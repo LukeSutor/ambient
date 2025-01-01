@@ -4,7 +4,6 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "compile": "cd server && Scripts\\python.exe -m PyInstaller --onefile --distpath ../src-tauri/binaries --name main-x86_64-pc-windows-msvc ../server/main.py",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
