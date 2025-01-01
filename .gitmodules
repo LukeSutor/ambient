@@ -1,0 +1,3 @@
+[submodule "src-tauri/llm/rust-llama.cpp"]
+	path = src-tauri/llm/rust-llama.cpp
+	url = https://github.com/mdrokz/rust-llama.cpp
