@@ -4,21 +4,23 @@
 mod llm;
 use llm::LLMService;
 use tauri::Manager;
+use async_std::sync::Mutex;
 
-// #[tauri::command]
-// async fn generate_text(state: tauri::State<'_, LLMService>, prompt: String) -> Result<String, String> {
-//     state.generate(prompt).await
-// }
+#[tauri::command]
+async fn generate_text(state: tauri::State<'_, Mutex<LLMService>>, prompt: String) -> Result<String, String> {
+    let state = state.lock().await;
+    state.generate(prompt).await
+}
 
 fn main() {
     tauri::Builder::default()
-        // .setup(|app| {
-        //     // Initialize LLM service with model path
-        //     let llm = LLMService::new("../llm/llava-v1.6-mistral-7b.Q4_K_M.gguf".into())?;
-        //     app.manager().insert(llm);
-        //     Ok(())
-        // })
-        // .invoke_handler(tauri::generate_handler![generate_text])
+        .setup(|app| {
+            let llm_service = LLMService::new("llm/models/llava-v1.6-mistral-7b.Q4_K_M.gguf".into())
+                .map_err(|e| e.to_string())?;
+            app.manage(Mutex::new(llm_service));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![generate_text])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

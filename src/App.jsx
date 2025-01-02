@@ -5,10 +5,10 @@ import "./App.css";
 
 function App() {
 
-  async function gen() {
+  async function gen(p) {
     // Generate text
     const response = await invoke('generate_text', { 
-      prompt: 'Write a story about...'
+      prompt: p
     })
     console.log(response)
   }
@@ -16,7 +16,7 @@ function App() {
   // WebSocket setup
   useEffect(() => {
 // Generate text
-    gen();
+    gen("hello world in python is what");
   }, []);
 
 
@@ -24,6 +24,7 @@ function App() {
     <main className="container">
       <h1>Welcome to Tauri + React</h1>
       <div className="">
+        <button onClick={() => gen("what's your favorite color")}>Click me</button>
       </div>
     </main>
   );

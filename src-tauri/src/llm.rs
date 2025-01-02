@@ -2,10 +2,18 @@ use llama_cpp_rs::{
     options::{ModelOptions, PredictOptions},
     LLama,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
+
+// Thread-safe wrapper for LLama
+struct ThreadSafeLLama(Arc<Mutex<LLama>>);
+
+// Implement Send for our wrapper
+unsafe impl Send for ThreadSafeLLama {}
+unsafe impl Sync for ThreadSafeLLama {}
 
 pub struct LLMService {
-    llama: Arc<Mutex<LLama>>,
+    llama: ThreadSafeLLama,
 }
 
 impl LLMService {
@@ -15,7 +23,7 @@ impl LLMService {
             .map_err(|e| e.to_string())?;
             
         Ok(Self {
-            llama: Arc::new(Mutex::new(llama))
+            llama: ThreadSafeLLama(Arc::new(Mutex::new(llama)))
         })
     }
 
@@ -28,9 +36,8 @@ impl LLMService {
             ..Default::default()
         };
 
-        self.llama
+        self.llama.0
             .lock()
-            .map_err(|e| e.to_string())?
             .predict(prompt, predict_options)
             .map_err(|e| e.to_string())
     }
