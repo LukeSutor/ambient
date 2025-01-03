@@ -653,10 +653,14 @@ int main(int argc, char ** argv) {
     });
 
     // Route to shutdown the server and exit the process
-    server.Post("/shutdown", [&server](const httplib::Request& req, httplib::Response& res) {
-        res.set_content("Server is shutting down", "text/plain");
-        server.stop();
-        exit(0);
+    server.Post("/shutdown", [&server, &model](const httplib::Request& req, httplib::Response& res) {
+    res.set_content("Server is shutting down", "text/plain");
+    std::thread([&server, &model]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            llama_free_model(model);
+            server.stop();
+            std::exit(0);
+        }).detach();
     });
 
     // Route to perform inference
@@ -779,10 +783,9 @@ int main(int argc, char ** argv) {
 //         }
 //     }
 
-//     llama_free_model(model);
-
     std::cout << "Starting server on port 8008..." << std::endl;
     server.listen("0.0.0.0", 8008);
 
+    llama_free_model(model);
     return 0;
 }

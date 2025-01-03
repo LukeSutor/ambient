@@ -7,4 +7,6 @@
     ```cmake ..```
 
 3. Build the project<br />
-    ```cmake --build . --config Release
+    ```cmake --build . --config Release```
+
+Once you set up cmake, you only have to rebuild the project for edits made to server.cpp.
