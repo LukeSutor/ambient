@@ -25,6 +25,7 @@
 #include <fstream>
 #include <httplib.h>
 #include <json.hpp>
+#include "json-schema-to-grammar.h"
 
 static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed,
                                      int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
@@ -304,6 +305,9 @@ static std::string process_prompt(struct llava_context * ctx_llava, struct llava
     common_sampler_free(smpl);
     LOG("\n");
     LOG("\nFinal response: %s\n", response.c_str());  // Debug log final response
+    if (response.length() >= 4 && response.substr(response.length() - 4) == "</s>") {
+        response = response.substr(0, response.length() - 4);
+    }
     return response;
 }
 
@@ -514,8 +518,7 @@ static void debug_dump_img_embed(struct llava_context * ctx_llava) {
 
 
 int main(int argc, char ** argv) {
-    common_init();
-
+    std::cout << "HERE" << std::endl;
     // Qwen Model initialization
     const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/Qwen_Qwen2-VL-2B-Instruct-Q4_K_M.gguf";
     const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-vision-2b.gguf";
@@ -523,6 +526,77 @@ int main(int argc, char ** argv) {
     params.model = MODEL_PATH;
     params.mmproj = MMPROJ_PATH;
     params.cpuparams.n_threads = 4;
+    params.sampling.grammar = json_schema_to_grammar(nlohmann::json::parse(R"({
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["MOVE", "CLICK", "TYPE"],
+                "description": "The computer control action to perform"
+            },
+            "x": {
+                "type": "integer",
+                "description": "X coordinate for mouse position"
+            },
+            "y": {
+                "type": "integer",
+                "description": "Y coordinate for mouse position"
+            },
+            "mouse_button": {
+                "type": "string",
+                "enum": ["LEFT", "RIGHT", "MIDDLE"],
+                "description": "Mouse button to interact with"
+            },
+            "input": {
+                "type": "string",
+                "description": "String to type using the keyboard"
+            }
+        },
+        "allOf": [
+            {
+                "if": {
+                    "properties": { "action": { "const": "MOVE" } }
+                },
+                "then": {
+                    "required": ["x", "y"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "action": {},
+                        "x": { "type": "integer" },
+                        "y": { "type": "integer" }
+                    }
+                }
+            },
+            {
+                "if": {
+                    "properties": { "action": { "const": "CLICK" } }
+                },
+                "then": {
+                    "required": ["mouse_button"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "action": {},
+                        "mouse_button": { "type": "string" }
+                    }
+                }
+            },
+            {
+                "if": {
+                    "properties": { "action": { "const": "TYPE" } }
+                },
+                "then": {
+                    "required": ["input"],
+                    "additionalProperties": false,
+                    "properties": {
+                        "action": {},
+                        "input": { "type": "string" }
+                    }
+                }
+            }
+        ]
+    })"));
     auto * model = llava_init(&params);
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to init llava model\n", __func__);
@@ -531,6 +605,7 @@ int main(int argc, char ** argv) {
 
 
     // Server setup
+    std::cout << "setting up server" << std::endl;
     httplib::Server server;
 
     // Route to load a model
@@ -570,10 +645,13 @@ int main(int argc, char ** argv) {
                 // Generate without image input
                 auto ctx_llava = llava_init_context(&params, model);
 
-                // llama_perf_context_print(ctx_llava->ctx_llama);
+                // process the prompt
+                result = process_prompt(ctx_llava, nullptr, &params, prompt);
+
                 ctx_llava->model = NULL;
                 llava_free(ctx_llava);
             } else {
+                // Generate with image input
                 auto * ctx_llava = llava_init_context(&params, model);
                 auto * image_embed = load_image(ctx_llava, &params, image);
                 if (!image_embed) {
@@ -584,7 +662,6 @@ int main(int argc, char ** argv) {
                 // process the prompt
                 result = process_prompt(ctx_llava, image_embed, &params, prompt);
 
-                llama_perf_context_print(ctx_llava->ctx_llama);
                 llava_image_embed_free(image_embed);
                 ctx_llava->model = NULL;
                 llava_free(ctx_llava);
@@ -592,7 +669,7 @@ int main(int argc, char ** argv) {
             params.prompt = "";
 
             res.status = 200;
-            res.set_content("Res: " + result, "application/json");
+            res.set_content(result, "application/json");
         } catch (const nlohmann::json::parse_error& e) {
             res.status = 400;
             res.set_content("Invalid JSON payload", "text/plain");
@@ -603,7 +680,7 @@ int main(int argc, char ** argv) {
 
 
 
-//     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
+    // if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
 //         return 1;
 //     }
 
