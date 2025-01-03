@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project name and version
-project(LlamaCppServer VERSION 1.0 LANGUAGES CXX)
+project(Qwen2VLServer VERSION 1.0 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -19,30 +19,27 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/../llama.cpp llama_lib)
 file(GLOB COMMON_SOURCES "${CMAKE_SOURCE_DIR}/../llama.cpp/common/*.cpp")
 
 # Add the executable with sources
-add_executable(LlamaCppServer
+set(TARGET qwen2vl-server)
+add_executable(${TARGET}
     ${CMAKE_SOURCE_DIR}/src/server.cpp
-    ${CMAKE_SOURCE_DIR}/src/qwen_functions.cpp
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/llava/clip.cpp
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/llava/llava.cpp
     ${COMMON_SOURCES}
 )
-
-# Link libraries - add required components
-target_link_libraries(LlamaCppServer PRIVATE 
+set_target_properties(${TARGET} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+install(TARGETS ${TARGET} RUNTIME)
+target_link_libraries(${TARGET} PRIVATE 
     llama 
     ggml
 )
-
 # Specify include directories for the executable
-target_include_directories(LlamaCppServer PRIVATE
+target_include_directories(${TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/../llama.cpp
     ${CMAKE_SOURCE_DIR}/../llama.cpp/common
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/llava
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/server
     ${CMAKE_SOURCE_DIR}/include
 )
-
-# Output configuration
-set_target_properties(LlamaCppServer PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+target_compile_features(${TARGET} PRIVATE cxx_std_17)
