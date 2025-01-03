@@ -9,9 +9,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Include directories for headers
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
 # Add the llama.cpp library
 add_subdirectory(${CMAKE_SOURCE_DIR}/../llama.cpp llama_lib)
 
