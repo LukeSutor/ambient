@@ -25,6 +25,8 @@
 #include <fstream>
 #include <httplib.h>
 #include <json.hpp>
+#include <thread>
+#include <string>
 #include "json-schema-to-grammar.h"
 
 const std::string CONTROL_SYSTEM_PROMPT = R"(You are an AI model designed to convert user instructions into JSON commands for controlling a computer. Your tasks include moving the mouse, clicking mouse buttons, and typing text. Output a JSON object that matches the user's instruction and adheres to the predefined schema.
@@ -553,6 +555,18 @@ static void debug_dump_img_embed(struct llava_context * ctx_llava) {
 #endif
 
 
+void stdin_monitor(httplib::Server& server) {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (line == "shutdown") {
+            std::cout << "Shutdown command received from stdin, stopping server...\n";
+            server.stop();
+            exit(0);
+        }
+    }
+}
+
+
 int main(int argc, char ** argv) {
     // Qwen Model initialization
     const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/Qwen_Qwen2-VL-2B-Instruct-Q4_K_M.gguf";
@@ -628,10 +642,21 @@ int main(int argc, char ** argv) {
     // Server setup
     httplib::Server server;
 
+    // Monitor stdin and listen for the kill server command
+    std::thread monitor_thread(stdin_monitor, std::ref(server));
+    monitor_thread.detach(); // Detach thread so it runs independently
+
     // Route to load a model
     server.Post("/load_model", [](const httplib::Request& req, httplib::Response& res) {
         std::cout << "load model..." << std::endl;
         res.set_content("loading response", "text/plain");
+    });
+
+    // Route to shutdown the server and exit the process
+    server.Post("/shutdown", [&server](const httplib::Request& req, httplib::Response& res) {
+        res.set_content("Server is shutting down", "text/plain");
+        server.stop();
+        exit(0);
     });
 
     // Route to perform inference
