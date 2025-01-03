@@ -27,6 +27,35 @@
 #include <json.hpp>
 #include "json-schema-to-grammar.h"
 
+const std::string CONTROL_SYSTEM_PROMPT = R"(You are an AI model designed to convert user instructions into JSON commands for controlling a computer. Your tasks include moving the mouse, clicking mouse buttons, and typing text. Output a JSON object that matches the user's instruction and adheres to the predefined schema.
+
+Tasks:
+
+1. MOVE: Move the mouse to specified X and Y coordinates.
+   - Example:
+     {
+       "action": "MOVE",
+       "x": 100,
+       "y": 200
+     }
+
+2. CLICK: Click a specified mouse button.
+   - Example:
+     {
+       "action": "CLICK",
+       "mouse_button": "LEFT"
+     }
+
+3. TYPE: Type a given string of text.
+   - Example:
+     {
+       "action": "TYPE",
+       "input": "Hello, World!"
+     }
+
+Generate JSON outputs based on these instructions using the correct properties for each action.
+)";
+
 static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed,
                                      int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
     int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
@@ -261,8 +290,15 @@ static std::string process_prompt(struct llava_context * ctx_llava, struct llava
         }
     } else {
         // llava-1.5 native mode
-        system_prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|>";
-        user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
+
+        // Only include the vision tokens if an image is passed
+        if (image_embed != nullptr) {
+            system_prompt = "<|im_start|>system\n" + CONTROL_SYSTEM_PROMPT + "<|im_end|>\n<|im_start|>user\n<|vision_start|>";
+            user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
+        } else {
+            system_prompt = "<|im_start|>system\n" + CONTROL_SYSTEM_PROMPT + "<|im_end|>\n<|im_start|>user\n";
+            user_prompt = prompt + "<|im_end|>\n<|im_start|>assistant\n";
+        }
         if (params->verbose_prompt) {
             auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int) tmp.size(); i++) {
@@ -518,7 +554,6 @@ static void debug_dump_img_embed(struct llava_context * ctx_llava) {
 
 
 int main(int argc, char ** argv) {
-    std::cout << "HERE" << std::endl;
     // Qwen Model initialization
     const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/Qwen_Qwen2-VL-2B-Instruct-Q4_K_M.gguf";
     const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-vision-2b.gguf";
@@ -528,84 +563,69 @@ int main(int argc, char ** argv) {
     params.cpuparams.n_threads = 4;
     params.sampling.grammar = json_schema_to_grammar(nlohmann::json::parse(R"({
         "$schema": "http://json-schema.org/draft-07/schema#",
-        "type": "object",
-        "required": ["action"],
-        "properties": {
-            "action": {
+        "oneOf": [
+            {
+            "type": "object",
+            "required": ["action", "x", "y"],
+            "additionalProperties": false,
+            "properties": {
+                "action": {
                 "type": "string",
-                "enum": ["MOVE", "CLICK", "TYPE"],
-                "description": "The computer control action to perform"
-            },
-            "x": {
+                "const": "MOVE",
+                "description": "Selected if the model thinks it should move the mouse pointer"
+                },
+                "x": {
                 "type": "integer",
                 "description": "X coordinate for mouse position"
-            },
-            "y": {
+                },
+                "y": {
                 "type": "integer",
                 "description": "Y coordinate for mouse position"
+                }
+            }
             },
-            "mouse_button": {
+            {
+            "type": "object",
+            "required": ["action", "mouse_button"],
+            "additionalProperties": false,
+            "properties": {
+                "action": {
+                "type": "string",
+                "const": "CLICK",
+                "description": "Selected if the model thinks it should click the mouse"
+                },
+                "mouse_button": {
                 "type": "string",
                 "enum": ["LEFT", "RIGHT", "MIDDLE"],
                 "description": "Mouse button to interact with"
+                }
+            }
             },
-            "input": {
+            {
+            "type": "object",
+            "required": ["action", "input"],
+            "additionalProperties": false,
+            "properties": {
+                "action": {
+                "type": "string",
+                "const": "TYPE",
+                "description": "Selected if the model thinks it should type something into the keyboard"
+                },
+                "input": {
                 "type": "string",
                 "description": "String to type using the keyboard"
+                }
             }
-        },
-        "allOf": [
-            {
-                "if": {
-                    "properties": { "action": { "const": "MOVE" } }
-                },
-                "then": {
-                    "required": ["x", "y"],
-                    "additionalProperties": false,
-                    "properties": {
-                        "action": {},
-                        "x": { "type": "integer" },
-                        "y": { "type": "integer" }
-                    }
-                }
-            },
-            {
-                "if": {
-                    "properties": { "action": { "const": "CLICK" } }
-                },
-                "then": {
-                    "required": ["mouse_button"],
-                    "additionalProperties": false,
-                    "properties": {
-                        "action": {},
-                        "mouse_button": { "type": "string" }
-                    }
-                }
-            },
-            {
-                "if": {
-                    "properties": { "action": { "const": "TYPE" } }
-                },
-                "then": {
-                    "required": ["input"],
-                    "additionalProperties": false,
-                    "properties": {
-                        "action": {},
-                        "input": { "type": "string" }
-                    }
-                }
             }
         ]
-    })"));
+        })"));
     auto * model = llava_init(&params);
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to init llava model\n", __func__);
         return 1;
     }
 
-
     // Server setup
-    std::cout << "setting up server" << std::endl;
     httplib::Server server;
 
     // Route to load a model
