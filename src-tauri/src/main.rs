@@ -43,24 +43,27 @@ async fn shutdown_server() -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn infer(prompt: std::string::String, image: std::string::String ) -> Result<(), Box<dyn std::error::Error>> {
+async fn infer(prompt: String, image_path: String) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let res = client.post("http://localhost:8008/inference")
-        .json(&serde_json::json!({
-            "prompt": "Describe the image in detail.",
-            "image": "path/to/image.jpg"
-        }))
+    let request_body = serde_json::json!({
+        "prompt": prompt,
+        "image": image_path,
+    });
+
+    match client.post("http://localhost:8008/inference")
+        .json(&request_body)
         .send()
-        .await?;
-
-    if res.status().is_success() {
-        let body = res.text().await?;
-        println!("Response: {}", body);
-    } else {
-        println!("Failed to get a successful response: {}", res.status());
-    }
-
-    Ok(())
+        .await {
+            Ok(res) => {
+                if res.status().is_success() {
+                    let response_text = res.text().await.map_err(|e| format!("Failed to read response text: {}", e))?;
+                    Ok(response_text)
+                } else {
+                    Err(format!("Failed to get a successful response: {}", res.status()))
+                }
+            },
+            Err(e) => Err(format!("Failed to send request: {}", e)),
+        }
 }
 
 fn main() {
@@ -80,7 +83,7 @@ fn main() {
             println!("[tauri] Server started.");
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![start_server, shutdown_server])
+        .invoke_handler(tauri::generate_handler![start_server, shutdown_server, infer])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, event| match event {
