@@ -23,7 +23,8 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
-
+#include <httplib.h>
+#include <json.hpp>
 
 static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed,
                                      int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
@@ -511,9 +512,63 @@ static void debug_dump_img_embed(struct llava_context * ctx_llava) {
 
 
 int main(int argc, char ** argv) {
+    // Server setup
+    httplib::Server server;
+
+    // Qwen Model initialization
+    const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/Qwen_Qwen2-VL-2B-Instruct-Q4_K_M.gguf";
+    const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-vision-2b.gguf";
+    common_params params;
+    params.model = MODEL_PATH;
+    params.mmproj = MMPROJ_PATH;
+    auto * model = llava_init(&params);
+    if (model == NULL) {
+        fprintf(stderr, "%s: error: failed to init llava model\n", __func__);
+        return 1;
+    }
+
+    // Route to load a model
+    server.Post("/load_model", [](const httplib::Request& req, httplib::Response& res) {
+        std::cout << "load model..." << std::endl;
+        res.set_content("loading response", "text/plain");
+    });
+
+    // Route to perform inference
+    server.Post("/inference", [](const httplib::Request& req, httplib::Response& res) {
+        try {
+            // Parse JSON from request body
+            auto json = nlohmann::json::parse(req.body);
+            
+            // Check for required prompt field
+            if (!json.contains("prompt")) {
+                res.status = 400;
+                res.set_content("Missing required 'prompt' field", "text/plain");
+                return;
+            }
+
+            // Extract fields
+            std::string prompt = json["prompt"];
+            std::string image = json.value("image", ""); // Optional field
+
+            // Print the values
+            std::cout << "Received inference request:" << std::endl;
+            std::cout << "Prompt: " << prompt << std::endl;
+            if (!image.empty()) {
+                std::cout << "Image location: " << image << std::endl;
+            }
+
+            // Generate with Qwen
+
+            res.set_content("Request received successfully", "application/json");
+        } catch (const nlohmann::json::parse_error& e) {
+            res.status = 400;
+            res.set_content("Invalid JSON payload", "text/plain");
+        }
+    });
+
     ggml_time_init();
 
-    common_params params;
+
 
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
         return 1;
@@ -526,11 +581,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    auto * model = llava_init(&params);
-    if (model == NULL) {
-        fprintf(stderr, "%s: error: failed to init llava model\n", __func__);
-        return 1;
-    }
+
 
     if (prompt_contains_image(params.prompt)) {
         auto * ctx_llava = llava_init_context(&params, model);
@@ -576,6 +627,9 @@ int main(int argc, char ** argv) {
     }
 
     llama_free_model(model);
+
+    std::cout << "Starting server on port 8008..." << std::endl;
+    server.listen("0.0.0.0", 8008);
 
     return 0;
 }
