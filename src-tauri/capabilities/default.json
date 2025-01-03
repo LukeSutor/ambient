@@ -8,22 +8,29 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "shell:default",
     {
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "name": "exec-sh",
-          "cmd": "sh",
-          "args": [
-            "-c",
-            {
-              "validator": "\\S+"
-            }
-          ],
+          "args": false,
+          "name": "binaries/qwen2vl-server",
           "sidecar": false
         }
       ]
-    }
+    },
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "http://**/"
+        },
+        {
+          "url": "https://**/"
+        }
+      ]
+    },
+    "shell:default",
+    "shell:allow-open",
+    "http:default"
   ]
 }
