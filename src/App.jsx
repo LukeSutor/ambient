@@ -5,7 +5,7 @@ import "./App.css";
 
 function App() {
   const [prompt, setPrompt] = useState("");
-  const [imagePath, setImagePath] = useState("");
+  const [image, setImage] = useState("");
 
   const shutdownSidecarAction = async () => {
     console.log("shutdown server");
@@ -30,9 +30,9 @@ function App() {
   }
 
   const inferAction = async () => {
-    console.log("making inference request", prompt, imagePath);
+    console.log("making inference request", prompt, image);
     try {
-      const result = await invoke("infer", { prompt, imagePath });
+      const result = await invoke("handle_request", { prompt, image });
       console.log("Inference result:", result);
       return;
     } catch (err) {
@@ -57,8 +57,8 @@ function App() {
         <input
           type="text"
           placeholder="Enter image path (optional)"
-          value={imagePath}
-          onChange={(e) => setImagePath(e.target.value)}
+          value={image}
+          onChange={(e) => setImage(e.target.value)}
         />
         <button onClick={inferAction}>Submit</button>
       </div>

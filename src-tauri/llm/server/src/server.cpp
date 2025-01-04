@@ -52,7 +52,7 @@ Tasks:
    - Example:
      {
        "action": "TYPE",
-       "input": "Hello, World!"
+       "text": "Hello, World!"
      }
 
 Generate JSON outputs based on these instructions using the correct properties for each action.
@@ -617,7 +617,7 @@ int main(int argc, char ** argv) {
             },
             {
             "type": "object",
-            "required": ["action", "input"],
+            "required": ["action", "text"],
             "additionalProperties": false,
             "properties": {
                 "action": {
@@ -625,7 +625,7 @@ int main(int argc, char ** argv) {
                 "const": "TYPE",
                 "description": "Selected if the model thinks it should type something into the keyboard"
                 },
-                "input": {
+                "text": {
                 "type": "string",
                 "description": "String to type using the keyboard"
                 }
