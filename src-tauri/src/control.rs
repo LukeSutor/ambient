@@ -34,18 +34,6 @@ pub fn click_mouse(button: String) {
 
 
 #[tauri::command]
-pub fn type_string_old(string: String) {
-    let mut enigo = Enigo::new(&Settings::default()).unwrap();
-    for c in string.chars() {
-        if let Err(e) = enigo.key(Key::Unicode(c), Click) {
-            eprintln!("Failed to type character '{}': {:?}", c, e);
-        }
-        thread::sleep(Duration::from_millis(50));
-    }
-}
-
-
-#[tauri::command]
 pub fn type_string(string: String) {
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     if let Err(e) = enigo.text(&string) {
