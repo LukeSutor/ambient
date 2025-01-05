@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
+  const [input, setInput] = useState("");
   const [prompt, setPrompt] = useState("");
   const [includeImage, setIncludeImage] = useState(false);
 
@@ -51,6 +52,17 @@ function App() {
     }
   }
 
+  const writeSidecarAction = async () => {
+    console.log("writing to sidecar: ", input);
+    try {
+      const result = await invoke("write_to_sidecar", { message: input });
+      console.log("Sidecar result:", result);
+      return;
+    } catch (err) {
+      console.error(`[ui] Failed to take screenshot. ${err}`);
+    }
+  }
+
   return (
     <main className="container">
       <h1>Welcome to Tauri + React</h1>
@@ -58,6 +70,15 @@ function App() {
         <button onClick={startSidecarAction}>Connect</button>
         <button onClick={shutdownSidecarAction}>Disconnect</button>
         <button onClick={takeScreenshotAction}>Take Screenshot</button>
+      </div>
+      <div className="">
+        <input
+          type="text"
+          placeholder="Enter sidecar input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        <button onClick={writeSidecarAction}>Write to Sidecar</button>
       </div>
       <div className="">
         <input

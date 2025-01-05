@@ -31,6 +31,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/qwen2vl-server"]
+    "externalBin": ["binaries/qwen2vl-server", "binaries/test"]
   }
 }

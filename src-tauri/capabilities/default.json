@@ -19,6 +19,16 @@
       ]
     },
     {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "args": false,
+          "name": "binaries/test",
+          "sidecar": true
+        }
+      ]
+    },
+    {
       "identifier": "http:default",
       "allow": [
         {

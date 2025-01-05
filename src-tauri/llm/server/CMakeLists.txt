@@ -40,3 +40,14 @@ target_include_directories(${TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 target_compile_features(${TARGET} PRIVATE cxx_std_17)
+
+# Add test executable
+set(TARGET test)
+add_executable(${TARGET}
+    ${CMAKE_SOURCE_DIR}/src/test.cpp
+)
+set_target_properties(${TARGET} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+install(TARGETS ${TARGET} RUNTIME)
+target_compile_features(${TARGET} PRIVATE cxx_std_17)
