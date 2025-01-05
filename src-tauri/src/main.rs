@@ -1,17 +1,17 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod control;
 mod runtime;
 mod server;
-mod control;
 
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, RunEvent};
 use tauri_plugin_shell::process::CommandChild;
 
-
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         // Add any necessary plugins
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())

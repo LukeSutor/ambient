@@ -1,11 +1,4 @@
-use enigo::{
-    Button, Coordinate,
-    Direction::Click,
-    Enigo, Key, Keyboard, Mouse, Settings,
-};
-use std::{thread, time::Duration};
-
-
+use enigo::{Button, Coordinate, Direction::Click, Enigo, Key, Keyboard, Mouse, Settings};
 
 #[tauri::command]
 pub fn move_mouse(x: i32, y: i32) {
@@ -31,7 +24,6 @@ pub fn click_mouse(button: String) {
         eprintln!("Failed to click mouse button: {:?}", e);
     }
 }
-
 
 #[tauri::command]
 pub fn type_string(string: String) {
