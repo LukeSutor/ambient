@@ -29,34 +29,197 @@
 #include <string>
 #include "json-schema-to-grammar.h"
 
-const std::string CONTROL_SYSTEM_PROMPT = R"(You are an AI model designed to convert user instructions into JSON commands for controlling a computer. Your tasks include moving the mouse, clicking mouse buttons, and typing text. Output a JSON object that matches the user's instruction and adheres to the predefined schema.
+const std::string SHOWUI_SYSTEM_PROMPT = R"(You are an assistant trained to navigate the desktop screen. 
+    Given a task instruction, a screen observation, and an action history sequence, 
+    output the next action and wait for the next observation. 
+    Format the action as a dictionary with the following keys:
+    {'action': 'ACTION_TYPE', 'value': 'element', 'position': [x,y]}
+    
+    If value or position is not applicable, set it as None.
+    Position might be [[x1,y1], [x2,y2]] if the action requires a start and end position.
+    Position represents the relative coordinates on the screenshot and should be scaled to a range of 0-1.
 
-Tasks:
-
-1. MOVE: Move the mouse to specified X and Y coordinates.
-   - Example:
-     {
-       "action": "MOVE",
-       "x": 100,
-       "y": 200
-     }
-
-2. CLICK: Click a specified mouse button.
-   - Example:
-     {
-       "action": "CLICK",
-       "mouse_button": "LEFT"
-     }
-
-3. TYPE: Type a given string of text.
-   - Example:
-     {
-       "action": "TYPE",
-       "text": "Hello, World!"
-     }
-
-Generate JSON outputs based on these instructions using the correct properties for each action.
+    Here is the action space:
+    1. CLICK: Click on an element, value is not applicable and the position [x,y] is required. 
+    2. INPUT: Type a string into an element, value is a string to type and the position [x,y] is required. 
+    3. HOVER: Hover on an element, value is not applicable and the position [x,y] is required.
+    4. ENTER: Enter operation, value and position are not applicable.
+    5. SCROLL: Scroll the screen, value is the direction to scroll and the position is not applicable.
+    6. ESC: ESCAPE operation, value and position are not applicable.
+    7. PRESS: Long click on an element, value is not applicable and the position [x,y] is required.
+    Here is the action you must perform:
 )";
+
+const std::string SHOWUI_JSON_SCHEMA = R"({
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["action", "position"],
+      "properties": {
+        "action": { "type": "string", "const": "CLICK" },
+        "value": { "type": "null" },
+        "position": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action", "value", "position"],
+      "properties": {
+        "action": { "type": "string", "const": "INPUT" },
+        "value": { "type": "string" },
+        "position": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action", "position"],
+      "properties": {
+        "action": { "type": "string", "const": "HOVER" },
+        "value": { "type": "null" },
+        "position": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": { "type": "string", "const": "ENTER" },
+        "value": { "type": "null" },
+        "position": { "type": "null" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action", "value"],
+      "properties": {
+        "action": { "type": "string", "const": "SCROLL" },
+        "value": { "type": "string" },
+        "position": { "type": "null" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action"],
+      "properties": {
+        "action": { "type": "string", "const": "ESC" },
+        "value": { "type": "null" },
+        "position": { "type": "null" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action", "position"],
+      "properties": {
+        "action": { "type": "string", "const": "PRESS" },
+        "value": { "type": "null" },
+        "position": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+})";
+
+const std::string CONTROL_SYSTEM_PROMPT = R"(You are an assistant trained to navigate the desktop screen. 
+Given a task instruction, a screen observation, and an action history sequence, 
+output the next action and wait for the next observation.
+Note that x, y positions represent the relative coordinates on the screenshot and should be scaled to a range of 0-1.
+Here are the tasks you can choose from:
+
+1. HOVER: Hover the mouse over the specified x and y coordinates. 
+   - Example:
+     {
+        "action": "HOVER",
+        "x": 0.1,
+        "y": 0.27
+     }
+
+2. CLICK: Click a specified mouse button at the specified x and y coordinates. Can choose between the LEFT, RIGHT, and MIDDLE mouse buttons.
+   - Example:
+     {
+        "action": "CLICK",
+        "mouse_button": "LEFT",
+        "x": 0.642,
+        "y": 0.05
+     }
+
+3. TYPE: Type a given string of text in an input field at the specified x and y coordinates. This command will simulate a click, selecting the input field before it types.
+   - Example:
+     {
+        "action": "TYPE",
+        "text": "Hello, World!",
+        "x": 0.642,
+        "y": 0.05
+     }
+
+Generate JSON outputs based on these instructions using the correct properties for each action.)";
+
+const std::string CONTROL_JSON_SCHEMA = R"({
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["action", "x", "y"],
+      "properties": {
+        "action": { "type": "string", "const": "HOVER" },
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action", "mouse_button", "x", "y"],
+      "properties": {
+        "action": { "type": "string", "const": "CLICK" },
+        "mouse_button": {
+          "type": "string",
+          "enum": ["LEFT", "RIGHT", "MIDDLE"]
+        },
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["action", "text", "x", "y"],
+      "properties": {
+        "action": { "type": "string", "const": "TYPE" },
+        "text": { "type": "string" },
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    }
+  ]
+})";
 
 static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed,
                                      int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
@@ -575,64 +738,7 @@ int main(int argc, char ** argv) {
     params.model = MODEL_PATH;
     params.mmproj = MMPROJ_PATH;
     params.cpuparams.n_threads = 4;
-    params.sampling.grammar = json_schema_to_grammar(nlohmann::json::parse(R"({
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "oneOf": [
-            {
-            "type": "object",
-            "required": ["action", "x", "y"],
-            "additionalProperties": false,
-            "properties": {
-                "action": {
-                "type": "string",
-                "const": "MOVE",
-                "description": "Selected if the model thinks it should move the mouse pointer"
-                },
-                "x": {
-                "type": "integer",
-                "description": "X coordinate for mouse position"
-                },
-                "y": {
-                "type": "integer",
-                "description": "Y coordinate for mouse position"
-                }
-            }
-            },
-            {
-            "type": "object",
-            "required": ["action", "mouse_button"],
-            "additionalProperties": false,
-            "properties": {
-                "action": {
-                "type": "string",
-                "const": "CLICK",
-                "description": "Selected if the model thinks it should click the mouse"
-                },
-                "mouse_button": {
-                "type": "string",
-                "enum": ["LEFT", "RIGHT", "MIDDLE"],
-                "description": "Mouse button to interact with"
-                }
-            }
-            },
-            {
-            "type": "object",
-            "required": ["action", "text"],
-            "additionalProperties": false,
-            "properties": {
-                "action": {
-                "type": "string",
-                "const": "TYPE",
-                "description": "Selected if the model thinks it should type something into the keyboard"
-                },
-                "text": {
-                "type": "string",
-                "description": "String to type using the keyboard"
-                }
-            }
-            }
-        ]
-        })"));
+    params.sampling.grammar = json_schema_to_grammar(nlohmann::json::parse(CONTROL_JSON_SCHEMA));
     auto * model = llava_init(&params);
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to init llava model\n", __func__);
@@ -643,8 +749,8 @@ int main(int argc, char ** argv) {
     httplib::Server server;
 
     // Monitor stdin and listen for the kill server command
-    std::thread monitor_thread(stdin_monitor, std::ref(server));
-    monitor_thread.detach(); // Detach thread so it runs independently
+    // std::thread monitor_thread(stdin_monitor, std::ref(server));
+    // monitor_thread.detach(); // Detach thread so it runs independently
 
     // Route to load a model
     server.Post("/load_model", [](const httplib::Request& req, httplib::Response& res) {
@@ -724,64 +830,6 @@ int main(int argc, char ** argv) {
             res.set_content("Invalid JSON payload", "text/plain");
         }
     });
-
-//     ggml_time_init();
-
-
-
-    // if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
-//         return 1;
-//     }
-
-//     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
-//         print_usage(argc, argv);
-//         return 1;
-//     }
-
-
-
-//     if (prompt_contains_image(params.prompt)) {
-//         auto * ctx_llava = llava_init_context(&params, model);
-
-//         auto * image_embed = load_image(ctx_llava, &params, "");
-
-//         // process the prompt
-//         process_prompt(ctx_llava, image_embed, &params, params.prompt);
-
-//         llama_perf_context_print(ctx_llava->ctx_llama);
-//         llava_image_embed_free(image_embed);
-//         ctx_llava->model = NULL;
-//         llava_free(ctx_llava);
-// #ifndef NDEBUG
-//     } else if (params.image[0].empty()) {
-//         auto ctx_llava = llava_init_context(&params, model);
-
-//         debug_test_mrope_2d();
-//         debug_dump_img_embed(ctx_llava);
-
-//         llama_perf_context_print(ctx_llava->ctx_llama);
-//         ctx_llava->model = NULL;
-//         llava_free(ctx_llava);
-// #endif
-//     } else {
-//         for (auto & image : params.image) {
-//             auto * ctx_llava = llava_init_context(&params, model);
-
-//             auto * image_embed = load_image(ctx_llava, &params, image);
-//             if (!image_embed) {
-//                 LOG_ERR("%s: failed to load image %s. Terminating\n\n", __func__, image.c_str());
-//                 return 1;
-//             }
-
-//             // process the prompt
-//             process_prompt(ctx_llava, image_embed, &params, params.prompt);
-
-//             llama_perf_context_print(ctx_llava->ctx_llama);
-//             llava_image_embed_free(image_embed);
-//             ctx_llava->model = NULL;
-//             llava_free(ctx_llava);
-//         }
-//     }
 
     std::cout << "Starting server on port 8008..." << std::endl;
     server.listen("0.0.0.0", 8008);
