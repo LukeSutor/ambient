@@ -5,9 +5,9 @@ use crate::data::take_screenshot;
 use crate::server::infer;
 
 #[tauri::command]
-pub async fn handle_request(prompt: String, include_image: bool) -> Result<String, String> {
+pub async fn handle_request(prompt: String, include_image: bool, app_handle: tauri::AppHandle) -> Result<String, String> {
     let image_path = if include_image {
-        take_screenshot()
+        take_screenshot(app_handle)
     } else {
         "".to_string()
     };
@@ -24,29 +24,44 @@ pub async fn handle_request(prompt: String, include_image: bool) -> Result<Strin
         .ok_or("Failed to extract 'action' field")?
         .to_string();
 
-    // Switch statement to call the appropriate function
+    // Switch statement to perform the appropriate action
     match action.as_str() {
+        "HOVER" => {
+            let x = response_json["x"]
+                .as_f64()
+                .ok_or("Failed to extract 'x' field")? as f64;
+            let y = response_json["y"]
+                .as_f64()
+                .ok_or("Failed to extract 'y' field")? as f64;
+            move_mouse(x, y);
+        }
         "CLICK" => {
+            let x = response_json["x"]
+                .as_f64()
+                .ok_or("Failed to extract 'x' field")? as f64;
+            let y = response_json["y"]
+                .as_f64()
+                .ok_or("Failed to extract 'y' field")? as f64;
             let button = response_json["mouse_button"]
                 .as_str()
                 .ok_or("Failed to extract 'button' field")?
                 .to_string();
+            move_mouse(x, y);
             click_mouse(button);
         }
-        "MOVE" => {
-            let x = response_json["x"]
-                .as_i64()
-                .ok_or("Failed to extract 'x' field")? as i32;
-            let y = response_json["y"]
-                .as_i64()
-                .ok_or("Failed to extract 'y' field")? as i32;
-            move_mouse(x, y);
-        }
         "TYPE" => {
+            let x = response_json["x"]
+                .as_f64()
+                .ok_or("Failed to extract 'x' field")? as f64;
+            let y = response_json["y"]
+                .as_f64()
+                .ok_or("Failed to extract 'y' field")? as f64;
             let text = response_json["text"]
                 .as_str()
                 .ok_or("Failed to extract 'text' field")?
                 .to_string();
+            move_mouse(x, y);
+            click_mouse("LEFT".to_string());
             type_string(text);
         }
         _ => return Err("Unknown action".to_string()),

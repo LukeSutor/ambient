@@ -6,8 +6,7 @@ mod data;
 mod runtime;
 mod server;
 
-use tauri_plugin_store::StoreExt;
-use tauri::{RunEvent, Manager};
+use tauri::RunEvent;
 
 
 fn main() {
@@ -29,16 +28,7 @@ fn main() {
             server::shutdown_server,
             server::infer
         ])
-        .setup(|app| {
-            // Create app store for key-value information pairs
-            let store = app.store("store.json")?;
-            // Store the data path
-            let app_data_path = app
-                .path()
-                .app_data_dir()
-                .expect("App data dir could not be fetched.");
-            store.set("app-data-path", app_data_path.to_str().unwrap().to_string());
-
+        .setup(|_app| {
             println!("[tauri] Creating server...");
             match server::start_server() {
                 Ok(output) => println!("Server output: {}", output),

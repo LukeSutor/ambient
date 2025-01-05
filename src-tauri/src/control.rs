@@ -1,14 +1,24 @@
 // Contains functions for interacting with the computer
 
 use enigo::{Button, Coordinate, Direction::Click, Enigo, Keyboard, Mouse, Settings};
+use screenshots::Screen;
 
 #[tauri::command]
-pub fn move_mouse(x: i32, y: i32) {
+pub fn move_mouse(x: f64, y: f64) {
     // Moves the mouse to an absolute position on the screen
+
+    // Translate the relative positions to absolute
+    let screens = Screen::all().unwrap();
+    let screen = &screens[0]; // Assuming single screen for simplicity
+    let abs_x = (screen.display_info.width as f64 * x) as i32;
+    let abs_y = (screen.display_info.height as f64 * y) as i32;
+
+    // Move the mouse
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
-    if let Err(e) = enigo.move_mouse(x, y, Coordinate::Abs) {
+    if let Err(e) = enigo.move_mouse(abs_x, abs_y, Coordinate::Abs) {
         eprintln!("Failed to move mouse: {:?}", e);
     }
+    println!("Clicked at location: {}, {}", abs_x, abs_y);
 }
 
 #[tauri::command]

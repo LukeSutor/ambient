@@ -174,8 +174,8 @@ Here are the tasks you can choose from:
      {
         "action": "TYPE",
         "text": "Hello, World!",
-        "x": 0.642,
-        "y": 0.05
+        "x": 0.4,
+        "y": 0.37
      }
 
 Generate JSON outputs based on these instructions using the correct properties for each action.)";
@@ -732,8 +732,8 @@ void stdin_monitor(httplib::Server& server) {
 
 int main(int argc, char ** argv) {
     // Qwen Model initialization
-    const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/Qwen_Qwen2-VL-2B-Instruct-Q4_K_M.gguf";
-    const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-vision-2b.gguf";
+    const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-text.gguf";
+    const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-vision.gguf";
     common_params params;
     params.model = MODEL_PATH;
     params.mmproj = MMPROJ_PATH;
