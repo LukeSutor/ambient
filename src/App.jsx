@@ -5,7 +5,7 @@ import "./App.css";
 
 function App() {
   const [prompt, setPrompt] = useState("");
-  const [image, setImage] = useState("");
+  const [includeImage, setIncludeImage] = useState(false);
 
   const shutdownSidecarAction = async () => {
     console.log("shutdown server");
@@ -30,13 +30,24 @@ function App() {
   }
 
   const inferAction = async () => {
-    console.log("making inference request", prompt, image);
+    console.log("making inference request", prompt, includeImage);
     try {
-      const result = await invoke("handle_request", { prompt, image });
+      const result = await invoke("handle_request", { prompt, includeImage });
       console.log("Inference result:", result);
       return;
     } catch (err) {
       console.error(`[ui] Failed to make inference request. ${err}`);
+    }
+  }
+
+  const takeScreenshotAction = async () => {
+    console.log("taking screenshot");
+    try {
+      const result = await invoke("take_screenshot");
+      console.log("Screenshot result:", result);
+      return;
+    } catch (err) {
+      console.error(`[ui] Failed to take screenshot. ${err}`);
     }
   }
 
@@ -46,6 +57,7 @@ function App() {
       <div className="">
         <button onClick={startSidecarAction}>Connect</button>
         <button onClick={shutdownSidecarAction}>Disconnect</button>
+        <button onClick={takeScreenshotAction}>Take Screenshot</button>
       </div>
       <div className="">
         <input
@@ -54,12 +66,14 @@ function App() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
-        <input
-          type="text"
-          placeholder="Enter image path (optional)"
-          value={image}
-          onChange={(e) => setImage(e.target.value)}
-        />
+        <label>
+          <input
+            type="checkbox"
+            checked={includeImage}
+            onChange={(e) => setIncludeImage(e.target.checked)}
+          />
+          Include Screenshot
+        </label>
         <button onClick={inferAction}>Submit</button>
       </div>
     </main>

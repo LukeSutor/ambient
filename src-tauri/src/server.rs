@@ -1,3 +1,5 @@
+// Contains functions for interacting with the C++ server
+
 use reqwest;
 use std::process::{Command, Stdio};
 

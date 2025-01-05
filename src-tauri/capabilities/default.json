@@ -32,6 +32,7 @@
     "shell:default",
     "shell:allow-open",
     "http:default",
-    "fs:default"
+    "fs:default",
+    "store:default"
   ]
 }

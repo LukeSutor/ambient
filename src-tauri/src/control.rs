@@ -1,4 +1,6 @@
-use enigo::{Button, Coordinate, Direction::Click, Enigo, Key, Keyboard, Mouse, Settings};
+// Contains functions for interacting with the computer
+
+use enigo::{Button, Coordinate, Direction::Click, Enigo, Keyboard, Mouse, Settings};
 
 #[tauri::command]
 pub fn move_mouse(x: i32, y: i32) {

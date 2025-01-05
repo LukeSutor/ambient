@@ -1,10 +1,19 @@
+// Contains high level functions for features
+
 use crate::control::{click_mouse, move_mouse, type_string};
+use crate::data::take_screenshot;
 use crate::server::infer;
 
 #[tauri::command]
-pub async fn handle_request(prompt: String, image: String) -> Result<String, String> {
+pub async fn handle_request(prompt: String, include_image: bool) -> Result<String, String> {
+    let image_path = if include_image {
+        take_screenshot()
+    } else {
+        "".to_string()
+    };
+
     // Get the response from the model
-    let response = infer(prompt, image).await?;
+    let response = infer(prompt, image_path).await?;
     println!("{}", response.to_string());
 
     // Extract the value of the "action" field
