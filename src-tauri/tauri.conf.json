@@ -31,6 +31,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/qwen2vl-server", "binaries/test"]
+    "externalBin": ["binaries/qwen2vl"],
+    "resources": {
+      "binaries/ggml-base.dll": "ggml-base.dll",
+      "binaries/ggml-cpu.dll": "ggml-cpu.dll",
+      "binaries/ggml.dll": "ggml.dll",
+      "binaries/llama.dll": "llama.dll"
+    }
   }
 }

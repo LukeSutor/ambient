@@ -16,11 +16,6 @@
 #include "ggml-backend.h"
 #endif
 
-// #ifdef _WIN32
-// #include <io.h>    // For _isatty and _fileno (Windows-specific)
-// #include <fcntl.h> // For _O_TEXT (Windows-specific)
-// #endif
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -842,6 +837,7 @@ std::string infer(const std::string &data) {
         // Extract fields
         std::string prompt = json["prompt"];
         std::string image = json.value("image", ""); // Optional field
+        log_input("prompt: " + prompt + " image: " + image);
 
         // Generate with Qwen
         params.prompt = prompt;
@@ -902,77 +898,39 @@ void processRequest(std::atomic<bool> &running)
         {
             if (input == "SHUTDOWN")
             {
-                restore_stdout_stderr();
+                // restore_stdout_stderr();
                 std::cout << "Shutting down..." << std::endl;
-                redirect_stdout_stderr_to_null();
+                // redirect_stdout_stderr_to_null();
                 running = false;
                 break;
             }
             else if (input.rfind("INFER", 0) == 0)
             {
                 std::string response = infer(input.substr(6)); // Call infer with the rest of the input
-                restore_stdout_stderr();
+                // restore_stdout_stderr();
                 std::cout << response << std::endl;
-                redirect_stdout_stderr_to_null();
+                // redirect_stdout_stderr_to_null();
             }
             else if (input.rfind("LOAD", 0) == 0)
             {
                 std::string response = load_model(input.substr(5)); // Call load_model with the rest of the input
-                restore_stdout_stderr();
+                // restore_stdout_stderr();
                 std::cout << response << std::endl;
-                redirect_stdout_stderr_to_null();
+                // redirect_stdout_stderr_to_null();
             }
             else
             {
-                restore_stdout_stderr();
+                // restore_stdout_stderr();
                 std::cout << "ERROR - unknown function: " << input << std::endl;
-                redirect_stdout_stderr_to_null();
+                // redirect_stdout_stderr_to_null();
             }
             input = "";
         }
     }
 }
 
-// // Define a no-op logging callback
-// void noop_log_callback(ggml_log_level level, const char *message, void *user_data) {
-//     // Do nothing
-// }
-// bool is_stdout_redirected() {
-//     return !_isatty(_fileno(stdout));
-// }
-// void restore_stdout() {
-//     if (is_stdout_redirected()) {
-//         if (freopen("CON", "w", stdout) == nullptr) {
-//             perror("freopen"); // Handle potential errors
-//         } else {
-//             // Set the mode to text mode
-//             _setmode(_fileno(stdout), _O_TEXT);
-//         }
-//     }
-// }
 int main()
 {
-    // // Redirect stdout to /dev/null
-    // std::fflush(stdout); // Flush the stream before redirecting.
-    // FILE* original_stdout = stdout; // Optional: Store the original stdout
-    // freopen("NUL", "w", stdout);
-
-    // std::cout << "This will not be printed to the console" << std::endl;
-    // log_input("This will not be printed to the console.");
-
-    // // Restore stdout
-    // // restore_stdout();
-    // freopen("CON", "w", stdout);
-
-    // // freopen("CON", "w", stdout); // For windows
-    // log_input("before This will be printed to the console.");
-    // std::cout << "This will be printed to the console" << std::endl;
-    // log_input("This will be printed to the console.");
-
-    // return 0;
-    // Make sure nothing but returned data is printed to stdout
-    redirect_stdout_stderr_to_null();
-
     // Qwen Model initialization
     const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-text.gguf";
     const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-vision.gguf";

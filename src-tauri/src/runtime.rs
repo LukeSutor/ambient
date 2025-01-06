@@ -2,18 +2,18 @@
 
 use crate::control::{click_mouse, move_mouse, type_string};
 use crate::data::take_screenshot;
-use crate::server::infer;
+use crate::sidecar::infer;
 
 #[tauri::command]
 pub async fn handle_request(prompt: String, include_image: bool, app_handle: tauri::AppHandle) -> Result<String, String> {
     let image_path = if include_image {
-        take_screenshot(app_handle)
+        take_screenshot(app_handle.clone())
     } else {
         "".to_string()
     };
 
     // Get the response from the model
-    let response = infer(prompt, image_path).await?;
+    let response = infer(prompt, image_path, app_handle).await?;
     println!("{}", response.to_string());
 
     // Extract the value of the "action" field

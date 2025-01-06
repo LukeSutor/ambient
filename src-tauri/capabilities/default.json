@@ -13,17 +13,7 @@
       "allow": [
         {
           "args": false,
-          "name": "binaries/qwen2vl-server",
-          "sidecar": false
-        }
-      ]
-    },
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "args": false,
-          "name": "binaries/test",
+          "name": "binaries/qwen2vl",
           "sidecar": true
         }
       ]

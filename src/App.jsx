@@ -11,7 +11,7 @@ function App() {
   const shutdownSidecarAction = async () => {
     console.log("shutdown server");
     try {
-      const result = await invoke("shutdown_server");
+      const result = await invoke("shutdown_sidecar");
       console.log("Shutdown result:", result);
       return;
     } catch (err) {
@@ -22,7 +22,7 @@ function App() {
   const startSidecarAction = async () => {
     console.log("start server");
     try {
-      const result = await invoke("start_server");
+      const result = await invoke("start_sidecar");
       console.log("Start result:", result);
       return;
     } catch (err) {
@@ -59,7 +59,7 @@ function App() {
       console.log("Sidecar result:", result);
       return;
     } catch (err) {
-      console.error(`[ui] Failed to take screenshot. ${err}`);
+      console.error(`[ui] Failed to write to sidecar. ${err}`);
     }
   }
 
