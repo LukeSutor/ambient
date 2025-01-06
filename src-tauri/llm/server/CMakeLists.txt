@@ -16,9 +16,9 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/../llama.cpp llama_lib)
 file(GLOB COMMON_SOURCES "${CMAKE_SOURCE_DIR}/../llama.cpp/common/*.cpp")
 
 # Add the executable with sources
-set(TARGET qwen2vl-server)
+set(TARGET qwen2vl)
 add_executable(${TARGET}
-    ${CMAKE_SOURCE_DIR}/src/server.cpp
+    ${CMAKE_SOURCE_DIR}/src/qwen2vl.cpp
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/llava/clip.cpp
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/llava/llava.cpp
     ${COMMON_SOURCES}
@@ -39,15 +39,4 @@ target_include_directories(${TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/../llama.cpp/examples/server
     ${CMAKE_SOURCE_DIR}/include
 )
-target_compile_features(${TARGET} PRIVATE cxx_std_17)
-
-# Add test executable
-set(TARGET test)
-add_executable(${TARGET}
-    ${CMAKE_SOURCE_DIR}/src/test.cpp
-)
-set_target_properties(${TARGET} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-install(TARGETS ${TARGET} RUNTIME)
 target_compile_features(${TARGET} PRIVATE cxx_std_17)
