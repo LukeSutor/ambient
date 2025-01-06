@@ -16,6 +16,11 @@
 #include "ggml-backend.h"
 #endif
 
+// #ifdef _WIN32
+// #include <io.h>    // For _isatty and _fileno (Windows-specific)
+// #include <fcntl.h> // For _O_TEXT (Windows-specific)
+// #endif
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -23,11 +28,15 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
-#include <httplib.h>
 #include <json.hpp>
 #include <thread>
 #include <string>
+#include <atomic>
 #include "json-schema-to-grammar.h"
+
+// These two are initialized in the main method and need to be used globally
+common_params params;
+llama_model *model;
 
 const std::string SHOWUI_SYSTEM_PROMPT = R"(You are an assistant trained to navigate the desktop screen. 
     Given a task instruction, a screen observation, and an action history sequence, 
@@ -221,9 +230,10 @@ const std::string CONTROL_JSON_SCHEMA = R"({
   ]
 })";
 
-static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct llava_image_embed * image_embed,
-                                     int n_batch, int * n_past, int * st_pos_id, struct clip_image_size * image_size) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llama));
+static bool qwen2vl_eval_image_embed(llama_context *ctx_llama, const struct llava_image_embed *image_embed,
+                                     int n_batch, int *n_past, int *st_pos_id, struct clip_image_size *image_size)
+{
+    int n_embd = llama_n_embd(llama_get_model(ctx_llama));
     const int patch_size = 14 * 2;
     const int ph = image_size->height / patch_size + (image_size->height % patch_size > 0);
     const int pw = image_size->width / patch_size + (image_size->width % patch_size > 0);
@@ -249,9 +259,11 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     std::vector<llama_pos> batch_mrope_pos;
     batch_mrope_pos.resize(img_tokens * 4);
 
-    for (int i = 0; i < img_tokens; i += n_batch) {
+    for (int i = 0; i < img_tokens; i += n_batch)
+    {
         int n_eval = img_tokens - i;
-        if (n_eval > n_batch) {
+        if (n_eval > n_batch)
+        {
             n_eval = n_batch;
         }
 
@@ -263,17 +275,18 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
         memcpy(&batch_mrope_pos[n_eval * 3], &mrope_pos[img_tokens * 3 + processed], n_eval * sizeof(llama_pos));
 
         llama_batch batch = {
-            int32_t(n_eval),                // n_tokens
-            nullptr,                        // token
-            (image_embed->embed+i*n_embd),  // embed
-            batch_mrope_pos.data(),         // pos
-            nullptr,  // n_seq_id
-            nullptr,  // seq_id
-            nullptr,  // logits
+            int32_t(n_eval),                   // n_tokens
+            nullptr,                           // token
+            (image_embed->embed + i * n_embd), // embed
+            batch_mrope_pos.data(),            // pos
+            nullptr,                           // n_seq_id
+            nullptr,                           // seq_id
+            nullptr,                           // logits
         };
 
-        if (llama_decode(ctx_llama, batch)) {
-            LOG_ERR("%s : failed to eval\n", __func__);
+        if (llama_decode(ctx_llama, batch))
+        {
+            // LOG_ERR("%s : failed to eval\n", __func__);
             return false;
         }
         *n_past += n_eval;
@@ -282,26 +295,30 @@ static bool qwen2vl_eval_image_embed(llama_context * ctx_llama, const struct lla
     return true;
 }
 
-
-static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past, int * st_pos_id) {
-    int N = (int) tokens.size();
+static bool eval_tokens(struct llama_context *ctx_llama, std::vector<llama_token> tokens, int n_batch, int *n_past, int *st_pos_id)
+{
+    int N = (int)tokens.size();
     std::vector<llama_pos> pos;
-    for (int i = 0; i < N; i += n_batch) {
-        int n_eval = (int) tokens.size() - i;
-        if (n_eval > n_batch) {
+    for (int i = 0; i < N; i += n_batch)
+    {
+        int n_eval = (int)tokens.size() - i;
+        if (n_eval > n_batch)
+        {
             n_eval = n_batch;
         }
         auto batch = llama_batch_get_one(&tokens[i], n_eval);
         // TODO: add mrope pos ids somewhere else
         pos.resize(batch.n_tokens * 4);
         std::fill(pos.begin(), pos.end(), 0);
-        for (int j = 0; j < batch.n_tokens * 3; j ++) {
+        for (int j = 0; j < batch.n_tokens * 3; j++)
+        {
             pos[j] = *st_pos_id + (j % batch.n_tokens);
         }
         batch.pos = pos.data();
 
-        if (llama_decode(ctx_llama, batch)) {
-            LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
+        if (llama_decode(ctx_llama, batch))
+        {
+            // LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
         }
         *n_past += n_eval;
@@ -310,78 +327,91 @@ static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_toke
     return true;
 }
 
-static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past, int * st_pos_id) {
+static bool eval_id(struct llama_context *ctx_llama, int id, int *n_past, int *st_pos_id)
+{
     std::vector<llama_token> tokens;
     tokens.push_back(id);
     return eval_tokens(ctx_llama, tokens, 1, n_past, st_pos_id);
 }
 
-static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, int * st_pos_id, bool add_bos){
-    std::string              str2     = str;
+static bool eval_string(struct llama_context *ctx_llama, const char *str, int n_batch, int *n_past, int *st_pos_id, bool add_bos)
+{
+    std::string str2 = str;
     std::vector<llama_token> embd_inp = common_tokenize(ctx_llama, str2, add_bos, true);
     eval_tokens(ctx_llama, embd_inp, n_batch, n_past, st_pos_id);
     return true;
 }
 
-static const char * sample(struct common_sampler * smpl,
-                           struct llama_context * ctx_llama,
-                           int * n_past, int * st_pos_id) {
+static const char *sample(struct common_sampler *smpl,
+                          struct llama_context *ctx_llama,
+                          int *n_past, int *st_pos_id)
+{
     const llama_token id = common_sampler_sample(smpl, ctx_llama, -1);
     common_sampler_accept(smpl, id, true);
     static std::string ret;
-    if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
+    if (llama_token_is_eog(llama_get_model(ctx_llama), id))
+    {
         ret = "</s>";
-    } else {
+    }
+    else
+    {
         ret = common_token_to_piece(ctx_llama, id);
     }
     eval_id(ctx_llama, id, n_past, st_pos_id);
     return ret.c_str();
 }
 
-static const char* IMG_BASE64_TAG_BEGIN = "<img src=\"data:image/jpeg;base64,";
-static const char* IMG_BASE64_TAG_END = "\">";
+static const char *IMG_BASE64_TAG_BEGIN = "<img src=\"data:image/jpeg;base64,";
+static const char *IMG_BASE64_TAG_END = "\">";
 
-static void find_image_tag_in_prompt(const std::string& prompt, size_t& begin_out, size_t& end_out) {
+static void find_image_tag_in_prompt(const std::string &prompt, size_t &begin_out, size_t &end_out)
+{
     begin_out = prompt.find(IMG_BASE64_TAG_BEGIN);
     end_out = prompt.find(IMG_BASE64_TAG_END, (begin_out == std::string::npos) ? 0UL : begin_out);
 }
 
-static bool prompt_contains_image(const std::string& prompt) {
+static bool prompt_contains_image(const std::string &prompt)
+{
     size_t begin, end;
     find_image_tag_in_prompt(prompt, begin, end);
     return (begin != std::string::npos);
 }
 
 // replaces the base64 image tag in the prompt with `replacement`
-static llava_image_embed * llava_image_embed_make_with_prompt_base64(struct clip_ctx * ctx_clip, int n_threads, const std::string& prompt) {
+static llava_image_embed *llava_image_embed_make_with_prompt_base64(struct clip_ctx *ctx_clip, int n_threads, const std::string &prompt)
+{
     size_t img_base64_str_start, img_base64_str_end;
     find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
-    if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos) {
-        LOG_ERR("%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
+    if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos)
+    {
+        // LOG_ERR("%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
         return NULL;
     }
 
     auto base64_bytes_start = img_base64_str_start + strlen(IMG_BASE64_TAG_BEGIN);
     auto base64_bytes_count = img_base64_str_end - base64_bytes_start;
-    auto base64_str = prompt.substr(base64_bytes_start, base64_bytes_count );
+    auto base64_str = prompt.substr(base64_bytes_start, base64_bytes_count);
 
     auto required_bytes = base64::required_encode_size(base64_str.size());
     auto img_bytes = std::vector<unsigned char>(required_bytes);
     base64::decode(base64_str.begin(), base64_str.end(), img_bytes.begin());
 
     auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
-    if (!embed) {
-        LOG_ERR("%s: could not load image from base64 string.\n", __func__);
+    if (!embed)
+    {
+        // LOG_ERR("%s: could not load image from base64 string.\n", __func__);
         return NULL;
     }
 
     return embed;
 }
 
-static std::string remove_image_from_prompt(const std::string& prompt, const char * replacement = "") {
+static std::string remove_image_from_prompt(const std::string &prompt, const char *replacement = "")
+{
     size_t begin, end;
     find_image_tag_in_prompt(prompt, begin, end);
-    if (begin == std::string::npos || end == std::string::npos) {
+    if (begin == std::string::npos || end == std::string::npos)
+    {
         return prompt;
     }
     auto pre = prompt.substr(0, begin);
@@ -389,36 +419,38 @@ static std::string remove_image_from_prompt(const std::string& prompt, const cha
     return pre + replacement + post;
 }
 
-struct llava_context {
-    struct clip_ctx * ctx_clip = NULL;
-    struct llama_context * ctx_llama = NULL;
-    struct llama_model * model = NULL;
+struct llava_context
+{
+    struct clip_ctx *ctx_clip = NULL;
+    struct llama_context *ctx_llama = NULL;
+    struct llama_model *model = NULL;
 };
 
-static void print_usage(int, char ** argv) {
-    LOG("\n example usage:\n");
-    LOG("\n     %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
-    LOG("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
-}
-
-static struct llava_image_embed * load_image(llava_context * ctx_llava, common_params * params, const std::string & fname) {
+static struct llava_image_embed *load_image(llava_context *ctx_llava, common_params *params, const std::string &fname)
+{
 
     // load and preprocess the image
-    llava_image_embed * embed = NULL;
+    llava_image_embed *embed = NULL;
     auto prompt = params->prompt;
-    if (prompt_contains_image(prompt)) {
-        if (!params->image.empty()) {
-            LOG_INF("using base64 encoded image instead of command line image path\n");
+    if (prompt_contains_image(prompt))
+    {
+        if (!params->image.empty())
+        {
+            // LOG_INF("using base64 encoded image instead of command line image path\n");
         }
         embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->cpuparams.n_threads, prompt);
-        if (!embed) {
-            LOG_ERR("%s: can't load image from prompt\n", __func__);
+        if (!embed)
+        {
+            // LOG_ERR("%s: can't load image from prompt\n", __func__);
             return NULL;
         }
         params->prompt = remove_image_from_prompt(prompt);
-    } else {
+    }
+    else
+    {
         embed = llava_image_embed_make_with_filename(ctx_llava->ctx_clip, params->cpuparams.n_threads, fname.c_str());
-        if (!embed) {
+        if (!embed)
+        {
             fprintf(stderr, "%s: is %s really an image file?\n", __func__, fname.c_str());
             return NULL;
         }
@@ -427,7 +459,8 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, common_p
     return embed;
 }
 
-static std::string process_prompt(struct llava_context * ctx_llava, struct llava_image_embed * image_embed, common_params * params, const std::string & prompt) {
+static std::string process_prompt(struct llava_context *ctx_llava, struct llava_image_embed *image_embed, common_params *params, const std::string &prompt)
+{
     int n_past = 0;
     int cur_pos_id = 0;
 
@@ -435,45 +468,58 @@ static std::string process_prompt(struct llava_context * ctx_llava, struct llava
 
     std::string system_prompt, user_prompt;
     size_t image_pos = prompt.find("<|vision_start|>");
-    if (image_pos != std::string::npos) {
+    if (image_pos != std::string::npos)
+    {
         // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
         system_prompt = prompt.substr(0, image_pos);
         user_prompt = prompt.substr(image_pos + std::string("<|vision_pad|>").length());
-        LOG_INF("system_prompt: %s\n", system_prompt.c_str());
-        if (params->verbose_prompt) {
+        // LOG_INF("system_prompt: %s\n", system_prompt.c_str());
+        if (params->verbose_prompt)
+        {
             auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
-            for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            for (int i = 0; i < (int)tmp.size(); i++)
+            {
+                // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
-        LOG_INF("user_prompt: %s\n", user_prompt.c_str());
-        if (params->verbose_prompt) {
+        // LOG_INF("user_prompt: %s\n", user_prompt.c_str());
+        if (params->verbose_prompt)
+        {
             auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
-            for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            for (int i = 0; i < (int)tmp.size(); i++)
+            {
+                // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
-    } else {
+    }
+    else
+    {
         // llava-1.5 native mode
 
         // Only include the vision tokens if an image is passed
-        if (image_embed != nullptr) {
+        if (image_embed != nullptr)
+        {
             system_prompt = "<|im_start|>system\n" + CONTROL_SYSTEM_PROMPT + "<|im_end|>\n<|im_start|>user\n<|vision_start|>";
             user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
-        } else {
+        }
+        else
+        {
             system_prompt = "<|im_start|>system\n" + CONTROL_SYSTEM_PROMPT + "<|im_end|>\n<|im_start|>user\n";
             user_prompt = prompt + "<|im_end|>\n<|im_start|>assistant\n";
         }
-        if (params->verbose_prompt) {
+        if (params->verbose_prompt)
+        {
             auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
-            for (int i = 0; i < (int) tmp.size(); i++) {
-                LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            for (int i = 0; i < (int)tmp.size(); i++)
+            {
+                // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
     }
 
     eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, &cur_pos_id, true);
-    if (image_embed != nullptr) {
+    if (image_embed != nullptr)
+    {
         auto image_size = clip_get_load_image_size(ctx_llava->ctx_clip);
         qwen2vl_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past, &cur_pos_id, image_size);
     }
@@ -481,73 +527,85 @@ static std::string process_prompt(struct llava_context * ctx_llava, struct llava
 
     // generate the response
 
-    LOG("\n");
+    // LOG("\n");
 
-    struct common_sampler * smpl = common_sampler_init(ctx_llava->model, params->sampling);
-    if (!smpl) {
-        LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
+    struct common_sampler *smpl = common_sampler_init(ctx_llava->model, params->sampling);
+    if (!smpl)
+    {
+        // LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
     }
 
     std::string response = "";
-    for (int i = 0; i < max_tgt_len; i++) {
-        const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past, &cur_pos_id);
+    for (int i = 0; i < max_tgt_len; i++)
+    {
+        const char *tmp = sample(smpl, ctx_llava->ctx_llama, &n_past, &cur_pos_id);
         response += tmp;
-        if (strcmp(tmp, "</s>") == 0) break;
-        if (strstr(tmp, "###")) break; // Yi-VL behavior
-        LOG("%s", tmp);
-        if (strstr(response.c_str(), "<|im_end|>")) break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
-        if (strstr(response.c_str(), "<|im_start|>")) break; // Yi-34B llava-1.6
-        if (strstr(response.c_str(), "USER:")) break; // mistral llava-1.6
+        if (strcmp(tmp, "</s>") == 0)
+            break;
+        if (strstr(tmp, "###"))
+            break; // Yi-VL behavior
+        // LOG("%s", tmp);
+        if (strstr(response.c_str(), "<|im_end|>"))
+            break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
+        if (strstr(response.c_str(), "<|im_start|>"))
+            break; // Yi-34B llava-1.6
+        if (strstr(response.c_str(), "USER:"))
+            break; // mistral llava-1.6
 
         fflush(stdout);
     }
 
     common_sampler_free(smpl);
-    LOG("\n");
-    LOG("\nFinal response: %s\n", response.c_str());  // Debug log final response
-    if (response.length() >= 4 && response.substr(response.length() - 4) == "</s>") {
+    // LOG("\n");
+    // LOG("\nFinal response: %s\n", response.c_str()); // Debug log final response
+    if (response.length() >= 4 && response.substr(response.length() - 4) == "</s>")
+    {
         response = response.substr(0, response.length() - 4);
     }
     return response;
 }
 
-static struct llama_model * llava_init(common_params * params) {
+static struct llama_model *llava_init(common_params *params)
+{
     llama_backend_init();
     llama_numa_init(params->numa);
 
     llama_model_params model_params = common_model_params_to_llama(*params);
 
-    llama_model * model = llama_load_model_from_file(params->model.c_str(), model_params);
-    if (model == NULL) {
-        LOG_ERR("%s: unable to load model\n" , __func__);
+    llama_model *model = llama_load_model_from_file(params->model.c_str(), model_params);
+    if (model == NULL)
+    {
+        // LOG_ERR("%s: unable to load model\n", __func__);
         return NULL;
     }
     return model;
 }
 
-static struct llava_context * llava_init_context(common_params * params, llama_model * model) {
-    const char * clip_path = params->mmproj.c_str();
+static struct llava_context *llava_init_context(common_params *params, llama_model *model)
+{
+    const char *clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
-    if (prompt.empty()) {
+    if (prompt.empty())
+    {
         prompt = "describe the image in detail.";
     }
 
-    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
-
+    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/1);
 
     llama_context_params ctx_params = common_context_params_to_llama(*params);
-    ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
+    ctx_params.n_ctx = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
 
-    llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
+    llama_context *ctx_llama = llama_new_context_with_model(model, ctx_params);
 
-    if (ctx_llama == NULL) {
-        LOG_ERR("%s: failed to create the llama_context\n" , __func__);
+    if (ctx_llama == NULL)
+    {
+        // LOG_ERR("%s: failed to create the llama_context\n", __func__);
         return NULL;
     }
 
-    auto * ctx_llava = (struct llava_context *)malloc(sizeof(llava_context));
+    auto *ctx_llava = (struct llava_context *)malloc(sizeof(llava_context));
 
     ctx_llava->ctx_llama = ctx_llama;
     ctx_llava->ctx_clip = ctx_clip;
@@ -555,8 +613,10 @@ static struct llava_context * llava_init_context(common_params * params, llama_m
     return ctx_llava;
 }
 
-static void llava_free(struct llava_context * ctx_llava) {
-    if (ctx_llava->ctx_clip) {
+static void llava_free(struct llava_context *ctx_llava)
+{
+    if (ctx_llava->ctx_clip)
+    {
         clip_free(ctx_llava->ctx_clip);
         ctx_llava->ctx_clip = NULL;
     }
@@ -568,7 +628,8 @@ static void llava_free(struct llava_context * ctx_llava) {
 
 #ifndef NDEBUG
 
-static void debug_test_mrope_2d() {
+static void debug_test_mrope_2d()
+{
     // 1. Initialize backend
     ggml_backend_t backend = NULL;
     std::string backend_name = "";
@@ -576,12 +637,14 @@ static void debug_test_mrope_2d() {
     fprintf(stderr, "%s: using CUDA backend\n", __func__);
     backend = ggml_backend_cuda_init(0); // init device 0
     backend_name = "cuda";
-    if (!backend) {
+    if (!backend)
+    {
         fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
     }
 #endif
     // if there aren't GPU Backends fallback to CPU backend
-    if (!backend) {
+    if (!backend)
+    {
         backend = ggml_backend_cpu_init();
         backend_name = "cpu";
     }
@@ -593,17 +656,17 @@ static void debug_test_mrope_2d() {
 
     // 2. Allocate `ggml_context` to store tensor data
     struct ggml_init_params params = {
-        /*.mem_size   =*/ ctx_size,
-        /*.mem_buffer =*/ NULL,
-        /*.no_alloc   =*/ true, // the tensors will be allocated later by ggml_backend_alloc_ctx_tensors()
+        /*.mem_size   =*/ctx_size,
+        /*.mem_buffer =*/NULL,
+        /*.no_alloc   =*/true, // the tensors will be allocated later by ggml_backend_alloc_ctx_tensors()
     };
-    struct ggml_context * ctx = ggml_init(params);
+    struct ggml_context *ctx = ggml_init(params);
 
-    struct ggml_tensor * inp_raw = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, 128, 12, 30);
+    struct ggml_tensor *inp_raw = ggml_new_tensor_3d(ctx, GGML_TYPE_F32, 128, 12, 30);
     ggml_set_name(inp_raw, "inp_raw");
     ggml_set_input(inp_raw);
 
-    struct ggml_tensor * pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 30 * 4);
+    struct ggml_tensor *pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 30 * 4);
     ggml_set_name(pos, "pos");
     ggml_set_input(pos);
 
@@ -614,7 +677,8 @@ static void debug_test_mrope_2d() {
 
     std::vector<int> pos_id;
     pos_id.resize(30 * 4);
-    for (int i = 0; i < 30; i ++) {
+    for (int i = 0; i < 30; i++)
+    {
         pos_id[i] = i;
         pos_id[i + 30] = i + 10;
         pos_id[i + 60] = i + 20;
@@ -630,21 +694,21 @@ static void debug_test_mrope_2d() {
     ggml_backend_tensor_set(pos, pos_id.data(), 0, ggml_nbytes(pos));
 
     // 6. Create a `ggml_cgraph` for mul_mat operation
-    struct ggml_cgraph * gf = NULL;
-    struct ggml_context * ctx_cgraph = NULL;
+    struct ggml_cgraph *gf = NULL;
+    struct ggml_context *ctx_cgraph = NULL;
 
     // create a temporally context to build the graph
     struct ggml_init_params params0 = {
-        /*.mem_size   =*/ ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
-        /*.mem_buffer =*/ NULL,
-        /*.no_alloc   =*/ true, // the tensors will be allocated later by ggml_gallocr_alloc_graph()
+        /*.mem_size   =*/ggml_tensor_overhead() * GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead(),
+        /*.mem_buffer =*/NULL,
+        /*.no_alloc   =*/true, // the tensors will be allocated later by ggml_gallocr_alloc_graph()
     };
     ctx_cgraph = ggml_init(params0);
     gf = ggml_new_graph(ctx_cgraph);
 
-    struct ggml_tensor * result0 = ggml_rope_multi(
+    struct ggml_tensor *result0 = ggml_rope_multi(
         ctx_cgraph, inp_raw, pos, nullptr,
-        128/2, sections, LLAMA_ROPE_TYPE_VISION, 32768, 1000000, 1,
+        128 / 2, sections, LLAMA_ROPE_TYPE_VISION, 32768, 1000000, 1,
         0, 1, 32, 1);
 
     // Add "result" tensor and all of its dependencies to the cgraph
@@ -656,26 +720,30 @@ static void debug_test_mrope_2d() {
 
     // 9. Run the computation
     int n_threads = 1; // Optional: number of threads to perform some operations with multi-threading
-    if (ggml_backend_is_cpu(backend)) {
+    if (ggml_backend_is_cpu(backend))
+    {
         ggml_backend_cpu_set_n_threads(backend, n_threads);
     }
     ggml_backend_graph_compute(backend, gf);
 
     // 10. Retrieve results (output tensors)
     // in this example, output tensor is always the last tensor in the graph
-    struct ggml_tensor * result = result0;
+    struct ggml_tensor *result = result0;
     // struct ggml_tensor * result = gf->nodes[gf->n_nodes - 1];
-    float * result_data = (float *)malloc(ggml_nbytes(result));
+    float *result_data = (float *)malloc(ggml_nbytes(result));
     // because the tensor data is stored in device buffer, we need to copy it back to RAM
     ggml_backend_tensor_get(result, result_data, 0, ggml_nbytes(result));
-    const std::string bin_file = "mrope_2d_" + backend_name +".bin";
+    const std::string bin_file = "mrope_2d_" + backend_name + ".bin";
     std::ofstream outFile(bin_file, std::ios::binary);
 
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(result_data), ggml_nbytes(result));
+    if (outFile.is_open())
+    {
+        outFile.write(reinterpret_cast<const char *>(result_data), ggml_nbytes(result));
         outFile.close();
         std::cout << "Data successfully written to " + bin_file << std::endl;
-    } else {
+    }
+    else
+    {
         std::cerr << "Error opening file!" << std::endl;
     }
 
@@ -688,49 +756,223 @@ static void debug_test_mrope_2d() {
     ggml_backend_free(backend);
 }
 
-static void debug_dump_img_embed(struct llava_context * ctx_llava) {
-    int n_embd  = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
+static void debug_dump_img_embed(struct llava_context *ctx_llava)
+{
+    int n_embd = llama_n_embd(llama_get_model(ctx_llava->ctx_llama));
     int ne = n_embd * 4;
     float vals[56 * 56 * 3];
     // float embd[ne];
     std::vector<float> embd;
     embd.resize(ne);
 
-    for (int i = 0; i < 56*56; i++)
+    for (int i = 0; i < 56 * 56; i++)
     {
         for (int c = 0; c < 3; c++)
-            vals[i * 3 + c] = (float)(i % (56 * 56)) / (56*56);
+            vals[i * 3 + c] = (float)(i % (56 * 56)) / (56 * 56);
     }
 
     clip_encode_float_image(ctx_llava->ctx_clip, 16, vals, 56, 56, embd.data());
 
     std::ofstream outFile("img_embed.bin", std::ios::binary);
-    if (outFile.is_open()) {
-        outFile.write(reinterpret_cast<const char*>(embd.data()), ne * sizeof(float));
+    if (outFile.is_open())
+    {
+        outFile.write(reinterpret_cast<const char *>(embd.data()), ne * sizeof(float));
 
         outFile.close();
         std::cout << "Data successfully written to mrope.bin" << std::endl;
-    } else {
+    }
+    else
+    {
         std::cerr << "Error opening file!" << std::endl;
     }
 }
 
 #endif
 
+// Helper function to restore stdout and stderr
+void restore_stdout_stderr() {
+    #ifdef _WIN32
+        freopen("CON", "w", stdout);
+        freopen("CON", "w", stderr);
+    #else
+        freopen("/dev/tty", "w", stdout);
+        freopen("/dev/tty", "w", stderr);
+    #endif
+}
 
-void stdin_monitor(httplib::Server& server) {
-    std::string line;
-    while (std::getline(std::cin, line)) {
-        if (line == "shutdown") {
-            std::cout << "Shutdown command received from stdin, stopping server...\n";
-            server.stop();
-            exit(0);
+// Helper function to redirect stdout and stderr to null
+void redirect_stdout_stderr_to_null() {
+#ifdef _WIN32
+    freopen("NUL", "w", stdout);
+    freopen("NUL", "w", stderr);
+#else
+    freopen("/dev/null", "w", stdout);
+    freopen("/dev/null", "w", stderr);
+#endif
+}
+
+void log_input(const std::string &input) {
+    std::ofstream log_file("C:\\Users\\Luke\\Downloads\\log.txt", std::ios_base::app);
+    if (log_file.is_open())
+    {
+        log_file << input << std::endl;
+    }
+}
+
+std::string load_model(const std::string &data) {
+    return "Model loaded with data: " + data;
+}
+
+std::string infer(const std::string &data) {
+    try
+    {
+        // Parse JSON from request body
+        log_input("infer input: " + data);
+        auto json = nlohmann::json::parse(data);
+
+        // Check for required prompt field
+        if (!json.contains("prompt"))
+        {
+            nlohmann::json response = {
+                {"success", false},
+                {"reason", "Missing required 'prompt' field"}};
+            return response.dump();
+        }
+
+        // Extract fields
+        std::string prompt = json["prompt"];
+        std::string image = json.value("image", ""); // Optional field
+
+        // Generate with Qwen
+        params.prompt = prompt;
+        std::string result = "";
+        if (image.empty())
+        {
+            // Generate without image input
+            auto ctx_llava = llava_init_context(&params, model);
+
+            // process the prompt
+            result = process_prompt(ctx_llava, nullptr, &params, prompt);
+
+            ctx_llava->model = NULL;
+            llava_free(ctx_llava);
+        }
+        else
+        {
+            // Generate with image input
+            auto *ctx_llava = llava_init_context(&params, model);
+            auto *image_embed = load_image(ctx_llava, &params, image);
+            if (!image_embed)
+            {
+                nlohmann::json response = {
+                    {"success", false},
+                    {"reason", "Failed to load image %s. Terminating\n\n", image.c_str()}};
+                return response.dump();
+            }
+
+            // process the prompt
+            result = process_prompt(ctx_llava, image_embed, &params, prompt);
+
+            llava_image_embed_free(image_embed);
+            ctx_llava->model = NULL;
+            llava_free(ctx_llava);
+        }
+        params.prompt = "";
+
+        log_input("returning: " + result);
+        return result;
+    }
+    catch (const nlohmann::json::parse_error &e)
+    {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Invalid JSON payload"}};
+        return response.dump();
+    }
+}
+
+void processRequest(std::atomic<bool> &running)
+{
+    std::string input;
+    while (running)
+    {
+        std::getline(std::cin, input);
+        std::cin.clear(); // Clear the input buffer
+        if (!input.empty())
+        {
+            if (input == "SHUTDOWN")
+            {
+                restore_stdout_stderr();
+                std::cout << "Shutting down..." << std::endl;
+                redirect_stdout_stderr_to_null();
+                running = false;
+                break;
+            }
+            else if (input.rfind("INFER", 0) == 0)
+            {
+                std::string response = infer(input.substr(6)); // Call infer with the rest of the input
+                restore_stdout_stderr();
+                std::cout << response << std::endl;
+                redirect_stdout_stderr_to_null();
+            }
+            else if (input.rfind("LOAD", 0) == 0)
+            {
+                std::string response = load_model(input.substr(5)); // Call load_model with the rest of the input
+                restore_stdout_stderr();
+                std::cout << response << std::endl;
+                redirect_stdout_stderr_to_null();
+            }
+            else
+            {
+                restore_stdout_stderr();
+                std::cout << "ERROR - unknown function: " << input << std::endl;
+                redirect_stdout_stderr_to_null();
+            }
+            input = "";
         }
     }
 }
 
+// // Define a no-op logging callback
+// void noop_log_callback(ggml_log_level level, const char *message, void *user_data) {
+//     // Do nothing
+// }
+// bool is_stdout_redirected() {
+//     return !_isatty(_fileno(stdout));
+// }
+// void restore_stdout() {
+//     if (is_stdout_redirected()) {
+//         if (freopen("CON", "w", stdout) == nullptr) {
+//             perror("freopen"); // Handle potential errors
+//         } else {
+//             // Set the mode to text mode
+//             _setmode(_fileno(stdout), _O_TEXT);
+//         }
+//     }
+// }
+int main()
+{
+    // // Redirect stdout to /dev/null
+    // std::fflush(stdout); // Flush the stream before redirecting.
+    // FILE* original_stdout = stdout; // Optional: Store the original stdout
+    // freopen("NUL", "w", stdout);
 
-int main(int argc, char ** argv) {
+    // std::cout << "This will not be printed to the console" << std::endl;
+    // log_input("This will not be printed to the console.");
+
+    // // Restore stdout
+    // // restore_stdout();
+    // freopen("CON", "w", stdout);
+
+    // // freopen("CON", "w", stdout); // For windows
+    // log_input("before This will be printed to the console.");
+    // std::cout << "This will be printed to the console" << std::endl;
+    // log_input("This will be printed to the console.");
+
+    // return 0;
+    // Make sure nothing but returned data is printed to stdout
+    redirect_stdout_stderr_to_null();
+
     // Qwen Model initialization
     const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-text.gguf";
     const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-vision.gguf";
@@ -739,100 +981,17 @@ int main(int argc, char ** argv) {
     params.mmproj = MMPROJ_PATH;
     params.cpuparams.n_threads = 4;
     params.sampling.grammar = json_schema_to_grammar(nlohmann::json::parse(CONTROL_JSON_SCHEMA));
-    auto * model = llava_init(&params);
-    if (model == NULL) {
+    model = llava_init(&params);
+    if (model == NULL)
+    {
         fprintf(stderr, "%s: error: failed to init llava model\n", __func__);
         return 1;
     }
 
-    // Server setup
-    httplib::Server server;
-
-    // Monitor stdin and listen for the kill server command
-    // std::thread monitor_thread(stdin_monitor, std::ref(server));
-    // monitor_thread.detach(); // Detach thread so it runs independently
-
-    // Route to load a model
-    server.Post("/load_model", [](const httplib::Request& req, httplib::Response& res) {
-        std::cout << "load model..." << std::endl;
-        res.set_content("loading response", "text/plain");
-    });
-
-    // Route to shutdown the server and exit the process
-    server.Post("/shutdown", [&server, &model](const httplib::Request& req, httplib::Response& res) {
-    res.set_content("Server is shutting down", "text/plain");
-    std::thread([&server, &model]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            llama_free_model(model);
-            server.stop();
-            std::exit(0);
-        }).detach();
-    });
-
-    // Route to perform inference
-    server.Post("/inference", [&params, &model](const httplib::Request& req, httplib::Response& res) {
-        try {
-            // Parse JSON from request body
-            auto json = nlohmann::json::parse(req.body);
-            
-            // Check for required prompt field
-            if (!json.contains("prompt")) {
-                res.status = 400;
-                res.set_content("Missing required 'prompt' field", "text/plain");
-                return;
-            }
-
-            // Extract fields
-            std::string prompt = json["prompt"];
-            std::string image = json.value("image", ""); // Optional field
-
-            // Print the values
-            std::cout << "Received inference request:" << std::endl;
-            std::cout << "Prompt: " << prompt << std::endl;
-            if (!image.empty()) {
-                std::cout << "Image location: " << image << std::endl;
-            }
-
-            // Generate with Qwen
-            params.prompt = prompt;
-            std::string result = "";
-            if (image.empty()) {
-                // Generate without image input
-                auto ctx_llava = llava_init_context(&params, model);
-
-                // process the prompt
-                result = process_prompt(ctx_llava, nullptr, &params, prompt);
-
-                ctx_llava->model = NULL;
-                llava_free(ctx_llava);
-            } else {
-                // Generate with image input
-                auto * ctx_llava = llava_init_context(&params, model);
-                auto * image_embed = load_image(ctx_llava, &params, image);
-                if (!image_embed) {
-                    LOG_ERR("%s: failed to load image %s. Terminating\n\n", __func__, image.c_str());
-                    return;
-                }
-
-                // process the prompt
-                result = process_prompt(ctx_llava, image_embed, &params, prompt);
-
-                llava_image_embed_free(image_embed);
-                ctx_llava->model = NULL;
-                llava_free(ctx_llava);
-            }
-            params.prompt = "";
-
-            res.status = 200;
-            res.set_content(result, "application/json");
-        } catch (const nlohmann::json::parse_error& e) {
-            res.status = 400;
-            res.set_content("Invalid JSON payload", "text/plain");
-        }
-    });
-
-    std::cout << "Starting server on port 8008..." << std::endl;
-    server.listen("0.0.0.0", 8008);
+    // Listen to stdin in another thread and respond to requests
+    std::atomic<bool> running(true);
+    std::thread listener(processRequest, std::ref(running));
+    listener.join();
 
     llama_free_model(model);
     return 0;
