@@ -9,6 +9,7 @@ use tauri_plugin_shell::ShellExt;
 // Function to start the sidecar
 #[tauri::command]
 pub async fn start_sidecar(app_handle: tauri::AppHandle) -> Result<(), String> {
+    println!("[tauri] Received command to start sidecar.");
     // Check if a sidecar process already exists
     if let Some(state) = app_handle.try_state::<Arc<Mutex<Option<CommandChild>>>>() {
         let child_process = state.lock().await;
@@ -33,6 +34,7 @@ pub async fn start_sidecar(app_handle: tauri::AppHandle) -> Result<(), String> {
     } else {
         return Err("Failed to access app state".to_string());
     }
+    println!("[tauri] Sidecar started and saved to app state");
     Ok(())
 }
 

@@ -28,34 +28,62 @@ impl Progress for MyProgress {
     }
 }
 
+// Checks if the model files for the cpp server are downloaded
 #[tauri::command]
-pub fn check_model_download() -> bool {
-    // Checks if the model files for the cpp server are downloaded
-    true
+pub fn check_model_download(app_handle: tauri::AppHandle) -> bool {
+    // Get the directory to save the model to
+    let app_data_path = app_handle
+        .path()
+        .app_data_dir()
+        .expect("App data dir could not be fetched.");
+    let models_dir = app_data_path.join("models");
+
+    if !models_dir.exists() {
+        return false;
+    }
+
+    let text_model_path = models_dir.join("qwen2vl-2b-text.gguf");
+    let vision_model_path = models_dir.join("qwen2vl-2b-vision.gguf");
+
+    text_model_path.exists() && vision_model_path.exists()
 }
 
+// Downloads the model from huggingface into the cache dir
 #[tauri::command]
-pub fn download_model() {
-    // Downloads the model from huggingface into the cache dir
+pub fn download_model(app_handle: tauri::AppHandle) {
+    // Get the directory to save the model to
+    let app_data_path = app_handle
+        .path()
+        .app_data_dir()
+        .expect("App data dir could not be fetched.");
+    let models_dir = app_data_path.join("models");
+    fs::create_dir_all(&models_dir).unwrap();
+
     let api = Api::new().unwrap();
+
+    // Download text model
     let text_model_progress = MyProgress {
         current: 0,
         total: 0,
     };
+    let text_model_path = models_dir.join("qwen2vl-2b-text.gguf");
     let text_model = api
         .model("lukesutor/Qwen2VL-2B-Q4-K-M-GGUF".to_string())
-        .download_with_progress("qwen2vl-2b-text.gguf", text_model_progress)
+        .download_with_progress(text_model_path.to_str().unwrap(), text_model_progress)
         .unwrap();
-    println!("{}", text_model.to_str().unwrap().to_string());
+    println!("[tauri] Downloaded text model to {}", text_model.to_str().unwrap().to_string());
+
+    // Vision model progress
     let vision_model_progress = MyProgress {
         current: 0,
         total: 0,
     };
+    let vision_model_path = models_dir.join("qwen2vl-2b-vision.gguf");
     let vision_model = api
         .model("lukesutor/Qwen2VL-2B-Q4-K-M-GGUF".to_string())
-        .download_with_progress("qwen2vl-2b-vision.gguf", vision_model_progress)
+        .download_with_progress(vision_model_path.to_str().unwrap(), vision_model_progress)
         .unwrap();
-    println!("{}", vision_model.to_str().unwrap().to_string());
+    println!("[tauri] Downloaded vision model to {}", vision_model.to_str().unwrap().to_string());
 }
 
 #[tauri::command]
@@ -64,7 +92,6 @@ pub fn take_screenshot(app_handle: tauri::AppHandle) -> String {
     let screen = &screens[0]; // Assuming single screen for simplicity
     let image = screen.capture().unwrap();
 
-    // let store = Store::get()
     let app_data_path = app_handle
         .path()
         .app_data_dir()
