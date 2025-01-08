@@ -815,14 +815,17 @@ void log_input(const std::string &input) {
 }
 
 std::string load_model(const std::string &data) {
-    return "Model loaded with data: " + data;
+    nlohmann::json response = {
+        {"success", true},
+        {"reason", "model loaded with data: " + data}};
+    return response.dump();;
 }
 
 std::string infer(const std::string &data) {
     try
     {
         // Parse JSON from request body
-        log_input("infer input: " + data);
+        // log_input("infer input: " + data);
         auto json = nlohmann::json::parse(data);
 
         // Check for required prompt field
@@ -837,15 +840,16 @@ std::string infer(const std::string &data) {
         // Extract fields
         std::string prompt = json["prompt"];
         std::string image = json.value("image", ""); // Optional field
-        log_input("prompt: " + prompt + " image: " + image);
+        // log_input("prompt: " + prompt + " image: " + image);
 
         // Generate with Qwen
         params.prompt = prompt;
         std::string result = "";
         if (image.empty())
         {
+
             // Generate without image input
-            auto ctx_llava = llava_init_context(&params, model);
+            llava_context *ctx_llava = llava_init_context(&params, model);
 
             // process the prompt
             result = process_prompt(ctx_llava, nullptr, &params, prompt);
@@ -856,8 +860,8 @@ std::string infer(const std::string &data) {
         else
         {
             // Generate with image input
-            auto *ctx_llava = llava_init_context(&params, model);
-            auto *image_embed = load_image(ctx_llava, &params, image);
+            llava_context *ctx_llava = llava_init_context(&params, model);
+            llava_image_embed *image_embed = load_image(ctx_llava, &params, image);
             if (!image_embed)
             {
                 nlohmann::json response = {
@@ -875,7 +879,8 @@ std::string infer(const std::string &data) {
         }
         params.prompt = "";
 
-        log_input("returning: " + result);
+        // log_input("returning: " + result);
+        result.erase(std::remove(result.begin(), result.end(), '\n'), result.end());
         return result;
     }
     catch (const nlohmann::json::parse_error &e)
@@ -898,31 +903,29 @@ void processRequest(std::atomic<bool> &running)
         {
             if (input == "SHUTDOWN")
             {
-                // restore_stdout_stderr();
-                std::cout << "Shutting down..." << std::endl;
-                // redirect_stdout_stderr_to_null();
+                nlohmann::json response = {
+                    {"success", true},
+                    {"reason", "Shutting down"}};
+                std::cout << "RESPONSE " << response.dump() << std::endl;
                 running = false;
                 break;
             }
             else if (input.rfind("INFER", 0) == 0)
             {
                 std::string response = infer(input.substr(6)); // Call infer with the rest of the input
-                // restore_stdout_stderr();
-                std::cout << response << std::endl;
-                // redirect_stdout_stderr_to_null();
+                std::cout << "RESPONSE " << response << std::endl;
             }
             else if (input.rfind("LOAD", 0) == 0)
             {
                 std::string response = load_model(input.substr(5)); // Call load_model with the rest of the input
-                // restore_stdout_stderr();
-                std::cout << response << std::endl;
-                // redirect_stdout_stderr_to_null();
+                std::cout << "RESPONSE " << response << std::endl;
             }
             else
             {
-                // restore_stdout_stderr();
-                std::cout << "ERROR - unknown function: " << input << std::endl;
-                // redirect_stdout_stderr_to_null();
+                nlohmann::json response = {
+                    {"success", false},
+                    {"reason", "Error unknown function: " + input}};
+                std::cout << "RESPONSE " << response.dump() << std::endl;
             }
             input = "";
         }
@@ -934,7 +937,6 @@ int main()
     // Qwen Model initialization
     const std::string MODEL_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-text.gguf";
     const std::string MMPROJ_PATH = "C:/Users/Luke/Desktop/coding/local-computer-use/src-tauri/llm/models/qwen2-vl/qwen2vl-2b-vision.gguf";
-    common_params params;
     params.model = MODEL_PATH;
     params.mmproj = MMPROJ_PATH;
     params.cpuparams.n_threads = 4;

@@ -69,8 +69,12 @@ pub async fn write_to_sidecar(app_handle: tauri::AppHandle, message: String) -> 
             while let Some(event) = rx.recv().await {
                 if let CommandEvent::Stdout(line_bytes) = event {
                     let line = String::from_utf8_lossy(&line_bytes);
-                    print!("Sidecar stdout: {}", line);
-                    return Ok(line.to_string());
+                    // If the line doesn't start with "RESPONSE", then it's just llama.cpp utility printing
+                    if line.starts_with("RESPONSE") {
+                        let line = line["RESPONSE ".len()..].to_string();
+                        print!("Sidecar stdout: {}", line);
+                        return Ok(line);
+                    }
                 }
             }
             return Err("No sidecar process running".to_string());
