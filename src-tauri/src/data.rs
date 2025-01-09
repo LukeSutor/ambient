@@ -1,32 +1,15 @@
 // Contains functions for the application data control
 
-use hf_hub::api::{sync::Api, Progress};
 use screenshots::Screen;
+use std::{fs::File, io::Write};
 use std::fs;
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 use image::imageops::FilterType;
 use std::path::PathBuf;
+use reqwest::Client;
+use serde::Serialize;
+use tokio_stream::StreamExt;
 
-struct MyProgress {
-    current: usize,
-    total: usize,
-}
-
-impl Progress for MyProgress {
-    fn init(&mut self, size: usize, _filename: &str) {
-        self.total = size;
-        self.current = 0;
-    }
-
-    fn update(&mut self, size: usize) {
-        self.current += size;
-        println!("{}/{}", self.current, self.total)
-    }
-
-    fn finish(&mut self) {
-        println!("Done !");
-    }
-}
 
 // Checks if the model files for the cpp server are downloaded
 #[tauri::command]
@@ -48,9 +31,29 @@ pub fn check_model_download(app_handle: tauri::AppHandle) -> bool {
     text_model_path.exists() && vision_model_path.exists()
 }
 
-// Downloads the model from huggingface into the cache dir
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadStarted {
+    model_name: String,
+    content_length: u64
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadProgress {
+    model_name: String,
+    total_progress: u64
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadFinished {
+    model_name: String,
+}
+
+// Downloads the model from huggingface into the data dir
 #[tauri::command]
-pub fn download_model(app_handle: tauri::AppHandle) {
+pub async fn download_model(app_handle: tauri::AppHandle) -> Result<(), String> {
     // Get the directory to save the model to
     let app_data_path = app_handle
         .path()
@@ -58,32 +61,56 @@ pub fn download_model(app_handle: tauri::AppHandle) {
         .expect("App data dir could not be fetched.");
     let models_dir = app_data_path.join("models");
     fs::create_dir_all(&models_dir).unwrap();
+    let text_model_url = "https://huggingface.co/lukesutor/Qwen2VL-2B-Q4-K-M-GGUF/resolve/main/qwen2vl-2b-text.gguf?download=true";
+    let vision_model_url = "https://huggingface.co/lukesutor/Qwen2VL-2B-Q4-K-M-GGUF/resolve/main/qwen2vl-2b-vision.gguf?download=true";
+    let text_model_name = "qwen2vl-2b-text.gguf";
+    let vision_model_name = "qwen2vl-2b-vision.gguf";
+    let text_model_path = models_dir.join(text_model_name);
+    let vision_model_path = models_dir.join(vision_model_name);
 
-    let api = Api::new().unwrap();
+    for (model_name, url, out_path) in [(text_model_name, text_model_url, text_model_path), (vision_model_name, vision_model_url, vision_model_path)] {
+        let client = Client::new();
+        let response = client.get(url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        let total_size = response
+            .content_length()
+            .ok_or_else(|| "Failed to get content length".to_string())?;
 
-    // Download text model
-    let text_model_progress = MyProgress {
-        current: 0,
-        total: 0,
-    };
-    let text_model_path = models_dir.join("qwen2vl-2b-text.gguf");
-    let text_model = api
-        .model("lukesutor/Qwen2VL-2B-Q4-K-M-GGUF".to_string())
-        .download_with_progress(text_model_path.to_str().unwrap(), text_model_progress)
-        .unwrap();
-    println!("[tauri] Downloaded text model to {}", text_model.to_str().unwrap().to_string());
+        // Send start update
+        app_handle
+            .emit("download-started", DownloadStarted {
+                model_name: model_name.to_string(),
+                content_length: total_size
+            }).unwrap();
+    
+        let mut file = File::create(out_path).map_err(|e| e.to_string())?;
+        let mut downloaded: u64 = 0;
 
-    // Vision model progress
-    let vision_model_progress = MyProgress {
-        current: 0,
-        total: 0,
-    };
-    let vision_model_path = models_dir.join("qwen2vl-2b-vision.gguf");
-    let vision_model = api
-        .model("lukesutor/Qwen2VL-2B-Q4-K-M-GGUF".to_string())
-        .download_with_progress(vision_model_path.to_str().unwrap(), vision_model_progress)
-        .unwrap();
-    println!("[tauri] Downloaded vision model to {}", vision_model.to_str().unwrap().to_string());
+        let mut stream = response.bytes_stream();
+
+        // Process the stream of chunks
+        while let Some(chunk) = stream.next().await {
+            let chunk_data = chunk.map_err(|e| e.to_string())?;
+            file.write_all(&chunk_data).map_err(|e| e.to_string())?;
+            downloaded += chunk_data.len() as u64;
+
+            // Send progress update
+            app_handle
+                .emit("download-progress", DownloadProgress {
+                    model_name: model_name.to_string(),
+                    total_progress: downloaded
+                }).unwrap();
+        }
+
+        // Send completion update
+        app_handle
+            .emit("download-finished", DownloadFinished {
+                model_name: model_name.to_string()
+            }).unwrap();
+    }
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+
+// Components
+import ModelDownloadBanner from "./components/ModelDownloadBanner";
 
 function App() {
   const [input, setInput] = useState("");
@@ -64,8 +65,10 @@ function App() {
   }
 
   return (
+    <>
+      <ModelDownloadBanner />
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+      <h1 className="text-green-500">Welcome to Tauri + React</h1>
       <div className="">
         <button onClick={startSidecarAction}>Connect</button>
         <button onClick={shutdownSidecarAction}>Disconnect</button>
@@ -98,6 +101,7 @@ function App() {
         <button onClick={inferAction}>Submit</button>
       </div>
     </main>
+    </>
   );
 }
 

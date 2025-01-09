@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tauri::{Manager, Emitter};
+use tauri::{Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
