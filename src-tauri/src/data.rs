@@ -10,25 +10,29 @@ use reqwest::Client;
 use serde::Serialize;
 use tokio_stream::StreamExt;
 
-
-// Checks if the model files for the cpp server are downloaded
+// Gets the paths of the model files
 #[tauri::command]
-pub fn check_model_download(app_handle: tauri::AppHandle) -> bool {
-    // Get the directory to save the model to
+pub fn get_model_paths(app_handle: tauri::AppHandle) -> Vec<PathBuf> {
+    // Get the directory where the models are saved
     let app_data_path = app_handle
         .path()
         .app_data_dir()
         .expect("App data dir could not be fetched.");
     let models_dir = app_data_path.join("models");
 
-    if !models_dir.exists() {
-        return false;
-    }
-
+    // Collect the model file paths
     let text_model_path = models_dir.join("qwen2vl-2b-text.gguf");
     let vision_model_path = models_dir.join("qwen2vl-2b-vision.gguf");
 
-    text_model_path.exists() && vision_model_path.exists()
+    vec![text_model_path, vision_model_path]
+}
+
+// Checks if the model files for the cpp server are downloaded
+#[tauri::command]
+pub fn check_model_download(app_handle: tauri::AppHandle) -> bool {
+    let model_paths = get_model_paths(app_handle);
+
+    model_paths.iter().all(|path| path.exists())
 }
 
 #[derive(Clone, Serialize)]
