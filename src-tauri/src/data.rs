@@ -38,21 +38,22 @@ pub fn check_model_download(app_handle: tauri::AppHandle) -> bool {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DownloadStarted {
-    model_name: String,
+    model_id: u64,
+    total_models: u64,
     content_length: u64
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DownloadProgress {
-    model_name: String,
+    model_id: u64,
     total_progress: u64
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DownloadFinished {
-    model_name: String,
+    model_id: u64
 }
 
 // Downloads the model from huggingface into the data dir
@@ -71,8 +72,9 @@ pub async fn download_model(app_handle: tauri::AppHandle) -> Result<(), String> 
     let vision_model_name = "qwen2vl-2b-vision.gguf";
     let text_model_path = models_dir.join(text_model_name);
     let vision_model_path = models_dir.join(vision_model_name);
+    let total_models = 2;
 
-    for (model_name, url, out_path) in [(text_model_name, text_model_url, text_model_path), (vision_model_name, vision_model_url, vision_model_path)] {
+    for (model_id, url, out_path) in [(1, text_model_url, text_model_path), (2, vision_model_url, vision_model_path)] {
         let client = Client::new();
         let response = client.get(url)
             .send()
@@ -85,7 +87,8 @@ pub async fn download_model(app_handle: tauri::AppHandle) -> Result<(), String> 
         // Send start update
         app_handle
             .emit("download-started", DownloadStarted {
-                model_name: model_name.to_string(),
+                model_id: model_id,
+                total_models: total_models,
                 content_length: total_size
             }).unwrap();
     
@@ -103,7 +106,7 @@ pub async fn download_model(app_handle: tauri::AppHandle) -> Result<(), String> 
             // Send progress update
             app_handle
                 .emit("download-progress", DownloadProgress {
-                    model_name: model_name.to_string(),
+                    model_id: model_id,
                     total_progress: downloaded
                 }).unwrap();
         }
@@ -111,7 +114,7 @@ pub async fn download_model(app_handle: tauri::AppHandle) -> Result<(), String> 
         // Send completion update
         app_handle
             .emit("download-finished", DownloadFinished {
-                model_name: model_name.to_string()
+                model_id: model_id
             }).unwrap();
     }
     Ok(())

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useNavigate } from "react-router-dom";
 
 // Components
 import ModelDownloadBanner from "./components/ModelDownloadBanner";
@@ -8,6 +9,23 @@ function App() {
   const [input, setInput] = useState("");
   const [prompt, setPrompt] = useState("");
   const [includeImage, setIncludeImage] = useState(false);
+  const [modelDownloaded, setModelDownloaded] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    async function checkModelDownload() {
+      try {
+        const result = await invoke("check_model_download");
+        setModelDownloaded(result);
+        if (!result) {
+          navigate("/download");
+        }
+      } catch (err) {
+        console.error(`[ui] Failed to check if models are downloaded. ${err}`);
+      }
+    }
+    checkModelDownload();
+  }, [navigate]);
 
   const shutdownSidecarAction = async () => {
     console.log("shutdown server");
@@ -62,6 +80,10 @@ function App() {
     } catch (err) {
       console.error(`[ui] Failed to write to sidecar. ${err}`);
     }
+  }
+
+  if (!modelDownloaded) {
+    return null; // Prevent rendering if redirecting
   }
 
   return (
