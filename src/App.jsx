@@ -1,16 +1,50 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 
-// Components
-import ModelDownloadBanner from "./components/ModelDownloadBanner";
+const formSchema = z.object({
+  prompt: z.string().min(1, {
+    message: "Prompt must be at least 1 character.",
+  }).max(500, {
+    message: "Prompt must be at most 500 characters.",
+  }),
+});
 
 function App() {
-  const [input, setInput] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [includeImage, setIncludeImage] = useState(false);
   const [modelDownloaded, setModelDownloaded] = useState(true);
   const navigate = useNavigate();
+
+  const form = useForm({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      prompt: "",
+    },
+  });
+
+  function onSubmit(values) {
+    console.log(values);
+  }
 
   useEffect(() => {
     async function checkModelDownload() {
@@ -27,103 +61,48 @@ function App() {
     checkModelDownload();
   }, [navigate]);
 
-  const shutdownSidecarAction = async () => {
-    console.log("shutdown server");
-    try {
-      const result = await invoke("shutdown_sidecar");
-      console.log("Shutdown result:", result);
-      return;
-    } catch (err) {
-      console.error(`[ui] Failed to shutdown server. ${err}`);
-    }
-  }
-
-  const startSidecarAction = async () => {
-    console.log("start server");
-    try {
-      const result = await invoke("start_sidecar");
-      console.log("Start result:", result);
-      return;
-    } catch (err) {
-      console.error(`[ui] Failed to start server. ${err}`);
-    }
-  }
-
-  const inferAction = async () => {
-    console.log("making inference request", prompt, includeImage);
-    try {
-      const result = await invoke("handle_request", { prompt, includeImage });
-      console.log("Inference result:", result);
-      return;
-    } catch (err) {
-      console.error(`[ui] Failed to make inference request. ${err}`);
-    }
-  }
-
-  const takeScreenshotAction = async () => {
-    console.log("taking screenshot");
-    try {
-      const result = await invoke("take_screenshot");
-      console.log("Screenshot result:", result);
-      return;
-    } catch (err) {
-      console.error(`[ui] Failed to take screenshot. ${err}`);
-    }
-  }
-
-  const writeSidecarAction = async () => {
-    console.log("writing to sidecar: ", input);
-    try {
-      const result = await invoke("write_to_sidecar", { message: input });
-      console.log("Sidecar result:", result);
-      return;
-    } catch (err) {
-      console.error(`[ui] Failed to write to sidecar. ${err}`);
-    }
-  }
-
   if (!modelDownloaded) {
     return null; // Prevent rendering if redirecting
   }
 
   return (
-    <>
-      <ModelDownloadBanner />
-    <main className="container">
-      <h1 className="text-green-500">Welcome to Tauri + React</h1>
-      <div className="">
-        <button onClick={startSidecarAction}>Connect</button>
-        <button onClick={shutdownSidecarAction}>Disconnect</button>
-        <button onClick={takeScreenshotAction}>Take Screenshot</button>
-      </div>
-      <div className="">
-        <input
-          type="text"
-          placeholder="Enter sidecar input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <button onClick={writeSidecarAction}>Write to Sidecar</button>
-      </div>
-      <div className="">
-        <input
-          type="text"
-          placeholder="Enter prompt"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
-        <label>
-          <input
-            type="checkbox"
-            checked={includeImage}
-            onChange={(e) => setIncludeImage(e.target.checked)}
-          />
-          Include Screenshot
-        </label>
-        <button onClick={inferAction}>Submit</button>
-      </div>
-    </main>
-    </>
+    <div className="flex flex-col justify-center items-center w-screen h-screen">
+      <Card className="w-[500px]">
+        <CardHeader>
+          <CardTitle>Ask anything</CardTitle>
+          <CardDescription>What would you like to achieve?</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col space-y-4">
+              <FormField
+                control={form.control}
+                name="prompt"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prompt</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Ask me to do anything..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit">Submit</Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+      <Button
+        className="absolute bottom-4 right-4"
+        onClick={() => navigate("/debug")}
+      >
+        Debug
+      </Button>
+    </div>
   );
 }
 
