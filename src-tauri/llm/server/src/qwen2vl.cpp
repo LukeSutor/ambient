@@ -27,6 +27,7 @@
 #include <thread>
 #include <string>
 #include <atomic>
+#include <mutex>
 #include "json-schema-to-grammar.h"
 
 //TODO: Update to replace with user OS
@@ -721,7 +722,7 @@ void log_file(const std::string &input) {
     }
 }
 
-std::string load_model(const std::string &data, inference_data inference_data) {
+std::string load_model(const std::string &data, inference_data &inference_data) {
     try {
         // Extract the model paths
         auto json = nlohmann::json::parse(data);
@@ -757,7 +758,7 @@ std::string load_model(const std::string &data, inference_data inference_data) {
 }
 
 // Extracts inference parameters from the request (creates data on the heap)
-bool extract_params(const std::string &data, inference_data inference_data) {
+bool extract_params(const std::string &data, inference_data &inference_data) {
     try {
         auto json = nlohmann::json::parse(data);
 
@@ -780,27 +781,56 @@ bool extract_params(const std::string &data, inference_data inference_data) {
     }
 }
 
-bool turn_setup(inference_data inference_data) {
+bool turn_setup(inference_data &inference_data) {
     // Create the context
     inference_data.ctx_llava = llava_init_context(inference_data.params, inference_data.model);
 
     // Embed the image
-    llava_image_embed *image_embed = load_image(inference_data.ctx_llava, inference_data.params, inference_data.image);
-    if (image_embed == nullptr)
+    inference_data.image_embed = load_image(inference_data.ctx_llava, inference_data.params, inference_data.image);
+    if (inference_data.image_embed == nullptr)
     {
         return false;
     }
     return true;
 }
 
-void turn_cleanup(inference_data inference_data) {
+void turn_cleanup(inference_data &inference_data) {
     // Free the image embedding and llava context
     llava_image_embed_free(inference_data.image_embed);
+    inference_data.image_embed = nullptr;
+
     inference_data.ctx_llava->model = NULL;
     llava_free(inference_data.ctx_llava);
+    inference_data.ctx_llava = nullptr;
 }
 
-std::string planner_turn(const std::string &data, inference_data inference_data) {
+std::string infer(inference_data &inference_data) {
+    // Generate with Qwen
+    inference_data.params->prompt = inference_data.prompt;
+    std::string result = "";
+
+    result = process_prompt(inference_data);
+    inference_data.params->prompt = "";
+    
+    // If the model outputs JSON, add success to it
+    try {
+        auto result_json = nlohmann::json::parse(result);
+        result_json["success"] = true;
+        return result_json.dump();
+    } catch (const nlohmann::json::parse_error &e) {
+        return result;
+    }
+}
+
+std::string planner_turn(const std::string &data, inference_data &inference_data) {
+    // Make sure the model is loaded
+    if (inference_data.model == nullptr) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Model not loaded"}};
+        return response.dump();
+    }
+
     if (!extract_params(data, inference_data)) {
         nlohmann::json response = {
             {"success", false},
@@ -829,7 +859,23 @@ std::string planner_turn(const std::string &data, inference_data inference_data)
     }
 }
 
-std::string executor_turn(const std::string &data, inference_data inference_data) {
+std::string executor_turn(const std::string &data, inference_data &inference_data) {
+    // Make sure the model is loaded
+    if (inference_data.model == nullptr) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Model not loaded"}};
+        return response.dump();
+    }
+
+    // Make sure the image exists
+    if (inference_data.image_embed == nullptr) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Image not properly loaded, please try again"}};
+        return response.dump();
+    }
+
     if (!extract_params(data, inference_data)) {
         nlohmann::json response = {
             {"success", false},
@@ -838,6 +884,19 @@ std::string executor_turn(const std::string &data, inference_data inference_data
     }
 
     inference_data.mode = EXECUTOR;
+
+    // Clear the old context and create a new one
+    if (inference_data.ctx_llava != nullptr) {
+        inference_data.ctx_llava->model = NULL;
+        llava_free(inference_data.ctx_llava);
+    }
+    inference_data.ctx_llava = llava_init_context(inference_data.params, inference_data.model);
+    if (inference_data.ctx_llava == nullptr) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Failed to initialize context"}};
+        return response.dump();
+    }
 
     std::string completion = infer(inference_data);
 
@@ -855,33 +914,7 @@ std::string executor_turn(const std::string &data, inference_data inference_data
     }
 }
 
-std::string infer(inference_data inference_data) {
-    // Make sure the model is loaded
-    if (inference_data.model == nullptr) {
-        nlohmann::json response = {
-            {"success", false},
-            {"reason", "Model not loaded"}};
-        return response.dump();
-    }
-
-    // Generate with Qwen
-    inference_data.params->prompt = inference_data.prompt;
-    std::string result = "";
-
-    result = process_prompt(inference_data);
-    inference_data.params->prompt = "";
-    
-    // If the model outputs JSON, add success to it
-    try {
-        auto result_json = nlohmann::json::parse(result);
-        result_json["success"] = true;
-        return result_json.dump();
-    } catch (const nlohmann::json::parse_error &e) {
-        return result;
-    }
-}
-
-void processRequest(std::atomic<bool> &running, std::atomic<inference_data> &inference_data)
+void processRequest(std::atomic<bool> &running, inference_data &inference_data, std::mutex &inference_data_mutex)
 {
     std::string input;
     while (running)
@@ -890,6 +923,7 @@ void processRequest(std::atomic<bool> &running, std::atomic<inference_data> &inf
         std::cin.clear(); // Clear the input buffer
         if (!input.empty())
         {
+            std::lock_guard<std::mutex> lock(inference_data_mutex);
             if (input == "SHUTDOWN")
             {
                 nlohmann::json response = {
@@ -907,11 +941,6 @@ void processRequest(std::atomic<bool> &running, std::atomic<inference_data> &inf
                 std::string response = executor_turn(input.substr(8), inference_data); // Call infer with the rest of the input
                 std::cout << "RESPONSE " << response << std::endl;
             }
-            // else if (input.rfind("INFER", 0) == 0)
-            // {
-                // std::string response = infer(inference_data); // Call infer with the rest of the input
-                // std::cout << "RESPONSE " << response << std::endl;
-            // }
             else if (input.rfind("LOAD", 0) == 0)
             {
                 std::string response = load_model(input.substr(5), inference_data); // Call load_model with the rest of the input
@@ -934,7 +963,7 @@ int main()
     // Inference data initialization
     common_params params;
     params.cpuparams.n_threads = 4;
-    inference_data data = {
+    inference_data inference_data = {
         &params, // parameters
         nullptr, // model
         nullptr, // llava context
@@ -947,10 +976,10 @@ int main()
 
     // Listen to stdin in another thread and respond to requests
     std::atomic<bool> running(true);
-    std::atomic<inference_data> inference_data(data);
-    std::thread listener(processRequest, std::ref(running), std::ref(inference_data));
+    std::mutex inference_data_mutex;
+    std::thread listener(processRequest, std::ref(running), std::ref(inference_data), std::ref(inference_data_mutex));
     listener.join();
 
-    llama_free_model(inference_data.load().model);
+    llama_free_model(inference_data.model);
     return 0;
 }
