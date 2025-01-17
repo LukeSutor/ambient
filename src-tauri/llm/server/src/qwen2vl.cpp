@@ -29,11 +29,64 @@
 #include <atomic>
 #include "json-schema-to-grammar.h"
 
-// These two are initialized in the main method and need to be used globally
-common_params params;
-llama_model *model;
+//TODO: Update to replace with user OS
+const std::string PLANNER_SYSTEM_PROMPT = R"(You are using a Windows device.
+You are able to use a mouse and keyboard to interact with the computer based on the given task and screenshot.
+You can only interact with the desktop GUI (no terminal or application menu access).
 
-const std::string SHOWUI_SYSTEM_PROMPT = R"(You are an assistant trained to navigate the desktop screen. 
+You may be given some history plan and actions, this is the response from the previous loop.
+You should carefully consider your plan base on the task, screenshot, and history actions.
+
+Your available "Next Action" only include:
+- ENTER: Press an enter key.
+- ESCAPE: Press an ESCAPE key.
+- INPUT: Input a string of text.
+- CLICK: Describe the ui element to be clicked.
+- HOVER: Describe the ui element to be hovered.
+- SCROLL: Scroll the screen, you must specify up or down.
+- PRESS: Describe the ui element to be pressed.
+
+Output format:
+```json
+{{
+    "Thinking": str, # describe your thoughts on how to achieve the task, choose one action from available actions at a time.
+    "Next Action": "action_type, action description" | "None" # one action at a time, describe it in short and precisely. 
+}}
+```
+
+One Example:
+```json
+{{  
+    "Thinking": "I need to search and navigate to amazon.com.",
+    "Next Action": "CLICK 'Search Google or type a URL'."
+}}
+```
+
+IMPORTANT NOTES:
+1. Carefully observe the screenshot to understand the current state and read history actions.
+2. You should only give a single action at a time. for example, INPUT text, and ENTER can't be in one Next Action.
+3. Attach the text to Next Action, if there is text or any description for the button. 
+4. You should not include other actions, such as keyboard shortcuts.
+5. When the task is completed, you should say "Next Action": "None" in the json field.)";
+
+const std::string PLANNER_JSON_SCHEMA = R"({
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "Thinking": {
+      "type": "string",
+      "description": "Describe your thoughts on how to achieve the task, choose one action from available actions at a time."
+    },
+    "Next Action": {
+      "type": "string",
+      "description": "One action at a time, describe it in short and precisely. Format: 'action_type, action description' or 'None'."
+    }
+  },
+  "required": ["Thinking", "Next Action"],
+  "additionalProperties": false
+})";
+
+const std::string EXECUTOR_SYSTEM_PROMPT = R"(You are an assistant trained to navigate the desktop screen. 
     Given a task instruction, a screen observation, and an action history sequence, 
     output the next action and wait for the next observation. 
     Format the action as a dictionary with the following keys:
@@ -54,7 +107,7 @@ const std::string SHOWUI_SYSTEM_PROMPT = R"(You are an assistant trained to navi
     Here is the action you must perform:
 )";
 
-const std::string SHOWUI_JSON_SCHEMA = R"({
+const std::string EXECUTOR_JSON_SCHEMA = R"({
   "$schema": "http://json-schema.org/draft-07/schema#",
   "oneOf": [
     {
@@ -224,6 +277,28 @@ const std::string CONTROL_JSON_SCHEMA = R"({
     }
   ]
 })";
+
+// enum inference_mode {
+//     PLANNER = 0,
+//     EXECUTOR = 1
+// };
+
+// struct llava_context
+// {
+//     struct clip_ctx *ctx_clip = NULL;
+//     struct llama_context *ctx_llama = NULL;
+//     struct llama_model *model = NULL;
+// };
+
+// struct inference_data {
+//     common_params *params;
+//     llama_model *model;
+//     llava_context *ctx_llava;
+//     llava_image_embed *image_embed;
+//     inference_mode mode;
+//     std::string prompt;
+//     std::string image;
+// };
 
 static bool qwen2vl_eval_image_embed(llama_context *ctx_llama, const struct llava_image_embed *image_embed,
                                      int n_batch, int *n_past, int *st_pos_id, struct clip_image_size *image_size)
@@ -421,6 +496,21 @@ struct llava_context
     struct llama_model *model = NULL;
 };
 
+enum inference_mode {
+    PLANNER = 0,
+    EXECUTOR = 1
+};
+
+struct inference_data {
+    common_params *params;
+    llama_model *model;
+    llava_context *ctx_llava;
+    llava_image_embed *image_embed;
+    inference_mode mode;
+    std::string prompt;
+    std::string image;
+};
+
 static struct llava_image_embed *load_image(llava_context *ctx_llava, common_params *params, const std::string &fname)
 {
 
@@ -454,33 +544,33 @@ static struct llava_image_embed *load_image(llava_context *ctx_llava, common_par
     return embed;
 }
 
-static std::string process_prompt(struct llava_context *ctx_llava, struct llava_image_embed *image_embed, common_params *params, const std::string &prompt)
+static std::string process_prompt(inference_data &inference_data)//, struct llava_image_embed *image_embed, common_params *params, const std::string &prompt, inference_mode mode)
 {
     int n_past = 0;
     int cur_pos_id = 0;
 
-    const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
+    const int max_tgt_len = inference_data.params->n_predict < 0 ? 256 : inference_data.params->n_predict;
 
     std::string system_prompt, user_prompt;
-    size_t image_pos = prompt.find("<|vision_start|>");
+    size_t image_pos = inference_data.prompt.find("<|vision_start|>");
     if (image_pos != std::string::npos)
     {
         // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
-        system_prompt = prompt.substr(0, image_pos);
-        user_prompt = prompt.substr(image_pos + std::string("<|vision_pad|>").length());
+        system_prompt = inference_data.prompt.substr(0, image_pos);
+        user_prompt = inference_data.prompt.substr(image_pos + std::string("<|vision_pad|>").length());
         // LOG_INF("system_prompt: %s\n", system_prompt.c_str());
-        if (params->verbose_prompt)
+        if (inference_data.params->verbose_prompt)
         {
-            auto tmp = common_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            auto tmp = common_tokenize(inference_data.ctx_llava->ctx_llama, system_prompt, true, true);
             for (int i = 0; i < (int)tmp.size(); i++)
             {
                 // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
             }
         }
         // LOG_INF("user_prompt: %s\n", user_prompt.c_str());
-        if (params->verbose_prompt)
+        if (inference_data.params->verbose_prompt)
         {
-            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(inference_data.ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int)tmp.size(); i++)
             {
                 // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
@@ -491,20 +581,22 @@ static std::string process_prompt(struct llava_context *ctx_llava, struct llava_
     {
         // llava-1.5 native mode
 
+        std::string general_prompt = inference_data.mode == PLANNER ? PLANNER_SYSTEM_PROMPT : EXECUTOR_SYSTEM_PROMPT;
+
         // Only include the vision tokens if an image is passed
-        if (image_embed != nullptr)
+        if (inference_data.image_embed != nullptr)
         {
-            system_prompt = "<|im_start|>system\n" + CONTROL_SYSTEM_PROMPT + "<|im_end|>\n<|im_start|>user\n<|vision_start|>";
-            user_prompt = "<|vision_end|>" + prompt + "<|im_end|>\n<|im_start|>assistant\n";
+            system_prompt = "<|im_start|>system\n" + general_prompt + "<|im_end|>\n<|im_start|>user\n<|vision_start|>";
+            user_prompt = "<|vision_end|>" + inference_data.prompt + "<|im_end|>\n<|im_start|>assistant\n";
         }
         else
         {
-            system_prompt = "<|im_start|>system\n" + CONTROL_SYSTEM_PROMPT + "<|im_end|>\n<|im_start|>user\n";
-            user_prompt = prompt + "<|im_end|>\n<|im_start|>assistant\n";
+            system_prompt = "<|im_start|>system\n" + general_prompt + "<|im_end|>\n<|im_start|>user\n";
+            user_prompt = inference_data.prompt + "<|im_end|>\n<|im_start|>assistant\n";
         }
-        if (params->verbose_prompt)
+        if (inference_data.params->verbose_prompt)
         {
-            auto tmp = common_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            auto tmp = common_tokenize(inference_data.ctx_llava->ctx_llama, user_prompt, true, true);
             for (int i = 0; i < (int)tmp.size(); i++)
             {
                 // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
@@ -512,29 +604,29 @@ static std::string process_prompt(struct llava_context *ctx_llava, struct llava_
         }
     }
 
-    eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, &cur_pos_id, true);
-    if (image_embed != nullptr)
+    // Set the JSON schema
+    inference_data.params->sampling.grammar = inference_data.mode == PLANNER ? json_schema_to_grammar(nlohmann::json::parse(PLANNER_JSON_SCHEMA)) : json_schema_to_grammar(nlohmann::json::parse(EXECUTOR_JSON_SCHEMA));
+
+    eval_string(inference_data.ctx_llava->ctx_llama, system_prompt.c_str(), inference_data.params->n_batch, &n_past, &cur_pos_id, true);
+    if (inference_data.image_embed != nullptr)
     {
-        auto image_size = clip_get_load_image_size(ctx_llava->ctx_clip);
-        qwen2vl_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past, &cur_pos_id, image_size);
+        auto image_size = clip_get_load_image_size(inference_data.ctx_llava->ctx_clip);
+        qwen2vl_eval_image_embed(inference_data.ctx_llava->ctx_llama, inference_data.image_embed, inference_data.params->n_batch, &n_past, &cur_pos_id, image_size);
     }
-    eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, &cur_pos_id, false);
+    eval_string(inference_data.ctx_llava->ctx_llama, user_prompt.c_str(), inference_data.params->n_batch, &n_past, &cur_pos_id, false);
 
     // generate the response
 
-    // LOG("\n");
-
-    struct common_sampler *smpl = common_sampler_init(ctx_llava->model, params->sampling);
+    struct common_sampler *smpl = common_sampler_init(inference_data.ctx_llava->model, inference_data.params->sampling);
     if (!smpl)
     {
-        // LOG_ERR("%s: failed to initialize sampling subsystem\n", __func__);
-        exit(1);
+        return "";
     }
 
     std::string response = "";
     for (int i = 0; i < max_tgt_len; i++)
     {
-        const char *tmp = sample(smpl, ctx_llava->ctx_llama, &n_past, &cur_pos_id);
+        const char *tmp = sample(smpl, inference_data.ctx_llava->ctx_llama, &n_past, &cur_pos_id);
         response += tmp;
         if (strcmp(tmp, "</s>") == 0)
             break;
@@ -629,7 +721,7 @@ void log_file(const std::string &input) {
     }
 }
 
-std::string load_model(const std::string &data) {
+std::string load_model(const std::string &data, inference_data inference_data) {
     try {
         // Extract the model paths
         auto json = nlohmann::json::parse(data);
@@ -645,12 +737,12 @@ std::string load_model(const std::string &data) {
         std::string vision_model = json["vision_model"];
 
         // Load the models
-        params.model = text_model;
-        params.mmproj = vision_model;
-        if (model != nullptr) {
-            llama_free_model(model);
+        inference_data.params->model = text_model;
+        inference_data.params->mmproj = vision_model;
+        if (inference_data.model != nullptr) {
+            llama_free_model(inference_data.model);
         }
-        model = llava_init(&params);
+        inference_data.model = llava_init(inference_data.params);
 
         nlohmann::json response = {
             {"success", true},
@@ -664,84 +756,132 @@ std::string load_model(const std::string &data) {
     }
 }
 
-std::string infer(const std::string &data) {
+// Extracts inference parameters from the request (creates data on the heap)
+bool extract_params(const std::string &data, inference_data inference_data) {
+    try {
+        auto json = nlohmann::json::parse(data);
+
+        // Check for required prompt field
+        if (!json.contains("prompt") || !json.contains("image"))
+        {
+            return false;
+        }
+
+        // Extract fields
+        std::string prompt = json["prompt"];
+        std::string image = json["image"];
+
+        inference_data.prompt = prompt;
+        inference_data.image = image;
+        return true;
+    }
+    catch (const nlohmann::json::parse_error &e) {
+        return false;
+    }
+}
+
+bool turn_setup(inference_data inference_data) {
+    // Create the context
+    inference_data.ctx_llava = llava_init_context(inference_data.params, inference_data.model);
+
+    // Embed the image
+    llava_image_embed *image_embed = load_image(inference_data.ctx_llava, inference_data.params, inference_data.image);
+    if (image_embed == nullptr)
+    {
+        return false;
+    }
+    return true;
+}
+
+void turn_cleanup(inference_data inference_data) {
+    // Free the image embedding and llava context
+    llava_image_embed_free(inference_data.image_embed);
+    inference_data.ctx_llava->model = NULL;
+    llava_free(inference_data.ctx_llava);
+}
+
+std::string planner_turn(const std::string &data, inference_data inference_data) {
+    if (!extract_params(data, inference_data)) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Invalid JSON payload, payload must contain \"prompt\" and \"image\" fields"}};
+        return response.dump();
+    }
+
+    if(!turn_setup(inference_data)) {
+    nlohmann::json response = {
+            {"success", false},
+            {"reason", "Could not initialize turn, please try again"}};
+        return response.dump();    
+    }
+
+    inference_data.mode = PLANNER;
+
+    std::string completion = infer(inference_data);
+    try {
+        auto result_json = nlohmann::json::parse(completion);
+        return result_json.dump();
+    } catch (const nlohmann::json::parse_error &e) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Invalid model response, please try again"}};
+        return response.dump();
+    }
+}
+
+std::string executor_turn(const std::string &data, inference_data inference_data) {
+    if (!extract_params(data, inference_data)) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Invalid JSON payload, payload must contain \"prompt\" and \"image\" fields"}};
+        return response.dump();
+    }
+
+    inference_data.mode = EXECUTOR;
+
+    std::string completion = infer(inference_data);
+
+    // Clean up
+    turn_cleanup(inference_data);
+
+    try {
+        auto result_json = nlohmann::json::parse(completion);
+        return result_json.dump();
+    } catch (const nlohmann::json::parse_error &e) {
+        nlohmann::json response = {
+            {"success", false},
+            {"reason", "Invalid model response, please try again"}};
+        return response.dump();
+    }
+}
+
+std::string infer(inference_data inference_data) {
     // Make sure the model is loaded
-    if (model == nullptr) {
+    if (inference_data.model == nullptr) {
         nlohmann::json response = {
             {"success", false},
             {"reason", "Model not loaded"}};
         return response.dump();
     }
-    try
-    {
-        // Parse JSON from request body
-        auto json = nlohmann::json::parse(data);
 
-        // Check for required prompt field
-        if (!json.contains("prompt"))
-        {
-            nlohmann::json response = {
-                {"success", false},
-                {"reason", "Missing required 'prompt' field"}};
-            return response.dump();
-        }
+    // Generate with Qwen
+    inference_data.params->prompt = inference_data.prompt;
+    std::string result = "";
 
-        // Extract fields
-        std::string prompt = json["prompt"];
-        std::string image = json.value("image", ""); // Optional field
-
-        // Generate with Qwen
-        params.prompt = prompt;
-        std::string result = "";
-        if (image.empty())
-        {
-
-            // Generate without image input
-            llava_context *ctx_llava = llava_init_context(&params, model);
-
-            // process the prompt
-            result = process_prompt(ctx_llava, nullptr, &params, prompt);
-
-            ctx_llava->model = NULL;
-            llava_free(ctx_llava);
-        }
-        else
-        {
-            // Generate with image input
-            llava_context *ctx_llava = llava_init_context(&params, model);
-            llava_image_embed *image_embed = load_image(ctx_llava, &params, image);
-            if (!image_embed)
-            {
-                nlohmann::json response = {
-                    {"success", false},
-                    {"reason", "Failed to load image %s", image.c_str()}};
-                return response.dump();
-            }
-
-            // process the prompt
-            result = process_prompt(ctx_llava, image_embed, &params, prompt);
-
-            llava_image_embed_free(image_embed);
-            ctx_llava->model = NULL;
-            llava_free(ctx_llava);
-        }
-        params.prompt = "";
-        
-        // Add success to the json and return
+    result = process_prompt(inference_data);
+    inference_data.params->prompt = "";
+    
+    // If the model outputs JSON, add success to it
+    try {
         auto result_json = nlohmann::json::parse(result);
         result_json["success"] = true;
         return result_json.dump();
-    }
-    catch (const nlohmann::json::parse_error &e)
-    {
-        nlohmann::json response = {
-            {"success", false},
-            {"reason", "Invalid JSON payload"}};
-        return response.dump();
+    } catch (const nlohmann::json::parse_error &e) {
+        return result;
     }
 }
 
-void processRequest(std::atomic<bool> &running)
+void processRequest(std::atomic<bool> &running, std::atomic<inference_data> &inference_data)
 {
     std::string input;
     while (running)
@@ -759,14 +899,22 @@ void processRequest(std::atomic<bool> &running)
                 running = false;
                 break;
             }
-            else if (input.rfind("INFER", 0) == 0)
-            {
-                std::string response = infer(input.substr(6)); // Call infer with the rest of the input
+            else if (input.rfind("PLAN", 0) == 0) {
+                std::string response = planner_turn(input.substr(5), inference_data); // Call infer with the rest of the input
                 std::cout << "RESPONSE " << response << std::endl;
             }
+            else if (input.rfind("EXECUTE", 0) == 0) {
+                std::string response = executor_turn(input.substr(8), inference_data); // Call infer with the rest of the input
+                std::cout << "RESPONSE " << response << std::endl;
+            }
+            // else if (input.rfind("INFER", 0) == 0)
+            // {
+                // std::string response = infer(inference_data); // Call infer with the rest of the input
+                // std::cout << "RESPONSE " << response << std::endl;
+            // }
             else if (input.rfind("LOAD", 0) == 0)
             {
-                std::string response = load_model(input.substr(5)); // Call load_model with the rest of the input
+                std::string response = load_model(input.substr(5), inference_data); // Call load_model with the rest of the input
                 std::cout << "RESPONSE " << response << std::endl;
             }
             else
@@ -783,16 +931,26 @@ void processRequest(std::atomic<bool> &running)
 
 int main()
 {
-    // Qwen Model initialization
-    // TODO: make the n_threads dependent on whether user is running the system in foreground or background
+    // Inference data initialization
+    common_params params;
     params.cpuparams.n_threads = 4;
-    params.sampling.grammar = json_schema_to_grammar(nlohmann::json::parse(CONTROL_JSON_SCHEMA));
+    inference_data data = {
+        &params, // parameters
+        nullptr, // model
+        nullptr, // llava context
+        nullptr, // image_embed
+        PLANNER, // inference_mode
+        "",      // prompt
+        ""       // image
+    };
+    // TODO: make the n_threads dependent on whether user is running the system in foreground or background
 
     // Listen to stdin in another thread and respond to requests
     std::atomic<bool> running(true);
-    std::thread listener(processRequest, std::ref(running));
+    std::atomic<inference_data> inference_data(data);
+    std::thread listener(processRequest, std::ref(running), std::ref(inference_data));
     listener.join();
 
-    llama_free_model(model);
+    llama_free_model(inference_data.load().model);
     return 0;
 }
