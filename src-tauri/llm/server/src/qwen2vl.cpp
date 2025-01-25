@@ -279,28 +279,6 @@ const std::string CONTROL_JSON_SCHEMA = R"({
   ]
 })";
 
-// enum inference_mode {
-//     PLANNER = 0,
-//     EXECUTOR = 1
-// };
-
-// struct llava_context
-// {
-//     struct clip_ctx *ctx_clip = NULL;
-//     struct llama_context *ctx_llama = NULL;
-//     struct llama_model *model = NULL;
-// };
-
-// struct inference_data {
-//     common_params *params;
-//     llama_model *model;
-//     llava_context *ctx_llava;
-//     llava_image_embed *image_embed;
-//     inference_mode mode;
-//     std::string prompt;
-//     std::string image;
-// };
-
 static bool qwen2vl_eval_image_embed(llama_context *ctx_llama, const struct llava_image_embed *image_embed,
                                      int n_batch, int *n_past, int *st_pos_id, struct clip_image_size *image_size)
 {
@@ -507,6 +485,7 @@ struct inference_data {
     llama_model *model;
     llava_context *ctx_llava;
     llava_image_embed *image_embed;
+    struct clip_image_size *image_size;
     inference_mode mode;
     std::string prompt;
     std::string image;
@@ -607,12 +586,10 @@ static std::string process_prompt(inference_data &inference_data)//, struct llav
 
     // Set the JSON schema
     inference_data.params->sampling.grammar = inference_data.mode == PLANNER ? json_schema_to_grammar(nlohmann::json::parse(PLANNER_JSON_SCHEMA)) : json_schema_to_grammar(nlohmann::json::parse(EXECUTOR_JSON_SCHEMA));
-
     eval_string(inference_data.ctx_llava->ctx_llama, system_prompt.c_str(), inference_data.params->n_batch, &n_past, &cur_pos_id, true);
     if (inference_data.image_embed != nullptr)
     {
-        auto image_size = clip_get_load_image_size(inference_data.ctx_llava->ctx_clip);
-        qwen2vl_eval_image_embed(inference_data.ctx_llava->ctx_llama, inference_data.image_embed, inference_data.params->n_batch, &n_past, &cur_pos_id, image_size);
+        qwen2vl_eval_image_embed(inference_data.ctx_llava->ctx_llama, inference_data.image_embed, inference_data.params->n_batch, &n_past, &cur_pos_id, inference_data.image_size);
     }
     eval_string(inference_data.ctx_llava->ctx_llama, user_prompt.c_str(), inference_data.params->n_batch, &n_past, &cur_pos_id, false);
 
@@ -645,8 +622,6 @@ static std::string process_prompt(inference_data &inference_data)//, struct llav
     }
 
     common_sampler_free(smpl);
-    // LOG("\n");
-    // LOG("\nFinal response: %s\n", response.c_str()); // Debug log final response
     if (response.length() >= 4 && response.substr(response.length() - 4) == "</s>")
     {
         response = response.substr(0, response.length() - 4);
@@ -787,6 +762,13 @@ bool turn_setup(inference_data &inference_data) {
 
     // Embed the image
     inference_data.image_embed = load_image(inference_data.ctx_llava, inference_data.params, inference_data.image);
+    
+    // Save the image dimensions for later
+    struct clip_image_size *img_size = clip_get_load_image_size(inference_data.ctx_llava->ctx_clip);
+    inference_data.image_size = new struct clip_image_size;
+    inference_data.image_size->width = img_size->width;
+    inference_data.image_size->height = img_size->height;
+
     if (inference_data.image_embed == nullptr)
     {
         return false;
@@ -798,6 +780,9 @@ void turn_cleanup(inference_data &inference_data) {
     // Free the image embedding and llava context
     llava_image_embed_free(inference_data.image_embed);
     inference_data.image_embed = nullptr;
+
+    delete inference_data.image_size;
+    inference_data.image_size = nullptr;
 
     inference_data.ctx_llava->model = NULL;
     llava_free(inference_data.ctx_llava);
@@ -884,7 +869,6 @@ std::string executor_turn(const std::string &data, inference_data &inference_dat
     }
 
     inference_data.mode = EXECUTOR;
-
     // Clear the old context and create a new one
     if (inference_data.ctx_llava != nullptr) {
         inference_data.ctx_llava->model = NULL;
@@ -962,17 +946,18 @@ int main()
 {
     // Inference data initialization
     common_params params;
+    // TODO: make the n_threads dependent on whether user is running the system in foreground or background
     params.cpuparams.n_threads = 4;
     inference_data inference_data = {
         &params, // parameters
         nullptr, // model
         nullptr, // llava context
         nullptr, // image_embed
+        nullptr, // image_size
         PLANNER, // inference_mode
         "",      // prompt
         ""       // image
     };
-    // TODO: make the n_threads dependent on whether user is running the system in foreground or background
 
     // Listen to stdin in another thread and respond to requests
     std::atomic<bool> running(true);

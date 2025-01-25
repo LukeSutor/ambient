@@ -29,6 +29,9 @@ dist-ssr
 # CMake files
 src-tauri/llm/server/build
 
+# Testing image files
+src-tauri/llm/server/test-images
+
 # Executables
 *.exe
 *.dll
