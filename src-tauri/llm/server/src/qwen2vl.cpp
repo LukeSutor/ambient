@@ -50,7 +50,7 @@ Your available "Next Action" only include:
 Output format:
 ```json
 {{
-    "Thinking": str, # describe your thoughts on how to achieve the task, choose one action from available actions at a time.
+    "Im Thinking": str, # describe your thoughts on how to achieve the task, choose one action from available actions at a time.
     "Next Action": "action_type, action description" | "None" # one action at a time, describe it in short and precisely. 
 }}
 ```
@@ -58,7 +58,7 @@ Output format:
 One Example:
 ```json
 {{  
-    "Thinking": "I need to search and navigate to amazon.com.",
+    "Im Thinking": "I need to search and navigate to amazon.com.",
     "Next Action": "CLICK 'Search Google or type a URL'."
 }}
 ```
@@ -68,13 +68,16 @@ IMPORTANT NOTES:
 2. You should only give a single action at a time. for example, INPUT text, and ENTER can't be in one Next Action.
 3. Attach the text to Next Action, if there is text or any description for the button. 
 4. You should not include other actions, such as keyboard shortcuts.
-5. When the task is completed, you should say "Next Action": "None" in the json field.)";
+6. When the task is completed, you should say "Next Action": "None" in the json field.
+
+<PREV_STEPS>
+)";
 
 const std::string PLANNER_JSON_SCHEMA = R"({
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "Thinking": {
+    "Im Thinking": {
       "type": "string",
       "description": "Describe your thoughts on how to achieve the task, choose one action from available actions at a time."
     },
@@ -83,29 +86,31 @@ const std::string PLANNER_JSON_SCHEMA = R"({
       "description": "One action at a time, describe it in short and precisely. Format: 'action_type, action description' or 'None'."
     }
   },
-  "required": ["Thinking", "Next Action"],
+  "required": ["Im Thinking", "Next Action"],
   "additionalProperties": false
 })";
 
 const std::string EXECUTOR_SYSTEM_PROMPT = R"(You are an assistant trained to navigate the desktop screen. 
-    Given a task instruction, a screen observation, and an action history sequence, 
-    output the next action and wait for the next observation. 
-    Format the action as a dictionary with the following keys:
-    {'action': 'ACTION_TYPE', 'value': 'element', 'position': [x,y]}
-    
-    If value or position is not applicable, set it as None.
-    Position might be [[x1,y1], [x2,y2]] if the action requires a start and end position.
-    Position represents the relative coordinates on the screenshot and should be scaled to a range of 0-1.
+Given a task instruction, a screen observation, and an action history sequence, 
+output the next action and wait for the next observation. 
+Format the action as a dictionary with the following keys:
+{'action': 'ACTION_TYPE', 'value': 'element', 'position': [x,y]}
 
-    Here is the action space:
-    1. CLICK: Click on an element, value is not applicable and the position [x,y] is required. 
-    2. INPUT: Type a string into an element, value is a string to type and the position [x,y] is required. 
-    3. HOVER: Hover on an element, value is not applicable and the position [x,y] is required.
-    4. ENTER: Enter operation, value and position are not applicable.
-    5. SCROLL: Scroll the screen, value is the direction to scroll and the position is not applicable.
-    6. ESC: ESCAPE operation, value and position are not applicable.
-    7. PRESS: Long click on an element, value is not applicable and the position [x,y] is required.
-    Here is the action you must perform:
+If value or position is not applicable, set it as None.
+Position might be [[x1,y1], [x2,y2]] if the action requires a start and end position.
+Position represents the relative coordinates on the screenshot and should be scaled to a range of 0-1.
+
+Here is the action space:
+1. CLICK: Click on an element, value is not applicable and the position [x,y] is required. 
+2. INPUT: Type a string into an element, value is a string to type and the position [x,y] is required. 
+3. HOVER: Hover on an element, value is not applicable and the position [x,y] is required.
+4. ENTER: Enter operation, value and position are not applicable.
+5. SCROLL: Scroll the screen, value is the direction to scroll and the position is not applicable.
+6. ESC: ESCAPE operation, value and position are not applicable.
+7. PRESS: Long click on an element, value is not applicable and the position [x,y] is required.
+
+<PREV_STEPS>
+
 )";
 
 const std::string EXECUTOR_JSON_SCHEMA = R"({
@@ -335,7 +340,6 @@ static bool qwen2vl_eval_image_embed(llama_context *ctx_llama, const struct llav
 
         if (llama_decode(ctx_llama, batch))
         {
-            // LOG_ERR("%s : failed to eval\n", __func__);
             return false;
         }
         *n_past += n_eval;
@@ -367,7 +371,6 @@ static bool eval_tokens(struct llama_context *ctx_llama, std::vector<llama_token
 
         if (llama_decode(ctx_llama, batch))
         {
-            // LOG_ERR("%s : failed to eval. token %d/%d (batch size %d, n_past %d)\n", __func__, i, N, n_batch, *n_past);
             return false;
         }
         *n_past += n_eval;
@@ -433,7 +436,6 @@ static llava_image_embed *llava_image_embed_make_with_prompt_base64(struct clip_
     find_image_tag_in_prompt(prompt, img_base64_str_start, img_base64_str_end);
     if (img_base64_str_start == std::string::npos || img_base64_str_end == std::string::npos)
     {
-        // LOG_ERR("%s: invalid base64 image tag. must be %s<base64 byte string>%s\n", __func__, IMG_BASE64_TAG_BEGIN, IMG_BASE64_TAG_END);
         return NULL;
     }
 
@@ -448,7 +450,6 @@ static llava_image_embed *llava_image_embed_make_with_prompt_base64(struct clip_
     auto embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, img_bytes.data(), img_bytes.size());
     if (!embed)
     {
-        // LOG_ERR("%s: could not load image from base64 string.\n", __func__);
         return NULL;
     }
 
@@ -489,6 +490,8 @@ struct inference_data {
     inference_mode mode;
     std::string prompt;
     std::string image;
+    std::vector<std::string> prev_plans;
+    std::vector<std::string> prev_executions;
 };
 
 static struct llava_image_embed *load_image(llava_context *ctx_llava, common_params *params, const std::string &fname)
@@ -501,12 +504,10 @@ static struct llava_image_embed *load_image(llava_context *ctx_llava, common_par
     {
         if (!params->image.empty())
         {
-            // LOG_INF("using base64 encoded image instead of command line image path\n");
         }
         embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->cpuparams.n_threads, prompt);
         if (!embed)
         {
-            // LOG_ERR("%s: can't load image from prompt\n", __func__);
             return NULL;
         }
         params->prompt = remove_image_from_prompt(prompt);
@@ -524,7 +525,26 @@ static struct llava_image_embed *load_image(llava_context *ctx_llava, common_par
     return embed;
 }
 
-static std::string process_prompt(inference_data &inference_data)//, struct llava_image_embed *image_embed, common_params *params, const std::string &prompt, inference_mode mode)
+std::string populate_system_prompt(std::string &prompt, enum inference_mode mode, std::vector<std::string> &prev_steps) {
+    // Fill in the system prompt with the proper previous step information depending on the mode
+    std::string replace;
+    std::string str_mode = mode == PLANNER ? "planning" : "execution";
+    if (prev_steps.size() == 0) {
+        replace = "No previous " + str_mode + " steps, generate a first step.";
+    } else {
+        replace = "Previous " + std::to_string(prev_steps.size()) + " " + str_mode + " steps from earliest to most recent:\n";
+        for (const auto &step : prev_steps) {
+            replace += step + "\n";
+        }
+    }
+    size_t pos = prompt.find("<PREV_STEPS>");
+    if (pos != std::string::npos) {
+        prompt.replace(pos, strlen("<PREV_STEPS>"), replace);
+    }
+    return prompt;
+}
+
+static std::string process_prompt(inference_data &inference_data)
 {
     int n_past = 0;
     int cur_pos_id = 0;
@@ -532,56 +552,23 @@ static std::string process_prompt(inference_data &inference_data)//, struct llav
     const int max_tgt_len = inference_data.params->n_predict < 0 ? 256 : inference_data.params->n_predict;
 
     std::string system_prompt, user_prompt;
-    size_t image_pos = inference_data.prompt.find("<|vision_start|>");
-    if (image_pos != std::string::npos)
+    std::string general_prompt = inference_data.mode == PLANNER ? PLANNER_SYSTEM_PROMPT : EXECUTOR_SYSTEM_PROMPT;
+    
+    // Put the previous steps in the system prompt
+    std::vector<std::string> prev_steps = inference_data.mode == PLANNER ? inference_data.prev_plans : inference_data.prev_executions;
+    general_prompt = populate_system_prompt(general_prompt, inference_data.mode, prev_steps);
+    std::cout << "prompt: " << general_prompt << std::endl;
+
+    // Only include the special tokens for vision if an image is passed
+    if (inference_data.image_embed != nullptr)
     {
-        // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for the image
-        system_prompt = inference_data.prompt.substr(0, image_pos);
-        user_prompt = inference_data.prompt.substr(image_pos + std::string("<|vision_pad|>").length());
-        // LOG_INF("system_prompt: %s\n", system_prompt.c_str());
-        if (inference_data.params->verbose_prompt)
-        {
-            auto tmp = common_tokenize(inference_data.ctx_llava->ctx_llama, system_prompt, true, true);
-            for (int i = 0; i < (int)tmp.size(); i++)
-            {
-                // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
-            }
-        }
-        // LOG_INF("user_prompt: %s\n", user_prompt.c_str());
-        if (inference_data.params->verbose_prompt)
-        {
-            auto tmp = common_tokenize(inference_data.ctx_llava->ctx_llama, user_prompt, true, true);
-            for (int i = 0; i < (int)tmp.size(); i++)
-            {
-                // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
-            }
-        }
+        system_prompt = "<|im_start|>system\n" + general_prompt + "<|im_end|>\n<|im_start|>user\n<|vision_start|>";
+        user_prompt = "<|vision_end|>" + inference_data.prompt + "<|im_end|>\n<|im_start|>assistant\n";
     }
     else
     {
-        // llava-1.5 native mode
-
-        std::string general_prompt = inference_data.mode == PLANNER ? PLANNER_SYSTEM_PROMPT : EXECUTOR_SYSTEM_PROMPT;
-
-        // Only include the vision tokens if an image is passed
-        if (inference_data.image_embed != nullptr)
-        {
-            system_prompt = "<|im_start|>system\n" + general_prompt + "<|im_end|>\n<|im_start|>user\n<|vision_start|>";
-            user_prompt = "<|vision_end|>" + inference_data.prompt + "<|im_end|>\n<|im_start|>assistant\n";
-        }
-        else
-        {
-            system_prompt = "<|im_start|>system\n" + general_prompt + "<|im_end|>\n<|im_start|>user\n";
-            user_prompt = inference_data.prompt + "<|im_end|>\n<|im_start|>assistant\n";
-        }
-        if (inference_data.params->verbose_prompt)
-        {
-            auto tmp = common_tokenize(inference_data.ctx_llava->ctx_llama, user_prompt, true, true);
-            for (int i = 0; i < (int)tmp.size(); i++)
-            {
-                // LOG_INF("%6d -> '%s'\n", tmp[i], common_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
-            }
-        }
+        system_prompt = "<|im_start|>system\n" + general_prompt + "<|im_end|>\n<|im_start|>user\n";
+        user_prompt = inference_data.prompt + "<|im_end|>\n<|im_start|>assistant\n";
     }
 
     // Set the JSON schema
@@ -610,7 +597,6 @@ static std::string process_prompt(inference_data &inference_data)//, struct llav
             break;
         if (strstr(tmp, "###"))
             break; // Yi-VL behavior
-        // LOG("%s", tmp);
         if (strstr(response.c_str(), "<|im_end|>"))
             break; // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
         if (strstr(response.c_str(), "<|im_start|>"))
@@ -626,6 +612,7 @@ static std::string process_prompt(inference_data &inference_data)//, struct llav
     {
         response = response.substr(0, response.length() - 4);
     }
+    std::cout << "res: " << response << std::endl;
     return response;
 }
 
@@ -639,7 +626,6 @@ static struct llama_model *llava_init(common_params *params)
     llama_model *model = llama_load_model_from_file(params->model.c_str(), model_params);
     if (model == NULL)
     {
-        // LOG_ERR("%s: unable to load model\n", __func__);
         return NULL;
     }
     return model;
@@ -664,7 +650,6 @@ static struct llava_context *llava_init_context(common_params *params, llama_mod
 
     if (ctx_llama == NULL)
     {
-        // LOG_ERR("%s: failed to create the llama_context\n", __func__);
         return NULL;
     }
 
@@ -687,14 +672,6 @@ static void llava_free(struct llava_context *ctx_llava)
     llama_free(ctx_llava->ctx_llama);
     llama_free_model(ctx_llava->model);
     llama_backend_free();
-}
-
-void log_file(const std::string &input) {
-    std::ofstream log_file("C:\\Users\\Luke\\Downloads\\log.txt", std::ios_base::app);
-    if (log_file.is_open())
-    {
-        log_file << input << std::endl;
-    }
 }
 
 std::string load_model(const std::string &data, inference_data &inference_data) {
@@ -833,6 +810,10 @@ std::string planner_turn(const std::string &data, inference_data &inference_data
     inference_data.mode = PLANNER;
 
     std::string completion = infer(inference_data);
+
+    // Store the response for future turns
+    inference_data.prev_plans.push_back(completion);
+
     try {
         auto result_json = nlohmann::json::parse(completion);
         return result_json.dump();
@@ -883,6 +864,9 @@ std::string executor_turn(const std::string &data, inference_data &inference_dat
     }
 
     std::string completion = infer(inference_data);
+
+    // Store the response for future turns
+    inference_data.prev_executions.push_back(completion);
 
     // Clean up
     turn_cleanup(inference_data);
@@ -948,6 +932,10 @@ int main()
     common_params params;
     // TODO: make the n_threads dependent on whether user is running the system in foreground or background
     params.cpuparams.n_threads = 4;
+
+    std::vector<std::string> prev_plans;
+    std::vector<std::string> prev_executions;
+
     inference_data inference_data = {
         &params, // parameters
         nullptr, // model
@@ -956,7 +944,9 @@ int main()
         nullptr, // image_size
         PLANNER, // inference_mode
         "",      // prompt
-        ""       // image
+        "",      // image
+        prev_plans,
+        prev_executions
     };
 
     // Listen to stdin in another thread and respond to requests
