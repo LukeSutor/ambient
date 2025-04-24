@@ -1,3 +1,0 @@
-[submodule "src-tauri/llm/llama.cpp"]
-	path = src-tauri/llm/llama.cpp
-	url = https://github.com/ggerganov/llama.cpp.git
