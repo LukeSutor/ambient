@@ -17,10 +17,26 @@ export default function Home() {
       });
   }, []);
 
+  // New function to call the sidecar command
+  async function callSidecar() {
+    // Replace with actual image path and prompt
+    const imagePath = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/sample_images/gmail.png";
+    const prompt = "Describe what the user is actively doing on their computer in this image.";
+    try {
+      console.log(`Calling sidecar with image: ${imagePath}, prompt: ${prompt}`);
+      const result = await invoke("call_main_sidecar", { imagePath, prompt });
+      console.log("Sidecar response:", result);
+      // Handle the successful response string (result)
+    } catch (error) {
+      console.error("Error calling sidecar:", error);
+      // Handle the error string (error)
+    }
+  }
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Button variant="outline">Button</Button>
+        <Button variant="outline" onClick={callSidecar}>Call Sidecar</Button>
         <Image
           className="dark:invert"
           src="/next.svg"

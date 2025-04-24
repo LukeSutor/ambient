@@ -1,0 +1,5 @@
+transformers==4.51.3
+torch==2.7.0
+pillow==11.2.1
+num2words==0.5.14
+argparse==1.4.0
