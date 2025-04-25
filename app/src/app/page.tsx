@@ -51,10 +51,22 @@ export default function Home() {
     }
   }
 
+  async function takeScreenshot() {
+    try {
+      const screenshotPath = await invoke<string>("take_screenshot");
+      console.log("Screenshot saved at:", screenshotPath);
+      // Handle the successful screenshot path (screenshotPath)
+    } catch (error) {
+      console.error("Error taking screenshot:", error);
+      // Handle the error string (error)
+    }
+  }
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
         <Button variant="outline" onClick={callLlamaSidecar}>Call Sidecar</Button>
+        <Button onClick={takeScreenshot}>Take Screenshot</Button>
         <Image
           className="dark:invert"
           src="/next.svg"

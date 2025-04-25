@@ -23,6 +23,7 @@
           "sidecar": true
         }
       ]
-    }
+    },
+    "fs:default"
   ]
 }

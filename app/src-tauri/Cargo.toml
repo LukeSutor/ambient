@@ -24,6 +24,9 @@ tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
 tokio = "1.42.0"
+screenshots = "0.8.10"
+image = "0.25.5"
+tauri-plugin-fs = "2"
 
 [features]
 # by default Tauri runs in production mode

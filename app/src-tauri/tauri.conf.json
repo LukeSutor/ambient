@@ -33,14 +33,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/main", "binaries/llama"],
-    "resources": {
-      "binaries/ggml-base.dll": "ggml-base.dll",
-      "binaries/ggml-cpu.dll": "ggml-cpu.dll",
-      "binaries/ggml.dll": "ggml.dll",
-      "binaries/llama.dll": "llama.dll",
-      "binaries/llava_shared.dll": "llava_shared.dll",
-      "binaries/mtmd_shared.dll": "mtmd_shared.dll"
-    }
+    "externalBin": ["binaries/main", "binaries/llama"]
   }
 }
