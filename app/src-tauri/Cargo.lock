@@ -4350,6 +4350,7 @@ name = "tauri-nextjs-template"
 version = "0.1.0"
 dependencies = [
  "image 0.25.6",
+ "once_cell",
  "screenshots",
  "serde",
  "serde_json",

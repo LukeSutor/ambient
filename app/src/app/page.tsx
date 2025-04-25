@@ -1,9 +1,15 @@
 "use client";
 import { RoundedButton } from "@/components/RoundedButton";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from '@tauri-apps/api/event'; // Import listen
 import Image from "next/image";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect, useRef } from "react"; // Import useEffect, useRef
 import { Button } from "@/components/ui/button"
+
+// Define the expected payload structure
+interface TaskResultPayload {
+  result: string;
+}
 
 export default function Home() {
   const [greeted, setGreeted] = useState<string | null>(null);
@@ -35,18 +41,24 @@ export default function Home() {
 
   // New function to call the sidecar command
   async function callLlamaSidecar() {
-    // Replace with actual image path and prompt
+    // Replace with actual image path
     const image = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/sample_images/gmail.png";
-    const prompt = "You are a computer screenshot analysis expert. You will be given an screenshot of a person using a computer, and you must accurately and precisely describe what they are currently doing based on the screenshot. Your response should be short and sweet, optimized for creating an embedding for document similarity with other tasks the user does. What is the user doing in this image?";
+    // Define model and mmproj paths
     const model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
     const mmproj = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/mmproj.gguf";
+    const promptKey = "SUMMARIZE_ACTION"; // Key for the desired prompt
+
     try {
+      // Fetch the prompt using the new command
+      const prompt = await invoke<string>("get_prompt_command", { key: promptKey });
+      console.log(`Fetched prompt for key '${promptKey}': ${prompt}`);
+
       console.log(`Calling sidecar with image: ${image}, prompt: ${prompt}`);
       const result = await invoke("call_llama_sidecar", { model, mmproj, image, prompt });
       console.log("Sidecar response:", result);
       // Handle the successful response string (result)
     } catch (error) {
-      console.error("Error calling sidecar:", error);
+      console.error("Error calling sidecar or fetching prompt:", error);
       // Handle the error string (error)
     }
   }
@@ -62,87 +74,93 @@ export default function Home() {
     }
   }
 
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Button variant="outline" onClick={callLlamaSidecar}>Call Sidecar</Button>
-        <Button onClick={takeScreenshot}>Take Screenshot</Button>
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  // Function to start the scheduler
+  async function startScheduler() {
+    try {
+      // Optionally pass an interval in minutes: await invoke("start_scheduler", { interval: 5 });
+      await invoke("start_scheduler");
+      console.log("Scheduler started successfully.");
+      // You could update UI state here, e.g., disable start button, enable stop button
+    } catch (error) {
+      console.error("Error starting scheduler:", error);
+      // Handle the error
+    }
+  }
 
-        <div className="flex flex-col gap-2 items-start">
-          <RoundedButton
-            onClick={greet}
-            title="Call &quot;greet&quot; from Rust"
-          />
-          <p className="break-words w-md">
-            {greeted ?? "Click the button to call the Rust function"}
-          </p>
+  // Function to stop the scheduler
+  async function stopScheduler() {
+    try {
+      await invoke("stop_scheduler");
+      console.log("Scheduler stopped successfully.");
+      // You could update UI state here, e.g., enable start button, disable stop button
+    } catch (error) {
+      console.error("Error stopping scheduler:", error);
+      // Handle the error (e.g., scheduler wasn't running)
+    }
+  }
+
+  const [taskResults, setTaskResults] = useState<string[]>([]); // State for task results
+  const resultsEndRef = useRef<HTMLDivElement>(null); // Ref for scrolling
+
+  // Effect to listen for task results
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    async function setupListener() {
+      try {
+        unlisten = await listen<TaskResultPayload>('task-completed', (event) => {
+          console.log("Received task result:", event.payload.result);
+          setTaskResults((prevResults) => [...prevResults, event.payload.result]);
+        });
+        console.log("Event listener for 'task-completed' set up.");
+      } catch (error) {
+        console.error("Failed to set up event listener:", error);
+      }
+    }
+
+    setupListener();
+
+    // Cleanup listener on component unmount
+    return () => {
+      if (unlisten) {
+        unlisten();
+        console.log("Event listener for 'task-completed' cleaned up.");
+      }
+    };
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+  // Effect to scroll to the bottom of the results box when new results arrive
+  useEffect(() => {
+    resultsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [taskResults]);
+
+  return (
+    <div className="flex flex-col items-center justify-center p-4">
+      <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
+        <div className="flex flex-wrap gap-2 justify-center">
+          <Button variant="outline" onClick={callLlamaSidecar}>Call Llama Sidecar</Button>
+          <Button onClick={takeScreenshot}>Take Screenshot</Button>
+          {/* Add buttons for scheduler control */}
+          <Button onClick={startScheduler}>Start Scheduler</Button>
+          <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
+        </div>
+
+        {/* Results Box */}
+        <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
+          <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
+          {taskResults.length === 0 ? (
+            <p className="text-gray-500">No results yet. Start the scheduler.</p>
+          ) : (
+            taskResults.map((result, index) => (
+              <pre key={index} className="whitespace-pre-wrap text-sm p-2 mb-2 border-b last:border-b-0">
+                {result}
+              </pre>
+            ))
+          )}
+          {/* Invisible element to scroll to */}
+          <div ref={resultsEndRef} />
         </div>
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }

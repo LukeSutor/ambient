@@ -27,6 +27,7 @@ tokio = "1.42.0"
 screenshots = "0.8.10"
 image = "0.25.5"
 tauri-plugin-fs = "2"
+once_cell = "1.21.3"
 
 [features]
 # by default Tauri runs in production mode
