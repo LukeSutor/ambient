@@ -1,8 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod data;
-pub mod sidecar;
+pub mod vlm;
 pub mod prompts;
-pub mod scheduler; // Add the new scheduler module
+pub mod scheduler;
+pub mod embedding; // Add the new embedding module
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -11,13 +12,13 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
-      sidecar::call_main_sidecar,
-      sidecar::call_llama_sidecar,
+      vlm::get_vlm_response,
       data::take_screenshot,
       prompts::get_prompt_command,
-      scheduler::start_scheduler, // Add start command
-      scheduler::stop_scheduler,  // Add stop command
-      scheduler::get_scheduler_interval // Add command to get interval
+      scheduler::start_scheduler,
+      scheduler::stop_scheduler,
+      scheduler::get_scheduler_interval,
+      embedding::get_embedding
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

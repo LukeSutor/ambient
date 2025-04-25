@@ -1,4 +1,4 @@
-use crate::{data, prompts, sidecar};
+use crate::{data, prompts, vlm};
 use once_cell::sync::Lazy;
 use serde::Serialize; // Import Serialize
 use std::sync::Arc;
@@ -57,36 +57,35 @@ async fn run_scheduled_task(app_handle: tauri::AppHandle) {
     let model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
     let mmproj = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/mmproj.gguf";
 
-    // 4. Call llama sidecar
+    // 4. Call VLM to get response
     println!(
-        "[scheduler] Calling llama sidecar with image: {}, model: {}, mmproj: {}",
+        "[scheduler] Getting VLM response for image: {}, model: {}, mmproj: {}",
         screenshot_path, model, mmproj
     );
-    match sidecar::call_llama_sidecar(
+    match vlm::get_vlm_response(
         app_handle.clone(),
         model.to_string(),
         mmproj.to_string(),
-        screenshot_path, // Already a String
+        screenshot_path,
         prompt,
     )
     .await
     {
         Ok(result) => {
-            println!("[scheduler] Llama sidecar executed successfully. Result: {}", result);
+            println!("[scheduler] VLM response received successfully.");
             // Emit the result to the frontend
             if let Err(e) = app_handle.emit(
                 "task-completed",
                 TaskResultPayload {
-                    result: result.clone(), // Clone the result string for the payload
+                    result: result.clone(),
                 },
             ) {
                 eprintln!("[scheduler] Failed to emit task-completed event: {}", e);
             }
-            // Optionally, still print the result to the Rust console if needed
-            // println!("[scheduler] Result: {}", result);
         }
         Err(e) => {
-            eprintln!("[scheduler] Error calling llama sidecar: {}", e);
+            eprintln!("[scheduler] Error getting VLM response: {}", e);
+            // Optionally emit an error event
         }
     }
     println!("[scheduler] Scheduled task finished.");

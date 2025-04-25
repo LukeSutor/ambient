@@ -14,7 +14,6 @@ static PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
 });
 
 /// Fetches a prompt by its key.
-/// Internal function, not directly exposed as a Tauri command.
 pub fn get_prompt(key: &str) -> Option<&'static str> {
     PROMPTS.get(key).copied()
 }
