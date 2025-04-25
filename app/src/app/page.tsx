@@ -33,10 +33,28 @@ export default function Home() {
     }
   }
 
+  // New function to call the sidecar command
+  async function callLlamaSidecar() {
+    // Replace with actual image path and prompt
+    const image = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/sample_images/gmail.png";
+    const prompt = "You are a computer screenshot analysis expert. You will be given an screenshot of a person using a computer, and you must accurately and precisely describe what they are currently doing based on the screenshot. Your response should be short and sweet, optimized for creating an embedding for document similarity with other tasks the user does. What is the user doing in this image?";
+    const model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
+    const mmproj = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/mmproj.gguf";
+    try {
+      console.log(`Calling sidecar with image: ${image}, prompt: ${prompt}`);
+      const result = await invoke("call_llama_sidecar", { model, mmproj, image, prompt });
+      console.log("Sidecar response:", result);
+      // Handle the successful response string (result)
+    } catch (error) {
+      console.error("Error calling sidecar:", error);
+      // Handle the error string (error)
+    }
+  }
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
       <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Button variant="outline" onClick={callSidecar}>Call Sidecar</Button>
+        <Button variant="outline" onClick={callLlamaSidecar}>Call Sidecar</Button>
         <Image
           className="dark:invert"
           src="/next.svg"

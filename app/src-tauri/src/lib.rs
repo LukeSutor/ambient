@@ -16,7 +16,8 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
       greet,
-      sidecar::call_main_sidecar
+      sidecar::call_main_sidecar,
+      sidecar::call_llama_sidecar
       ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -16,6 +16,11 @@
           "args": true,
           "name": "binaries/main",
           "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/llama",
+          "sidecar": true
         }
       ]
     }
