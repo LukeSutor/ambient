@@ -4,6 +4,8 @@ import { listen } from '@tauri-apps/api/event'; // Import listen
 import Image from "next/image";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea" // Import Textarea
+import { Label } from "@/components/ui/label" // Import Label
 import Link from 'next/link'
 
 // Define the expected payload structure
@@ -101,6 +103,45 @@ export default function Home() {
   const [taskResults, setTaskResults] = useState<string[]>([]); // State for task results
   const resultsEndRef = useRef<HTMLDivElement>(null); // Ref for scrolling
 
+  // State for SQL execution
+  const [sqlQuery, setSqlQuery] = useState<string>("SELECT * FROM documents LIMIT 5;");
+  const [sqlParams, setSqlParams] = useState<string>("[]"); // Store params as JSON string
+  const [sqlResult, setSqlResult] = useState<string | null>(null);
+  const [sqlError, setSqlError] = useState<string | null>(null);
+
+  // Function to execute SQL
+  const handleExecuteSql = async () => {
+    setSqlResult(null); // Clear previous result
+    setSqlError(null); // Clear previous error
+
+    let parsedParams: any[] | null = null;
+    try {
+      // Only parse if params string is not empty and not just whitespace
+      if (sqlParams.trim()) {
+        parsedParams = JSON.parse(sqlParams);
+        if (!Array.isArray(parsedParams)) {
+          throw new Error("Parameters must be a valid JSON array.");
+        }
+      }
+    } catch (e: any) {
+      setSqlError(`Invalid JSON in parameters: ${e.message}`);
+      return;
+    }
+
+    try {
+      console.log(`Executing SQL: ${sqlQuery} with params:`, parsedParams);
+      const result = await invoke("execute_sql", {
+        sql: sqlQuery,
+        params: parsedParams, // Pass null if parsing resulted in null
+      });
+      console.log("SQL Result:", result);
+      setSqlResult(JSON.stringify(result, null, 2)); // Pretty print JSON result
+    } catch (error: any) {
+      console.error("Error executing SQL:", error);
+      setSqlError(typeof error === 'string' ? error : JSON.stringify(error));
+    }
+  };
+
   // Effect to listen for task results
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -134,37 +175,70 @@ export default function Home() {
   }, [taskResults]);
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-4">
+    <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
       {/* Home screen link */}
       <Button asChild className="absolute top-4 right-4 bg-red-500">
         <Link href="/">Home</Link>
       </Button>
-      <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
-        <div className="flex flex-wrap gap-2 justify-center">
-          <Button variant="outline" onClick={callVLMSidecar}>Call VLM Sidecar</Button>
-          <Button variant="outline" onClick={callEmbeddingSidecar}>Call Embedding Sidecar</Button>
-          <Button onClick={takeScreenshot}>Take Screenshot</Button>
-          {/* Add buttons for scheduler control */}
-          <Button onClick={startScheduler}>Start Scheduler</Button>
-          <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
-        </div>
 
-        {/* Results Box */}
-        <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
-          <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
-          {taskResults.length === 0 ? (
-            <p className="text-gray-500">No results yet. Start the scheduler.</p>
-          ) : (
-            taskResults.map((result, index) => (
-              <pre key={index} className="whitespace-pre-wrap text-sm p-2 mb-2 border-b last:border-b-0">
-                {result}
-              </pre>
-            ))
-          )}
-          {/* Invisible element to scroll to */}
-          <div ref={resultsEndRef} />
+      {/* Existing Buttons Section */}
+      <div className="flex flex-wrap gap-2 justify-center">
+        <Button variant="outline" onClick={callVLMSidecar}>Call VLM Sidecar</Button>
+        <Button variant="outline" onClick={callEmbeddingSidecar}>Call Embedding Sidecar</Button>
+        <Button onClick={takeScreenshot}>Take Screenshot</Button>
+        <Button onClick={startScheduler}>Start Scheduler</Button>
+        <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
+      </div>
+
+      {/* SQL Execution Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4">
+        <h2 className="text-lg font-semibold">Execute SQL Query</h2>
+        <div className="space-y-2">
+          <Label htmlFor="sql-query">SQL Query</Label>
+          <Textarea
+            id="sql-query"
+            value={sqlQuery}
+            onChange={(e) => setSqlQuery(e.target.value)}
+            placeholder="Enter SQL query (e.g., SELECT * FROM documents)"
+            rows={4}
+          />
         </div>
-      </main>
+        <div className="space-y-2">
+          <Label htmlFor="sql-params">Parameters (JSON Array)</Label>
+          <Textarea
+            id="sql-params"
+            value={sqlParams}
+            onChange={(e) => setSqlParams(e.target.value)}
+            placeholder='Enter parameters as JSON array (e.g., ["value1", 123]) or leave empty'
+            rows={2}
+          />
+        </div>
+        <Button onClick={handleExecuteSql}>Execute SQL</Button>
+        {(sqlResult || sqlError) && (
+          <div className="mt-4">
+            <h3 className="text-md font-semibold">Result:</h3>
+            <pre className="mt-2 p-2 border rounded bg-gray-50 text-sm overflow-x-auto">
+              {sqlError ? `Error: ${sqlError}` : sqlResult}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Results Box */}
+      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
+        <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
+        {taskResults.length === 0 ? (
+          <p className="text-gray-500">No results yet. Start the scheduler.</p>
+        ) : (
+          taskResults.map((result, index) => (
+            <pre key={index} className="whitespace-pre-wrap text-sm p-2 mb-2 border-b last:border-b-0">
+              {result}
+            </pre>
+          ))
+        )}
+        {/* Invisible element to scroll to */}
+        <div ref={resultsEndRef} />
+      </div>
     </div>
   );
 }

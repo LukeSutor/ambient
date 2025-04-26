@@ -5,6 +5,10 @@ pub mod vlm;
 pub mod prompts;
 pub mod scheduler;
 pub mod embedding;
+use tauri::Manager;
+
+use rusqlite::Connection; // Added for clarity, though likely already implicitly used via db
+use std::sync::Mutex; // Added for clarity
 
 pub struct DbState(pub Mutex<Option<Connection>>); // Wrap connection in Mutex and Option
 
@@ -18,8 +22,8 @@ pub fn run() {
         match db::initialize_database(&app_handle) {
             Ok(conn) => {
                 println!("[setup] Database initialized successfully.");
-                // Store the connection in the managed state
-                let state = app.state::<DbState>();
+                // Store the connection in the managed state using the app_handle
+                let state = app_handle.state::<DbState>();
                 *state.0.lock().unwrap() = Some(conn); // Store the connection
             }
             Err(e) => {
@@ -40,7 +44,8 @@ pub fn run() {
       scheduler::start_scheduler,
       scheduler::stop_scheduler,
       scheduler::get_scheduler_interval,
-      embedding::get_embedding
+      embedding::get_embedding,
+      db::execute_sql // Added the new command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
