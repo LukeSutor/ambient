@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event'; // Import listen
 import Image from "next/image";
-import { useCallback, useState, useEffect, useRef } from "react"; // Import useEffect, useRef
+import { useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
 
@@ -24,7 +24,7 @@ export default function Home() {
   }, []);
 
   // New function to call the sidecar command
-  async function callLlamaSidecar() {
+  async function callVLMSidecar() {
     // Replace with actual image path
     const image = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/sample_images/gmail.png";
     // Define model and mmproj paths
@@ -38,11 +38,26 @@ export default function Home() {
       console.log(`Fetched prompt for key '${promptKey}': ${prompt}`);
 
       console.log(`Calling sidecar with image: ${image}, prompt: ${prompt}`);
-      const result = await invoke("call_llama_sidecar", { model, mmproj, image, prompt });
+      const result = await invoke("get_vlm_response", { model, mmproj, image, prompt });
       console.log("Sidecar response:", result);
       // Handle the successful response string (result)
     } catch (error) {
       console.error("Error calling sidecar or fetching prompt:", error);
+      // Handle the error string (error)
+    }
+  }
+
+  async function callEmbeddingSidecar() {
+    const model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
+    const prompt = "Hello world!";
+
+    try {
+      console.log(`Calling embedding sidecar with model: ${model}, prompt: ${prompt}`);
+      const embedding = await invoke<string>("get_embedding", { model, prompt });
+      console.log("Embedding response:", embedding);
+      // Handle the successful embedding response (embedding)
+    } catch (error) {
+      console.error("Error calling embedding sidecar:", error);
       // Handle the error string (error)
     }
   }
@@ -120,13 +135,14 @@ export default function Home() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4">
-      {/* Dev screen link */}
+      {/* Home screen link */}
       <Button asChild className="absolute top-4 right-4 bg-red-500">
-        <Link href="/dev">Dev</Link>
+        <Link href="/">Home</Link>
       </Button>
       <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
         <div className="flex flex-wrap gap-2 justify-center">
-          <Button variant="outline" onClick={callLlamaSidecar}>Call Llama Sidecar</Button>
+          <Button variant="outline" onClick={callVLMSidecar}>Call VLM Sidecar</Button>
+          <Button variant="outline" onClick={callEmbeddingSidecar}>Call Embedding Sidecar</Button>
           <Button onClick={takeScreenshot}>Take Screenshot</Button>
           {/* Add buttons for scheduler control */}
           <Button onClick={startScheduler}>Start Scheduler</Button>
