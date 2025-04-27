@@ -9,13 +9,12 @@ use tauri::Manager;
 
 use rusqlite::Connection; // Added for clarity, though likely already implicitly used via db
 use std::sync::Mutex; // Added for clarity
-
-pub struct DbState(pub Mutex<Option<Connection>>); // Wrap connection in Mutex and Option
+use db::DbState; // Import DbState from the db module
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
-    .manage(DbState(Mutex::new(None))) // Initialize state with None
+    .manage(DbState(Mutex::new(None))) // Initialize state with None (using the imported DbState)
     .setup(|app| {
         // Initialize the database connection during setup
         let app_handle = app.handle().clone(); // Get the app handle
@@ -23,7 +22,7 @@ pub fn run() {
             Ok(conn) => {
                 println!("[setup] Database initialized successfully.");
                 // Store the connection in the managed state using the app_handle
-                let state = app_handle.state::<DbState>();
+                let state = app_handle.state::<DbState>(); // Use app_handle here (using the imported DbState)
                 *state.0.lock().unwrap() = Some(conn); // Store the connection
             }
             Err(e) => {
