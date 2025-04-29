@@ -176,11 +176,6 @@ export default function Home() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
-      {/* Home screen link */}
-      <Button asChild className="absolute top-4 right-4 bg-red-500">
-        <Link href="/">Home</Link>
-      </Button>
-
       {/* Existing Buttons Section */}
       <div className="flex flex-wrap gap-2 justify-center">
         <Button variant="outline" onClick={callVLMSidecar}>Call VLM Sidecar</Button>

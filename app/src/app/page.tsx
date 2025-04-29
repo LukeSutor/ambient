@@ -120,19 +120,7 @@ export default function Home() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4">
-      {/* Dev screen link */}
-      <Button asChild className="absolute top-4 right-4 bg-red-500">
-        <Link href="/dev">Dev</Link>
-      </Button>
       <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
-        <div className="flex flex-wrap gap-2 justify-center">
-          <Button variant="outline" onClick={callLlamaSidecar}>Call Llama Sidecar</Button>
-          <Button onClick={takeScreenshot}>Take Screenshot</Button>
-          {/* Add buttons for scheduler control */}
-          <Button onClick={startScheduler}>Start Scheduler</Button>
-          <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
-        </div>
-
         {/* Results Box */}
         <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
           <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
