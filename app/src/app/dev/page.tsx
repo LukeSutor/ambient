@@ -13,7 +13,7 @@ interface TaskResultPayload {
   result: string;
 }
 
-export default function Home() {
+export default function Dev() {
   const [greeted, setGreeted] = useState<string | null>(null);
   const greet = useCallback((): void => {
     invoke<string>("greet")
@@ -101,7 +101,6 @@ export default function Home() {
   }
 
   const [taskResults, setTaskResults] = useState<string[]>([]); // State for task results
-  const resultsEndRef = useRef<HTMLDivElement>(null); // Ref for scrolling
 
   // State for SQL execution
   const [sqlQuery, setSqlQuery] = useState<string>("SELECT * FROM documents LIMIT 5;");
@@ -169,11 +168,6 @@ export default function Home() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
-  // Effect to scroll to the bottom of the results box when new results arrive
-  useEffect(() => {
-    resultsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [taskResults]);
-
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
       {/* Existing Buttons Section */}
@@ -231,8 +225,6 @@ export default function Home() {
             </pre>
           ))
         )}
-        {/* Invisible element to scroll to */}
-        <div ref={resultsEndRef} />
       </div>
     </div>
   );

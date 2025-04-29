@@ -3,11 +3,7 @@
 import * as React from "react"
 import {
   Bot,
-  Frame,
   LifeBuoy,
-  Map,
-  PieChart,
-  Send,
   Settings2,
   SquareTerminal,
   House,
@@ -20,18 +16,14 @@ import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarHeader
 } from "@/components/ui/sidebar"
 
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "user",
+    email: "user@example.com",
+    avatar: "/",
   },
   navMain: [
     {
