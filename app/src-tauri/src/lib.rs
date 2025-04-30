@@ -44,7 +44,8 @@ pub fn run() {
       scheduler::stop_scheduler,
       scheduler::get_scheduler_interval,
       embedding::get_embedding,
-      db::execute_sql // Added the new command
+      db::execute_sql,
+      db::reset_database
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

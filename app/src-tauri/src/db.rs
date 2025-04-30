@@ -18,14 +18,52 @@ lazy_static::lazy_static! {
     static ref MIGRATIONS: Migrations<'static> =
         Migrations::new(vec![
             M::up("
-                -- Migration 001: Create initial tables
-                CREATE TABLE IF NOT EXISTS documents (
+                -- Migration 001: Create core activity tracking tables
+                CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    content TEXT NOT NULL,
-                    embedding BLOB -- For sqlite-vec
-                    -- Add timestamp, etc. if needed
+                    timestamp INTEGER NOT NULL,              -- Unix epoch seconds UTC
+                    active_app_name TEXT NOT NULL,           -- e.g., 'Code.exe', 'chrome.exe'
+                    active_window_title TEXT,                -- Window title, nullable
+                    active_url TEXT,                         -- URL if browser, nullable
+                    activity_type TEXT NOT NULL,             -- VLM/Logic classification (e.g., 'Coding', 'Browsing')
+                    activity_details TEXT,                   -- More specific details, nullable
+                    confidence REAL,                         -- Confidence score (0.0-1.0), nullable
+                    embedding BLOB NOT NULL,                 -- Text embedding of activity (for sqlite-vec)
+                    duration_hint_secs INTEGER               -- Optional: Estimated duration since last *different* event
                 );
-                -- Add other initial tables here
+
+                -- Indexes for common queries
+                CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);
+                CREATE INDEX IF NOT EXISTS idx_events_activity_type ON events (activity_type);
+                CREATE INDEX IF NOT EXISTS idx_events_app_name ON events (active_app_name);
+
+                -- Table for discovered patterns
+                CREATE TABLE IF NOT EXISTS patterns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern_type TEXT NOT NULL,              -- e.g., 'sequence', 'periodicity', 'cluster'
+                    trigger_conditions TEXT NOT NULL,        -- JSON describing triggers (time, preceding events, app, etc.)
+                    predicted_next_event TEXT,               -- JSON describing likely next event(s), nullable
+                    recommended_action TEXT,                 -- JSON describing suggested action, nullable
+                    confidence_score REAL NOT NULL,          -- Reliability metric (support, confidence, etc.)
+                    frequency_metric REAL,                   -- How often it occurs (e.g., per week), nullable
+                    last_detected_timestamp INTEGER,         -- When this pattern was last updated/seen
+                    created_timestamp INTEGER NOT NULL,      -- When the pattern was first discovered
+                    is_active INTEGER NOT NULL DEFAULT 1     -- Boolean (0/1) if the pattern is enabled for recommendations
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_patterns_type ON patterns (pattern_type);
+                CREATE INDEX IF NOT EXISTS idx_patterns_active_timestamp ON patterns (is_active, last_detected_timestamp);
+
+                -- Table for application settings
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY NOT NULL,
+                    value TEXT NOT NULL                      -- Store simple values directly, complex ones as JSON
+                );
+
+                -- Default settings examples (insert these via code after migration if needed)
+                -- INSERT OR IGNORE INTO settings (key, value) VALUES ('capture_interval_seconds', '60');
+                -- INSERT OR IGNORE INTO settings (key, value) VALUES ('ignored_apps', '[]'); -- JSON array of app names
+                -- INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_vlm', 'true');
             ")
             // Add more migrations here as needed
             // M::up("
@@ -192,5 +230,61 @@ pub fn execute_sql(
         }
     } else {
         Err("Database connection not available.".to_string())
+    }
+}
+
+/// Closes the current database connection, deletes the database file,
+/// and initializes a fresh database.
+#[tauri::command]
+pub fn reset_database(
+    state: tauri::State<'_, DbState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    println!("[db] Attempting to reset database...");
+
+    // 1. Resolve the database path (same logic as initialize_database)
+    let app_data_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
+    let db_path = app_data_path.join("sqlite.db");
+    println!("[db] Target database path for reset: {:?}", db_path);
+
+    // 2. Lock the state and take the connection (this closes it when `_conn_guard` drops)
+    let mut conn_guard = state.0.lock().map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let old_conn = conn_guard.take(); // Takes the Option<Connection>, leaving None
+
+    // Explicitly drop the old connection if it exists
+    if let Some(conn) = old_conn {
+        drop(conn); // Ensure connection is closed before deleting file
+        println!("[db] Closed existing database connection.");
+    } else {
+        println!("[db] No existing database connection found in state.");
+    }
+
+    // 3. Delete the database file
+    if db_path.exists() {
+        println!("[db] Deleting database file: {:?}", db_path);
+        fs::remove_file(&db_path)
+            .map_err(|e| format!("Failed to delete database file {:?}: {}", db_path, e))?;
+        println!("[db] Database file deleted successfully.");
+    } else {
+        println!("[db] Database file not found, skipping deletion.");
+    }
+
+    // 4. Re-initialize the database
+    println!("[db] Re-initializing database...");
+    match initialize_database(&app_handle) {
+        Ok(new_conn) => {
+            // 5. Store the new connection in the state
+            *conn_guard = Some(new_conn);
+            println!("[db] Database reset and re-initialized successfully.");
+            Ok(())
+        }
+        Err(e) => {
+            // If initialization fails, the state remains None
+            println!("[db] Failed to re-initialize database: {}", e);
+            Err(format!("Failed to re-initialize database: {}", e))
+        }
     }
 }
