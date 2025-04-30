@@ -5,7 +5,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogClose,
   DialogHeader,
   DialogTitle,
@@ -22,14 +21,10 @@ export default function Settings() {
         try {
             await invoke('reset_database');
             console.log("Database reset successfully!");
-            toast("Data reset", {
-                description: "Your data has been successfully removed."
-            })
+            toast.success('Database reset succesful')
         } catch (error) {
             console.error("Failed to reset database:", error);
-            toast("Error", {
-                description: "Something went wrong, please try again later."
-            })
+            toast.error('Database reset not succesful')
         }
     }
 
@@ -39,12 +34,12 @@ export default function Settings() {
             {/* Danger zone */}
             <p className="text-xl font-semibold w-full pb-2">Danger Zone</p>
             <div className="outline outline-red-500 w-full max-w-xl rounded-md">
-                <Toaster />
+                <Toaster richColors />
                 <Dialog>
                     <div className="flex flex-row justify-between p-4">
                         <div className="flex flex-col">
                             <p className="font-semibold text-sm">Delete personal data</p>
-                            <p className="text-sm">This action is not reversible, please be certain.</p>
+                            <p className="text-sm">This action is not reversible. Please be certain.</p>
                         </div>
                         <DialogTrigger asChild>
                             <Button variant="outline" className="text-red-500 hover:text-red-600 font-semibold">Reset</Button>
