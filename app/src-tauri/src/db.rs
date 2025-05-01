@@ -10,7 +10,6 @@ use serde::Serialize; // Keep Serialize if needed elsewhere, otherwise remove
 use serde_json::Value as JsonValue; // Added
 use std::sync::Mutex; // Ensure DbState uses Mutex if not already defined
 
-// Define DbState if it's not defined elsewhere (assuming it wraps the connection)
 pub struct DbState(pub Mutex<Option<Connection>>);
 
 

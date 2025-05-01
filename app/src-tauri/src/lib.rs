@@ -5,6 +5,7 @@ pub mod vlm;
 pub mod prompts;
 pub mod scheduler;
 pub mod embedding;
+pub mod setup;
 use tauri::Manager;
 
 use rusqlite::Connection; // Added for clarity, though likely already implicitly used via db
@@ -37,15 +38,21 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
-      vlm::get_vlm_response,
-      data::take_screenshot,
-      prompts::get_prompt_command,
-      scheduler::start_scheduler,
-      scheduler::stop_scheduler,
-      scheduler::get_scheduler_interval,
-      embedding::get_embedding,
-      db::execute_sql,
-      db::reset_database
+        vlm::get_vlm_response,
+        data::take_screenshot,
+        prompts::get_prompt_command,
+        scheduler::start_scheduler,
+        scheduler::stop_scheduler,
+        scheduler::get_scheduler_interval,
+        embedding::get_embedding,
+        db::execute_sql,
+        db::reset_database,
+        setup::setup,
+        setup::get_vlm_model_paths,
+        setup::check_vlm_model_download,
+        setup::get_fastembed_model_path,
+        setup::check_fastembed_model_download,
+        setup::check_setup_complete
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
