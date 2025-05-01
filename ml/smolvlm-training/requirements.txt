@@ -3,6 +3,10 @@ qwen-vl-utils
 torch
 torchvision
 accelerate
-packaging
-ninja
-flash-attn --no-build-isolation
+# packaging
+# ninja
+# flash-attn --no-build-isolation
+# datasets
+peft
+python-dotenv
+trl

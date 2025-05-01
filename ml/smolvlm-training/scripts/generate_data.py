@@ -9,59 +9,78 @@ import re
 CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/images")
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/generated_data.json") # Define output file path
-PROMPT = """You are an expert screen activity analyzer helping create a dataset for a user productivity assistant. Your task is to generate structured, highly specific descriptions of user activities shown in computer screenshots. These descriptions will be embedded in a vector database to detect patterns in user behavior for intelligent recommendations.
+PROMPT = """You are an expert screen activity analyzer helping create a dataset for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots. These descriptions will be embedded in a vector database to identify patterns in user behavior.
+
 Output Format
 For each screenshot, provide a JSON object with two key fields:
-{
-  "application": "Specific software/application name the user is using",
-  "description": "Precise, detailed description of the user's activity (10-15 words maximum)"
-}
-Guidelines
+```{
+  "application": "Specific application name visible in the screenshot",
+  "description": "Ultra-concise description of exactly what the user is doing (include URLs for web content)"
+}```
 
-Be extremely specific about the application name (e.g., "Chrome", "VSCode", "Excel", "Slack")
-Make descriptions highly detailed but concise - every word must contribute meaningful information
-Focus on capturing actionable patterns (what the user is doing, not just what is visible)
-Include relevant context that would help distinguish this activity from similar ones
-Prioritize information that would be useful for pattern recognition in a vector database
-Avoid generic descriptions; be precise about content, actions, and purpose
-Ensure descriptions are optimized for semantic search and similarity matching
+Guidelines
+- Be extremely specific about the application name (e.g., "Chrome", "VSCode", "Excel", "Gmail", "Slack")
+- Make descriptions extremely concise yet highly descriptive of the exact activity
+- For web browsing, always include the domain (e.g., "youtube.com", "github.com", "google.com")
+- If the user is on the homescreen/desktop with no active applications, explicitly state "homescreen" as the application and describe that they are not doing anything
+- Focus on capturing actionable information that would help identify usage patterns
+- Identify specific content being viewed or created when possible
+- Mention file names, document titles, or project names if visible
+- For coding, specify the programming language and project context
+- Describe the exact stage of activity (reading, writing, watching, editing, etc.)
 
 Special Cases
-
-For browsers, try to identify the specific service (e.g., "Gmail in Chrome", "YouTube in Firefox"), as well as the specific website (e.g. "youtube.com") in the description
-For development environments, note the programming language or framework when visible
-For productivity tools, mention the specific type of document or project
-For communication tools, distinguish between reading, writing, or other activities, as well as the names of the people being communicated with
-For a blank screen (like the user being on their homepage with no applications open), indicate that they are on the homepage and are not partaking in any activity.
+- If multiple windows are visible, focus on the active/forefront window
+- For split-screen views, mention both visible applications
+- If a video is playing, mention the content type and topic
+- For communication tools, differentiate between reading, composing, or scanning messages
 
 Examples
+
 Example 1 - Word Processing:
-{
+```{
   "application": "Microsoft Word",
-  "description": "Editing business proposal with financial projections table and executive summary"
-}
+  "description": "Editing quarterly financial report with budget forecasting table highlighted"
+}```
+
 Example 2 - Programming:
-{
+```{
   "application": "VSCode",
-  "description": "Writing Python function using pandas for data cleaning in machine learning pipeline"
-}
+  "description": "Writing Python data analysis function in utils.py with pandas dataframe manipulation"
+}```
+
 Example 3 - Web Browsing:
-{
+```{
   "application": "Chrome",
-  "description": "Reading AWS Lambda documentation on docs.aws.amazon.com/lambda/ focused on deployment configuration settings"
-}
+  "description": "Watching tutorial video on youtube.com about machine learning implementation"
+}```
+
 Example 4 - Email:
-{
+```{
   "application": "Gmail",
-  "description": "Composing team email about project timeline with bullet-point deliverables"
-}
+  "description": "Composing email to marketing team with product launch timeline attachment open"
+}```
+
 Example 5 - Data Analysis:
-{
+```{
   "application": "Excel",
-  "description": "Analyzing quarterly sales dashboard with filtered regional performance metrics"
-}
-Analyze the provided screenshot and generate an accurate, structured description following this format, optimized for vector embedding and similarity search."""
-BATCH_SIZE = 8
+  "description": "Analyzing Q3 sales data with pivot table and filtering by region"
+}```
+
+Example 6 - Desktop:
+```{
+  "application": "homescreen",
+  "description": "Desktop visible, no active applications"
+}```
+
+Example 7 - Multiple Applications:
+```{
+  "application": "Zoom",
+  "description": "In video meeting with 4 participants while viewing shared PowerPoint presentation about marketing strategy"
+}```
+
+Analyze the provided screenshot and generate an accurate, structured description following this format. Focus on making the description extremely specific and information-dense to optimize for vector embedding and pattern recognition."""
+BATCH_SIZE = 10
 
 def extract_json_string(text):
     """Extracts the JSON string from markdown code blocks."""
@@ -99,11 +118,28 @@ def main():
     max_pixels = 1280*28*28
     processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-32B-Instruct", min_pixels=min_pixels, max_pixels=max_pixels, padding_side="left")
 
-    all_filenames = os.listdir(DATA_DIR)
-    # Process only a subset for testing - remove [:8] to process all
-    filenames_to_process = all_filenames[:64]
+    # Load existing data if output file exists
+    processed_filenames = set()
+    results_data = []
+    if os.path.exists(OUTPUT_FILE):
+        try:
+            with open(OUTPUT_FILE, 'r') as f:
+                results_data = json.load(f)
+                processed_filenames = {item['filename'] for item in results_data}
+            print(f"Loaded {len(processed_filenames)} existing results from {OUTPUT_FILE}")
+        except json.JSONDecodeError:
+            print(f"Warning: Could not decode JSON from {OUTPUT_FILE}. Starting fresh.")
+            results_data = [] # Reset if file is corrupted
+            processed_filenames = set()
+        except Exception as e:
+            print(f"Error loading {OUTPUT_FILE}: {e}. Starting fresh.")
+            results_data = [] # Reset on other errors
+            processed_filenames = set()
 
-    results_data = [] # Initialize list to store results
+    all_filenames = os.listdir(DATA_DIR)
+    # Filter out already processed files
+    filenames_to_process = [f for f in all_filenames if f not in processed_filenames]
+    print(f"Found {len(all_filenames)} total files, {len(filenames_to_process)} remaining to process.")
 
     # Wrap the loop with tqdm for progress tracking
     for i in tqdm(range(0, len(filenames_to_process), BATCH_SIZE), desc="Processing batches"):
@@ -151,17 +187,24 @@ def main():
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
 
-        # Store results and print
+        # Store results for the current batch
+        batch_results = []
         for filename, output_text in zip(batch_filenames, output_texts):
             extracted_json_str = extract_json_string(output_text) # Extract JSON string
-            results_data.append({"filename": filename, "generation": extracted_json_str}) # Store extracted string
+            batch_results.append({"filename": filename, "generation": extracted_json_str}) # Store extracted string
 
-    # Save results to JSON file
-    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True) # Ensure output directory exists
-    with open(OUTPUT_FILE, 'w') as f:
-        json.dump(results_data, f, indent=4)
-    print(f"\nGenerated data saved to {OUTPUT_FILE}")
+        # Append batch results to the main list
+        results_data.extend(batch_results)
 
+        # Save results to JSON file after each batch
+        try:
+            os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True) # Ensure output directory exists
+            with open(OUTPUT_FILE, 'w') as f:
+                json.dump(results_data, f, indent=4)
+        except Exception as e:
+            print(f"\nError saving progress to {OUTPUT_FILE}: {e}")
+
+    print(f"\nFinished processing. Total results saved: {len(results_data)}")
 
 if __name__ == "__main__":
     main()
