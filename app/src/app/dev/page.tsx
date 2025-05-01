@@ -177,6 +177,7 @@ export default function Dev() {
         <Button onClick={takeScreenshot}>Take Screenshot</Button>
         <Button onClick={startScheduler}>Start Scheduler</Button>
         <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
+        <Button asChild><Link href="/setup">Setup</Link></Button>
       </div>
 
       {/* SQL Execution Section */}
