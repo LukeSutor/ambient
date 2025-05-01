@@ -28,7 +28,7 @@ Ensure descriptions are optimized for semantic search and similarity matching
 
 Special Cases
 
-For browsers, try to identify the specific service (e.g., "Gmail in Chrome", "YouTube in Firefox"), as well as the specific website (e.g. "https://youtube.com") in the description
+For browsers, try to identify the specific service (e.g., "Gmail in Chrome", "YouTube in Firefox"), as well as the specific website (e.g. "youtube.com") in the description
 For development environments, note the programming language or framework when visible
 For productivity tools, mention the specific type of document or project
 For communication tools, distinguish between reading, writing, or other activities, as well as the names of the people being communicated with
@@ -48,7 +48,7 @@ Example 2 - Programming:
 Example 3 - Web Browsing:
 {
   "application": "Chrome",
-  "description": "Reading AWS Lambda documentation on https://docs.aws.amazon.com/lambda/, focused on deployment configuration settings"
+  "description": "Reading AWS Lambda documentation on docs.aws.amazon.com/lambda/ focused on deployment configuration settings"
 }
 Example 4 - Email:
 {
@@ -90,7 +90,7 @@ def main():
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         "Qwen/Qwen2.5-VL-32B-Instruct",
         torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        # attn_implementation="flash_attention_2",
         cache_dir=CACHE_DIR
     )
     model = model.to(device)
