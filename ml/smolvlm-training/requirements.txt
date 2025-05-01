@@ -1,0 +1,6 @@
+transformers
+qwen-vl-utils
+torch
+torchvision
+accelerate
+flash-attn --no-build-isolation
