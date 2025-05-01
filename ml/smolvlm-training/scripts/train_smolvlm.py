@@ -87,9 +87,9 @@ Analyze the provided screenshot and generate an accurate, structured description
 
 # Returns a list of all data samples
 def load_dataset():
-    with open(os.path.join(DATA_DIR, "generated_data.json")) as file:
+    json_path = os.path.join(os.path.dirname(DATA_DIR), "generated_data.json")
+    with open(json_path) as file:
         data = json.load(file)
-
     return data
 
 
@@ -213,8 +213,8 @@ def main():
         output_dir=os.path.join(DATA_DIR, "../results"),
         hub_model_id="lukesutor/SmolVLM-500M-ActivityTracking",
         num_train_epochs=1,
-        per_device_train_batch_size=64,
-        gradient_accumulation_steps=64,
+        per_device_train_batch_size=16,
+        gradient_accumulation_steps=2,
         warmup_steps=50,
         learning_rate=1e-4,
         weight_decay=0.01,
