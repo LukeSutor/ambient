@@ -5,6 +5,7 @@ from qwen_vl_utils import process_vision_info
 from tqdm import tqdm
 import json
 import re
+from PIL import Image, UnidentifiedImageError # Added import
 
 CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/images")
@@ -101,7 +102,19 @@ def extract_json_string(text):
                  pass # Not valid JSON, fall through
     # If no JSON found or extraction failed, return original text or handle as needed
     print(f"Warning: Could not extract JSON from: {text}") # Optional warning
-    return text # Return original text if no JSON block found
+    # Attempt to find any JSON-like structure as a last resort, be cautious
+    match = re.search(r'(\{.*?\})', text, re.DOTALL)
+    if match:
+        potential_json = match.group(1).strip()
+        # Basic validation
+        if potential_json.startswith('{') and potential_json.endswith('}'):
+            try:
+                json.loads(potential_json) # Check if it parses
+                print(f"Warning: Found JSON-like string outside markdown: {potential_json}")
+                return potential_json # Return if it looks like JSON
+            except json.JSONDecodeError:
+                pass # Not valid JSON
+    return text # Return original text if no valid JSON found
 
 def main():
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -144,30 +157,54 @@ def main():
     # Wrap the loop with tqdm for progress tracking
     for i in tqdm(range(0, len(filenames_to_process), BATCH_SIZE), desc="Processing batches"):
         batch_filenames = filenames_to_process[i:i + BATCH_SIZE]
-        batch_messages = []
+        valid_batch_messages = []
+        valid_batch_filenames = []
 
         for filename in batch_filenames:
             file_path = os.path.join(DATA_DIR, filename)
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "image": file_path,
-                        },
-                        {"type": "text", "text": PROMPT},
-                    ],
-                }
-            ]
-            batch_messages.append(messages)
+            try:
+                # Try to open and load the image to catch truncation errors early
+                img = Image.open(file_path)
+                img.load() # Force loading image data to trigger potential errors
 
-        # Prepare batch inputs
+                # If loading succeeds, create messages and add to valid lists
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "image": file_path,
+                            },
+                            {"type": "text", "text": PROMPT},
+                        ],
+                    }
+                ]
+                valid_batch_messages.append(messages)
+                valid_batch_filenames.append(filename)
+            except (OSError, UnidentifiedImageError) as e:
+                print(f"\nWarning: Skipping corrupted or unreadable image: {filename} - {e}")
+            except Exception as e: # Catch other potential errors during file processing
+                print(f"\nWarning: Skipping file {filename} due to unexpected error: {e}")
+
+        # If no valid images were found in the batch, skip to the next iteration
+        if not valid_batch_messages:
+            print(f"\nWarning: Skipping batch starting at index {i} as no valid images were found.")
+            continue
+
+        # Prepare batch inputs using only valid messages
         texts = [
             processor.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
-            for msg in batch_messages
+            for msg in valid_batch_messages # Use valid messages
         ]
-        image_inputs, video_inputs = process_vision_info(batch_messages)
+        # process_vision_info might still raise errors if internal processing fails,
+        # but basic file corruption should be caught above.
+        try:
+            image_inputs, video_inputs = process_vision_info(valid_batch_messages) # Use valid messages
+        except Exception as e:
+            print(f"\nError during process_vision_info for batch starting at index {i}: {e}. Skipping batch.")
+            # Optionally, try to identify which image within the valid list caused the issue if possible
+            continue # Skip this batch if process_vision_info fails
 
         inputs = processor(
             text=texts,
@@ -179,19 +216,27 @@ def main():
         inputs = inputs.to(device)
 
         # Batch inference
-        generated_ids = model.generate(**inputs, max_new_tokens=512)
-        generated_ids_trimmed = [
-            out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        output_texts = processor.batch_decode(
-            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
+        try:
+            generated_ids = model.generate(**inputs, max_new_tokens=512)
+            generated_ids_trimmed = [
+                out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            ]
+            output_texts = processor.batch_decode(
+                generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            )
+        except Exception as e:
+            print(f"\nError during model generation for batch starting at index {i}: {e}. Skipping batch.")
+            continue # Skip this batch if generation fails
 
-        # Store results for the current batch
+        # Store results for the current batch (using valid filenames)
         batch_results = []
-        for filename, output_text in zip(batch_filenames, output_texts):
-            extracted_json_str = extract_json_string(output_text) # Extract JSON string
-            batch_results.append({"filename": filename, "generation": extracted_json_str}) # Store extracted string
+        # Ensure output_texts aligns with valid_batch_filenames
+        if len(valid_batch_filenames) == len(output_texts):
+            for filename, output_text in zip(valid_batch_filenames, output_texts): # Use valid filenames
+                extracted_json_str = extract_json_string(output_text) # Extract JSON string
+                batch_results.append({"filename": filename, "generation": extracted_json_str}) # Store extracted string
+        else:
+            print(f"\nWarning: Mismatch between number of valid filenames ({len(valid_batch_filenames)}) and generated outputs ({len(output_texts)}) for batch starting at index {i}. Skipping result saving for this batch.")
 
         # Append batch results to the main list
         results_data.extend(batch_results)
