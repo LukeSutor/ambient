@@ -6,15 +6,7 @@ use reqwest::Client;
 use serde::Serialize;
 use tokio_stream::StreamExt;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
-
-
-/// Constants for downloading
-const EMBEDDING_DIR: &str = "models/embedding";
-const VLM_DIR: &str = "models/vlm";
-const TEXT_FILE: &str = "text-model.gguf";
-const MMPROJ_FILE: &str = "mmproj-model.gguf";
-const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf";
-const MMPROJ_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf";
+use crate::constants::*; // Import constants
 
 
 /// Objects for download progress
@@ -177,40 +169,53 @@ async fn initialize_fastembed(app_handle: tauri::AppHandle) -> Result<String, St
 }
 
 
-/// Gets the paths of the VLM model files.
+/// Gets the path of the VLM text model file.
 #[tauri::command]
-pub fn get_vlm_model_paths(app_handle: tauri::AppHandle) -> Result<Vec<PathBuf>, String> {
-    // Get the application data directory
+pub fn get_vlm_text_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
     let app_data_path = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
-
-    // Construct the specific directory for VLM models
     let vlm_models_dir = app_data_path.join(VLM_DIR);
+    Ok(vlm_models_dir.join(TEXT_FILE))
+}
 
-    // Collect the specific VLM model file paths
-    let text_model_path = vlm_models_dir.join(TEXT_FILE);
-    let mmproj_model_path = vlm_models_dir.join(MMPROJ_FILE);
-
-    Ok(vec![text_model_path, mmproj_model_path])
+/// Gets the path of the VLM mmproj model file.
+#[tauri::command]
+pub fn get_vlm_mmproj_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
+    let vlm_models_dir = app_data_path.join(VLM_DIR);
+    Ok(vlm_models_dir.join(MMPROJ_FILE))
 }
 
 
-/// Checks if the VLM model files are downloaded.
+/// Checks if the VLM text model file is downloaded.
 #[tauri::command]
-pub fn check_vlm_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
-    // Get the expected paths for the VLM models
-    let model_paths = match get_vlm_model_paths(app_handle) {
-        Ok(paths) => paths,
+pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    match get_vlm_text_model_path(app_handle) {
+        Ok(path) => Ok(path.exists()),
         Err(e) => {
-            eprintln!("[check_setup] Failed to get VLM model paths: {}", e);
-            return Ok(false); // If we can't get the paths, assume not downloaded
+            eprintln!("[check_setup] Failed to get VLM text model path: {}", e);
+            // If we can't get the path, treat it as not downloaded, but don't error out the check itself
+            Ok(false)
         }
-    };
+    }
+}
 
-    // Check if all expected model files exist
-    Ok(model_paths.iter().all(|path| path.exists()))
+/// Checks if the VLM mmproj model file is downloaded.
+#[tauri::command]
+pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+    match get_vlm_mmproj_model_path(app_handle) {
+        Ok(path) => Ok(path.exists()),
+        Err(e) => {
+            eprintln!("[check_setup] Failed to get VLM mmproj model path: {}", e);
+            // If we can't get the path, treat it as not downloaded, but don't error out the check itself
+            Ok(false)
+        }
+    }
 }
 
 
@@ -246,7 +251,7 @@ pub fn check_fastembed_model_download(app_handle: tauri::AppHandle) -> Result<bo
     };
 
     // Check if the directory exists.
-    if !model_dir.exists() {
+    if (!model_dir.exists()) {
         println!("[check_setup] FastEmbed model directory does not exist: {:?}", model_dir);
         return Ok(false);
     }
@@ -259,20 +264,37 @@ pub fn check_fastembed_model_download(app_handle: tauri::AppHandle) -> Result<bo
 pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String> {
     println!("[check_setup] Checking overall setup completeness...");
 
-    // Check VLM models first
-    let vlm_downloaded = match check_vlm_model_download(app_handle.clone()) {
+    // Check VLM text model
+    let vlm_text_downloaded = match check_vlm_text_model_download(app_handle.clone()) {
         Ok(downloaded) => downloaded,
         Err(e) => {
-             eprintln!("[check_setup] Error checking VLM download status: {}", e);
-            return Err(format!("Error checking VLM status: {}", e)); // Propagate error
+             eprintln!("[check_setup] Error checking VLM text model download status: {}", e);
+            // Propagate the error if the check itself failed unexpectedly
+            return Err(format!("Error checking VLM text model status: {}", e));
         }
     };
 
-    if !vlm_downloaded {
-        println!("[check_setup] VLM models not downloaded. Setup incomplete.");
-        return Ok(false); // If VLM isn't ready, no need to check further
+    if (!vlm_text_downloaded) {
+        println!("[check_setup] VLM text model not downloaded. Setup incomplete.");
+        return Ok(false);
     }
-     println!("[check_setup] VLM models appear to be downloaded.");
+     println!("[check_setup] VLM text model appears to be downloaded.");
+
+    // Check VLM mmproj model
+    let vlm_mmproj_downloaded = match check_vlm_mmproj_model_download(app_handle.clone()) {
+        Ok(downloaded) => downloaded,
+        Err(e) => {
+             eprintln!("[check_setup] Error checking VLM mmproj model download status: {}", e);
+             return Err(format!("Error checking VLM mmproj model status: {}", e));
+        }
+    };
+
+    if (!vlm_mmproj_downloaded) {
+        println!("[check_setup] VLM mmproj model not downloaded. Setup incomplete.");
+        return Ok(false);
+    }
+    println!("[check_setup] VLM mmproj model appears to be downloaded.");
+
 
     // Check FastEmbed model
     let fastembed_downloaded = match check_fastembed_model_download(app_handle) {
@@ -283,14 +305,14 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
          }
     };
 
-    if !fastembed_downloaded {
+    if (!fastembed_downloaded) {
          println!("[check_setup] FastEmbed model not downloaded. Setup incomplete.");
         return Ok(false);
     }
     println!("[check_setup] FastEmbed model appears to be downloaded.");
 
 
-    // If both checks passed
+    // If all checks passed
     println!("[check_setup] All models appear to be downloaded. Setup complete.");
     Ok(true)
 }

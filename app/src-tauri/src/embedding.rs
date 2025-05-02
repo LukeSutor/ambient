@@ -3,9 +3,8 @@ use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
 use std::fs;
-
-//TODO: Create a constants module
-const EMBEDDING_DIR: &str = "models/embedding";
+use crate::setup::{check_fastembed_model_download, get_fastembed_model_path}
+use crate::constants::EMBEDDING_DIR;
 
 
 /// Tauri command to generate an embedding for a given prompt using the managed model.
@@ -16,19 +15,14 @@ pub async fn get_embedding(
 ) -> Result<Value, String> {
     println!("[embedding] Generating embedding for prompt: \"{}\"", prompt);
 
-    // Get cache dir for embedding model
-    let app_data_path = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
-
-    let model_path = app_data_path.join(EMBEDDING_DIR);
-    if !model_path.exists() {
-        return Err(format!(
-            "Model path does not exist: {:?}. Please ensure the model is initialized.",
-            model_path
-        ));
+    // Use the check_fastembed_model_download function to verify the model is downloaded
+    if !check_fastembed_model_download(app_handle.clone())? {
+        return Err("FastEmbed model is not downloaded. Please ensure the model is initialized.".to_string());
     }
+
+    // Use the get_fastembed_model_path function to get the model path
+    let model_path = get_fastembed_model_path(app_handle)
+        .map_err(|e| format!("Failed to get FastEmbed model path: {}", e))?;
     println!("[embedding] Embedding model path: {:?}", model_path);
     
     let model = TextEmbedding::try_new(
@@ -44,7 +38,7 @@ pub async fn get_embedding(
         format!("Failed to generate embeddings: {}", e)
     })?;
 
-    if embeddings.is_empty() {
+    if (embeddings.is_empty()) {
         return Err("Embedding generation returned no results.".to_string());
     }
 

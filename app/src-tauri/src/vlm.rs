@@ -3,27 +3,41 @@ use tauri::Manager;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
+use crate::setup; // Import setup functions
 
 
 /// Internal function to call the VLM (llama) sidecar process and return raw output.
 async fn call_vlm_sidecar_internal(
     app_handle: tauri::AppHandle,
-    model: String,
-    mmproj: String,
     image: String,
     prompt: String,
 ) -> Result<String, String> {
+    // Get model paths using functions from setup.rs
+    let model_path = setup::get_vlm_text_model_path(app_handle.clone())?;
+    let mmproj_path = setup::get_vlm_mmproj_model_path(app_handle.clone())?;
+
+    // Convert paths to strings, handling potential errors if paths are not valid UTF-8
+    let model_str = model_path.to_str()
+        .ok_or_else(|| format!("Model path is not valid UTF-8: {:?}", model_path))?
+        .to_string();
+    let mmproj_str = mmproj_path.to_str()
+        .ok_or_else(|| format!("Mmproj path is not valid UTF-8: {:?}", mmproj_path))?
+        .to_string();
+
     println!(
-        "[vlm] Calling sidecar with model: {}, mmproj: {}, image: {}, prompt: {}",
-        model, mmproj, image, prompt
+        "[vlm] Calling sidecar with image: {}, prompt: {}",
+        image, prompt
     );
 
     let shell = app_handle.shell();
     let output = shell
-        .sidecar("llama") // Assumes "llama" is the VLM sidecar defined in tauri.conf.json
+        .sidecar("llama")
         .map_err(|e| format!("Failed to get sidecar command: {}", e))?
         .args([
-            "-m", &model, "--mmproj", &mmproj, "--image", &image, "-p", &prompt,
+            "-m", &model_str,
+            "--mmproj", &mmproj_str,
+            "--image", &image,
+            "-p", &prompt,
         ])
         .output()
         .await
@@ -93,11 +107,9 @@ fn parse_vlm_output(output_string: &str) -> Result<String, String> {
 #[tauri::command]
 pub async fn get_vlm_response(
     app_handle: tauri::AppHandle,
-    model: String,
-    mmproj: String,
     image: String,
     prompt: String,
 ) -> Result<String, String> {
-    let raw_output = call_vlm_sidecar_internal(app_handle, model, mmproj, image, prompt).await?;
+    let raw_output = call_vlm_sidecar_internal(app_handle, image, prompt).await?;
     parse_vlm_output(&raw_output)
 }
