@@ -251,11 +251,31 @@ pub fn check_fastembed_model_download(app_handle: tauri::AppHandle) -> Result<bo
     };
 
     // Check if the directory exists.
-    if (!model_dir.exists()) {
-        println!("[check_setup] FastEmbed model directory does not exist: {:?}", model_dir);
+    if !model_dir.exists() || !model_dir.is_dir() {
+        println!("[check_setup] FastEmbed model directory does not exist or is not a directory: {:?}", model_dir);
         return Ok(false);
     }
-    Ok(true)
+
+    // Check if the directory is empty.
+    match fs::read_dir(&model_dir) {
+        Ok(mut entries) => {
+            if entries.next().is_none() {
+                // Directory exists but is empty
+                println!("[check_setup] FastEmbed model directory exists but is empty: {:?}", model_dir);
+                Ok(false)
+            } else {
+                // Directory exists and is not empty
+                println!("[check_setup] FastEmbed model directory exists and is not empty: {:?}", model_dir);
+                Ok(true)
+            }
+        }
+        Err(e) => {
+            // Error reading directory contents
+            eprintln!("[check_setup] Failed to read FastEmbed model directory contents: {}", e);
+            // Treat error reading contents as potentially incomplete setup
+            Ok(false)
+        }
+    }
 }
 
 
@@ -274,7 +294,7 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
         }
     };
 
-    if (!vlm_text_downloaded) {
+    if !vlm_text_downloaded {
         println!("[check_setup] VLM text model not downloaded. Setup incomplete.");
         return Ok(false);
     }
