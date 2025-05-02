@@ -6,6 +6,7 @@ pub mod prompts;
 pub mod scheduler;
 pub mod embedding;
 pub mod setup;
+pub mod constants;
 use tauri::Manager;
 
 use rusqlite::Connection; // Added for clarity, though likely already implicitly used via db
@@ -48,8 +49,10 @@ pub fn run() {
         db::execute_sql,
         db::reset_database,
         setup::setup,
-        setup::get_vlm_model_paths,
-        setup::check_vlm_model_download,
+        setup::get_vlm_text_model_path,
+        setup::get_vlm_mmproj_model_path,
+        setup::check_vlm_text_model_download,
+        setup::check_vlm_mmproj_model_download,
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
         setup::check_setup_complete

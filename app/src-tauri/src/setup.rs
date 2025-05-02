@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde::Serialize;
 use tokio_stream::StreamExt;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
-use crate::constants::*; // Import constants
+use crate::constants::*;
 
 
 /// Objects for download progress

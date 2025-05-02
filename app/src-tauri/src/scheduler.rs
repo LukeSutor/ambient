@@ -30,7 +30,7 @@ struct TaskResultPayload {
 async fn run_scheduled_task(app_handle: tauri::AppHandle) {
     println!("[scheduler] Running scheduled task...");
 
-    // 1. Take screenshot
+    // Take screenshot
     let screenshot_path_result = data::take_screenshot(app_handle.clone());
     let screenshot_path = match screenshot_path_result {
         path => {
@@ -40,7 +40,7 @@ async fn run_scheduled_task(app_handle: tauri::AppHandle) {
           // Add proper error handling if take_screenshot returns Result
     };
 
-    // 2. Get prompt
+    // Get prompt
     let prompt_key = "SUMMARIZE_ACTION";
     let prompt = match prompts::get_prompt(prompt_key) {
         Some(p) => {
@@ -53,19 +53,9 @@ async fn run_scheduled_task(app_handle: tauri::AppHandle) {
         }
     };
 
-    // 3. Define model and mmproj paths (consider making these configurable)
-    let model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
-    let mmproj = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/mmproj.gguf";
-
-    // 4. Call VLM to get response
-    println!(
-        "[scheduler] Getting VLM response for image: {}, model: {}, mmproj: {}",
-        screenshot_path, model, mmproj
-    );
+    // Call VLM to get response
     match vlm::get_vlm_response(
         app_handle.clone(),
-        model.to_string(),
-        mmproj.to_string(),
         screenshot_path,
         prompt,
     )

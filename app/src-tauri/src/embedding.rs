@@ -3,8 +3,7 @@ use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
 use std::fs;
-use crate::setup::{check_fastembed_model_download, get_fastembed_model_path}
-use crate::constants::EMBEDDING_DIR;
+use crate::setup::{check_fastembed_model_download, get_fastembed_model_path};
 
 
 /// Tauri command to generate an embedding for a given prompt using the managed model.
