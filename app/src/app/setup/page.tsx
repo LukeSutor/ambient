@@ -14,9 +14,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner"; // Import toast
 import { Toaster } from "@/components/ui/sonner"; // Import Toaster
+import { Loader2 } from "lucide-react";
 
 // Define the structure of the event payloads based on Rust code
 interface DownloadStartedPayload {
@@ -57,20 +59,13 @@ interface SetupPageProps {
 
 // Accept onSetupComplete prop
 function SetupPage({ onSetupComplete }: SetupPageProps) {
-  // Remove isLoading and isSetupComplete state related to the initial check
-  // const [isLoading, setIsLoading] = useState(true);
-  // const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [isSettingUp, setIsSettingUp] = useState(false);
-  // Keep overallStatus for user feedback during the setup process
-  const [overallStatus, setOverallStatus] = useState("Models need to be downloaded.");
+  const [overallStatus, setOverallStatus] = useState("");
 
   // VLM Download specific state
   const [vlmDownloadId, setVlmDownloadId] = useState<number | null>(null);
   const [vlmTotalSize, setVlmTotalSize] = useState(0);
   const [vlmCurrentProgress, setVlmCurrentProgress] = useState(0);
-
-  // Remove the useEffect hook that checked setup status initially
-  // useEffect(() => { ... checkStatus ... }, []);
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {
@@ -83,13 +78,13 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
     const listeners: UnlistenFn[] = [];
 
     try {
-      // Setup listeners (remain the same)
+      // Setup listeners
       listeners.push(await listen<DownloadStartedPayload>('download-started', (event) => {
         console.log("Download Started:", event.payload);
         setVlmDownloadId(event.payload.id);
         setVlmTotalSize(event.payload.contentLength);
         setVlmCurrentProgress(0);
-        setOverallStatus(`Downloading Model ${event.payload.id}...`);
+        setOverallStatus(`Downloading Model ${event.payload.id}`);
       }));
 
       listeners.push(await listen<DownloadProgressPayload>('download-progress', (event) => {
@@ -104,12 +99,12 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
       listeners.push(await listen<DownloadFinishedPayload>('download-finished', (event) => {
         console.log("Download Finished:", event.payload);
         if (event.payload.id === 2) {
-            setOverallStatus("Finalizing...");
+            setOverallStatus("Finalizing");
             setVlmDownloadId(null);
             setVlmTotalSize(0);
             setVlmCurrentProgress(0);
         } else if (event.payload.id === 1) {
-             setOverallStatus("Model 1 complete. Starting model 2...");
+             setOverallStatus("Model 1 complete. Starting model 2.");
         }
       }));
 
@@ -119,10 +114,8 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
       setOverallStatus("Setup completed successfully!");
       toast.success("Setup completed successfully!");
 
-      // Call the callback to notify RootLayout instead of redirecting
+      // Call the callback to notify RootLayout
       onSetupComplete();
-      // Remove the redirect:
-      // setTimeout(() => redirect("/"), 1500);
 
     } catch (err) {
       console.error("[SetupPage] Setup failed:", err);
@@ -157,12 +150,12 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Removed the Alert component */}
-          {/* {setupError && ( ... )} */}
-
-          <div className="text-sm text-muted-foreground"> {/* Use theme text color */}
-            Status: {overallStatus}
-          </div>
+          {overallStatus !== "" ? 
+          (<div className="text-sm text-muted-foreground"> {/* Use theme text color */}
+            {overallStatus}
+          </div>) : (
+            <div className="h-[20px]" />
+          )}
 
           {/* VLM Progress Display */}
           {isSettingUp && vlmDownloadId !== null && (
@@ -177,10 +170,11 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
             </div>
           )}
           {/* Embedding Model Status Display */}
-           {isSettingUp && vlmDownloadId === null && overallStatus.includes("embedding model") && (
-             <div className="space-y-2 pt-2">
-                <p className="text-xs text-center text-muted-foreground">Processing embedding model (console may show progress)...</p> {/* Use theme text color */}
-                <Progress value={100} className="w-full h-2 opacity-50 animate-pulse" />
+           {isSettingUp && vlmDownloadId === null && overallStatus.includes("Finalizing") && (
+             <div className="space-y-2 pt-2 flex flex-row items-center justify-center">
+                <div className="animate-spin">
+                  <Loader2 />
+                </div>
              </div>
            )}
 
