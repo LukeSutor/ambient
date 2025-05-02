@@ -5,7 +5,7 @@ from qwen_vl_utils import process_vision_info
 from tqdm import tqdm
 import json
 import re
-from PIL import Image, UnidentifiedImageError # Added import
+from PIL import Image
 
 CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/images")
@@ -182,9 +182,7 @@ def main():
                 ]
                 valid_batch_messages.append(messages)
                 valid_batch_filenames.append(filename)
-            except (OSError, UnidentifiedImageError) as e:
-                print(f"\nWarning: Skipping corrupted or unreadable image: {filename} - {e}")
-            except Exception as e: # Catch other potential errors during file processing
+            except Exception as e:
                 print(f"\nWarning: Skipping file {filename} due to unexpected error: {e}")
 
         # If no valid images were found in the batch, skip to the next iteration

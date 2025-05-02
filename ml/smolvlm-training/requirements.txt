@@ -3,10 +3,8 @@ qwen-vl-utils
 torch
 torchvision
 accelerate
-# packaging
-# ninja
-# flash-attn --no-build-isolation
-# datasets
 peft
 python-dotenv
 trl
+bitsandbytes==0.43.0
+num2words

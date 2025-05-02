@@ -1,4 +1,3 @@
-from datasets import load_dataset
 from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
 import torch
 import os
@@ -12,7 +11,7 @@ from dotenv import load_dotenv
 
 CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../models"))
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../data/images")
-PROMPT = """You are an expert screen activity analyzer helping create a dataset for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots. These descriptions will be embedded in a vector database to identify patterns in user behavior.
+PROMPT = """You are an expert screen activity analyzer for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots.
 
 Output Format
 For each screenshot, provide a JSON object with two key fields:
@@ -103,16 +102,14 @@ def split_dataset(data, train_proportion=0.8):
 
 
 def format_data(sample):
-    filepath = os.path.join(DATA_DIR, sample["filename"])
-    image = Image.open(filepath).convert("RGB")
-
+    # Only store the filename, not the image object
     return [
         {
             "role": "user",
             "content": [
                 {
                     "type": "image",
-                    "image": image,
+                    "image_filename": sample["filename"],  # store filename
                 },
                 {
                     "type": "text",
@@ -240,9 +237,10 @@ def main():
 
         image_inputs = []
         for example in examples:
-            image = example[0]['content'][0]['image']
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            # Load image from disk here
+            image_filename = example[0]['content'][0]['image_filename']
+            image_path = os.path.join(DATA_DIR, image_filename)
+            image = Image.open(image_path).convert('RGB')
             image_inputs.append([image])
 
         batch = processor(text=texts, images=image_inputs, return_tensors="pt", padding=True)
