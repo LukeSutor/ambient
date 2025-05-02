@@ -9,8 +9,10 @@ pub const TEXT_FILE: &str = "text-model.gguf";
 pub const MMPROJ_FILE: &str = "mmproj-model.gguf";
 
 // VLM model download links
-pub const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf";
-pub const MMPROJ_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf";
+// pub const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf";
+// pub const MMPROJ_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-500M-Video-Instruct-f16.gguf";
+pub const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/SmolVLM2-2.2B-Instruct-Q4_K_M.gguf";
+pub const MMPROJ_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf";
 
 // Embedding model name (used internally by fastembed, but good to have for reference)
 // pub const EMBEDDING_MODEL_NAME: &str = "AllMiniLML6V2"; // Example if needed later

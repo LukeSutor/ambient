@@ -51,8 +51,7 @@ async fn call_vlm_sidecar_internal(
             println!("[vlm] Failed to decode stdout: {}", e);
             format!("Failed to decode stdout: {}", e)
         })?;
-        // Don't print full stdout here, can be long
-        println!("[vlm] Sidecar executed successfully.");
+        println!("[vlm] Sidecar executed successfully. Raw output:\n{}", stdout);
         Ok(stdout)
     } else {
         let stderr = String::from_utf8(output.stderr).map_err(|e| {

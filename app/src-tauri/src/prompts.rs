@@ -4,6 +4,9 @@ use std::collections::HashMap;
 // Use Lazy to initialize the HashMap only once
 static PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut map = HashMap::new();
+    // map.insert(
+    //   "SUMMARIZE_ACTION",
+    //   "You are an expert screen activity analyzer helping creating annotations for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots");
     map.insert(
         "SUMMARIZE_ACTION",
 r#"You are an expert screen activity analyzer helping create a dataset for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots. These descriptions will be embedded in a vector database to identify patterns in user behavior.
