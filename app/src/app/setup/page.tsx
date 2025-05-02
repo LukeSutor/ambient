@@ -1,9 +1,10 @@
-"use client"; // Required for hooks like useState, useEffect
+"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { redirect } from 'next/navigation'
+// Remove redirect import as it's handled by layout change now
+// import { redirect } from 'next/navigation'
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,56 +50,31 @@ function formatBytes(bytes: number, decimals = 1): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
+// Define props for the component
+interface SetupPageProps {
+  onSetupComplete: () => void;
+}
 
-function SetupPage() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSetupComplete, setIsSetupComplete] = useState(false);
+// Accept onSetupComplete prop
+function SetupPage({ onSetupComplete }: SetupPageProps) {
+  // Remove isLoading and isSetupComplete state related to the initial check
+  // const [isLoading, setIsLoading] = useState(true);
+  // const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [isSettingUp, setIsSettingUp] = useState(false);
-  // setupError state might not be needed if only using toasts for errors
-  // const [setupError, setSetupError] = useState<string | null>(null);
-  const [overallStatus, setOverallStatus] = useState("Checking setup status...");
+  // Keep overallStatus for user feedback during the setup process
+  const [overallStatus, setOverallStatus] = useState("Models need to be downloaded.");
 
   // VLM Download specific state
   const [vlmDownloadId, setVlmDownloadId] = useState<number | null>(null);
   const [vlmTotalSize, setVlmTotalSize] = useState(0);
   const [vlmCurrentProgress, setVlmCurrentProgress] = useState(0);
 
-  // Check setup status on component mount
-  useEffect(() => {
-    const checkStatus = async () => {
-      setIsLoading(true);
-      // setSetupError(null); // Clear previous errors if state is kept
-      setOverallStatus("Checking setup status...");
-      try {
-        const complete = await invoke<boolean>("check_setup_complete");
-        if (complete) {
-          setIsSetupComplete(true);
-          setOverallStatus("Setup is complete. Redirecting...");
-          console.log("[SetupPage] Setup complete, navigating to /");
-          toast.success("Setup already complete!"); // Optional success toast
-          redirect("/")
-        } else {
-          setIsSetupComplete(false);
-          setOverallStatus("Models need to be downloaded.");
-          console.log("[SetupPage] Setup required.");
-        }
-      } catch (err) {
-        const errorMsg = typeof err === 'string' ? err : (err instanceof Error ? err.message : 'An unknown error occurred');
-        console.error("[SetupPage] Failed to check setup status:", err);
-        // Use toast for error instead of Alert
-        toast.error(`Failed to check setup status: ${errorMsg}`);
-        setOverallStatus("Error checking setup status.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkStatus();
-  }, []);
+  // Remove the useEffect hook that checked setup status initially
+  // useEffect(() => { ... checkStatus ... }, []);
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {
     setIsSettingUp(true);
-    // setSetupError(null); // Clear previous errors if state is kept
     setOverallStatus("Starting setup...");
     setVlmDownloadId(null);
     setVlmTotalSize(0);
@@ -113,7 +89,7 @@ function SetupPage() {
         setVlmDownloadId(event.payload.id);
         setVlmTotalSize(event.payload.contentLength);
         setVlmCurrentProgress(0);
-        setOverallStatus(`Downloading VLM model ${event.payload.id}...`);
+        setOverallStatus(`Downloading Model ${event.payload.id}...`);
       }));
 
       listeners.push(await listen<DownloadProgressPayload>('download-progress', (event) => {
@@ -128,22 +104,25 @@ function SetupPage() {
       listeners.push(await listen<DownloadFinishedPayload>('download-finished', (event) => {
         console.log("Download Finished:", event.payload);
         if (event.payload.id === 2) {
-            setOverallStatus("VLM models downloaded. Initializing embedding model (this may take a moment)...");
+            setOverallStatus("Finalizing...");
             setVlmDownloadId(null);
             setVlmTotalSize(0);
             setVlmCurrentProgress(0);
         } else if (event.payload.id === 1) {
-             setOverallStatus("VLM model 1 finished. Starting model 2...");
+             setOverallStatus("Model 1 complete. Starting model 2...");
         }
       }));
 
       // Invoke the setup command
       const result = await invoke<string>("setup");
       console.log("[SetupPage] Setup command finished:", result);
-      setOverallStatus("Setup completed successfully! Redirecting...");
-      setIsSetupComplete(true);
-      toast.success("Setup completed successfully!"); // Success toast
-      setTimeout(() => redirect("/"), 1500);
+      setOverallStatus("Setup completed successfully!");
+      toast.success("Setup completed successfully!");
+
+      // Call the callback to notify RootLayout instead of redirecting
+      onSetupComplete();
+      // Remove the redirect:
+      // setTimeout(() => redirect("/"), 1500);
 
     } catch (err) {
       console.error("[SetupPage] Setup failed:", err);
@@ -152,87 +131,64 @@ function SetupPage() {
       toast.error(`Setup failed: ${errorMsg}`);
       setOverallStatus("Setup process encountered an error.");
     } finally {
-      setIsSettingUp(false);
+      // Set isSettingUp false only on error or completion (handled by onSetupComplete call)
+      // If an error occurs, we might want the user to be able to retry
+      if (!overallStatus.includes("successfully")) { // Keep button disabled only if setup didn't succeed
+          setIsSettingUp(false);
+      }
       listeners.forEach(unlisten => unlisten());
       console.log("[SetupPage] Event listeners cleaned up.");
     }
-  }, []);
-
-  // Render logic (remains mostly the same, Alert removed)
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center">
-        {/* Add Toaster here so it's available during loading */}
-        <Toaster richColors position="top-center" />
-        <Card className="w-[100px]">
-          <CardHeader>
-            <CardTitle>Setup</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>{overallStatus}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (isSetupComplete && !isSettingUp) {
-     return (
-        <div className="flex items-center justify-center w-screen h-screen">
-            {/* Add Toaster here too */}
-            <Toaster richColors position="top-center" />
-            <p>Setup complete. Redirecting...</p>
-        </div>
-     );
-  }
+  // Add onSetupComplete to dependency array
+  }, [onSetupComplete, overallStatus]);
 
   const progressPercent = vlmTotalSize > 0 ? (vlmCurrentProgress / vlmTotalSize) * 100 : 0;
 
+  // Render the setup card directly. The parent (RootLayout) handles centering/layout.
   return (
-    <div className="flex items-center justify-center w-screen h-screen bg-gray-100 dark:bg-gray-900">
-       {/* Add Toaster here for the main setup view */}
+    <div className="flex items-center justify-center w-screen h-screen bg-background"> {/* Use theme background */}
        <Toaster richColors position="top-center" />
       <Card className="w-[450px] shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Model Setup Required</CardTitle>
+          <CardTitle className="text-2xl">Application Setup Required</CardTitle>
           <CardDescription>
             Essential models need to be downloaded before using the application.
-            This might take some time depending on your internet connection. The total download size is approximately 1.5 GB.
+            This might take some time depending on your internet connection. The total download size is approximately 0.7 GB.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Removed the Alert component */}
           {/* {setupError && ( ... )} */}
 
-          <div className="text-sm text-gray-600 dark:text-gray-400">
+          <div className="text-sm text-muted-foreground"> {/* Use theme text color */}
             Status: {overallStatus}
           </div>
 
-          {/* VLM Progress Display (remains the same) */}
+          {/* VLM Progress Display */}
           {isSettingUp && vlmDownloadId !== null && (
             <div className="space-y-2 pt-2">
-              <div className="flex justify-between text-xs font-medium text-gray-700 dark:text-gray-300">
+              <div className="flex justify-between text-xs font-medium text-foreground"> {/* Use theme text color */}
                 <span>
-                  {`VLM Model ${vlmDownloadId}`} ({formatBytes(vlmCurrentProgress)} / {formatBytes(vlmTotalSize)})
+                  {`Model ${vlmDownloadId}`} ({formatBytes(vlmCurrentProgress)} / {formatBytes(vlmTotalSize)})
                 </span>
                 <span>{progressPercent.toFixed(0)}%</span>
               </div>
               <Progress value={progressPercent} className="w-full h-2" />
             </div>
           )}
-          {/* Embedding Model Status Display (remains the same) */}
+          {/* Embedding Model Status Display */}
            {isSettingUp && vlmDownloadId === null && overallStatus.includes("embedding model") && (
              <div className="space-y-2 pt-2">
-                <p className="text-xs text-center text-gray-500">Processing embedding model (console may show progress)...</p>
+                <p className="text-xs text-center text-muted-foreground">Processing embedding model (console may show progress)...</p> {/* Use theme text color */}
                 <Progress value={100} className="w-full h-2 opacity-50 animate-pulse" />
              </div>
            )}
 
         </CardContent>
         <CardFooter>
-          {/* Buttons remain the same */}
-          {!isSettingUp && !isSetupComplete && (
-            <Button onClick={handleStartSetup} className="w-full" disabled={isLoading}>
+          {/* Button logic remains similar, but no isSetupComplete check needed here */}
+          {!isSettingUp && (
+            <Button onClick={handleStartSetup} className="w-full">
               Start Setup
             </Button>
           )}
