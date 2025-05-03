@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
+from transformers import AutoProcessor, AutoModelForImageTextToText
 import torch
 import os
 from PIL import Image
@@ -172,20 +172,12 @@ def main():
     train_dataset = [format_data(sample) for sample in train_dataset]
     eval_dataset = [format_data(sample) for sample in eval_dataset]
 
-    # BitsAndBytesConfig int-4 config
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16
-    )
-
+    # Remove BitsAndBytesConfig and quantization
     model_path = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
     processor = AutoProcessor.from_pretrained(model_path)
     model = AutoModelForImageTextToText.from_pretrained(
         model_path,
-        torch_dtype=torch.bfloat16,
-        quantization_config=bnb_config,
+        torch_dtype=torch.float16,  # Use float16
         cache_dir=CACHE_DIR
     ).to("cuda")
 
@@ -212,6 +204,7 @@ def main():
         num_train_epochs=1,
         per_device_train_batch_size=16,
         gradient_accumulation_steps=2,
+        #TODO: Set dataloader_num_workers  parameter for multiprocessing batches
         warmup_steps=50,
         learning_rate=1e-4,
         weight_decay=0.01,
@@ -220,7 +213,8 @@ def main():
         save_steps=25,
         save_total_limit=1,
         optim="adamw_torch_fused",
-        bf16=True,
+        bf16=False,   # Not using bfloat16
+        fp16=True,    # Enable fp16 (float16) training
         push_to_hub=True,
         report_to="tensorboard",
         remove_unused_columns=False,
@@ -259,7 +253,7 @@ def main():
         eval_dataset=eval_dataset,
         data_collator=collate_fn,
         peft_config=peft_config,
-        tokenizer=processor.tokenizer,
+        processing_class=processor.tokenizer,
     )
 
     trainer.train()
