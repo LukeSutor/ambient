@@ -202,18 +202,18 @@ def main():
         hub_model_id="lukesutor/SmolVLM2-2.2B-ActivityTracking",
         num_train_epochs=1,
         per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
+        per_device_eval_batch_size=4,
         gradient_accumulation_steps=2,
         dataloader_num_workers=4, # Set this to the number of cpu cores
-        warmup_steps=50,
+        warmup_steps=100,
         learning_rate=1e-4,
         weight_decay=0.01,
-        logging_steps=25,
+        logging_steps=50,
         save_strategy="steps",
-        save_steps=25,
+        save_steps=50,
         save_total_limit=1,
         eval_strategy="steps",
-        eval_steps=25,
+        eval_steps=50,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
@@ -257,7 +257,7 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collate_fn,
-        # peft_config=peft_config, Do not pass this, as it will add another adapter
+        peft_config=peft_config,
         processing_class=processor.tokenizer,
     )
 
