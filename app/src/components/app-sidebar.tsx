@@ -2,14 +2,16 @@
 
 import * as React from "react"
 import {
-  Bot,
   LifeBuoy,
   Settings2,
   SquareTerminal,
   House,
-  Code
+  Code,
+  Blocks
 } from "lucide-react"
+import { useSidebar } from "@/components/ui/sidebar"
 
+import { Separator } from "@/components/ui/separator"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
@@ -49,9 +51,9 @@ const data = {
       ]
     },
     {
-      title: "Status",
+      title: "Integrations",
       url: "/status",
-      icon: Bot
+      icon: Blocks
     }
   ],
   navSecondary: [
@@ -85,11 +87,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
+  const { state } = useSidebar()
+
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
       <SidebarHeader>
         <NavLogo />
       </SidebarHeader>
+      <Separator className={state === "collapsed" ? "hidden" : "block"} />
       <SidebarContent>
         <NavMain items={navItems} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
