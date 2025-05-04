@@ -34,22 +34,22 @@ struct DownloadFinished {
 /// Setup function to download vlm and fastembed models
 #[tauri::command]
 pub async fn setup(app_handle: tauri::AppHandle) -> Result<String, String> {
-    println!("[setup] Starting model setup..."); // Added log
+    println!("[setup] Starting model setup...");
 
     // Download the vlm files
     if let Err(e) = initialize_vlm(app_handle.clone()).await {
-        eprintln!("[setup] VLM initialization failed: {}", e); // Added log
+        eprintln!("[setup] VLM initialization failed: {}", e);
         return Err(format!("Failed to initialize VLM: {}", e));
     }
-    println!("[setup] VLM initialization successful."); // Added log
+    println!("[setup] VLM initialization successful.");
 
     // Download the fastembed files
     // Note: FastEmbed handles its own download internally. Progress is shown in console, not via events.
     if let Err(e) = initialize_fastembed(app_handle.clone()).await {
-        eprintln!("[setup] FastEmbed initialization failed: {}", e); // Added log
+        eprintln!("[setup] FastEmbed initialization failed: {}", e);
         return Err(format!("Failed to initialize FastEmbed: {}", e));
     }
-    println!("[setup] FastEmbed initialization successful."); // Added log
+    println!("[setup] FastEmbed initialization successful.");
 
     Ok("Setup completed successfully.".to_string()) // More accurate success message
 }
