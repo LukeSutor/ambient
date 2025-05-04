@@ -2,6 +2,7 @@ from transformers import AutoProcessor, AutoModelForImageTextToText
 import torch
 import os
 from PIL import Image
+from peft import LoraConfig, get_peft_model
 from trl import SFTConfig, SFTTrainer
 import json
 import random
@@ -171,20 +172,37 @@ def main():
     train_dataset = [format_data(sample) for sample in train_dataset]
     eval_dataset = [format_data(sample) for sample in eval_dataset]
 
-    model_path = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
+    # Remove BitsAndBytesConfig and quantization
+    model_path = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
     processor = AutoProcessor.from_pretrained(model_path)
     model = AutoModelForImageTextToText.from_pretrained(
         model_path,
+        torch_dtype=torch.float16,
         cache_dir=CACHE_DIR
     ).to("cuda")
+
+    # Configure LoRA
+    peft_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        lora_dropout=0.1,
+        target_modules=['down_proj','o_proj','k_proj','q_proj','gate_proj','up_proj','v_proj'],
+        init_lora_weights="gaussian"
+    )
+
+    # Apply PEFT model adaptation
+    peft_model = get_peft_model(model, peft_config)
+
+    # Print trainable parameters
+    peft_model.print_trainable_parameters()
 
     # Configure training arguments using SFTConfig
     training_args = SFTConfig(
         output_dir=os.path.join(DATA_DIR, "../results"),
-        hub_model_id="lukesutor/SmolVLM-500M-ActivityTracking",
+        hub_model_id="lukesutor/SmolVLM2-2.2B-ActivityTracking",
         num_train_epochs=1,
         per_device_train_batch_size=8,
-        per_device_eval_batch_size=4,
+        per_device_eval_batch_size=8,
         gradient_accumulation_steps=2,
         dataloader_num_workers=4, # Set this to the number of cpu cores
         warmup_steps=50,
@@ -198,8 +216,10 @@ def main():
         eval_steps=25,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
-        greater_is_better=False,  
+        greater_is_better=False,
         optim="adamw_torch_fused",
+        bf16=False,   # Not using bfloat16
+        fp16=True,    # Enable fp16 (float16) training
         push_to_hub=True,
         report_to="tensorboard",
         remove_unused_columns=False,
@@ -230,13 +250,14 @@ def main():
         batch["labels"] = labels
 
         return batch
-
+    
     trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collate_fn,
+        # peft_config=peft_config, Do not pass this, as it will add another adapter
         processing_class=processor.tokenizer,
     )
 
