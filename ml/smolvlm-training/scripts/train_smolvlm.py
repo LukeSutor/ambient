@@ -2,7 +2,6 @@ from transformers import AutoProcessor, AutoModelForImageTextToText
 import torch
 import os
 from PIL import Image
-# from peft import LoraConfig, get_peft_model
 from trl import SFTConfig, SFTTrainer
 import json
 import random
@@ -135,7 +134,7 @@ def main():
     eval_dataset = [format_data(sample) for sample in eval_dataset]
 
     # Remove BitsAndBytesConfig and quantization
-    model_path = "HuggingFaceTB/SmolVLM2-2.2B-Instruct"
+    model_path = "OpenGVLab/InternVL3-2B"
     processor = AutoProcessor.from_pretrained(model_path)
     model = AutoModelForImageTextToText.from_pretrained(
         model_path,
@@ -143,25 +142,10 @@ def main():
         cache_dir=CACHE_DIR
     ).to("cuda")
 
-    # Configure LoRA
-    # peft_config = LoraConfig(
-    #     r=16,
-    #     lora_alpha=32,
-    #     lora_dropout=0.1,
-    #     target_modules=['down_proj','o_proj','k_proj','q_proj','gate_proj','up_proj','v_proj'],
-    #     init_lora_weights="gaussian"
-    # )
-
-    # # Apply PEFT model adaptation
-    # peft_model = get_peft_model(model, peft_config)
-
-    # # Print trainable parameters
-    # peft_model.print_trainable_parameters()
-
     # Configure training arguments using SFTConfig
     training_args = SFTConfig(
         output_dir=os.path.join(DATA_DIR, "../results"),
-        hub_model_id="lukesutor/SmolVLM2-2.2B-ActivityTracking",
+        hub_model_id="lukesutor/InternVL3-2B-ActivityTracking",
         label_names=["labels"],
         num_train_epochs=1,
         per_device_train_batch_size=4,
@@ -220,7 +204,6 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collate_fn,
-        # peft_config=peft_config,
         processing_class=processor.tokenizer,
     )
 
