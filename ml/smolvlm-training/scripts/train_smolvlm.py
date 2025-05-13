@@ -2,7 +2,7 @@ from transformers import AutoProcessor, AutoModelForImageTextToText
 import torch
 import os
 from PIL import Image
-from peft import LoraConfig, get_peft_model
+# from peft import LoraConfig, get_peft_model
 from trl import SFTConfig, SFTTrainer
 import json
 import random
@@ -124,44 +124,6 @@ def format_data(sample):
     ]
 
 
-def generate_text_from_sample(model, processor, sample, max_new_tokens=1024, device="cuda"):
-    # Prepare the text input by applying the chat template
-    text_input = processor.apply_chat_template(
-        sample[0],  # Use the sample without the system message
-        add_generation_prompt=True
-    )
-
-    image_inputs = []
-    image = sample[0]['content'][0]['image']
-    if image.mode != 'RGB':
-        image = image.convert('RGB')
-    image_inputs.append([image])
-
-    # Prepare the inputs for the model
-    model_inputs = processor(
-        text=text_input,
-        images=image_inputs,
-        return_tensors="pt",
-    ).to(device)  # Move inputs to the specified device
-
-    # Generate text with the model
-    generated_ids = model.generate(**model_inputs, max_new_tokens=max_new_tokens)
-
-    # Trim the generated ids to remove the input ids
-    trimmed_generated_ids = [
-        out_ids[len(in_ids):] for in_ids, out_ids in zip(model_inputs.input_ids, generated_ids)
-    ]
-
-    # Decode the output text
-    output_text = processor.batch_decode(
-        trimmed_generated_ids,
-        skip_special_tokens=True,
-        clean_up_tokenization_spaces=False
-    )
-
-    return output_text[0]  # Return the first decoded output text
-
-
 def main():
     load_dotenv()
 
@@ -177,31 +139,32 @@ def main():
     processor = AutoProcessor.from_pretrained(model_path)
     model = AutoModelForImageTextToText.from_pretrained(
         model_path,
-        torch_dtype=torch.float16,
+        torch_dtype=torch.bfloat16,
         cache_dir=CACHE_DIR
     ).to("cuda")
 
     # Configure LoRA
-    peft_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.1,
-        target_modules=['down_proj','o_proj','k_proj','q_proj','gate_proj','up_proj','v_proj'],
-        init_lora_weights="gaussian"
-    )
+    # peft_config = LoraConfig(
+    #     r=16,
+    #     lora_alpha=32,
+    #     lora_dropout=0.1,
+    #     target_modules=['down_proj','o_proj','k_proj','q_proj','gate_proj','up_proj','v_proj'],
+    #     init_lora_weights="gaussian"
+    # )
 
-    # Apply PEFT model adaptation
-    peft_model = get_peft_model(model, peft_config)
+    # # Apply PEFT model adaptation
+    # peft_model = get_peft_model(model, peft_config)
 
-    # Print trainable parameters
-    peft_model.print_trainable_parameters()
+    # # Print trainable parameters
+    # peft_model.print_trainable_parameters()
 
     # Configure training arguments using SFTConfig
     training_args = SFTConfig(
         output_dir=os.path.join(DATA_DIR, "../results"),
         hub_model_id="lukesutor/SmolVLM2-2.2B-ActivityTracking",
+        label_names=["labels"],
         num_train_epochs=1,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=4,
         per_device_eval_batch_size=4,
         gradient_accumulation_steps=2,
         dataloader_num_workers=4, # Set this to the number of cpu cores
@@ -214,13 +177,12 @@ def main():
         save_total_limit=1,
         eval_strategy="steps",
         eval_steps=50,
+        eval_on_start=True,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         optim="adamw_torch_fused",
-        bf16=False,   # Not using bfloat16
-        fp16=True,    # Enable fp16 (float16) training
-        push_to_hub=True,
+        bf16=True,
         report_to="tensorboard",
         remove_unused_columns=False,
         gradient_checkpointing=True,
@@ -250,6 +212,7 @@ def main():
         batch["labels"] = labels
 
         return batch
+
     
     trainer = SFTTrainer(
         model=model,
@@ -257,7 +220,7 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collate_fn,
-        peft_config=peft_config,
+        # peft_config=peft_config,
         processing_class=processor.tokenizer,
     )
 
