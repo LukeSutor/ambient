@@ -8,10 +8,8 @@ pub mod embedding;
 pub mod setup;
 pub mod constants;
 use tauri::Manager;
-
-use rusqlite::Connection; // Added for clarity, though likely already implicitly used via db
-use std::sync::Mutex; // Added for clarity
-use db::DbState; // Import DbState from the db module
+use std::sync::Mutex;
+use db::DbState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

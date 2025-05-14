@@ -1,9 +1,5 @@
-use std::sync::Arc;
-use tauri::Manager;
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
-use tokio::sync::Mutex;
-use crate::setup; // Import setup functions
+use crate::setup;
 
 
 /// Internal function to call the VLM (llama) sidecar process and return raw output.

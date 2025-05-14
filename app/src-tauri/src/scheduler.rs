@@ -1,8 +1,8 @@
 use crate::{data, prompts, vlm};
 use once_cell::sync::Lazy;
-use serde::Serialize; // Import Serialize
+use serde::Serialize;
 use std::sync::Arc;
-use tauri::{Emitter, Manager}; // Import Emitter
+use tauri::Emitter;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};

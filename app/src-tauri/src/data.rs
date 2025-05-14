@@ -1,7 +1,6 @@
 use image::imageops::FilterType;
 use screenshots::Screen;
-use tauri::{path::BaseDirectory, Manager};
-use std::{fs::File, io::Write};
+use tauri::Manager;
 use std::path::PathBuf;
 use std::fs;
 

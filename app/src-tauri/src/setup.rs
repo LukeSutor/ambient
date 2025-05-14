@@ -309,7 +309,7 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
         }
     };
 
-    if (!vlm_mmproj_downloaded) {
+    if !vlm_mmproj_downloaded {
         println!("[check_setup] VLM mmproj model not downloaded. Setup incomplete.");
         return Ok(false);
     }
@@ -325,7 +325,7 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
          }
     };
 
-    if (!fastembed_downloaded) {
+    if !fastembed_downloaded {
          println!("[check_setup] FastEmbed model not downloaded. Setup incomplete.");
         return Ok(false);
     }

@@ -1,14 +1,12 @@
 // filepath: c:\Users\Luke\Desktop\coding\local-computer-use\app\src-tauri\src\db.rs
 use rusqlite::{ffi::sqlite3_auto_extension, Connection, Result as RusqliteResult, params_from_iter};
-use rusqlite::types::{ValueRef, Value as RusqliteValue}; // Added
+use rusqlite::types::{ValueRef, Value as RusqliteValue};
 use sqlite_vec::sqlite3_vec_init;
 use std::fs;
-use std::path::PathBuf;
 use tauri::Manager;
 use rusqlite_migration::{Migrations, M};
-use serde::Serialize; // Keep Serialize if needed elsewhere, otherwise remove
-use serde_json::Value as JsonValue; // Added
-use std::sync::Mutex; // Ensure DbState uses Mutex if not already defined
+use serde_json::Value as JsonValue;
+use std::sync::Mutex;
 
 pub struct DbState(pub Mutex<Option<Connection>>);
 

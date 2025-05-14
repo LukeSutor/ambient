@@ -1,8 +1,5 @@
 use serde_json::Value;
-use tauri::Manager;
-use tauri_plugin_shell::ShellExt;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
-use std::fs;
 use crate::setup::{check_fastembed_model_download, get_fastembed_model_path};
 
 
@@ -37,7 +34,7 @@ pub async fn get_embedding(
         format!("Failed to generate embeddings: {}", e)
     })?;
 
-    if (embeddings.is_empty()) {
+    if embeddings.is_empty() {
         return Err("Embedding generation returned no results.".to_string());
     }
 
