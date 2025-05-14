@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoModelForImageTextToText
+from transformers import AutoProcessor, AutoModel
 import torch
 import os
 from PIL import Image
@@ -135,10 +135,13 @@ def main():
 
     # Remove BitsAndBytesConfig and quantization
     model_path = "OpenGVLab/InternVL3-2B"
-    processor = AutoProcessor.from_pretrained(model_path)
-    model = AutoModelForImageTextToText.from_pretrained(
+    # Need the -hf version of the model for the processor
+    processor_path = model_path + "-hf"
+    processor = AutoProcessor.from_pretrained(processor_path, trust_remote_code=True)
+    model = AutoModel.from_pretrained(
         model_path,
         torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
         cache_dir=CACHE_DIR
     ).to("cuda")
 
@@ -174,8 +177,11 @@ def main():
         dataset_kwargs={"skip_prepare_dataset": True},
     )
 
-    image_token_id = processor.tokenizer.additional_special_tokens_ids[
-                processor.tokenizer.additional_special_tokens.index("<image>")]
+    if model.config.architectures[0] == "InternVLChatModel":
+        image_token_id = 151667
+    else:
+        image_token_id = processor.tokenizer.additional_special_tokens_ids[
+            processor.tokenizer.additional_special_tokens.index("<image>")]
 
     def collate_fn(examples):
         texts = [processor.apply_chat_template(example, tokenize=False) for example in examples]
@@ -190,12 +196,20 @@ def main():
 
         batch = processor(text=texts, images=image_inputs, return_tensors="pt", padding=True)
         labels = batch["input_ids"].clone()
-        labels[labels == processor.tokenizer.pad_token_id] = -100  # Mask padding tokens in labels
+        if model.config.architectures[0] == "InternVLChatModel":
+            labels[labels == 151645] = -100  # Mask padding tokens in labels
+        else:
+            labels[labels == processor.tokenizer.pad_token_id] = -100  # Mask padding tokens in labels
         labels[labels == image_token_id] = -100  # Mask image token IDs in labels
 
         batch["labels"] = labels
 
         return batch
+
+    if model.config.architectures[0] == "InternVLChatModel":
+        processing_class = processor._tokenizer
+    else:
+        processing_class = processor.tokenizer
 
     
     trainer = SFTTrainer(
@@ -204,7 +218,7 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collate_fn,
-        processing_class=processor.tokenizer,
+        processing_class=processing_class,
     )
 
     trainer.train()

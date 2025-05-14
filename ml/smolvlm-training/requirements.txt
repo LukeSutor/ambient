@@ -1,4 +1,4 @@
-transformers
+git+https://github.com/huggingface/transformers
 qwen-vl-utils
 torch
 torchvision
@@ -6,7 +6,9 @@ accelerate
 peft
 python-dotenv
 trl
-# bitsandbytes==0.43.0
+bitsandbytes==0.43.0
 num2words
 tensorboard
 standard-imghdr
+einops
+timm
