@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoModelForImageTextToText
+from transformers import AutoProcessor, AutoModel
 import torch
 import os
 from PIL import Image
@@ -134,25 +134,26 @@ def main():
     eval_dataset = [format_data(sample) for sample in eval_dataset]
 
     # Remove BitsAndBytesConfig and quantization
-    model_path = "HuggingFaceTB/SmolVLM2-500M-Video-Instruct"
+    model_path = "OpenGVLab/InternVL3-2B"
     # Need the -hf version of the model for the processor
-    processor_path = model_path# + "-hf"
+    processor_path = model_path + "-hf"
     processor = AutoProcessor.from_pretrained(processor_path, trust_remote_code=True)
-    model = AutoModelForImageTextToText.from_pretrained(
+    model = AutoModel.from_pretrained(
         model_path,
-        # torch_dtype=torch.bfloat16,
+        torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
         cache_dir=CACHE_DIR
     ).to("cuda")
 
     # Configure training arguments using SFTConfig
     training_args = SFTConfig(
         output_dir=os.path.join(DATA_DIR, "../results"),
-        hub_model_id="lukesutor/SmolVLM-500M-ActivityTracking",
+        hub_model_id="lukesutor/InternVL3-2B-ActivityTracking",
         label_names=["labels"],
         num_train_epochs=1,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
-        gradient_accumulation_steps=4,
+        per_device_train_batch_size=4,
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=2,
         dataloader_num_workers=4, # Set this to the number of cpu cores
         warmup_steps=100,
         learning_rate=1e-4,
@@ -168,7 +169,7 @@ def main():
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         optim="adamw_torch_fused",
-        # bf16=True,
+        bf16=True,
         report_to="tensorboard",
         remove_unused_columns=False,
         gradient_checkpointing=True,
