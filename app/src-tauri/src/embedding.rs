@@ -2,7 +2,6 @@ use serde_json::Value;
 use fastembed::{TextEmbedding, InitOptions, EmbeddingModel};
 use crate::setup::{check_fastembed_model_download, get_fastembed_model_path};
 
-
 /// Tauri command to generate an embedding for a given prompt using the managed model.
 #[tauri::command]
 pub async fn get_embedding(

@@ -19,20 +19,14 @@ lazy_static::lazy_static! {
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp INTEGER NOT NULL,              -- Unix epoch seconds UTC
-                    active_app_name TEXT NOT NULL,           -- e.g., 'Code.exe', 'chrome.exe'
-                    active_window_title TEXT,                -- Window title, nullable
-                    active_url TEXT,                         -- URL if browser, nullable
-                    activity_type TEXT NOT NULL,             -- VLM/Logic classification (e.g., 'Coding', 'Browsing')
-                    activity_details TEXT,                   -- More specific details, nullable
-                    confidence REAL,                         -- Confidence score (0.0-1.0), nullable
-                    embedding BLOB NOT NULL,                 -- Text embedding of activity (for sqlite-vec)
-                    duration_hint_secs INTEGER               -- Optional: Estimated duration since last *different* event
+                    active_app TEXT NOT NULL,                -- e.g., 'Code.exe', 'chrome.exe'
+                    description TEXT,                        -- More specific details, nullable
+                    description_embedding BLOB NOT NULL,     -- Text embedding of activity (for sqlite-vec)
                 );
 
                 -- Indexes for common queries
                 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);
-                CREATE INDEX IF NOT EXISTS idx_events_activity_type ON events (activity_type);
-                CREATE INDEX IF NOT EXISTS idx_events_app_name ON events (active_app_name);
+                CREATE INDEX IF NOT EXISTS idx_events_app_name ON events (active_app);
 
                 -- Table for discovered patterns
                 CREATE TABLE IF NOT EXISTS patterns (
@@ -229,6 +223,45 @@ pub fn execute_sql(
         Err("Database connection not available.".to_string())
     }
 }
+
+
+/// Inserts a new event record into the events table.
+/// - `state`: The database state.
+/// - `timestamp`: Unix epoch seconds (UTC).
+/// - `active_app`: The application name (e.g., "Code.exe").
+/// - `description`: Description of the event.
+/// - `description_embedding`: Embedding vector as Vec<f32>.
+#[tauri::command]
+pub fn insert_event(
+    state: tauri::State<DbState>,
+    timestamp: i64,
+    active_app: String,
+    description: Option<String>,
+    description_embedding: Vec<f32>,
+) -> Result<(), String> {
+    let conn_guard = state.0.lock().map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard.as_ref().ok_or("Database connection not available.".to_string())?;
+
+    // Store the embedding as a BLOB using the sqlite-vec extension (f32 array)
+    let sql = r#"
+        INSERT INTO events (timestamp, active_app, description, description_embedding)
+        VALUES (?1, ?2, ?3, vec32(?4))
+    "#;
+
+    conn.execute(
+        sql,
+        rusqlite::params![
+            timestamp,
+            active_app,
+            description,
+            description_embedding, // Vec<f32> is supported by sqlite-vec
+        ],
+    )
+    .map_err(|e| format!("Failed to insert event: {}", e))?;
+
+    Ok(())
+}
+
 
 /// Closes the current database connection, deletes the database file,
 /// and initializes a fresh database.

@@ -1,7 +1,6 @@
 use tauri_plugin_shell::ShellExt;
 use crate::setup;
 
-
 /// Internal function to call the VLM (llama) sidecar process and return raw output.
 async fn call_vlm_sidecar_internal(
     app_handle: tauri::AppHandle,
@@ -65,46 +64,32 @@ async fn call_vlm_sidecar_internal(
     }
 }
 
-/// Parses the raw output from the VLM sidecar to extract the model's response.
-fn parse_vlm_output(output_string: &str) -> Result<String, String> {
-    // Find the marker line indicating the start of the actual response
-    // Adjust this marker if the sidecar's logging changes
-    let marker = "decoding image batch";
-    if let Some(marker_pos) = output_string.find(marker) {
-        // Find the end of the line containing the marker
-        if let Some(line_end_pos) = output_string[marker_pos..].find('\n') {
-            // The response starts after this line
-            let response_start_pos = marker_pos + line_end_pos + 1;
-            // Trim leading/trailing whitespace from the extracted response
-            let response = output_string[response_start_pos..].trim();
-            if response.is_empty() {
-                Err("Extracted response is empty after parsing.".to_string())
-            } else {
-                Ok(response.to_string())
-            }
-        } else {
-            // Marker found, but no newline after it? Return rest of string maybe?
-            let response = output_string[marker_pos + marker.len()..].trim();
-             if response.is_empty() {
-                Err("Could not find newline after marker, and remaining string is empty.".to_string())
-            } else {
-                println!("[vlm] Warning: No newline found after marker, returning rest of string.");
-                Ok(response.to_string())
-            }
-        }
-    } else {
-        println!("[vlm] Could not find response marker '{}' in output.", marker);
-        Err(format!("Could not find response marker '{}' in output.", marker))
+/// Parses the raw output from the VLM sidecar to extract the model's response as JSON.
+fn parse_vlm_output(output_string: &str) -> Result<serde_json::Value, String> {
+    let start_marker = "<|START|>";
+    let end_marker = "<|END|>";
+
+    let start = output_string.find(start_marker)
+        .ok_or_else(|| format!("Could not find start marker '{}' in output.", start_marker))?;
+    let end = output_string.find(end_marker)
+        .ok_or_else(|| format!("Could not find end marker '{}' in output.", end_marker))?;
+
+    if end <= start + start_marker.len() {
+        return Err("End marker found before start marker.".to_string());
     }
+
+    let json_str = &output_string[start + start_marker.len()..end].trim();
+    serde_json::from_str(json_str).map_err(|e| format!("Failed to parse JSON from VLM output: {}", e))
 }
 
 /// Tauri command to get a response from the VLM sidecar for an image and prompt.
+/// Returns a serde_json::Value object.
 #[tauri::command]
 pub async fn get_vlm_response(
     app_handle: tauri::AppHandle,
     image: String,
     prompt: String,
-) -> Result<String, String> {
+) -> Result<serde_json::Value, String> {
     let raw_output = call_vlm_sidecar_internal(app_handle, image, prompt).await?;
     parse_vlm_output(&raw_output)
 }

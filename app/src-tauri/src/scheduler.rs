@@ -36,8 +36,7 @@ async fn run_scheduled_task(app_handle: tauri::AppHandle) {
         path => {
             println!("[scheduler] Screenshot taken: {}", path);
             path
-        } // Assuming take_screenshot now directly returns String or panics
-          // Add proper error handling if take_screenshot returns Result
+        }
     };
 
     // Get prompt
@@ -49,34 +48,112 @@ async fn run_scheduled_task(app_handle: tauri::AppHandle) {
         }
         None => {
             eprintln!("[scheduler] Error: Prompt key '{}' not found.", prompt_key);
-            return; // Stop task execution if prompt is missing
+            return;
         }
     };
 
-    // Call VLM to get response
-    match vlm::get_vlm_response(
+    // Call VLM to get response (now returns serde_json::Value)
+    let vlm_response = vlm::get_vlm_response(
         app_handle.clone(),
-        screenshot_path,
+        screenshot_path.clone(),
         prompt,
     )
-    .await
-    {
-        Ok(result) => {
+    .await;
+
+    let mut application = String::new();
+    let mut description = String::new();
+
+    match &vlm_response {
+        Ok(json_val) => {
             println!("[scheduler] VLM response received successfully.");
-            // Emit the result to the frontend
-            if let Err(e) = app_handle.emit(
-                "task-completed",
-                TaskResultPayload {
-                    result: result.clone(),
-                },
-            ) {
-                eprintln!("[scheduler] Failed to emit task-completed event: {}", e);
-            }
+            // Extract "application" and "description" fields from JSON
+            application = json_val.get("application")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+            description = json_val.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
         }
         Err(e) => {
             eprintln!("[scheduler] Error getting VLM response: {}", e);
-            // Optionally emit an error event
         }
+    }
+
+    // Embed the description text and save to a Vec<f32>
+    let embedding: Vec<f32> = match &vlm_response {
+        Ok(json_val) => {
+            let desc = json_val.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            match crate::embedding::get_embedding(app_handle.clone(), desc).await {
+                Ok(json_val) => {
+                    if let serde_json::Value::Array(arr) = json_val {
+                        arr.iter()
+                            .filter_map(|v| v.as_f64().map(|f| f as f32))
+                            .collect()
+                    } else {
+                        eprintln!("[scheduler] Embedding result is not an array.");
+                        Vec::new()
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[scheduler] Failed to get embedding: {}", e);
+                    Vec::new()
+                }
+            }
+        }
+        Err(_) => Vec::new(),
+    };
+
+    // Insert the event into the database
+    if !embedding.is_empty() && !description.is_empty() {
+        let timestamp = chrono::Utc::now().timestamp();
+        let active_app = application.clone();
+        let description_opt = Some(description.clone());
+        let description_embedding = embedding.clone();
+
+        let db_state = match app_handle.state::<crate::db::DbState>() {
+            Ok(state) => state,
+            Err(e) => {
+                eprintln!("[scheduler] Failed to get DB state: {}", e);
+                return;
+            }
+        };
+
+        match crate::db::insert_event(
+            db_state,
+            timestamp,
+            active_app,
+            description_opt,
+            description_embedding,
+        ) {
+            Ok(_) => {
+                println!("[scheduler] Event inserted into database successfully.");
+            }
+            Err(e) => {
+                eprintln!("[scheduler] Failed to insert event into database: {}", e);
+            }
+        }
+    } else {
+        eprintln!("[scheduler] Skipping DB insert: embedding or description is empty.");
+    }
+
+    // Emit the result to the frontend (send the whole JSON if available, else error string)
+    let emit_result = match &vlm_response {
+        Ok(json_val) => serde_json::to_string(json_val).unwrap_or_else(|_| "".to_string()),
+        Err(e) => e.to_string(),
+    };
+
+    if let Err(e) = app_handle.emit(
+        "task-completed",
+        TaskResultPayload {
+            result: emit_result,
+        },
+    ) {
+        eprintln!("[scheduler] Failed to emit task-completed event: {}", e);
     }
     println!("[scheduler] Scheduled task finished.");
 }
