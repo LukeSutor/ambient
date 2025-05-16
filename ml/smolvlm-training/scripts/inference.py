@@ -94,15 +94,34 @@ def generate_text_from_sample(model, processor, sample, max_new_tokens=1024, dev
     return processor.batch_decode(trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
 
 
+def resize_to_patch_multiple(image, patch_size=16, max_longest_edge=512):
+    """Resize image so longest edge is max_longest_edge, then both dimensions are divisible by patch_size."""
+    w, h = image.size
+    print(f"Original size: {w}x{h}")
+    # First, scale so longest edge is max_longest_edge (if needed)
+    scale = min(max_longest_edge / max(w, h), 1.0)
+    if scale < 1.0:
+        w = int(w * scale)
+        h = int(h * scale)
+        image = image.resize((w, h), Image.LANCZOS)
+    # Then, make both dimensions divisible by patch_size
+    new_w = w - (w % patch_size)
+    new_h = h - (h % patch_size)
+    print(f"Resized to: {new_w}x{new_h}")
+    if new_w != w or new_h != h:
+        image = image.resize((new_w, new_h), Image.LANCZOS)
+    return image
+
+
 def main():
     # Resolve paths relative to this script
     script_dir = os.path.dirname(__file__)
-    model_dir = os.path.join(script_dir, "../results/checkpoint-1200")
+    model_dir = os.path.join(script_dir, "../results/smolvlm-500m")
     images_dir = os.path.join(script_dir, "../../../backend/sample_images")
 
     # Load model & processor
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM2-2.2B-Instruct")
+    processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM2-500M-Video-Instruct")
     model = AutoModelForImageTextToText.from_pretrained(model_dir).to(device)
 
     # Iterate over all images in sample_images
@@ -111,22 +130,36 @@ def main():
             continue
 
         img_path = os.path.join(images_dir, fname)
-        image = Image.open(img_path).convert("RGB")
+        # image = Image.open(img_path).convert("RGB")
+        # image = resize_to_patch_multiple(image, patch_size=16)
 
         # Use helper functions for inference
         sample = [
             {
                 "role": "user",
                 "content": [
-                    {"type": "image", "image": image},
+                    {"type": "image", "path": img_path},
                     {"type": "text",  "text": PROMPT},
                 ],
             }
         ]
-        result = generate_text_from_sample(model, processor, sample, max_new_tokens=256, device=device)
+        inputs = processor.apply_chat_template(
+            sample,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
+            return_tensors="pt",
+        ).to(model.device)
+
+        generated_ids = model.generate(**inputs, do_sample=False, max_new_tokens=256)
+        generated_texts = processor.batch_decode(
+            generated_ids,
+            skip_special_tokens=True,
+        )
+        # result = generate_text_from_sample(model, processor, sample, max_new_tokens=256, device=device)
 
         print(f"--- {fname} ---")
-        print(result)
+        print(generated_texts[0])
         print()
 
 if __name__ == "__main__":
