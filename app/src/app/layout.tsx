@@ -152,7 +152,7 @@ export default function RootLayout({
               <main className="flex flex-1 flex-col p-4"> {/* Added main wrapper */}
                 {children}
               </main>
-              <Toaster richColors position="top-center" /> {/* Toaster for the main app */}
+              <Toaster richColors /> {/* Toaster for the main app */}
             </SidebarInset>
           </SidebarProvider>
         )}

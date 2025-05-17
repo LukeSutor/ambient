@@ -11,7 +11,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Toaster } from "@/components/ui/sonner"
 import { invoke } from "@tauri-apps/api/core";
 
 export default function Settings() {
@@ -34,7 +33,6 @@ export default function Settings() {
             {/* Danger zone */}
             <p className="text-xl font-semibold w-full pb-2">Danger Zone</p>
             <div className="outline outline-red-500 w-full max-w-xl rounded-md">
-                <Toaster richColors />
                 <Dialog>
                     <div className="flex flex-row justify-between p-4">
                         <div className="flex flex-col">
