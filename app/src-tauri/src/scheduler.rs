@@ -2,7 +2,7 @@ use crate::{data, prompts, vlm};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::sync::Arc;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration};
@@ -111,22 +111,17 @@ async fn run_scheduled_task(app_handle: tauri::AppHandle) {
     // Insert the event into the database
     if !embedding.is_empty() && !description.is_empty() {
         let timestamp = chrono::Utc::now().timestamp();
-        let active_app = application.clone();
+        let application_opt = application.clone();
         let description_opt = Some(description.clone());
         let description_embedding = embedding.clone();
 
-        let db_state = match app_handle.state::<crate::db::DbState>() {
-            Ok(state) => state,
-            Err(e) => {
-                eprintln!("[scheduler] Failed to get DB state: {}", e);
-                return;
-            }
-        };
+        // Get the tauri::State<DbState>
+        let db_state = app_handle.state::<crate::db::DbState>();
 
         match crate::db::insert_event(
             db_state,
             timestamp,
-            active_app,
+            application_opt,
             description_opt,
             description_embedding,
         ) {

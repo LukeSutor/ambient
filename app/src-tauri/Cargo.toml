@@ -36,6 +36,7 @@ zerocopy = "0.8.25"
 fastembed = "4.8.0"
 reqwest = "0.12.15"
 tokio-stream = "0.1.17"
+chrono = "0.4.41"
 
 [features]
 # by default Tauri runs in production mode

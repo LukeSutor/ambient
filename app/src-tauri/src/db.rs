@@ -7,6 +7,7 @@ use tauri::Manager;
 use rusqlite_migration::{Migrations, M};
 use serde_json::Value as JsonValue;
 use std::sync::Mutex;
+use zerocopy::IntoBytes;
 
 pub struct DbState(pub Mutex<Option<Connection>>);
 
@@ -19,14 +20,14 @@ lazy_static::lazy_static! {
                 CREATE TABLE IF NOT EXISTS events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp INTEGER NOT NULL,              -- Unix epoch seconds UTC
-                    active_app TEXT NOT NULL,                -- e.g., 'Code.exe', 'chrome.exe'
+                    application TEXT NOT NULL,               -- e.g., 'Code.exe', 'chrome.exe'
                     description TEXT,                        -- More specific details, nullable
-                    description_embedding BLOB NOT NULL,     -- Text embedding of activity (for sqlite-vec)
+                    description_embedding BLOB NOT NULL      -- Text embedding of activity (for sqlite-vec)
                 );
 
                 -- Indexes for common queries
                 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);
-                CREATE INDEX IF NOT EXISTS idx_events_app_name ON events (active_app);
+                CREATE INDEX IF NOT EXISTS idx_events_app_name ON events (application);
 
                 -- Table for discovered patterns
                 CREATE TABLE IF NOT EXISTS patterns (
@@ -44,17 +45,6 @@ lazy_static::lazy_static! {
 
                 CREATE INDEX IF NOT EXISTS idx_patterns_type ON patterns (pattern_type);
                 CREATE INDEX IF NOT EXISTS idx_patterns_active_timestamp ON patterns (is_active, last_detected_timestamp);
-
-                -- Table for application settings
-                CREATE TABLE IF NOT EXISTS settings (
-                    key TEXT PRIMARY KEY NOT NULL,
-                    value TEXT NOT NULL                      -- Store simple values directly, complex ones as JSON
-                );
-
-                -- Default settings examples (insert these via code after migration if needed)
-                -- INSERT OR IGNORE INTO settings (key, value) VALUES ('capture_interval_seconds', '60');
-                -- INSERT OR IGNORE INTO settings (key, value) VALUES ('ignored_apps', '[]'); -- JSON array of app names
-                -- INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_vlm', 'true');
             ")
             // Add more migrations here as needed
             // M::up("
@@ -225,17 +215,52 @@ pub fn execute_sql(
 }
 
 
+/// Retrieves events from the database with pagination.
+/// Returns events in descending order of timestamp (most recent first).
+#[tauri::command]
+pub fn get_events(
+    state: tauri::State<DbState>,
+    offset: u32,
+    limit: u32,
+) -> Result<serde_json::Value, String> {
+    let conn_guard = state.0.lock().map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard.as_ref().ok_or("Database connection not available.".to_string())?;
+
+    let sql = r#"
+        SELECT id, timestamp, application, description
+        FROM events
+        ORDER BY timestamp DESC, id DESC
+        LIMIT ?1 OFFSET ?2
+    "#;
+
+    let mut stmt = conn.prepare(sql).map_err(|e| format!("Prepare failed: {}", e))?;
+    let rows = stmt
+        .query_map(rusqlite::params![limit, offset], |row| {
+            let mut map = serde_json::Map::new();
+            map.insert("id".to_string(), serde_json::json!(row.get::<_, i64>(0)?));
+            map.insert("timestamp".to_string(), serde_json::json!(row.get::<_, i64>(1)?));
+            map.insert("application".to_string(), serde_json::json!(row.get::<_, String>(2)?));
+            map.insert("description".to_string(), serde_json::json!(row.get::<_, Option<String>>(3)?));
+            Ok(serde_json::Value::Object(map))
+        })
+        .map_err(|e| format!("Query map failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row processing failed: {}", e))?;
+
+    Ok(serde_json::Value::Array(rows))
+}
+
 /// Inserts a new event record into the events table.
 /// - `state`: The database state.
 /// - `timestamp`: Unix epoch seconds (UTC).
-/// - `active_app`: The application name (e.g., "Code.exe").
+/// - `application`: The application name (e.g., "Code.exe").
 /// - `description`: Description of the event.
 /// - `description_embedding`: Embedding vector as Vec<f32>.
 #[tauri::command]
 pub fn insert_event(
     state: tauri::State<DbState>,
     timestamp: i64,
-    active_app: String,
+    application: String,
     description: Option<String>,
     description_embedding: Vec<f32>,
 ) -> Result<(), String> {
@@ -244,17 +269,17 @@ pub fn insert_event(
 
     // Store the embedding as a BLOB using the sqlite-vec extension (f32 array)
     let sql = r#"
-        INSERT INTO events (timestamp, active_app, description, description_embedding)
-        VALUES (?1, ?2, ?3, vec32(?4))
+        INSERT INTO events (timestamp, application, description, description_embedding)
+        VALUES (?1, ?2, ?3, ?4)
     "#;
 
     conn.execute(
         sql,
         rusqlite::params![
             timestamp,
-            active_app,
+            application,
             description,
-            description_embedding, // Vec<f32> is supported by sqlite-vec
+            (&description_embedding).as_bytes(), // Use reference for AsBytes
         ],
     )
     .map_err(|e| format!("Failed to insert event: {}", e))?;

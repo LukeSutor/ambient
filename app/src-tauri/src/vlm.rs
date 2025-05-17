@@ -1,5 +1,6 @@
 use tauri_plugin_shell::ShellExt;
 use crate::setup;
+use crate::constants::VLM_CHAT_TEMPLATE;
 
 /// Internal function to call the VLM (llama) sidecar process and return raw output.
 async fn call_vlm_sidecar_internal(
@@ -19,11 +20,6 @@ async fn call_vlm_sidecar_internal(
         .ok_or_else(|| format!("Mmproj path is not valid UTF-8: {:?}", mmproj_path))?
         .to_string();
 
-    println!(
-        "[vlm] Calling sidecar with image: {}, prompt: {}",
-        image, prompt
-    );
-
     let shell = app_handle.shell();
     let output = shell
         .sidecar("llama")
@@ -33,6 +29,7 @@ async fn call_vlm_sidecar_internal(
             "--mmproj", &mmproj_str,
             "--image", &image,
             "-p", &prompt,
+            "--chat-template", VLM_CHAT_TEMPLATE,
         ])
         .output()
         .await
