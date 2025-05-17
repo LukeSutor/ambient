@@ -7,6 +7,8 @@ pub mod scheduler;
 pub mod embedding;
 pub mod setup;
 pub mod constants;
+pub mod integrations;
+use crate::integrations::chromium::server::start_server_on_available_port;
 use tauri::Manager;
 use std::sync::Mutex;
 use db::DbState;
@@ -31,6 +33,15 @@ pub fn run() {
                 panic!("Database initialization failed: {}", e);
             }
         }
+
+        // --- Start Chromium integration server on startup ---
+        tauri::async_runtime::spawn(async {
+            match start_server_on_available_port().await {
+                Ok(port) => println!("[chromium/server] Running on port {}", port),
+                Err(e) => eprintln!("[chromium/server] Failed to start: {}", e),
+            }
+        });
+
         Ok(())
     })
     .plugin(tauri_plugin_fs::init())
