@@ -11,7 +11,6 @@ use tokio::sync::Mutex;
 use std::sync::Arc;
 use std::net::SocketAddr;
 use futures::StreamExt;
-use futures::FutureExt;
 use futures::SinkExt;
 
 /// Try to start the server on a range of ports, returning the port used.

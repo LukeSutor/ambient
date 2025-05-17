@@ -38,7 +38,6 @@ reqwest = "0.12.15"
 tokio-stream = { version = "0.1.17", features = ["net"] }
 chrono = "0.4.41"
 axum = { version = "0.6", features = ["ws"] }
-tokio-tungstenite = "0.26.2"
 futures = "0.3.4"
 
 [features]
