@@ -41,7 +41,6 @@ export interface NavigationStep extends BaseStep {
 export interface ClickStep extends BaseStep {
   type: "click";
   url: string;
-  frameUrl: string;
   xpath: string;
   cssSelector?: string;
   elementTag: string;
@@ -50,7 +49,6 @@ export interface ClickStep extends BaseStep {
 export interface InputStep extends BaseStep {
   type: "input";
   url: string;
-  frameUrl: string;
   xpath: string;
   cssSelector?: string;
   elementTag: string;
@@ -59,7 +57,6 @@ export interface InputStep extends BaseStep {
 export interface KeyPressStep extends BaseStep {
   type: "key_press";
   url?: string;
-  frameUrl?: string;
   key: string;
   xpath?: string;
   cssSelector?: string;

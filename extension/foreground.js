@@ -169,7 +169,6 @@ document.addEventListener('click', function(event) {
         timestamp: Date.now(),
         tabId: 0, // You can update this if you have tab info
         url: window.location.href,
-        frameUrl: window.location.href,
         xpath,
         cssSelector: getEnhancedCSSSelector(target, xpath),
         elementTag: target.tagName,
@@ -188,7 +187,6 @@ document.addEventListener('input', function(event) {
         timestamp: Date.now(),
         tabId: 0,
         url: window.location.href,
-        frameUrl: window.location.href,
         xpath,
         cssSelector: getEnhancedCSSSelector(target, xpath),
         elementTag: target.tagName,
@@ -198,7 +196,37 @@ document.addEventListener('input', function(event) {
 }, true);
 
 // --- KeyPress Event ---
+const CAPTURED_KEYS = new Set([
+    'Enter',
+    'Tab',
+    'Escape',
+    'ArrowUp',
+    'ArrowDown',
+    'ArrowLeft',
+    'ArrowRight',
+    'Home',
+    'End',
+    'PageUp',
+    'PageDown',
+    'Backspace',
+    'Delete',
+]);
 document.addEventListener('keydown', function(event) {
+    const key = event.key;
+    let keyToLog = '';
+    // Capture explicit keys
+    if (CAPTURED_KEYS.has(key)) {
+        keyToLog = key;
+    } else if (
+        (event.ctrlKey || event.metaKey) &&
+        key.length === 1 &&
+        /[a-zA-Z0-9]/.test(key)
+    ) {
+        // Use 'CmdOrCtrl' to be cross-platform friendly in logs
+        keyToLog = `CmdOrCtrl+${key.toUpperCase()}`;
+    }
+    if (!keyToLog) return;
+
     const target = event.target;
     let xpath = "";
     let cssSelector = "";
@@ -213,8 +241,7 @@ document.addEventListener('keydown', function(event) {
         timestamp: Date.now(),
         tabId: 0,
         url: window.location.href,
-        frameUrl: window.location.href,
-        key: event.key,
+        key: keyToLog,
         xpath,
         cssSelector,
         elementTag
