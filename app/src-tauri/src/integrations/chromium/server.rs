@@ -10,8 +10,6 @@ use tokio::sync::broadcast;
 use tokio::sync::Mutex;
 use std::sync::Arc;
 use std::net::SocketAddr;
-// use futures_util::stream::stream::StreamExt;
-// use futures_util::stream::stream::FutureExt;
 use futures::StreamExt;
 use futures::FutureExt;
 use futures::SinkExt;
@@ -42,7 +40,7 @@ pub async fn start_server_on_available_port() -> Result<u16, String> {
                 };
                 tokio::spawn(async move {
                     if let Err(e) = Server::from_tcp(std_listener)
-                        .expect("Failed to create axum server")
+                        .unwrap()
                         .serve(app.into_make_service())
                         .await
                     {
@@ -87,6 +85,7 @@ async fn handle_socket(
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = recv_socket.next().await {
             if let Message::Text(text) = msg {
+                println!("[chromium/server] Received message: {}", text);
                 let _ = tx.send(text.to_string());
             }
         }
