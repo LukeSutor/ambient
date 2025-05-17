@@ -13,6 +13,112 @@ interface TaskResultPayload {
   result: string;
 }
 
+// --- Workflow Format Types ---
+export interface Workflow {
+  steps: Step[];
+  name: string;
+  description: string;
+  version: string;
+  input_schema: [];
+}
+export type Step =
+  | NavigationStep
+  | ClickStep
+  | InputStep
+  | KeyPressStep
+  | ScrollStep;
+
+export interface BaseStep {
+  type: string;
+  timestamp: number;
+  tabId: number;
+  url?: string;
+}
+export interface NavigationStep extends BaseStep {
+  type: "navigation";
+  url: string;
+}
+export interface ClickStep extends BaseStep {
+  type: "click";
+  url: string;
+  frameUrl: string;
+  xpath: string;
+  cssSelector?: string;
+  elementTag: string;
+  elementText: string;
+}
+export interface InputStep extends BaseStep {
+  type: "input";
+  url: string;
+  frameUrl: string;
+  xpath: string;
+  cssSelector?: string;
+  elementTag: string;
+  value: string;
+}
+export interface KeyPressStep extends BaseStep {
+  type: "key_press";
+  url?: string;
+  frameUrl?: string;
+  key: string;
+  xpath?: string;
+  cssSelector?: string;
+  elementTag?: string;
+}
+export interface ScrollStep extends BaseStep {
+  type: "scroll";
+  targetId: number;
+  scrollX: number;
+  scrollY: number;
+}
+
+import React from "react";
+
+// --- WebSocket Event Monitor ---
+const WS_PORT_RANGE = Array.from({ length: 11 }, (_, i) => 3010 + i);
+
+function useWebSocketEventMonitor() {
+  const [events, setEvents] = useState<Step[]>([]);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    let connected = false;
+    let ws: WebSocket | null = null;
+    (async () => {
+      for (const port of WS_PORT_RANGE) {
+        try {
+          ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+          await new Promise((resolve, reject) => {
+            ws!.onopen = () => resolve(undefined);
+            ws!.onerror = () => reject(undefined);
+            setTimeout(() => reject(undefined), 500);
+          });
+          connected = true;
+          wsRef.current = ws;
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              // Only add if it matches a Step type (basic check)
+              if (data && typeof data.type === "string" && data.timestamp) {
+                setEvents((prev) => [...prev, data]);
+              }
+            } catch (e) {
+              // Ignore non-JSON or non-event messages
+            }
+          };
+          break;
+        } catch {
+          // Try next port
+        }
+      }
+    })();
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, []);
+  return events;
+}
+
 export default function Dev() {
   const [greeted, setGreeted] = useState<string | null>(null);
   const greet = useCallback((): void => {
@@ -168,6 +274,8 @@ export default function Dev() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
+  const events = useWebSocketEventMonitor();
+
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
       {/* Existing Buttons Section */}
@@ -224,6 +332,31 @@ export default function Dev() {
             <pre key={index} className="whitespace-pre-wrap text-sm p-2 mb-2 border-b last:border-b-0">
               {result}
             </pre>
+          ))
+        )}
+      </div>
+
+      {/* --- Browser Event Monitor --- */}
+      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-blue-50">
+        <h2 className="text-lg font-semibold mb-2">Browser Event Monitor</h2>
+        {events.length === 0 ? (
+          <p className="text-gray-500">No browser events received yet.</p>
+        ) : (
+          events.slice(-50).map((event, idx) => (
+            <div key={idx} className="mb-2 p-2 border-b last:border-b-0 bg-white rounded">
+              <div className="font-mono text-xs text-gray-700">
+                <b>{event.type}</b> @ {new Date(event.timestamp).toLocaleTimeString()} (tab {event.tabId})
+              </div>
+              <div className="text-xs text-gray-600">
+                {Object.entries(event)
+                  .filter(([k]) => !["type", "timestamp", "tabId"].includes(k))
+                  .map(([k, v]) => (
+                    <span key={k} className="mr-2">
+                      <b>{k}:</b> {typeof v === "string" || typeof v === "number" ? v : JSON.stringify(v)}
+                    </span>
+                  ))}
+              </div>
+            </div>
           ))
         )}
       </div>
