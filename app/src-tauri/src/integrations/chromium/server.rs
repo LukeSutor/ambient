@@ -12,6 +12,8 @@ use std::sync::Arc;
 use std::net::SocketAddr;
 use futures::StreamExt;
 use futures::SinkExt;
+use crate::integrations::chromium::workflow::{self, WorkflowStep};
+use serde_json::Value;
 
 /// Try to start the server on a range of ports, returning the port used.
 pub async fn start_server_on_available_port() -> Result<u16, String> {
@@ -85,6 +87,35 @@ async fn handle_socket(
         while let Some(Ok(msg)) = recv_socket.next().await {
             if let Message::Text(text) = msg {
                 println!("[chromium/server] Received message: {}", text);
+                // Parse event JSON
+                if let Ok(event) = serde_json::from_str::<Value>(&text) {
+                    let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    let url = event.get("url").and_then(|v| v.as_str()).unwrap_or("");
+                    let timestamp = event.get("timestamp").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let step = WorkflowStep {
+                        event_type: event_type.to_string(),
+                        payload: event.clone(),
+                        timestamp,
+                    };
+                    match event_type {
+                        "page_open" => {
+                            workflow::start_workflow(url, step);
+                        },
+                        "form_submitted" => {
+                            workflow::append_step(url, step.clone());
+                            // Save and remove workflow
+                            // TODO: Pass db_state here if needed
+                            // workflow::save_workflow(url, db_state)?;
+                            workflow::remove_workflow(url);
+                        },
+                        "page_closed" => {
+                            workflow::remove_workflow(url);
+                        },
+                        _ => {
+                            workflow::append_step(url, step);
+                        }
+                    }
+                }
                 let _ = tx.send(text.to_string());
             }
         }

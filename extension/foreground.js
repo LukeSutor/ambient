@@ -138,6 +138,14 @@ async function connectToTauriWebSocket() {
     if (!ws) {
         console.warn("[extension] Could not connect to Tauri WebSocket server on any port");
     }
+    // Send a "page_open" message when the connection loads and the page is open
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: "page_open",
+            url: window.location.href,
+            timestamp: Date.now()
+        }));
+    }
 }
 
 // Call this to send a message to Tauri
@@ -190,7 +198,29 @@ document.addEventListener('input', function(event) {
         xpath,
         cssSelector: getEnhancedCSSSelector(target, xpath),
         elementTag: target.tagName,
-        value: target.type === 'password' ? '********' : target.value
+        // This sends passwords, change it to this to stop:
+        // value: target.type === 'password' ? '********' : target.value
+        value: target.value
+    };
+    sendStepEvent(step);
+}, true);
+
+// --- Select Change Event ---
+document.addEventListener('change', function(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const xpath = getXPath(target);
+    const selectedOption = target.options[target.selectedIndex];
+    const step = {
+        type: "select",
+        timestamp: Date.now(),
+        tabId: 0,
+        url: window.location.href,
+        xpath,
+        cssSelector: getEnhancedCSSSelector(target, xpath),
+        elementTag: target.tagName,
+        selectedValue: target.value,
+        selectedText: selectedOption ? selectedOption.text : ''
     };
     sendStepEvent(step);
 }, true);
@@ -310,3 +340,34 @@ window.addEventListener('scroll', function(event) {
     // Initial page load
     sendNavStep(window.location.href);
 })();
+
+// --- Form Submit Event ---
+document.addEventListener('submit', function(event) {
+    const msg = {
+        type: "form_submitted",
+        url: window.location.href,
+        timestamp: Date.now()
+    };
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+    }
+}, true);
+
+// --- Tab Close/Page Unload Event ---
+window.addEventListener('beforeunload', function() {
+    const msg = {
+        type: "page_closed",
+        url: window.location.href,
+        timestamp: Date.now()
+    };
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+    }
+    document.removeEventListener('click', arguments.callee, true);
+    document.removeEventListener('input', arguments.callee, true);
+    document.removeEventListener('change', arguments.callee, true);
+    document.removeEventListener('keydown', arguments.callee, true);
+    window.removeEventListener('scroll', arguments.callee, true);
+    document.removeEventListener('submit', arguments.callee, true);
+    window.removeEventListener('beforeunload', arguments.callee, true);
+});
