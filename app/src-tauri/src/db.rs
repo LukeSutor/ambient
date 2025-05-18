@@ -8,9 +8,11 @@ use rusqlite_migration::{Migrations, M};
 use serde_json::Value as JsonValue;
 use std::sync::Mutex;
 use zerocopy::IntoBytes;
+use once_cell::sync::Lazy;
 
 pub struct DbState(pub Mutex<Option<Connection>>);
 
+pub static GLOBAL_DB_STATE: Lazy<DbState> = Lazy::new(|| DbState(Mutex::new(None)));
 
 lazy_static::lazy_static! {
     static ref MIGRATIONS: Migrations<'static> =
@@ -301,7 +303,48 @@ pub fn insert_event(
     Ok(())
 }
 
+/// Inserts a new workflow record into the workflows table without requiring the db state as an argument.
+/// This function assumes you have a globally accessible DbState (e.g., via lazy_static or once_cell).
+/// Returns an error if the global state is not initialized.
+#[allow(dead_code)]
+pub fn insert_workflow_global(
+    name: String,
+    description: Option<String>,
+    url: String,
+    steps_json: String,
+    recording_start: i64,
+    recording_end: i64,
+    last_updated: i64,
+) -> Result<(), String> {
+    // You must have a global static reference to DbState, e.g.:
+    // lazy_static::lazy_static! { pub static ref GLOBAL_DB_STATE: DbState = ...; }
+    // Here we assume it's called GLOBAL_DB_STATE.
+    static GLOBAL_DB_STATE: Lazy<DbState> = Lazy::new(|| DbState(Mutex::new(None)));
 
+    let conn_guard = GLOBAL_DB_STATE.0.lock().map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard.as_ref().ok_or("Database connection not available.".to_string())?;
+
+    let sql = r#"
+        INSERT INTO workflows (name, description, url, steps_json, recording_start, recording_end, last_updated)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+    "#;
+
+    conn.execute(
+        sql,
+        rusqlite::params![
+            name,
+            description,
+            url,
+            steps_json,
+            recording_start,
+            recording_end,
+            last_updated
+        ],
+    )
+    .map_err(|e| format!("Failed to insert workflow: {}", e))?;
+
+    Ok(())
+}
 /// Inserts a new workflow record into the workflows table.
 /// - `state`: The database state.
 /// - `name`: Name of the workflow.

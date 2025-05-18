@@ -25,7 +25,9 @@ pub fn run() {
                 println!("[setup] Database initialized successfully.");
                 // Store the connection in the managed state using the app_handle
                 let state = app_handle.state::<DbState>(); // Use app_handle here (using the imported DbState)
-                *state.0.lock().unwrap() = Some(conn); // Store the connection
+                // *state.0.lock().unwrap() = Some(conn); // Store the connection in tauri state
+                // Also store in global state for insert_workflow_global
+                *db::GLOBAL_DB_STATE.0.lock().unwrap() = Some(conn);
             }
             Err(e) => {
                 eprintln!("[setup] Failed to initialize database: {}", e);
@@ -66,7 +68,7 @@ pub fn run() {
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
         setup::check_setup_complete,
-        integrations::chromium::server::chromium_ping // <-- Add ping command
+        // integrations::chromium::server::chromium_ping // <-- Add ping command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -39,6 +39,7 @@ tokio-stream = { version = "0.1.17", features = ["net"] }
 chrono = "0.4.41"
 axum = { version = "0.6", features = ["ws"] }
 futures = "0.3.4"
+dashmap = "6.1.0"
 
 [features]
 # by default Tauri runs in production mode

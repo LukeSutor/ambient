@@ -130,8 +130,13 @@ async function connectToTauriWebSocket() {
 
             ws.onmessage = (event) => {
                 // Handle messages from Tauri here
-                if (event.data === "pong") {
-                    wsLastPong = true;
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "pong") {
+                        wsLastPong = true;
+                    }
+                } catch (e) {
+                    // Not JSON, ignore
                 }
                 console.log("[extension] Message from Tauri:", event.data);
             };
@@ -139,7 +144,7 @@ async function connectToTauriWebSocket() {
             wsPingInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     wsLastPong = false;
-                    ws.send("ping");
+                    ws.send(JSON.stringify({ type: "ping" }));
                     setTimeout(() => {
                         if (!wsLastPong) {
                             ws.dispatchEvent(new CustomEvent("ws-disconnected"));
@@ -174,7 +179,7 @@ window.isTauriWSConnected = function() {
 window.pingTauriWS = function() {
     if (ws && ws.readyState === WebSocket.OPEN) {
         wsLastPong = false;
-        ws.send("ping");
+        ws.send(JSON.stringify({ type: "ping" }));
         return new Promise((resolve) => {
             setTimeout(() => resolve(wsLastPong), 500);
         });
