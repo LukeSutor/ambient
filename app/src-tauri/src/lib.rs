@@ -59,7 +59,8 @@ pub fn run() {
         embedding::get_embedding,
         db::execute_sql,
         db::reset_database,
-        db::get_events, // <-- Add this line
+        db::get_events,
+        db::get_workflows_global,
         setup::setup,
         setup::get_vlm_text_model_path,
         setup::get_vlm_mmproj_model_path,

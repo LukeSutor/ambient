@@ -35,6 +35,7 @@ pub fn start_workflow(url: &str, open_event: WorkflowStep) {
 // Append a step to the workflow for a URL
 pub fn append_step(url: &str, step: WorkflowStep) {
     if let Some(mut wf) = WORKFLOWS.get_mut(url) {
+        println!("[chromium/workflow] Appending step to workflow for {}: {:?}", url, step);
         wf.steps.push(step);
     }
 }
@@ -42,6 +43,7 @@ pub fn append_step(url: &str, step: WorkflowStep) {
 // Save workflow to DB and remove from memory
 pub fn save_workflow(url: &str) -> Result<(), String> {
     if let Some((_key, mut wf)) = WORKFLOWS.remove(url) {
+        println!("[chromium/workflow] Saving workflow for {}: {:?}", url, wf);
         wf.recording_end = wf.steps.last().map(|s| s.timestamp);
         let steps_json = serde_json::to_string(&wf.steps).map_err(|e| e.to_string())?;
         let now = wf.recording_end.unwrap_or(wf.recording_start);

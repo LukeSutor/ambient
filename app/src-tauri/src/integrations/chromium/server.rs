@@ -103,9 +103,7 @@ async fn handle_socket(
                         },
                         "form_submitted" => {
                             workflow::append_step(url, step.clone());
-                            // Save and remove workflow
-                            // TODO: Pass db_state here if needed
-                            // workflow::save_workflow(url, db_state)?;
+                            workflow::save_workflow(url);
                             workflow::remove_workflow(url);
                         },
                         "page_closed" => {

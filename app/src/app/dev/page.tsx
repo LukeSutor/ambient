@@ -273,6 +273,26 @@ export default function Dev() {
 
   const events = useWebSocketEventMonitor();
 
+  // --- Workflows Viewer ---
+  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [workflowsLoading, setWorkflowsLoading] = useState(false);
+  const [workflowsError, setWorkflowsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setWorkflowsLoading(true);
+    setWorkflowsError(null);
+    invoke<any[]>("get_workflows_global", { offset: 0, limit: 10 })
+      .then((result) => {
+        // result is expected to be an array of workflow objects
+        setWorkflows(Array.isArray(result) ? result : []);
+        setWorkflowsLoading(false);
+      })
+      .catch((err) => {
+        setWorkflowsError(typeof err === "string" ? err : JSON.stringify(err));
+        setWorkflowsLoading(false);
+      });
+  }, []);
+
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
       {/* Existing Buttons Section */}
@@ -352,6 +372,47 @@ export default function Dev() {
                       <b>{k}:</b> {typeof v === "string" || typeof v === "number" ? v : JSON.stringify(v)}
                     </span>
                   ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* --- Workflows Table Viewer --- */}
+      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-green-50">
+        <h2 className="text-lg font-semibold mb-2">Saved Workflows (First 10)</h2>
+        {workflowsLoading ? (
+          <p className="text-gray-500">Loading workflows...</p>
+        ) : workflowsError ? (
+          <p className="text-red-500">Error: {workflowsError}</p>
+        ) : workflows.length === 0 ? (
+          <p className="text-gray-500">No workflows found.</p>
+        ) : (
+          workflows.map((wf, idx) => (
+            <div key={wf.id ?? idx} className="mb-2 p-2 border-b last:border-b-0 bg-white rounded">
+              <div className="font-mono text-xs text-gray-700">
+                <b>{wf.name}</b> ({wf.url ?? "no url"})
+              </div>
+              <div className="text-xs text-gray-600">
+                <b>Description:</b> {wf.description ?? <span className="italic text-gray-400">none</span>}
+                <br />
+                <b>Steps:</b> {(() => {
+                  try {
+                    const steps = JSON.parse(wf.steps_json ?? "[]");
+                    return Array.isArray(steps) ? steps.length : 0;
+                  } catch {
+                    return 0;
+                  }
+                })()}
+                <br />
+                <b>Recorded:</b>{" "}
+                {wf.recording_start
+                  ? new Date(wf.recording_start * 1000).toLocaleString()
+                  : "?"}
+                {" - "}
+                {wf.recording_end
+                  ? new Date(wf.recording_end * 1000).toLocaleString()
+                  : "?"}
               </div>
             </div>
           ))
