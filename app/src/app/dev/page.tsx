@@ -281,7 +281,7 @@ export default function Dev() {
   useEffect(() => {
     setWorkflowsLoading(true);
     setWorkflowsError(null);
-    invoke<any[]>("get_workflows_global", { offset: 0, limit: 10 })
+    invoke<any[]>("get_workflows", { offset: 0, limit: 10 })
       .then((result) => {
         // result is expected to be an array of workflow objects
         setWorkflows(Array.isArray(result) ? result : []);

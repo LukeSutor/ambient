@@ -25,9 +25,9 @@ pub fn run() {
                 println!("[setup] Database initialized successfully.");
                 // Store the connection in the managed state using the app_handle
                 let state = app_handle.state::<DbState>(); // Use app_handle here (using the imported DbState)
-                // *state.0.lock().unwrap() = Some(conn); // Store the connection in tauri state
+                *state.0.lock().unwrap() = Some(conn); // Store the connection in tauri state
                 // Also store in global state for insert_workflow_global
-                *db::GLOBAL_DB_STATE.0.lock().unwrap() = Some(conn);
+                // *db::GLOBAL_DB_STATE.0.lock().unwrap() = Some(conn);
             }
             Err(e) => {
                 eprintln!("[setup] Failed to initialize database: {}", e);
@@ -38,7 +38,7 @@ pub fn run() {
 
         // --- Start Chromium integration server on startup ---
         tauri::async_runtime::spawn(async {
-            match start_server_on_available_port().await {
+            match start_server_on_available_port(app_handle).await {
                 Ok(port) => println!("[chromium/server] Running on port {}", port),
                 Err(e) => eprintln!("[chromium/server] Failed to start: {}", e),
             }
@@ -60,7 +60,7 @@ pub fn run() {
         db::execute_sql,
         db::reset_database,
         db::get_events,
-        db::get_workflows_global,
+        db::get_workflows,
         setup::setup,
         setup::get_vlm_text_model_path,
         setup::get_vlm_mmproj_model_path,

@@ -14,9 +14,10 @@ use futures::StreamExt;
 use futures::SinkExt;
 use crate::integrations::chromium::workflow::{self, WorkflowStep};
 use serde_json::Value;
+use tauri::Manager;
 
 /// Try to start the server on a range of ports, returning the port used.
-pub async fn start_server_on_available_port() -> Result<u16, String> {
+pub async fn start_server_on_available_port(app_handle: tauri::AppHandle) -> Result<u16, String> {
     // Try ports 3010..=3020
     for port in 3010..=3020 {
         let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -28,7 +29,8 @@ pub async fn start_server_on_available_port() -> Result<u16, String> {
                     "/ws",
                     get({
                         let state = state.clone();
-                        move |ws: WebSocketUpgrade| handle_websocket(ws, state.clone())
+                        let app_handle = app_handle.clone(); // <-- clone here for each closure
+                        move |ws: WebSocketUpgrade| handle_websocket(ws, state.clone(), app_handle.clone())
                     }),
                 );
                 // Convert tokio listener to std listener for axum::Server
@@ -60,13 +62,15 @@ pub async fn start_server_on_available_port() -> Result<u16, String> {
 async fn handle_websocket(
     ws: WebSocketUpgrade,
     state: Arc<Mutex<broadcast::Sender<String>>>,
+    app_handle: tauri::AppHandle
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, app_handle))
 }
 
 async fn handle_socket(
     socket: WebSocket,
     state: Arc<Mutex<broadcast::Sender<String>>>,
+    app_handle: tauri::AppHandle
 ) {
     let tx = state.lock().await.clone();
     let mut rx = tx.subscribe();
@@ -103,7 +107,9 @@ async fn handle_socket(
                         },
                         "form_submitted" => {
                             workflow::append_step(url, step.clone());
-                            workflow::save_workflow(url);
+                            // Get the tauri::State<DbState>
+                            let db_state = app_handle.state::<crate::db::DbState>();
+                            workflow::save_workflow(url, db_state);
                             workflow::remove_workflow(url);
                         },
                         "page_closed" => {

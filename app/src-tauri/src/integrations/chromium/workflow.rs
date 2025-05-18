@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
 use dashmap::DashMap;
+use crate::DbState;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowStep {
@@ -41,13 +43,14 @@ pub fn append_step(url: &str, step: WorkflowStep) {
 }
 
 // Save workflow to DB and remove from memory
-pub fn save_workflow(url: &str) -> Result<(), String> {
+pub fn save_workflow(url: &str, db_state: tauri::State<DbState>) -> Result<(), String> {
     if let Some((_key, mut wf)) = WORKFLOWS.remove(url) {
         println!("[chromium/workflow] Saving workflow for {}: {:?}", url, wf);
         wf.recording_end = wf.steps.last().map(|s| s.timestamp);
         let steps_json = serde_json::to_string(&wf.steps).map_err(|e| e.to_string())?;
         let now = wf.recording_end.unwrap_or(wf.recording_start);
-        crate::db::insert_workflow_global(
+        crate::db::insert_workflow(
+            db_state,
             format!("Workflow for {}", url),
             Some(format!("Recorded on {}", url)),
             url.to_string(),
