@@ -6,6 +6,25 @@
     <title>Chrome Addon v3: popup</title>
 </head>
 <body>
+    <div id="status" style="font-weight:bold;margin-bottom:0.5rem;">Checking connection...</div>
     This is the <span class="special-text">HTML</span> body of the addon.
+    <script src="../foreground.js"></script>
+    <script>
+    async function updateStatus() {
+        if (window.pingTauriWS) {
+            const connected = await window.pingTauriWS();
+            const statusDiv = document.getElementById('status');
+            if (connected) {
+                statusDiv.textContent = 'Connected';
+                statusDiv.className = 'connected';
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'disconnected';
+            }
+        }
+    }
+    updateStatus();
+    setInterval(updateStatus, 2000);
+    </script>
 </body>
 </html>

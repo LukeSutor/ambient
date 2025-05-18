@@ -9,3 +9,10 @@ body {
 .special-text {
     color: red;
 }
+
+.connected {
+    color: #00ff00;
+}
+.disconnected {
+    color: #ff3333;
+}

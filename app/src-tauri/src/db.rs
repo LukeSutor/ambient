@@ -51,12 +51,14 @@ lazy_static::lazy_static! {
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     name TEXT NOT NULL,
                     description TEXT,
-                    version TEXT,
+                    url TEXT NOT NULL,
                     steps_json TEXT NOT NULL,
                     recording_start INTEGER NOT NULL,
                     recording_end INTEGER NOT NULL,
                     last_updated INTEGER NOT NULL,
                 );
+
+                CREATE INDEX IF NOT EXISTS idx_workflows_url ON workflows (url);
             ")
             // Add more migrations here as needed
             // M::up("
@@ -304,7 +306,7 @@ pub fn insert_event(
 /// - `state`: The database state.
 /// - `name`: Name of the workflow.
 /// - `description`: Optional description.
-/// - `version`: Optional version string.
+/// - `url`: url of the website string.
 /// - `steps_json`: Steps as a JSON string.
 /// - `recording_start`: Unix epoch seconds (UTC) when recording started.
 /// - `recording_end`: Unix epoch seconds (UTC) when recording ended.
@@ -314,7 +316,7 @@ pub fn insert_workflow(
     state: tauri::State<DbState>,
     name: String,
     description: Option<String>,
-    version: Option<String>,
+    url: String,
     steps_json: String,
     recording_start: i64,
     recording_end: i64,
@@ -324,7 +326,7 @@ pub fn insert_workflow(
     let conn = conn_guard.as_ref().ok_or("Database connection not available.".to_string())?;
 
     let sql = r#"
-        INSERT INTO workflows (name, description, version, steps_json, recording_start, recording_end, last_updated)
+        INSERT INTO workflows (name, description, url, steps_json, recording_start, recording_end, last_updated)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
     "#;
 
@@ -333,7 +335,7 @@ pub fn insert_workflow(
         rusqlite::params![
             name,
             description,
-            version,
+            url,
             steps_json,
             recording_start,
             recording_end,
@@ -358,7 +360,7 @@ pub fn get_workflows(
     let conn = conn_guard.as_ref().ok_or("Database connection not available.".to_string())?;
 
     let sql = r#"
-        SELECT id, name, description, version, steps_json, recording_start, recording_end, last_updated
+        SELECT id, name, description, url, steps_json, recording_start, recording_end, last_updated
         FROM workflows
         ORDER BY last_updated DESC, id DESC
         LIMIT ?1 OFFSET ?2
@@ -371,7 +373,7 @@ pub fn get_workflows(
             map.insert("id".to_string(), serde_json::json!(row.get::<_, i64>(0)?));
             map.insert("name".to_string(), serde_json::json!(row.get::<_, String>(1)?));
             map.insert("description".to_string(), serde_json::json!(row.get::<_, Option<String>>(2)?));
-            map.insert("version".to_string(), serde_json::json!(row.get::<_, Option<String>>(3)?));
+            map.insert("url".to_string(), serde_json::json!(row.get::<_, Option<String>>(3)?));
             map.insert("steps_json".to_string(), serde_json::json!(row.get::<_, String>(4)?));
             map.insert("recording_start".to_string(), serde_json::json!(row.get::<_, i64>(5)?));
             map.insert("recording_end".to_string(), serde_json::json!(row.get::<_, i64>(6)?));

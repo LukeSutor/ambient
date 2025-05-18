@@ -65,7 +65,8 @@ pub fn run() {
         setup::check_vlm_mmproj_model_download,
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
-        setup::check_setup_complete
+        setup::check_setup_complete,
+        integrations::chromium::server::chromium_ping // <-- Add ping command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

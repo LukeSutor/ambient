@@ -14,6 +14,14 @@ use futures::StreamExt;
 use futures::SinkExt;
 use crate::integrations::chromium::workflow::{self, WorkflowStep};
 use serde_json::Value;
+use crate::db::DbState;
+use tauri::State;
+
+// Add a tauri command for ping
+#[tauri::command]
+pub fn chromium_ping() -> &'static str {
+    "pong"
+}
 
 /// Try to start the server on a range of ports, returning the port used.
 pub async fn start_server_on_available_port() -> Result<u16, String> {
@@ -28,7 +36,7 @@ pub async fn start_server_on_available_port() -> Result<u16, String> {
                     "/ws",
                     get({
                         let state = state.clone();
-                        move |ws: WebSocketUpgrade| handle_websocket(ws, state.clone())
+                        move |ws: WebSocketUpgrade, db_state: State<'_, DbState>| handle_websocket(ws, state.clone(), db_state)
                     }),
                 );
                 // Convert tokio listener to std listener for axum::Server
@@ -60,17 +68,18 @@ pub async fn start_server_on_available_port() -> Result<u16, String> {
 async fn handle_websocket(
     ws: WebSocketUpgrade,
     state: Arc<Mutex<broadcast::Sender<String>>>,
+    db_state: State<'_, DbState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, db_state.inner().clone()))
 }
 
 async fn handle_socket(
     socket: WebSocket,
     state: Arc<Mutex<broadcast::Sender<String>>>,
+    db_state: DbState,
 ) {
     let tx = state.lock().await.clone();
     let mut rx = tx.subscribe();
-
     let (mut send_socket, mut recv_socket) = socket.split();
 
     // Task for sending broadcasted messages to the client
@@ -86,6 +95,11 @@ async fn handle_socket(
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = recv_socket.next().await {
             if let Message::Text(text) = msg {
+                // --- PING HANDLING ---
+                if text == "ping" {
+                    let _ = send_socket.send(Message::Text("pong".to_string())).await;
+                    continue;
+                }
                 println!("[chromium/server] Received message: {}", text);
                 // Parse event JSON
                 if let Ok(event) = serde_json::from_str::<Value>(&text) {
@@ -104,19 +118,17 @@ async fn handle_socket(
                         "form_submitted" => {
                             workflow::append_step(url, step.clone());
                             // Save and remove workflow
-                            // TODO: Pass db_state here if needed
-                            // workflow::save_workflow(url, db_state)?;
+                            let _ = workflow::save_workflow(url, &db_state);
                             workflow::remove_workflow(url);
                         },
                         "page_closed" => {
                             workflow::remove_workflow(url);
                         },
-                        _ => {
+                        "click" | "input" | "change" | "scroll" | "keydown" => {
                             workflow::append_step(url, step);
                         }
                     }
                 }
-                let _ = tx.send(text.to_string());
             }
         }
     });

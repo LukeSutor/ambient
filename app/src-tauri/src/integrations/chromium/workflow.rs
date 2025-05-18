@@ -51,7 +51,7 @@ pub fn save_workflow(url: &str, db_state: tauri::State<'_, crate::db::DbState>) 
             db_state,
             format!("Workflow for {}", wf.url),
             Some(format!("Recorded on {}", wf.url)),
-            Some("1.0".to_string()),
+            wf.url.clone(),
             steps_json,
             wf.recording_start,
             now,

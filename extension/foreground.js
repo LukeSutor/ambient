@@ -112,6 +112,8 @@ function getEnhancedCSSSelector(element, xpath) {
 let ws = null;
 let connectedPort = null;
 const PORT_RANGE = Array.from({length: 11}, (_, i) => 3010 + i);
+let wsPingInterval = null;
+let wsLastPong = false;
 
 async function connectToTauriWebSocket() {
     for (const port of PORT_RANGE) {
@@ -128,8 +130,25 @@ async function connectToTauriWebSocket() {
 
             ws.onmessage = (event) => {
                 // Handle messages from Tauri here
+                if (event.data === "pong") {
+                    wsLastPong = true;
+                }
                 console.log("[extension] Message from Tauri:", event.data);
             };
+            // --- WebSocket ping loop ---
+            wsPingInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    wsLastPong = false;
+                    ws.send("ping");
+                    setTimeout(() => {
+                        if (!wsLastPong) {
+                            ws.dispatchEvent(new CustomEvent("ws-disconnected"));
+                        } else {
+                            ws.dispatchEvent(new CustomEvent("ws-connected"));
+                        }
+                    }, 500);
+                }
+            }, 2000);
             break;
         } catch {
             // Try next port
@@ -147,6 +166,21 @@ async function connectToTauriWebSocket() {
         }));
     }
 }
+
+// Allow popup to check connection status
+window.isTauriWSConnected = function() {
+    return ws && ws.readyState === WebSocket.OPEN && wsLastPong;
+};
+window.pingTauriWS = function() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        wsLastPong = false;
+        ws.send("ping");
+        return new Promise((resolve) => {
+            setTimeout(() => resolve(wsLastPong), 500);
+        });
+    }
+    return Promise.resolve(false);
+};
 
 // Call this to send a message to Tauri
 function sendMessageToTauri(obj) {
