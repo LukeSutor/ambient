@@ -1,0 +1,5 @@
+transformers
+pillow
+accelerate
+qwen-vl-utils
+'vllm>0.7.2'

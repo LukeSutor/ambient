@@ -1,0 +1,22 @@
+{
+    "bundle": {
+      "resources": {
+        "binaries/ggml-base.dll": "ggml-base.dll",
+        "binaries/ggml-cpu-alderlake.dll": "ggml-cpu-alderlake.dll",
+        "binaries/ggml-cpu-haswell.dll": "ggml-cpu-haswell.dll",
+        "binaries/ggml-cpu-icelake.dll": "ggml-cpu-icelake.dll",
+        "binaries/ggml-cpu-sandybridge.dll": "ggml-cpu-sandybridge.dll",
+        "binaries/ggml-cpu-sapphirerapids.dll": "ggml-cpu-sapphirerapids.dll",
+        "binaries/ggml-cpu-skylakex.dll": "ggml-cpu-skylakex.dll",
+        "binaries/ggml-cpu-sse42.dll": "ggml-cpu-sse42.dll",
+        "binaries/ggml-cpu-x64.dll": "ggml-cpu-x64.dll",
+        "binaries/ggml-rpc.dll": "ggml-rpc.dll",
+        "binaries/ggml.dll": "ggml.dll",
+        "binaries/libcurl-x64.dll": "libcurl-x64.dll",
+        "binaries/llama.dll": "llama.dll",
+        "binaries/llava_shared.dll": "llava_shared.dll",
+        "binaries/mtmd_shared.dll": "mtmd_shared.dll"
+      }
+    }
+}
+  
