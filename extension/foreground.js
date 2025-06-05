@@ -230,6 +230,7 @@ function sendStepEvent(step) {
 
 // --- Click Event ---
 document.addEventListener('click', function(event) {
+    if (window.__isReplayingWorkflow) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const xpath = getXPath(target);
@@ -248,6 +249,7 @@ document.addEventListener('click', function(event) {
 
 // --- Input Event ---
 document.addEventListener('input', function(event) {
+    if (window.__isReplayingWorkflow) return;
     const target = event.target;
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
     const xpath = getXPath(target);
@@ -268,6 +270,7 @@ document.addEventListener('input', function(event) {
 
 // --- Select Change Event ---
 document.addEventListener('change', function(event) {
+    if (window.__isReplayingWorkflow) return;
     const target = event.target;
     if (!(target instanceof HTMLSelectElement)) return;
     const xpath = getXPath(target);
@@ -303,6 +306,7 @@ const CAPTURED_KEYS = new Set([
     'Delete',
 ]);
 document.addEventListener('keydown', function(event) {
+    if (window.__isReplayingWorkflow) return;
     const key = event.key;
     let keyToLog = '';
     // Capture explicit keys
@@ -344,6 +348,7 @@ document.addEventListener('keydown', function(event) {
 let lastScrollTarget = null;
 let lastScrollTimeout = null;
 window.addEventListener('scroll', function(event) {
+    if (window.__isReplayingWorkflow) return;
     if (lastScrollTimeout) clearTimeout(lastScrollTimeout);
     lastScrollTarget = event.target;
     lastScrollTimeout = setTimeout(() => {
@@ -366,6 +371,7 @@ window.addEventListener('scroll', function(event) {
     const pushState = history.pushState;
     const replaceState = history.replaceState;
     function sendNavStep(url) {
+        if (window.__isReplayingWorkflow) return;
         const step = {
             type: "navigation",
             timestamp: Date.now(),
@@ -404,6 +410,7 @@ window.addEventListener('scroll', function(event) {
 
 // --- Form Submit Event ---
 document.addEventListener('submit', function(event) {
+    if (window.__isReplayingWorkflow) return;
     const msg = {
         type: "form_submitted",
         url: window.location.href,
@@ -453,70 +460,79 @@ function delay(ms) {
 }
 
 async function runWorkflowSteps(steps) {
-  for (const step of steps) {
-    console.log("Running step:", step);
-    switch (step.event_type) {
-      case "click": {
-        const el = getElementByXPath(step.payload.xpath);
-        if (el instanceof HTMLElement) {
-          el.click();
-        }
-        break;
-      }
-      case "input": {
-          console.log("XPath for input element:", step.payload.xpath);
-        const el = getElementByXPath(step.payload.xpath);
-        console.log("Input step for element:", el);
-        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-          el.value = step.payload.value || "";
-          el.dispatchEvent(new Event("input", { bubbles: true }));
-        }
-        break;
-      }
-      case "select": {
-        const el = getElementByXPath(step.payload.xpath);
-        if (el instanceof HTMLSelectElement) {
-          el.value = step.selectedValue || "";
-          el.dispatchEvent(new Event("change", { bubbles: true }));
-        }
-        break;
-      }
-      case "key_press": {
-        const el = step.payload.xpath ? getElementByXPath(step.payload.xpath) : document.activeElement;
-        const eventInit = { key: step.payload.key, bubbles: true };
-        if (el instanceof HTMLElement) {
-          el.dispatchEvent(new KeyboardEvent("keydown", eventInit));
-        } else {
-          document.dispatchEvent(new KeyboardEvent("keydown", eventInit));
-        }
-        break;
-      }
-      case "scroll": {
-        // Scroll the window or a specific element
-        if (step.payload.xpath) {
+  window.__isReplayingWorkflow = true;
+  try {
+    for (const step of steps) {
+      console.log("Running step:", step);
+      switch (step.event_type) {
+        case "click": {
           const el = getElementByXPath(step.payload.xpath);
           if (el instanceof HTMLElement) {
-            el.scrollTo(step.payload.scrollX || 0, step.payload.scrollY || 0);
-          }
+            el.click();
         } else {
-          window.scrollTo(step.payload.scrollX || 0, step.payload.scrollY || 0);
+            console.warn("Element not found for click step:", step.payload.xpath);
         }
-        break;
-      }
-      case "navigation": {
-        if (step.payload.url && window.location.href !== step.payload.url) {
-          window.location.href = step.payload.url;
-          // Wait for navigation to complete
-          await new Promise((resolve) => {
-            window.addEventListener("DOMContentLoaded", resolve, { once: true });
-          });
+          break;
         }
-        break;
+        case "input": {
+          const el = getElementByXPath(step.payload.xpath);
+          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+            el.value = step.payload.value || "";
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          } else {
+            console.warn("Element not found for input step:", step.payload.xpath);
+        }
+          break;
+        }
+        case "select": {
+          const el = getElementByXPath(step.payload.xpath);
+          if (el instanceof HTMLSelectElement) {
+            el.value = step.selectedValue || "";
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+          } else {
+            console.warn("Element not found for select step:", step.payload.xpath);
+        }
+          break;
+        }
+        case "key_press": {
+          const el = step.payload.xpath ? getElementByXPath(step.payload.xpath) : document.activeElement;
+          const eventInit = { key: step.payload.key, bubbles: true };
+          if (el instanceof HTMLElement) {
+            el.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+          } else {
+            document.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+          }
+          break;
+        }
+        case "scroll": {
+          // Scroll the window or a specific element
+          if (step.payload.xpath) {
+            const el = getElementByXPath(step.payload.xpath);
+            if (el instanceof HTMLElement) {
+              el.scrollTo(step.payload.scrollX || 0, step.payload.scrollY || 0);
+            }
+          } else {
+            window.scrollTo(step.payload.scrollX || 0, step.payload.scrollY || 0);
+          }
+          break;
+        }
+        case "navigation": {
+          if (step.payload.url && window.location.href !== step.payload.url) {
+            window.location.href = step.payload.url;
+            // Wait for navigation to complete
+            await new Promise((resolve) => {
+              window.addEventListener("DOMContentLoaded", resolve, { once: true });
+            });
+          }
+          break;
+        }
+        default:
+          break;
       }
-      default:
-        break;
+      // Optional: add a small delay between steps for realism
+      await delay(200);
     }
-    // Optional: add a small delay between steps for realism
-    await delay(200);
+  } finally {
+    window.__isReplayingWorkflow = false;
   }
 }
