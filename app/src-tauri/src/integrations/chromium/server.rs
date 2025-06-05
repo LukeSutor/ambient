@@ -95,7 +95,13 @@ async fn handle_socket(
                 if let Ok(event) = serde_json::from_str::<Value>(&text) {
                     let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
                     let url = event.get("url").and_then(|v| v.as_str()).unwrap_or("");
-                    let timestamp = event.get("timestamp").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let timestamp_raw = event.get("timestamp").and_then(|v| v.as_i64()).unwrap_or(0);
+                    // If timestamp is too large, assume it's in ms and convert to seconds
+                    let timestamp = if timestamp_raw > 1_000_000_000_000 {
+                        timestamp_raw / 1000
+                    } else {
+                        timestamp_raw
+                    };
                     let step = WorkflowStep {
                         event_type: event_type.to_string(),
                         payload: event.clone(),

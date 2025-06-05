@@ -388,34 +388,79 @@ export default function Dev() {
         ) : workflows.length === 0 ? (
           <p className="text-gray-500">No workflows found.</p>
         ) : (
-          workflows.map((wf, idx) => (
-            <div key={wf.id ?? idx} className="mb-2 p-2 border-b last:border-b-0 bg-white rounded">
-              <div className="font-mono text-xs text-gray-700">
-                <b>{wf.name}</b> ({wf.url ?? "no url"})
+          workflows.map((wf, idx) => {
+            let steps: any[] = [];
+            try {
+              steps = JSON.parse(wf.steps_json ?? "[]");
+            } catch {
+              steps = [];
+            }
+            return (
+              <div key={wf.id ?? idx} className="mb-2 p-2 border-b last:border-b-0 bg-white rounded">
+                <div className="font-mono text-xs text-gray-700">
+                  <b>{wf.name}</b> ({wf.url ?? "no url"})
+                </div>
+                <div className="text-xs text-gray-600">
+                  <b>Description:</b> {wf.description ?? <span className="italic text-gray-400">none</span>}
+                  <br />
+                  <b>Steps:</b> {steps.length}
+                  <br />
+                  <b>Recorded:</b>{" "}
+                  {typeof wf.recording_start === "number" && wf.recording_start > 0
+                    ? (() => {
+                        // Defensive: if value is too large, assume ms and convert to seconds
+                        const ts = wf.recording_start > 1e12
+                          ? Math.floor(wf.recording_start / 1000)
+                          : wf.recording_start;
+                        return new Date(ts * 1000).toLocaleString();
+                      })()
+                    : "?"}
+                  {" - "}
+                  {typeof wf.recording_end === "number" && wf.recording_end > 0
+                    ? (() => {
+                        const ts = wf.recording_end > 1e12
+                          ? Math.floor(wf.recording_end / 1000)
+                          : wf.recording_end;
+                        return new Date(ts * 1000).toLocaleString();
+                      })()
+                    : "?"}
+                  {/* Steps List */}
+                  {steps.length > 0 && (
+                    <div className="mt-2 border rounded bg-gray-50 p-2 max-h-32 overflow-y-auto">
+                      <div className="font-semibold mb-1">Captured Steps:</div>
+                      {steps.map((step, sidx) => (
+                        <div key={sidx} className="mb-1 p-1 border-b last:border-b-0">
+                          <span className="font-mono text-xs">
+                            <b>{step.event_type || step.type}</b>
+                            {" @ "}
+                            {step.timestamp
+                              ? new Date(
+                                  (typeof step.timestamp === "number" && step.timestamp > 1e12
+                                    ? step.timestamp / 1000
+                                    : step.timestamp) * 1000
+                                ).toLocaleString()
+                              : "?"}
+                          </span>
+                          <div className="text-xs text-gray-700">
+                            {Object.entries(step.payload || step)
+                              .filter(([k]) => !["event_type", "timestamp", "payload"].includes(k))
+                              .map(([k, v]) => (
+                                <span key={k} className="mr-2">
+                                  <b>{k}:</b>{" "}
+                                  {typeof v === "string" || typeof v === "number"
+                                    ? v
+                                    : JSON.stringify(v)}
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="text-xs text-gray-600">
-                <b>Description:</b> {wf.description ?? <span className="italic text-gray-400">none</span>}
-                <br />
-                <b>Steps:</b> {(() => {
-                  try {
-                    const steps = JSON.parse(wf.steps_json ?? "[]");
-                    return Array.isArray(steps) ? steps.length : 0;
-                  } catch {
-                    return 0;
-                  }
-                })()}
-                <br />
-                <b>Recorded:</b>{" "}
-                {wf.recording_start
-                  ? new Date(wf.recording_start * 1000).toLocaleString()
-                  : "?"}
-                {" - "}
-                {wf.recording_end
-                  ? new Date(wf.recording_end * 1000).toLocaleString()
-                  : "?"}
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
