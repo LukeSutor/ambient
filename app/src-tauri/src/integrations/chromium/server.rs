@@ -15,6 +15,12 @@ use futures::SinkExt;
 use crate::integrations::chromium::workflow::{self, WorkflowStep};
 use serde_json::Value;
 use tauri::Manager;
+use crate::db::DbState;
+use crate::integrations::chromium::workflow::Workflow;
+use once_cell::sync::OnceCell;
+
+/// Global broadcast sender for Chromium websocket
+pub static CHROMIUM_WS_BROADCAST: OnceCell<broadcast::Sender<String>> = OnceCell::new();
 
 /// Try to start the server on a range of ports, returning the port used.
 pub async fn start_server_on_available_port(app_handle: tauri::AppHandle) -> Result<u16, String> {
@@ -24,6 +30,8 @@ pub async fn start_server_on_available_port(app_handle: tauri::AppHandle) -> Res
         match TcpListener::bind(addr).await {
             Ok(listener) => {
                 let (tx, _rx) = broadcast::channel::<String>(100);
+                // Set the global broadcast sender if not already set
+                let _ = CHROMIUM_WS_BROADCAST.set(tx.clone());
                 let state = Arc::new(Mutex::new(tx));
                 let app = Router::new().route(
                     "/ws",
@@ -134,4 +142,32 @@ async fn handle_socket(
 
     // Wait for either task to finish
     let _ = tokio::try_join!(send_task, recv_task);
+}
+
+#[tauri::command]
+pub async fn run_workflow_by_id(
+    id: i64,
+    state: tauri::State<'_, crate::db::DbState>,
+) -> Result<(), String> {
+    // Use the new DB helper
+    let mut wf_json = crate::db::get_workflow_by_id(state, id)?;
+    if let Some(steps_json_str) = wf_json.get("steps_json").and_then(|v| v.as_str()) {
+        let steps_json_value: serde_json::Value = serde_json::from_str(steps_json_str)
+            .map_err(|e| format!("Failed to parse steps_json: {}", e))?;
+        if let Some(obj) = wf_json.as_object_mut() {
+            obj.insert("steps_json".to_string(), steps_json_value);
+        }
+    }
+    // Send to all websocket clients
+    if let Some(sender) = CHROMIUM_WS_BROADCAST.get() {
+        let msg = serde_json::json!({
+            "event_type": "run_workflow",
+            "payload": wf_json
+        });
+        let msg_str = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
+        let _ = sender.send(msg_str);
+        Ok(())
+    } else {
+        Err("WebSocket broadcast channel not initialized".to_string())
+    }
 }

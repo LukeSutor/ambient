@@ -138,22 +138,44 @@ async function connectToTauriWebSocket() {
                 } catch (e) {
                     // Not JSON, ignore
                 }
-                console.log("[extension] Message from Tauri:", event.data);
+                let jsonData;
+                try {
+                    jsonData = JSON.parse(event.data);
+                    console.log("[extension] Message from Tauri (JSON):", jsonData);
+                    if(jsonData.event_type === "run_workflow" && jsonData.payload) {
+                        console.log("Running workflow...");
+                        let steps = [];
+                        try {
+                            steps = jsonData.payload.steps_json || [];
+                            if (!Array.isArray(steps)) {
+                                throw new Error("steps_json is not an array");
+                            }
+                        } catch (err) {
+                            console.error("[extension] Failed to parse workflow steps:", err, jsonData.payload);
+                            steps = [];
+                        }
+                        if (steps.length > 0) {
+                            runWorkflowSteps(steps);
+                        }
+                    }
+                } catch {
+                    console.log("[extension] Message from Tauri (not JSON):", event.data);
+                }
             };
             // --- WebSocket ping loop ---
-            wsPingInterval = setInterval(() => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    wsLastPong = false;
-                    ws.send(JSON.stringify({ type: "ping" }));
-                    setTimeout(() => {
-                        if (!wsLastPong) {
-                            ws.dispatchEvent(new CustomEvent("ws-disconnected"));
-                        } else {
-                            ws.dispatchEvent(new CustomEvent("ws-connected"));
-                        }
-                    }, 500);
-                }
-            }, 2000);
+            // wsPingInterval = setInterval(() => {
+            //     if (ws && ws.readyState === WebSocket.OPEN) {
+            //         wsLastPong = false;
+            //         ws.send(JSON.stringify({ type: "ping" }));
+            //         setTimeout(() => {
+            //             if (!wsLastPong) {
+            //                 ws.dispatchEvent(new CustomEvent("ws-disconnected"));
+            //             } else {
+            //                 ws.dispatchEvent(new CustomEvent("ws-connected"));
+            //             }
+            //         }, 500);
+            //     }
+            // }, 2000);
             break;
         } catch {
             // Try next port
@@ -410,3 +432,91 @@ window.addEventListener('beforeunload', function() {
     document.removeEventListener('submit', arguments.callee, true);
     window.removeEventListener('beforeunload', arguments.callee, true);
 });
+
+// --- Workflow Runner ---
+function getElementByXPath(xpath) {
+    try {
+        // Check for id("...") XPath shortcut
+        const idMatch = /^id\(["']?([^"')]+)["']?\)$/i.exec(xpath);
+        if (idMatch) {
+            return document.getElementById(idMatch[1]);
+        }
+        return document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    } catch (e) {
+        console.error("Error evaluating XPath:", xpath, e);
+        return null;
+    }
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runWorkflowSteps(steps) {
+  for (const step of steps) {
+    console.log("Running step:", step);
+    switch (step.event_type) {
+      case "click": {
+        const el = getElementByXPath(step.payload.xpath);
+        if (el instanceof HTMLElement) {
+          el.click();
+        }
+        break;
+      }
+      case "input": {
+          console.log("XPath for input element:", step.payload.xpath);
+        const el = getElementByXPath(step.payload.xpath);
+        console.log("Input step for element:", el);
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+          el.value = step.payload.value || "";
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        break;
+      }
+      case "select": {
+        const el = getElementByXPath(step.payload.xpath);
+        if (el instanceof HTMLSelectElement) {
+          el.value = step.selectedValue || "";
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        break;
+      }
+      case "key_press": {
+        const el = step.payload.xpath ? getElementByXPath(step.payload.xpath) : document.activeElement;
+        const eventInit = { key: step.payload.key, bubbles: true };
+        if (el instanceof HTMLElement) {
+          el.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+        } else {
+          document.dispatchEvent(new KeyboardEvent("keydown", eventInit));
+        }
+        break;
+      }
+      case "scroll": {
+        // Scroll the window or a specific element
+        if (step.payload.xpath) {
+          const el = getElementByXPath(step.payload.xpath);
+          if (el instanceof HTMLElement) {
+            el.scrollTo(step.payload.scrollX || 0, step.payload.scrollY || 0);
+          }
+        } else {
+          window.scrollTo(step.payload.scrollX || 0, step.payload.scrollY || 0);
+        }
+        break;
+      }
+      case "navigation": {
+        if (step.payload.url && window.location.href !== step.payload.url) {
+          window.location.href = step.payload.url;
+          // Wait for navigation to complete
+          await new Promise((resolve) => {
+            window.addEventListener("DOMContentLoaded", resolve, { once: true });
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+    // Optional: add a small delay between steps for realism
+    await delay(200);
+  }
+}

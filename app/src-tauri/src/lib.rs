@@ -61,6 +61,8 @@ pub fn run() {
         db::reset_database,
         db::get_events,
         db::get_workflows,
+        db::insert_workflow,
+        db::delete_workflow,
         setup::setup,
         setup::get_vlm_text_model_path,
         setup::get_vlm_mmproj_model_path,
@@ -69,7 +71,7 @@ pub fn run() {
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
         setup::check_setup_complete,
-        // integrations::chromium::server::chromium_ping // <-- Add ping command
+        integrations::chromium::server::run_workflow_by_id // <-- Register the new command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
