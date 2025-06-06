@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Cortical",
     "description": "A Chrome Addon for the Cortical application.",
-    "version": "0.0.1",
+    "version": "0.1.1",
     "icons": {
         "16": "logo/logo-16.png",
         "48": "logo/logo-48.png",
@@ -13,7 +13,12 @@
         "default_title": "Chrome Addon v3 Starter",
         "default_popup": "popup/popup.html"
     },
-    "permissions": [],
+    "permissions": [
+        "storage",
+        "activeTab",
+        "tabs",
+        "scripting"
+    ],
     "host_permissions": [
         "*://*/*"
     ],

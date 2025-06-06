@@ -18,6 +18,8 @@ use tauri::Manager;
 use crate::db::DbState;
 use crate::integrations::chromium::workflow::Workflow;
 use once_cell::sync::OnceCell;
+use tokio::sync::oneshot;
+use std::time::Duration;
 
 /// Global broadcast sender for Chromium websocket
 pub static CHROMIUM_WS_BROADCAST: OnceCell<broadcast::Sender<String>> = OnceCell::new();
@@ -116,6 +118,12 @@ async fn handle_socket(
                         timestamp,
                     };
                     match event_type {
+                        "ping" => {
+                            // Respond only to the sender with a pong
+                            let pong = serde_json::json!({ "type": "pong" });
+                            let _ = tx.send(pong.to_string());
+                            continue; // Do not broadcast ping
+                        },
                         "page_open" => {
                             workflow::start_workflow(url, step);
                         },
@@ -123,7 +131,7 @@ async fn handle_socket(
                             workflow::append_step(url, step.clone());
                             // Get the tauri::State<DbState>
                             let db_state = app_handle.state::<crate::db::DbState>();
-                            workflow::save_workflow(url, db_state);
+                            let _ = workflow::save_workflow(url, db_state);
                             workflow::remove_workflow(url);
                         },
                         "page_closed" => {
@@ -135,6 +143,7 @@ async fn handle_socket(
                         _ => {}
                     }
                 }
+                // Only broadcast non-ping events
                 let _ = tx.send(text.to_string());
             }
         }
@@ -161,7 +170,7 @@ pub async fn run_workflow_by_id(
     // Send to all websocket clients
     if let Some(sender) = CHROMIUM_WS_BROADCAST.get() {
         let msg = serde_json::json!({
-            "event_type": "run_workflow",
+            "type": "run_workflow",
             "payload": wf_json
         });
         let msg_str = serde_json::to_string(&msg).map_err(|e| e.to_string())?;
@@ -169,5 +178,39 @@ pub async fn run_workflow_by_id(
         Ok(())
     } else {
         Err("WebSocket broadcast channel not initialized".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn ping_chromium_extension() -> Result<(), String> {
+    use tokio::time::timeout;
+    use futures::StreamExt;
+    // Get the broadcast sender
+    let sender = CHROMIUM_WS_BROADCAST.get().ok_or("WebSocket broadcast channel not initialized")?.clone();
+    // Create a oneshot channel to receive the pong
+    let (pong_tx, pong_rx) = oneshot::channel();
+    // Create a unique id for this ping (not strictly needed for single client, but future-proof)
+    let ping_id = uuid::Uuid::new_v4().to_string();
+    // Listen for pong on a background task
+    let mut rx = sender.subscribe();
+    tokio::spawn(async move {
+        while let Ok(msg) = rx.recv().await {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&msg) {
+                if val.get("type").and_then(|v| v.as_str()) == Some("pong") {
+                    // Optionally check id here
+                    let _ = pong_tx.send(());
+                    break;
+                }
+            }
+        }
+    });
+    // Send ping
+    let ping_msg = serde_json::json!({ "type": "ping" });
+    sender.send(ping_msg.to_string()).map_err(|e| format!("Failed to send ping: {e}"))?;
+    // Wait for pong with timeout
+    match timeout(Duration::from_secs(2), pong_rx).await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(_)) => Err("Pong channel closed unexpectedly".to_string()),
+        Err(_) => Err("Timed out waiting for pong from extension".to_string()),
     }
 }

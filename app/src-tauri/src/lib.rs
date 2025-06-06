@@ -71,7 +71,8 @@ pub fn run() {
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
         setup::check_setup_complete,
-        integrations::chromium::server::run_workflow_by_id // <-- Register the new command
+        integrations::chromium::server::run_workflow_by_id,
+        integrations::chromium::server::ping_chromium_extension // <-- Register the new command
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -40,6 +40,7 @@ chrono = "0.4.41"
 axum = { version = "0.6", features = ["ws"] }
 futures = "0.3.4"
 dashmap = "6.1.0"
+uuid = { version = "1.17.0", features = ["v4"] }
 
 [features]
 # by default Tauri runs in production mode

@@ -142,7 +142,7 @@ async function connectToTauriWebSocket() {
                 try {
                     jsonData = JSON.parse(event.data);
                     console.log("[extension] Message from Tauri (JSON):", jsonData);
-                    if(jsonData.event_type === "run_workflow" && jsonData.payload) {
+                    if(jsonData.type === "run_workflow" && jsonData.payload) {
                         console.log("Running workflow...");
                         let steps = [];
                         try {
@@ -157,6 +157,9 @@ async function connectToTauriWebSocket() {
                         if (steps.length > 0) {
                             runWorkflowSteps(steps);
                         }
+                    } else if (jsonData.type === "ping") {
+                        console.log("[extension] Received ping from Tauri, sending pong");
+                        ws.send(JSON.stringify({ type: "pong" }));
                     }
                 } catch {
                     console.log("[extension] Message from Tauri (not JSON):", event.data);
@@ -464,7 +467,7 @@ async function runWorkflowSteps(steps) {
   try {
     for (const step of steps) {
       console.log("Running step:", step);
-      switch (step.event_type) {
+      switch (step.type) {
         case "click": {
           const el = getElementByXPath(step.payload.xpath);
           if (el instanceof HTMLElement) {
@@ -536,3 +539,70 @@ async function runWorkflowSteps(steps) {
     window.__isReplayingWorkflow = false;
   }
 }
+
+// Listen for messages from the popup
+window.addEventListener('message', async function(event) {
+    // Only accept messages from the same origin
+    if (event.source !== window) return;
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
+    if (data.type === 'ping-tauri') {
+        try {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                wsLastPong = false;
+                ws.send(JSON.stringify({ type: 'ping' }));
+                setTimeout(() => {
+                    // Reply to popup with result
+                    window.postMessage({
+                        type: 'ping-tauri-result',
+                        requestId: data.requestId,
+                        connected: wsLastPong
+                    }, '*');
+                }, 500);
+            } else {
+                window.postMessage({
+                    type: 'ping-tauri-result',
+                    requestId: data.requestId,
+                    connected: false,
+                    error: 'WebSocket not connected'
+                }, '*');
+            }
+        } catch (err) {
+            window.postMessage({
+                type: 'ping-tauri-result',
+                requestId: data.requestId,
+                connected: false,
+                error: err && err.message ? err.message : String(err)
+            }, '*');
+        }
+    }
+});
+
+// Listen for ping requests from the popup via chrome.runtime messaging
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log("[extension] Received message from popup:", message);
+    if (message && message.type === 'ping-tauri') {
+        const requestId = message.requestId;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            wsLastPong = false;
+            ws.send(JSON.stringify({ type: 'ping' }));
+            setTimeout(() => {
+                sendResponse({
+                    type: 'ping-tauri-result',
+                    requestId,
+                    connected: wsLastPong,
+                    error: wsLastPong ? undefined : 'No pong received from backend'
+                });
+            }, 500);
+        } else {
+            sendResponse({
+                type: 'ping-tauri-result',
+                requestId,
+                connected: false,
+                error: 'WebSocket not connected'
+            });
+        }
+        // Indicate async response
+        return true;
+    }
+});
