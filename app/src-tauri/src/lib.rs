@@ -8,6 +8,7 @@ pub mod embedding;
 pub mod setup;
 pub mod constants;
 pub mod integrations;
+pub mod os_utils;
 use crate::integrations::chromium::server::start_server_on_available_port;
 use tauri::Manager;
 use std::sync::Mutex;
@@ -72,7 +73,8 @@ pub fn run() {
         setup::check_fastembed_model_download,
         setup::check_setup_complete,
         integrations::chromium::server::run_workflow_by_id,
-        integrations::chromium::server::ping_chromium_extension // <-- Register the new command
+        integrations::chromium::server::ping_chromium_extension,
+        os_utils::windows::window::get_focused_window_name,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

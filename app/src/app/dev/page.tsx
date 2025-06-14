@@ -271,6 +271,38 @@ export default function Dev() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
+  // --- Focused Window Name ---
+  const [focusedWindowName, setFocusedWindowName] = useState<string | null>(null);
+  const [focusedWindowError, setFocusedWindowError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    let interval: NodeJS.Timeout;
+
+    const fetchWindowName = async () => {
+      try {
+        const name = await invoke<string>("get_focused_window_name");
+        if (isMounted) {
+          setFocusedWindowName(name);
+          setFocusedWindowError(null);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setFocusedWindowError(typeof err === "string" ? err : JSON.stringify(err));
+          setFocusedWindowName(null);
+        }
+      }
+    };
+
+    fetchWindowName(); // Initial fetch
+    interval = setInterval(fetchWindowName, 2000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const events = useWebSocketEventMonitor();
 
   // --- Workflows Viewer ---
@@ -461,6 +493,18 @@ export default function Dev() {
               </div>
             );
           })
+        )}
+      </div>
+
+      {/* --- Focused Window Name Section --- */}
+      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-yellow-50">
+        <h2 className="text-lg font-semibold mb-2">Focused Window Name</h2>
+        {/* Button removed, now auto-updating */}
+        {focusedWindowName && (
+          <div className="mt-2 text-green-700 font-mono">{focusedWindowName}</div>
+        )}
+        {focusedWindowError && (
+          <div className="mt-2 text-red-700 font-mono">Error: {focusedWindowError}</div>
         )}
       </div>
     </div>

@@ -15,8 +15,6 @@ use futures::SinkExt;
 use crate::integrations::chromium::workflow::{self, WorkflowStep};
 use serde_json::Value;
 use tauri::Manager;
-use crate::db::DbState;
-use crate::integrations::chromium::workflow::Workflow;
 use once_cell::sync::OnceCell;
 use tokio::sync::oneshot;
 use std::time::Duration;
@@ -184,13 +182,12 @@ pub async fn run_workflow_by_id(
 #[tauri::command]
 pub async fn ping_chromium_extension() -> Result<(), String> {
     use tokio::time::timeout;
-    use futures::StreamExt;
     // Get the broadcast sender
     let sender = CHROMIUM_WS_BROADCAST.get().ok_or("WebSocket broadcast channel not initialized")?.clone();
     // Create a oneshot channel to receive the pong
     let (pong_tx, pong_rx) = oneshot::channel();
     // Create a unique id for this ping (not strictly needed for single client, but future-proof)
-    let ping_id = uuid::Uuid::new_v4().to_string();
+    let _ping_id = uuid::Uuid::new_v4().to_string();
     // Listen for pong on a background task
     let mut rx = sender.subscribe();
     tokio::spawn(async move {
