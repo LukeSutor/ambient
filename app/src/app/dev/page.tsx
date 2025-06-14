@@ -1,7 +1,6 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event'; // Import listen
-import Image from "next/image";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea" // Import Textarea
@@ -281,7 +280,7 @@ export default function Dev() {
 
     const fetchWindowName = async () => {
       try {
-        const name = await invoke<string>("get_focused_window_name");
+        const name = await invoke<string>("get_all_text_from_focused_app");
         if (isMounted) {
           setFocusedWindowName(name);
           setFocusedWindowError(null);

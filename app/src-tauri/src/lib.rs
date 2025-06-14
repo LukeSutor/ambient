@@ -75,6 +75,7 @@ pub fn run() {
         integrations::chromium::server::run_workflow_by_id,
         integrations::chromium::server::ping_chromium_extension,
         os_utils::windows::window::get_focused_window_name,
+        os_utils::windows::window::get_all_text_from_focused_app,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
