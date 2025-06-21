@@ -9,6 +9,7 @@ pub mod setup;
 pub mod constants;
 pub mod integrations;
 pub mod os_utils;
+pub mod models;
 use crate::integrations::chromium::server::start_server_on_available_port;
 use tauri::Manager;
 use std::sync::Mutex;
@@ -77,6 +78,7 @@ pub fn run() {
         os_utils::windows::window::get_focused_window_name,
         os_utils::windows::window::get_all_text_from_focused_app,
         os_utils::windows::window::get_brave_url,
+        models::llm::qwen3::generate
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -12,6 +12,32 @@ interface TaskResultPayload {
 }
 
 export default function Home() {
+  // Chat state
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Handle chat send
+  async function handleSendChat(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const prompt = chatInput.trim();
+    if (!prompt) return;
+    setChatHistory((h) => [...h, { sender: "user", text: prompt }]);
+    setChatInput("");
+    try {
+      const response = await invoke<string>("generate", { prompt });
+      setChatHistory((h) => [...h, { sender: "bot", text: response }]);
+    } catch (err) {
+      console.error("Error generating response:", err);
+      setChatHistory((h) => [...h, { sender: "bot", text: "[Error generating response]" }]);
+    }
+  }
+
+  // Scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory]);
+
   const [greeted, setGreeted] = useState<string | null>(null);
   const greet = useCallback((): void => {
     invoke<string>("greet")
@@ -120,6 +146,41 @@ export default function Home() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4">
+      {/* Chat Window */}
+      <div className="w-full max-w-md mb-6 bg-white border rounded shadow p-4">
+        <h2 className="text-lg font-semibold mb-2">Chat with Qwen3</h2>
+        <div className="h-48 overflow-y-auto mb-2 bg-gray-50 p-2 rounded">
+          {chatHistory.length === 0 ? (
+            <p className="text-gray-400">Start the conversation...</p>
+          ) : (
+            chatHistory.map((msg, idx) => (
+              <div key={idx} className={msg.sender === "user" ? "text-right" : "text-left"}>
+                <span className={msg.sender === "user" ? "text-blue-700" : "text-green-700"}>
+                  <b>{msg.sender === "user" ? "You" : "Qwen3"}:</b> {msg.text}
+                </span>
+              </div>
+            ))
+          )}
+          <div ref={chatEndRef} />
+        </div>
+        <form className="flex gap-2" onSubmit={handleSendChat}>
+          <input
+            className="flex-1 border rounded px-2 py-1"
+            type="text"
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            placeholder="Type your message..."
+            autoFocus
+          />
+          <button
+            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+            type="submit"
+            disabled={!chatInput.trim()}
+          >
+            Send
+          </button>
+        </form>
+      </div>
       <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
         {/* Results Box */}
         <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">

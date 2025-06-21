@@ -23,7 +23,7 @@ serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
-tokio = { version = "1.42.0", features = ["macros"] }
+tokio = { version = "1.45.1", features = ["macros"] }
 screenshots = "0.8.10"
 image = "0.25.5"
 tauri-plugin-fs = "2"
@@ -50,6 +50,8 @@ windows = { version = "0.60.0", features = [
     "Win32_System_Ole",
     "Win32_System_Com"
 ] }
+mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git" }
+anyhow = "1.0.98"
 
 [features]
 # by default Tauri runs in production mode
