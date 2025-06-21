@@ -302,6 +302,38 @@ export default function Dev() {
     };
   }, []);
 
+  // --- Browser URL ---
+  const [browserUrl, setBrowserUrl] = useState<string | null>(null);
+  const [browserUrlError, setBrowserUrlError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    let interval: NodeJS.Timeout;
+
+    const fetchBrowserUrl = async () => {
+      try {
+        const url = await invoke<string>("get_brave_url");
+        if (isMounted) {
+          setBrowserUrl(url);
+          setBrowserUrlError(null);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setBrowserUrlError(typeof err === "string" ? err : JSON.stringify(err));
+          setBrowserUrl(null);
+        }
+      }
+    };
+
+    fetchBrowserUrl(); // Initial fetch
+    interval = setInterval(fetchBrowserUrl, 2000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const events = useWebSocketEventMonitor();
 
   // --- Workflows Viewer ---
@@ -498,12 +530,22 @@ export default function Dev() {
       {/* --- Focused Window Name Section --- */}
       <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-yellow-50">
         <h2 className="text-lg font-semibold mb-2">Focused Window Name</h2>
-        {/* Button removed, now auto-updating */}
         {focusedWindowName && (
-          <div className="mt-2 text-green-700 font-mono">{focusedWindowName}</div>
+          <div className="mt-2 text-green-700 font-mono whitespace-pre-wrap">{focusedWindowName}</div>
         )}
         {focusedWindowError && (
           <div className="mt-2 text-red-700 font-mono">Error: {focusedWindowError}</div>
+        )}
+      </div>
+
+      {/* --- Browser URL Section --- */}
+      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-orange-50">
+        <h2 className="text-lg font-semibold mb-2">Current Browser URL (Brave)</h2>
+        {browserUrl && (
+          <div className="mt-2 text-blue-700 font-mono break-all">{browserUrl}</div>
+        )}
+        {browserUrlError && (
+          <div className="mt-2 text-red-700 font-mono">Error: {browserUrlError}</div>
         )}
       </div>
     </div>

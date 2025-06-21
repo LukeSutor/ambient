@@ -76,6 +76,7 @@ pub fn run() {
         integrations::chromium::server::ping_chromium_extension,
         os_utils::windows::window::get_focused_window_name,
         os_utils::windows::window::get_all_text_from_focused_app,
+        os_utils::windows::window::get_brave_url,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

@@ -41,12 +41,14 @@ axum = { version = "0.6", features = ["ws"] }
 futures = "0.3.4"
 dashmap = "6.1.0"
 uuid = { version = "1.17.0", features = ["v4"] }
-windows = { version = "0.54", features = [
+windows = { version = "0.60.0", features = [
     "Win32_UI_Accessibility", 
     "Win32_System_Com",
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
-    "implement"
+    "Win32_System_Variant",
+    "Win32_System_Ole",
+    "Win32_System_Com"
 ] }
 
 [features]
