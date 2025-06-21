@@ -1,6 +1,6 @@
 use anyhow::Result;
 use mistralrs::{
-    TextMessageRole, TextMessages, GgufModelBuilder
+    TextMessageRole, TextMessages, GgufModelBuilder, TextModelBuilder, IsqType
 };
 
 /// Generates a response from the Qwen3-8B model given a user prompt.
@@ -8,10 +8,8 @@ use mistralrs::{
 #[tauri::command]
 pub async fn generate(prompt: String) -> Result<String, String> {
     println!("[Qwen3] Generating response for prompt: {}", prompt);
-    let model = GgufModelBuilder::new(
-        "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/vlm/",
-        vec!["Qwen3-1.7B-Q8_0.gguf"],
-    )
+    let model = TextModelBuilder::new("C:\\Users\\Luke\\AppData\\Roaming\\com.tauri.dev\\models\\vlm\\qwen3")
+        .with_isq(IsqType::Q4K)
         .with_logging()
         .build()
         .await
