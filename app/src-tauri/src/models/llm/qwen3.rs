@@ -1,6 +1,6 @@
 use anyhow::Result;
 use mistralrs::{
-    TextMessageRole, GgufModelBuilder, RequestBuilder
+    TextMessageRole, GgufModelBuilder, RequestBuilder, Response, ChatCompletionChunkResponse, ChunkChoice, Delta
 };
 use std::sync::{Mutex, Arc};
 use once_cell::sync::Lazy;
@@ -323,26 +323,30 @@ pub async fn stream_qwen3(
     let mut full_content = String::new();
 
     // Process the stream and emit updates to the frontend
-    while let Some(response) = stream.next().await {
-        // For streaming responses, try to access content the same way as the non-streaming version
-        let content = if let Some(choices) = response.choices.get(0) {
-
-            choices.message.content.as_ref().map(|s| s.as_str()).unwrap_or("")
-        } else {
-            ""
-        };
-        
-        if !content.is_empty() {
-            full_content.push_str(content);
-            
-            // Emit streaming update to frontend
-            if let Err(e) = app_handle.emit("qwen3-stream", StreamResponsePayload {
-                content: content.to_string(),
-                is_finished: false,
-                conversation_id: conv_id.clone(),
-            }) {
-                eprintln!("[Qwen3] Failed to emit stream event: {}", e);
+    while let Some(chunk) = stream.next().await {
+        // Handle streaming response chunks properly
+        if let Response::Chunk(ChatCompletionChunkResponse { choices, .. }) = chunk {
+            if let Some(ChunkChoice {
+                delta: Delta {
+                    content: Some(content),
+                    ..
+                },
+                ..
+            }) = choices.first() {
+                full_content.push_str(content);
+                
+                // Emit streaming update to frontend
+                if let Err(e) = app_handle.emit("qwen3-stream", StreamResponsePayload {
+                    content: content.clone(),
+                    is_finished: false,
+                    conversation_id: conv_id.clone(),
+                }) {
+                    eprintln!("[Qwen3] Failed to emit stream event: {}", e);
+                }
             }
+        } else {
+            // Handle errors or other response types
+            eprintln!("[Qwen3] Received non-chunk response in stream");
         }
     }
 

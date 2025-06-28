@@ -16,17 +16,50 @@ interface ConversationMessage {
   content: string;
 }
 
+interface StreamResponsePayload {
+  content: string;
+  is_finished: boolean;
+  conversation_id: string;
+}
+
 export default function Home() {
   // Chat state
   const [chatInput, setChatInput] = useState("");  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [streamingEnabled, setStreamingEnabled] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [currentStreamContent, setCurrentStreamContent] = useState("");
   const [modelStatus, setModelStatus] = useState<{initialized: boolean, loading: boolean}>({ initialized: false, loading: true });
   const chatEndRef = useRef<HTMLDivElement>(null);
   // Load conversation history on component mount
   useEffect(() => {
     loadConversationHistory();
     checkModelStatus();
+    
+    // Set up streaming listener
+    let unlistenStream: (() => void) | undefined;
+    
+    async function setupStreamListener() {
+      try {
+        unlistenStream = await listen<StreamResponsePayload>('qwen3-stream', (event) => {
+          const { content, is_finished, conversation_id } = event.payload;
+          
+          if (is_finished) {
+            setIsStreaming(false);
+            setCurrentStreamContent("");
+            console.log('Stream finished for conversation:', conversation_id);
+          } else {
+            setCurrentStreamContent(prev => prev + content);
+          }
+        });
+        console.log("Stream event listener set up.");
+      } catch (error) {
+        console.error("Failed to set up stream listener:", error);
+      }
+    }
+    
+    setupStreamListener();
     
     // Check model status periodically until initialized
     const statusInterval = setInterval(async () => {
@@ -36,7 +69,12 @@ export default function Home() {
       }
     }, 2000);
     
-    return () => clearInterval(statusInterval);
+    return () => {
+      clearInterval(statusInterval);
+      if (unlistenStream) {
+        unlistenStream();
+      }
+    };
   }, []);
 
   // Check model initialization status
@@ -76,29 +114,60 @@ export default function Home() {
   async function handleSendChat(e?: React.FormEvent) {
     if (e) e.preventDefault();
     const prompt = chatInput.trim();
-    if (!prompt || !modelStatus.initialized) return;
+    if (!prompt || !modelStatus.initialized || isStreaming) return;
     
     setChatHistory((h) => [...h, { sender: "user", text: prompt }]);
     setChatInput("");
     
-    try {
-      const response = await invoke<string>("generate_qwen3", { 
-        prompt,
-        thinking: thinkingEnabled,
-        resetConversation: false,
-        conversationId: currentConversationId,
-        systemPrompt: "You are a helpful assistant."
-      });
-      setChatHistory((h) => [...h, { sender: "bot", text: response }]);
+    if (streamingEnabled) {
+      // Handle streaming
+      setIsStreaming(true);
+      setCurrentStreamContent("");
       
-      // Update conversation ID if this was the first message
-      if (!currentConversationId) {
-        const convId = await invoke<string | null>("get_current_conversation_id");
-        setCurrentConversationId(convId);
+      // Add a placeholder for the bot response that will be updated in real-time
+      setChatHistory((h) => [...h, { sender: "bot", text: "" }]);
+      
+      try {
+        await invoke<string>("stream_qwen3", { 
+          prompt,
+          thinking: thinkingEnabled,
+          resetConversation: false,
+          conversationId: currentConversationId,
+          systemPrompt: "You are a helpful assistant."
+        });
+        
+        // Update conversation ID if this was the first message
+        if (!currentConversationId) {
+          const convId = await invoke<string | null>("get_current_conversation_id");
+          setCurrentConversationId(convId);
+        }
+      } catch (err) {
+        console.error("Error generating streaming response:", err);
+        setChatHistory((h) => h.slice(0, -1).concat([{ sender: "bot", text: "[Error generating response]" }]));
+        setIsStreaming(false);
+        setCurrentStreamContent("");
       }
-    } catch (err) {
-      console.error("Error generating response:", err);
-      setChatHistory((h) => [...h, { sender: "bot", text: "[Error generating response]" }]);
+    } else {
+      // Handle regular non-streaming
+      try {
+        const response = await invoke<string>("generate_qwen3", { 
+          prompt,
+          thinking: thinkingEnabled,
+          resetConversation: false,
+          conversationId: currentConversationId,
+          systemPrompt: "You are a helpful assistant."
+        });
+        setChatHistory((h) => [...h, { sender: "bot", text: response }]);
+        
+        // Update conversation ID if this was the first message
+        if (!currentConversationId) {
+          const convId = await invoke<string | null>("get_current_conversation_id");
+          setCurrentConversationId(convId);
+        }
+      } catch (err) {
+        console.error("Error generating response:", err);
+        setChatHistory((h) => [...h, { sender: "bot", text: "[Error generating response]" }]);
+      }
     }
   }
 
@@ -110,6 +179,8 @@ export default function Home() {
       }
       setChatHistory([]);
       setCurrentConversationId(null);
+      setIsStreaming(false);
+      setCurrentStreamContent("");
       console.log("Conversation reset successfully.");
     } catch (err) {
       console.error("Error resetting conversation:", err);
@@ -181,8 +252,8 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Thinking toggle */}
-        <div className="mb-2">
+        {/* Thinking and Streaming toggles */}
+        <div className="mb-2 space-y-1">
           <label className="flex items-center text-sm">
             <input
               type="checkbox"
@@ -192,20 +263,45 @@ export default function Home() {
             />
             Enable thinking mode
           </label>
+          <label className="flex items-center text-sm">
+            <input
+              type="checkbox"
+              checked={streamingEnabled}
+              onChange={(e) => setStreamingEnabled(e.target.checked)}
+              className="mr-2"
+            />
+            Enable streaming responses
+          </label>
         </div>
         
         <div className="h-48 overflow-y-auto mb-2 bg-gray-50 p-2 rounded">
           {chatHistory.length === 0 ? (
             <p className="text-gray-400">Start the conversation...</p>
           ) : (
-            chatHistory.map((msg, idx) => (
-              <div key={idx} className={msg.sender === "user" ? "text-right mb-2" : "text-left mb-2"}>
-                <span className={msg.sender === "user" ? "text-blue-700" : "text-green-700"}>
-                  <b>{msg.sender === "user" ? "You" : "Qwen3"}:</b> 
-                </span>
-                <div className="mt-1 text-gray-800 whitespace-pre-wrap">{msg.text}</div>
-              </div>
-            ))
+            chatHistory.map((msg, idx) => {
+              // For the last bot message during streaming, show the streaming content
+              const isLastBotMessage = msg.sender === "bot" && idx === chatHistory.length - 1;
+              const displayText = isLastBotMessage && isStreaming && currentStreamContent 
+                ? currentStreamContent 
+                : msg.text;
+              
+              return (
+                <div key={idx} className={msg.sender === "user" ? "text-right mb-2" : "text-left mb-2"}>
+                  <span className={msg.sender === "user" ? "text-blue-700" : "text-green-700"}>
+                    <b>{msg.sender === "user" ? "You" : "Qwen3"}:</b> 
+                    {isLastBotMessage && isStreaming && (
+                      <span className="ml-1 text-xs text-gray-500">(streaming...)</span>
+                    )}
+                  </span>
+                  <div className="mt-1 text-gray-800 whitespace-pre-wrap">
+                    {displayText}
+                    {isLastBotMessage && isStreaming && (
+                      <span className="animate-pulse">▊</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
           )}
           <div ref={chatEndRef} />
         </div>
@@ -228,9 +324,9 @@ export default function Home() {
           />          <button
             className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:bg-gray-400"
             type="submit"
-            disabled={!chatInput.trim() || !modelStatus.initialized}
+            disabled={!chatInput.trim() || !modelStatus.initialized || isStreaming}
           >
-            {modelStatus.initialized ? 'Send' : 'Loading...'}
+            {isStreaming ? 'Streaming...' : modelStatus.initialized ? 'Send' : 'Loading...'}
           </button>
         </form>
       </div>
