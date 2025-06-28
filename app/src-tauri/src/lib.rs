@@ -9,6 +9,7 @@ pub mod setup;
 pub mod constants;
 pub mod integrations;
 pub mod os_utils;
+pub mod models;
 use crate::integrations::chromium::server::start_server_on_available_port;
 use tauri::Manager;
 use std::sync::Mutex;
@@ -38,10 +39,19 @@ pub fn run() {
         }
 
         // --- Start Chromium integration server on startup ---
-        tauri::async_runtime::spawn(async {
-            match start_server_on_available_port(app_handle).await {
-                Ok(port) => println!("[chromium/server] Running on port {}", port),
-                Err(e) => eprintln!("[chromium/server] Failed to start: {}", e),
+        // tauri::async_runtime::spawn(async {
+        //     match start_server_on_available_port(app_handle).await {
+        //         Ok(port) => println!("[chromium/server] Running on port {}", port),
+        //         Err(e) => eprintln!("[chromium/server] Failed to start: {}", e),
+        //     }
+        // });
+        
+        // Initialize Qwen3 model on startup
+        let app_handle_clone = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            match models::llm::qwen3::initialize_qwen3_model().await {
+                Ok(()) => println!("[setup] Qwen3 model initialized successfully."),
+                Err(e) => eprintln!("[setup] Failed to initialize Qwen3 model: {}", e),
             }
         });
 
@@ -71,12 +81,19 @@ pub fn run() {
         setup::check_vlm_mmproj_model_download,
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
-        setup::check_setup_complete,
-        integrations::chromium::server::run_workflow_by_id,
+        setup::check_setup_complete,        integrations::chromium::server::run_workflow_by_id,
         integrations::chromium::server::ping_chromium_extension,
         os_utils::windows::window::get_focused_window_name,
         os_utils::windows::window::get_all_text_from_focused_app,
-        os_utils::windows::window::get_brave_url,
+        os_utils::windows::window::get_brave_url,        models::llm::qwen3::generate,
+        models::llm::qwen3::generate_qwen3,
+        models::llm::qwen3::stream_qwen3,
+        models::llm::qwen3::get_conversation_history,
+        models::llm::qwen3::reset_conversation,
+        models::llm::qwen3::list_conversations,
+        models::llm::qwen3::get_current_conversation_id,
+        models::llm::qwen3::is_qwen3_model_initialized,
+        models::llm::qwen3::get_qwen3_status
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
