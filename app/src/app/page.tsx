@@ -11,25 +11,108 @@ interface TaskResultPayload {
   result: string;
 }
 
+interface ConversationMessage {
+  role: string;
+  content: string;
+}
+
 export default function Home() {
   // Chat state
-  const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [modelStatus, setModelStatus] = useState<{initialized: boolean, loading: boolean}>({ initialized: false, loading: true });
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // Load conversation history on component mount
+  useEffect(() => {
+    loadConversationHistory();
+    checkModelStatus();
+    
+    // Check model status periodically until initialized
+    const statusInterval = setInterval(async () => {
+      const isInitialized = await checkModelStatus();
+      if (isInitialized) {
+        clearInterval(statusInterval);
+      }
+    }, 2000);
+    
+    return () => clearInterval(statusInterval);
+  }, []);
 
+  // Check model initialization status
+  async function checkModelStatus(): Promise<boolean> {
+    try {
+      const status = await invoke<{model_initialized: boolean, conversation_count: number}>("get_qwen3_status");
+      setModelStatus({ 
+        initialized: status.model_initialized, 
+        loading: !status.model_initialized 
+      });
+      return status.model_initialized;
+    } catch (err) {
+      console.error("Error checking model status:", err);
+      setModelStatus({ initialized: false, loading: true });
+      return false;
+    }
+  }
+
+  // Load conversation history from backend
+  async function loadConversationHistory() {
+    try {
+      const history = await invoke<ConversationMessage[]>("get_conversation_history");
+      const formattedHistory = history.map(msg => ({
+        sender: msg.role === "User" ? "user" as const : "bot" as const,
+        text: msg.content
+      }));
+      setChatHistory(formattedHistory);
+      
+      // Get current conversation ID
+      const convId = await invoke<string | null>("get_current_conversation_id");
+      setCurrentConversationId(convId);
+    } catch (err) {
+      console.log("No existing conversation history or error loading:", err);
+    }
+  }
   // Handle chat send
   async function handleSendChat(e?: React.FormEvent) {
     if (e) e.preventDefault();
     const prompt = chatInput.trim();
-    if (!prompt) return;
+    if (!prompt || !modelStatus.initialized) return;
+    
     setChatHistory((h) => [...h, { sender: "user", text: prompt }]);
     setChatInput("");
+    
     try {
-      const response = await invoke<string>("generate", { prompt });
+      const response = await invoke<string>("generate_qwen3", { 
+        prompt,
+        thinking: thinkingEnabled,
+        resetConversation: false,
+        conversationId: currentConversationId,
+        systemPrompt: "You are a helpful assistant."
+      });
       setChatHistory((h) => [...h, { sender: "bot", text: response }]);
+      
+      // Update conversation ID if this was the first message
+      if (!currentConversationId) {
+        const convId = await invoke<string | null>("get_current_conversation_id");
+        setCurrentConversationId(convId);
+      }
     } catch (err) {
       console.error("Error generating response:", err);
       setChatHistory((h) => [...h, { sender: "bot", text: "[Error generating response]" }]);
+    }
+  }
+
+  // Reset conversation
+  async function resetConversation() {
+    try {
+      if (currentConversationId) {
+        await invoke("reset_conversation", { conversationId: currentConversationId });
+      }
+      setChatHistory([]);
+      setCurrentConversationId(null);
+      console.log("Conversation reset successfully.");
+    } catch (err) {
+      console.error("Error resetting conversation:", err);
     }
   }
 
@@ -37,52 +120,6 @@ export default function Home() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
-
-  const [greeted, setGreeted] = useState<string | null>(null);
-  const greet = useCallback((): void => {
-    invoke<string>("greet")
-      .then((s) => {
-        setGreeted(s);
-      })
-      .catch((err: unknown) => {
-        console.error(err);
-      });
-  }, []);
-
-  // New function to call the sidecar command
-  async function callLlamaSidecar() {
-    // Replace with actual image path
-    const image = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/sample_images/gmail.png";
-    // Define model and mmproj paths
-    const model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
-    const mmproj = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/mmproj.gguf";
-    const promptKey = "SUMMARIZE_ACTION"; // Key for the desired prompt
-
-    try {
-      // Fetch the prompt using the new command
-      const prompt = await invoke<string>("get_prompt_command", { key: promptKey });
-      console.log(`Fetched prompt for key '${promptKey}': ${prompt}`);
-
-      console.log(`Calling sidecar with image: ${image}, prompt: ${prompt}`);
-      const result = await invoke("call_llama_sidecar", { model, mmproj, image, prompt });
-      console.log("Sidecar response:", result);
-      // Handle the successful response string (result)
-    } catch (error) {
-      console.error("Error calling sidecar or fetching prompt:", error);
-      // Handle the error string (error)
-    }
-  }
-
-  async function takeScreenshot() {
-    try {
-      const screenshotPath = await invoke<string>("take_screenshot");
-      console.log("Screenshot saved at:", screenshotPath);
-      // Handle the successful screenshot path (screenshotPath)
-    } catch (error) {
-      console.error("Error taking screenshot:", error);
-      // Handle the error string (error)
-    }
-  }
 
   // Function to start the scheduler
   async function startScheduler() {
@@ -145,24 +182,66 @@ export default function Home() {
   }, [taskResults]);
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-4">
-      {/* Chat Window */}
-      <div className="w-full max-w-md mb-6 bg-white border rounded shadow p-4">
-        <h2 className="text-lg font-semibold mb-2">Chat with Qwen3</h2>
+    <div className="relative flex flex-col items-center justify-center p-4">      {/* Chat Window */}
+      <div className="w-full max-w-md mb-6 bg-white border rounded shadow p-4">        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-lg font-semibold">Chat with Qwen3</h2>
+          <div className="flex items-center gap-2">
+            {/* Model status indicator */}
+            <div className="flex items-center text-xs">
+              <div className={`w-2 h-2 rounded-full mr-1 ${
+                modelStatus.initialized ? 'bg-green-500' : 
+                modelStatus.loading ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+              }`}></div>
+              <span className="text-gray-600">
+                {modelStatus.initialized ? 'Ready' : 
+                 modelStatus.loading ? 'Loading...' : 'Error'}
+              </span>
+            </div>
+            <button
+              onClick={resetConversation}
+              className="text-sm bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+        
+        {/* Thinking toggle */}
+        <div className="mb-2">
+          <label className="flex items-center text-sm">
+            <input
+              type="checkbox"
+              checked={thinkingEnabled}
+              onChange={(e) => setThinkingEnabled(e.target.checked)}
+              className="mr-2"
+            />
+            Enable thinking mode
+          </label>
+        </div>
+        
         <div className="h-48 overflow-y-auto mb-2 bg-gray-50 p-2 rounded">
           {chatHistory.length === 0 ? (
             <p className="text-gray-400">Start the conversation...</p>
           ) : (
             chatHistory.map((msg, idx) => (
-              <div key={idx} className={msg.sender === "user" ? "text-right" : "text-left"}>
+              <div key={idx} className={msg.sender === "user" ? "text-right mb-2" : "text-left mb-2"}>
                 <span className={msg.sender === "user" ? "text-blue-700" : "text-green-700"}>
-                  <b>{msg.sender === "user" ? "You" : "Qwen3"}:</b> {msg.text}
+                  <b>{msg.sender === "user" ? "You" : "Qwen3"}:</b> 
                 </span>
+                <div className="mt-1 text-gray-800 whitespace-pre-wrap">{msg.text}</div>
               </div>
             ))
           )}
           <div ref={chatEndRef} />
         </div>
+        
+        {/* Conversation info */}
+        {currentConversationId && (
+          <div className="text-xs text-gray-500 mb-2">
+            Conversation ID: {currentConversationId.substring(0, 8)}...
+          </div>
+        )}
+        
         <form className="flex gap-2" onSubmit={handleSendChat}>
           <input
             className="flex-1 border rounded px-2 py-1"
@@ -171,13 +250,12 @@ export default function Home() {
             onChange={e => setChatInput(e.target.value)}
             placeholder="Type your message..."
             autoFocus
-          />
-          <button
-            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700"
+          />          <button
+            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:bg-gray-400"
             type="submit"
-            disabled={!chatInput.trim()}
+            disabled={!chatInput.trim() || !modelStatus.initialized}
           >
-            Send
+            {modelStatus.initialized ? 'Send' : 'Loading...'}
           </button>
         </form>
       </div>

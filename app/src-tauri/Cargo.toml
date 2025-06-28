@@ -53,6 +53,10 @@ windows = { version = "0.60.0", features = [
 mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git" }
 anyhow = "1.0.98"
 
+[profile.dev]
+debug = true
+opt-level = 3
+
 [features]
 # by default Tauri runs in production mode
 # when `tauri dev` runs it is executed with `cargo run --no-default-features` if `devPath` is an URL
