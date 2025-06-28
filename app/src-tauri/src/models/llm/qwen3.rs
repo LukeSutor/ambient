@@ -360,9 +360,9 @@ pub async fn stream_qwen3(
         }
     }
 
-    // Emit final completion event
+    // Emit final completion event with the full content
     if let Err(e) = app_handle.emit("qwen3-stream", StreamResponsePayload {
-        content: String::new(), // Empty content for completion event
+        content: full_content.clone(), // Send the complete content for completion event
         is_finished: true,
         conversation_id: conv_id.clone(),
     }) {

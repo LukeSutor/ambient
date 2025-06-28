@@ -32,6 +32,7 @@ export default function Home() {
   const [currentStreamContent, setCurrentStreamContent] = useState("");
   const [modelStatus, setModelStatus] = useState<{initialized: boolean, loading: boolean}>({ initialized: false, loading: true });
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const streamContentRef = useRef<string>("");
   // Load conversation history on component mount
   useEffect(() => {
     loadConversationHistory();
@@ -46,10 +47,24 @@ export default function Home() {
           const { content, is_finished, conversation_id } = event.payload;
           
           if (is_finished) {
+            // When stream finishes, update the last bot message with the complete content
+            setChatHistory((h) => {
+              const newHistory = [...h];
+              const lastIndex = newHistory.length - 1;
+              if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
+                newHistory[lastIndex] = {
+                  ...newHistory[lastIndex],
+                  text: content // Use the content from the final event
+                };
+              }
+              return newHistory;
+            });
             setIsStreaming(false);
             setCurrentStreamContent("");
+            streamContentRef.current = "";
             console.log('Stream finished for conversation:', conversation_id);
           } else {
+            streamContentRef.current = streamContentRef.current + content;
             setCurrentStreamContent(prev => prev + content);
           }
         });
@@ -123,6 +138,7 @@ export default function Home() {
       // Handle streaming
       setIsStreaming(true);
       setCurrentStreamContent("");
+      streamContentRef.current = "";
       
       // Add a placeholder for the bot response that will be updated in real-time
       setChatHistory((h) => [...h, { sender: "bot", text: "" }]);
@@ -146,6 +162,7 @@ export default function Home() {
         setChatHistory((h) => h.slice(0, -1).concat([{ sender: "bot", text: "[Error generating response]" }]));
         setIsStreaming(false);
         setCurrentStreamContent("");
+        streamContentRef.current = "";
       }
     } else {
       // Handle regular non-streaming
@@ -181,6 +198,7 @@ export default function Home() {
       setCurrentConversationId(null);
       setIsStreaming(false);
       setCurrentStreamContent("");
+      streamContentRef.current = "";
       console.log("Conversation reset successfully.");
     } catch (err) {
       console.error("Error resetting conversation:", err);
