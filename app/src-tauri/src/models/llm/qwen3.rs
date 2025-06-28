@@ -2,7 +2,7 @@ use anyhow::Result;
 use mistralrs::{
     TextMessageRole, GgufModelBuilder, RequestBuilder
 };
-use std::sync::Mutex;
+use std::sync::{Mutex, Arc};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -21,7 +21,7 @@ pub struct Conversation {
 }
 
 pub struct Qwen3State {
-    pub model: Option<mistralrs::Model>,
+    pub model: Option<Arc<mistralrs::Model>>,
     pub conversations: HashMap<String, Conversation>,
     pub current_conversation_id: Option<String>,
 }
@@ -56,7 +56,7 @@ pub async fn initialize_qwen3_model() -> Result<(), String> {
     let mut state = GLOBAL_QWEN3_STATE.lock()
         .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
     
-    state.model = Some(model);
+    state.model = Some(Arc::new(model));
     
     println!("[Qwen3] Model initialization complete.");
     Ok(())
@@ -99,17 +99,7 @@ pub async fn generate_qwen3(
     let thinking = thinking.unwrap_or(false);
     let reset_conversation = reset_conversation.unwrap_or(false);
     
-    // First, get the model reference and release the lock
-    let model = {
-        let state = GLOBAL_QWEN3_STATE.lock()
-            .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
-        
-        state.model.as_ref()
-            .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?
-            .clone() // Clone the model reference
-    };
-    
-    // Now handle conversation management with a separate lock
+    // First, handle conversation management and prepare request data
     let (conv_id, conversation_messages, system_prompt_text) = {
         let mut state = GLOBAL_QWEN3_STATE.lock()
             .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
@@ -119,8 +109,8 @@ pub async fn generate_qwen3(
             // Remove existing conversation if reset requested
             if let Some(id) = &conversation_id {
                 state.conversations.remove(id);
-            } else if let Some(current_id) = &state.current_conversation_id {
-                state.conversations.remove(current_id);
+            } else if let Some(current_id) = state.current_conversation_id.clone() {
+                state.conversations.remove(&current_id);
             }
             get_or_create_conversation(&mut state, conversation_id, system_prompt)
         } else {
@@ -137,40 +127,63 @@ pub async fn generate_qwen3(
         });
         
         // Clone the data we need for the request
-        let messages = conversation.messages.clone();
-        let sys_prompt = conversation.system_prompt.clone();
+        let conversation_messages = conversation.messages.clone();
+        let system_prompt_text = conversation.system_prompt.clone();
         
-        (conv_id, messages, sys_prompt)
+        (conv_id, conversation_messages, system_prompt_text)
     };
     
-    // Build request with conversation history
-    let mut request_builder = RequestBuilder::new();
-    
-    // Add system message
-    request_builder = request_builder.add_message(
-        TextMessageRole::System,
-        &system_prompt_text,
-    );
-    
-    // Add conversation history
-    for msg in &conversation_messages {
-        let role = match msg.role.as_str() {
-            "User" => TextMessageRole::User,
-            "Assistant" => TextMessageRole::Assistant,
-            _ => TextMessageRole::User, // Default fallback
+    // Now get the model reference and make the request
+    let response = {
+        // First, check if model is initialized and build the request
+        let request_builder = {
+            let state = GLOBAL_QWEN3_STATE.lock()
+                .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+            
+            // Check if model is initialized
+            state.model.as_ref()
+                .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?;
+            
+            // Build request with conversation history
+            let mut request_builder = RequestBuilder::new();
+            
+            // Add system message
+            request_builder = request_builder.add_message(
+                TextMessageRole::System,
+                &system_prompt_text,
+            );
+            
+            // Add conversation history
+            for msg in &conversation_messages {
+                let role = match msg.role.as_str() {
+                    "User" => TextMessageRole::User,
+                    "Assistant" => TextMessageRole::Assistant,
+                    _ => TextMessageRole::User, // Default fallback
+                };
+                request_builder = request_builder.add_message(role, &msg.content);
+            }
+            
+            // Enable thinking if requested
+            request_builder.enable_thinking(thinking)
         };
-        request_builder = request_builder.add_message(role, &msg.content);
-    }
-    
-    // Enable thinking if requested
-    let request_builder = request_builder.enable_thinking(thinking);
-    
-    println!("[Qwen3] Sending request with {} messages in conversation", conversation_messages.len());
-    
-    let response = model
-        .send_chat_request(request_builder)
-        .await
-        .map_err(|e| format!("Failed to send chat request: {}", e))?;
+        
+        println!("[Qwen3] Sending request with {} messages in conversation", conversation_messages.len());
+        
+        // Now make the request - get model reference and immediately clone the Arc
+        let model = {
+            let state = GLOBAL_QWEN3_STATE.lock()
+                .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+            
+            state.model.as_ref()
+                .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?
+                .clone()
+        };
+        
+        model
+            .send_chat_request(request_builder)
+            .await
+            .map_err(|e| format!("Failed to send chat request: {}", e))?
+    };
 
     let content = response.choices[0]
         .message
@@ -179,7 +192,7 @@ pub async fn generate_qwen3(
         .cloned()
         .unwrap_or_else(|| "".to_string());
 
-    // Add assistant response to conversation with a new lock
+    // Add assistant response to conversation in a final scope
     {
         let mut state = GLOBAL_QWEN3_STATE.lock()
             .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
