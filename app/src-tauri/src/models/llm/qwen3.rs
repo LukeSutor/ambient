@@ -7,7 +7,6 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::Emitter;
-use futures::StreamExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationMessage {
@@ -53,7 +52,7 @@ pub static GLOBAL_QWEN3_STATE: Lazy<Mutex<Qwen3State>> = Lazy::new(|| {
 pub async fn initialize_qwen3_model() -> Result<(), String> {
     println!("[Qwen3] Initializing model...");    let model = GgufModelBuilder::new(
         "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/vlm/",
-        vec!["Qwen3-1.7B-Q8_0.gguf"],
+        vec!["Qwen3-1.7B-Q4_K_M.gguf"],
     )
         .with_logging()
         .build()

@@ -44,7 +44,9 @@ pub fn run() {
         //         Ok(port) => println!("[chromium/server] Running on port {}", port),
         //         Err(e) => eprintln!("[chromium/server] Failed to start: {}", e),
         //     }
-        // });        // Initialize Qwen3 model on startup
+        // });
+        
+        // Initialize Qwen3 model on startup
         let app_handle_clone = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             match models::llm::qwen3::initialize_qwen3_model().await {
