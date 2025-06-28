@@ -6,11 +6,20 @@ use std::sync::{Mutex, Arc};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tauri::Emitter;
+use futures::StreamExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationMessage {
     pub role: String, // Changed from TextMessageRole to String for easier serialization
     pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamResponsePayload {
+    pub content: String,
+    pub is_finished: bool,
+    pub conversation_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,6 +219,160 @@ pub async fn generate_qwen3(
     Ok(content)
 }
 
+/// Stream responses from Qwen3 model with real-time updates via Tauri events
+#[tauri::command]
+pub async fn stream_qwen3(
+    app_handle: tauri::AppHandle,
+    prompt: String,
+    thinking: Option<bool>,
+    reset_conversation: Option<bool>,
+    conversation_id: Option<String>,
+    system_prompt: Option<String>,
+) -> Result<String, String> {
+    println!("[Qwen3] Starting streaming response for prompt: {}", prompt);
+    
+    let thinking = thinking.unwrap_or(false);
+    let reset_conversation = reset_conversation.unwrap_or(false);
+    
+    // First, handle conversation management and prepare request data
+    let (conv_id, conversation_messages, system_prompt_text) = {
+        let mut state = GLOBAL_QWEN3_STATE.lock()
+            .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+        
+        // Handle conversation management
+        let conv_id = if reset_conversation {
+            // Remove existing conversation if reset requested
+            if let Some(id) = &conversation_id {
+                state.conversations.remove(id);
+            } else if let Some(current_id) = state.current_conversation_id.clone() {
+                state.conversations.remove(&current_id);
+            }
+            get_or_create_conversation(&mut state, conversation_id, system_prompt)
+        } else {
+            get_or_create_conversation(&mut state, conversation_id, system_prompt)
+        };
+        
+        let conversation = state.conversations.get_mut(&conv_id)
+            .ok_or("Failed to get conversation".to_string())?;
+        
+        // Add user message to conversation
+        conversation.messages.push(ConversationMessage {
+            role: "User".to_string(),
+            content: prompt.clone(),
+        });
+        
+        // Clone the data we need for the request
+        let conversation_messages = conversation.messages.clone();
+        let system_prompt_text = conversation.system_prompt.clone();
+        
+        (conv_id, conversation_messages, system_prompt_text)
+    };
+    
+    // Now get the model reference and create the stream
+    let mut stream = {
+        // First, check if model is initialized and build the request
+        let request_builder = {
+            let state = GLOBAL_QWEN3_STATE.lock()
+                .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+            
+            // Check if model is initialized
+            state.model.as_ref()
+                .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?;
+            
+            // Build request with conversation history
+            let mut request_builder = RequestBuilder::new();
+            
+            // Add system message
+            request_builder = request_builder.add_message(
+                TextMessageRole::System,
+                &system_prompt_text,
+            );
+            
+            // Add conversation history
+            for msg in &conversation_messages {
+                let role = match msg.role.as_str() {
+                    "User" => TextMessageRole::User,
+                    "Assistant" => TextMessageRole::Assistant,
+                    _ => TextMessageRole::User, // Default fallback
+                };
+                request_builder = request_builder.add_message(role, &msg.content);
+            }
+            
+            // Enable thinking if requested
+            request_builder.enable_thinking(thinking)
+        };
+        
+        println!("[Qwen3] Sending streaming request with {} messages in conversation", conversation_messages.len());
+        
+        // Now make the request - get model reference and immediately clone the Arc
+        let model = {
+            let state = GLOBAL_QWEN3_STATE.lock()
+                .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+            
+            state.model.as_ref()
+                .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?
+                .clone()
+        };
+        
+        model
+            .stream_chat_request(request_builder)
+            .await
+            .map_err(|e| format!("Failed to create stream: {}", e))?
+    };
+
+    let mut full_content = String::new();
+
+    // Process the stream and emit updates to the frontend
+    while let Some(response) = stream.next().await {
+        // For streaming responses, try to access content the same way as the non-streaming version
+        let content = if let Some(choices) = response.choices.get(0) {
+
+            choices.message.content.as_ref().map(|s| s.as_str()).unwrap_or("")
+        } else {
+            ""
+        };
+        
+        if !content.is_empty() {
+            full_content.push_str(content);
+            
+            // Emit streaming update to frontend
+            if let Err(e) = app_handle.emit("qwen3-stream", StreamResponsePayload {
+                content: content.to_string(),
+                is_finished: false,
+                conversation_id: conv_id.clone(),
+            }) {
+                eprintln!("[Qwen3] Failed to emit stream event: {}", e);
+            }
+        }
+    }
+
+    // Add assistant response to conversation in a final scope
+    {
+        let mut state = GLOBAL_QWEN3_STATE.lock()
+            .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+        
+        if let Some(conversation) = state.conversations.get_mut(&conv_id) {
+            conversation.messages.push(ConversationMessage {
+                role: "Assistant".to_string(),
+                content: full_content.clone(),
+            });
+        }
+    }
+
+    // Emit final completion event
+    if let Err(e) = app_handle.emit("qwen3-stream", StreamResponsePayload {
+        content: String::new(), // Empty content for completion event
+        is_finished: true,
+        conversation_id: conv_id.clone(),
+    }) {
+        eprintln!("[Qwen3] Failed to emit completion event: {}", e);
+    }
+
+    println!("[Qwen3] Streaming response completed successfully.");
+
+    Ok(full_content)
+}
+
 /// Get current conversation history
 #[tauri::command]
 pub fn get_conversation_history(conversation_id: Option<String>) -> Result<Vec<ConversationMessage>, String> {
@@ -291,3 +454,71 @@ pub fn get_qwen3_status() -> Result<serde_json::Value, String> {
 pub async fn generate(prompt: String) -> Result<String, String> {
     generate_qwen3(prompt, Some(false), Some(false), None, None).await
 }
+
+/*
+Frontend Usage Example:
+
+// In your React component:
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/tauri';
+
+interface StreamResponsePayload {
+  content: string;
+  is_finished: boolean;
+  conversation_id: string;
+}
+
+function useQwen3Stream() {
+  const [streamContent, setStreamContent] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  
+  useEffect(() => {
+    const setupStreamListener = async () => {
+      const unlisten = await listen<StreamResponsePayload>('qwen3-stream', (event) => {
+        const { content, is_finished, conversation_id } = event.payload;
+        
+        if (is_finished) {
+          setIsStreaming(false);
+          console.log('Stream finished for conversation:', conversation_id);
+        } else {
+          setStreamContent(prev => prev + content);
+        }
+      });
+      
+      // Error listener
+      const unlistenError = await listen<string>('qwen3-stream-error', (event) => {
+        console.error('Stream error:', event.payload);
+        setIsStreaming(false);
+      });
+      
+      return () => {
+        unlisten();
+        unlistenError();
+      };
+    };
+    
+    setupStreamListener();
+  }, []);
+  
+  const startStream = async (prompt: string) => {
+    setStreamContent('');
+    setIsStreaming(true);
+    
+    try {
+      await invoke('stream_qwen3', {
+        appHandle: undefined, // Tauri provides this automatically
+        prompt,
+        thinking: false,
+        resetConversation: false,
+        conversationId: null,
+        systemPrompt: null,
+      });
+    } catch (error) {
+      console.error('Failed to start stream:', error);
+      setIsStreaming(false);
+    }
+  };
+  
+  return { streamContent, isStreaming, startStream };
+}
+*/

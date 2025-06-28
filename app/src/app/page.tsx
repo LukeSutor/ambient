@@ -121,31 +121,6 @@ export default function Home() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory]);
 
-  // Function to start the scheduler
-  async function startScheduler() {
-    try {
-      // Optionally pass an interval in minutes: await invoke("start_scheduler", { interval: 5 });
-      await invoke("start_scheduler");
-      console.log("Scheduler started successfully.");
-      // You could update UI state here, e.g., disable start button, enable stop button
-    } catch (error) {
-      console.error("Error starting scheduler:", error);
-      // Handle the error
-    }
-  }
-
-  // Function to stop the scheduler
-  async function stopScheduler() {
-    try {
-      await invoke("stop_scheduler");
-      console.log("Scheduler stopped successfully.");
-      // You could update UI state here, e.g., enable start button, disable stop button
-    } catch (error) {
-      console.error("Error stopping scheduler:", error);
-      // Handle the error (e.g., scheduler wasn't running)
-    }
-  }
-
   const [taskResults, setTaskResults] = useState<string[]>([]); // State for task results
   const resultsEndRef = useRef<HTMLDivElement>(null); // Ref for scrolling
 

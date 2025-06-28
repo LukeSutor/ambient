@@ -85,6 +85,7 @@ pub fn run() {
         os_utils::windows::window::get_all_text_from_focused_app,
         os_utils::windows::window::get_brave_url,        models::llm::qwen3::generate,
         models::llm::qwen3::generate_qwen3,
+        models::llm::qwen3::stream_qwen3,
         models::llm::qwen3::get_conversation_history,
         models::llm::qwen3::reset_conversation,
         models::llm::qwen3::list_conversations,
