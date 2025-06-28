@@ -268,57 +268,54 @@ pub async fn stream_qwen3(
         (conv_id, conversation_messages, system_prompt_text)
     };
     
-    // Now get the model reference and create the stream
-    let mut stream = {
-        // First, check if model is initialized and build the request
-        let request_builder = {
-            let state = GLOBAL_QWEN3_STATE.lock()
-                .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
-            
-            // Check if model is initialized
-            state.model.as_ref()
-                .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?;
-            
-            // Build request with conversation history
-            let mut request_builder = RequestBuilder::new();
-            
-            // Add system message
-            request_builder = request_builder.add_message(
-                TextMessageRole::System,
-                &system_prompt_text,
-            );
-            
-            // Add conversation history
-            for msg in &conversation_messages {
-                let role = match msg.role.as_str() {
-                    "User" => TextMessageRole::User,
-                    "Assistant" => TextMessageRole::Assistant,
-                    _ => TextMessageRole::User, // Default fallback
-                };
-                request_builder = request_builder.add_message(role, &msg.content);
-            }
-            
-            // Enable thinking if requested
-            request_builder.enable_thinking(thinking)
-        };
+    // Build the request first
+    let request_builder = {
+        let state = GLOBAL_QWEN3_STATE.lock()
+            .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
         
-        println!("[Qwen3] Sending streaming request with {} messages in conversation", conversation_messages.len());
+        // Check if model is initialized
+        state.model.as_ref()
+            .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?;
         
-        // Now make the request - get model reference and immediately clone the Arc
-        let model = {
-            let state = GLOBAL_QWEN3_STATE.lock()
-                .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
-            
-            state.model.as_ref()
-                .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?
-                .clone()
-        };
+        // Build request with conversation history
+        let mut request_builder = RequestBuilder::new();
         
-        model
-            .stream_chat_request(request_builder)
-            .await
-            .map_err(|e| format!("Failed to create stream: {}", e))?
+        // Add system message
+        request_builder = request_builder.add_message(
+            TextMessageRole::System,
+            &system_prompt_text,
+        );
+        
+        // Add conversation history
+        for msg in &conversation_messages {
+            let role = match msg.role.as_str() {
+                "User" => TextMessageRole::User,
+                "Assistant" => TextMessageRole::Assistant,
+                _ => TextMessageRole::User, // Default fallback
+            };
+            request_builder = request_builder.add_message(role, &msg.content);
+        }
+        
+        // Enable thinking if requested
+        request_builder.enable_thinking(thinking)
     };
+    
+    println!("[Qwen3] Sending streaming request with {} messages in conversation", conversation_messages.len());
+    
+    // Get the model and create the stream
+    let model = {
+        let state = GLOBAL_QWEN3_STATE.lock()
+            .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
+        
+        state.model.as_ref()
+            .ok_or("Qwen3 model not initialized. Please restart the application.".to_string())?
+            .clone()
+    };
+    
+    let mut stream = model
+        .stream_chat_request(request_builder)
+        .await
+        .map_err(|e| format!("Failed to create stream: {}", e))?;
 
     let mut full_content = String::new();
 
