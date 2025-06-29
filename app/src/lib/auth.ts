@@ -25,6 +25,22 @@ export interface SignUpRequest {
   family_name?: string;
 }
 
+export interface CognitoUserInfo {
+  username: string;
+  email?: string;
+  given_name?: string;
+  family_name?: string;
+  sub: string;
+}
+
+export interface SignInResult {
+  access_token: string;
+  id_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user_info: CognitoUserInfo;
+}
+
 // Auth service for interacting with Tauri backend
 export class AuthService {
   /**
@@ -58,6 +74,25 @@ export class AuthService {
   static async isAuthenticated(): Promise<boolean> {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<boolean>('is_authenticated');
+  }
+
+  /**
+   * Sign in with username and password using Cognito
+   */
+  static async signIn(username: string, password: string): Promise<SignInResult> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<SignInResult>('cognito_sign_in', {
+      username,
+      password,
+    });
+  }
+
+  /**
+   * Get current user information
+   */
+  static async getCurrentUser(): Promise<CognitoUserInfo | null> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<CognitoUserInfo | null>('get_current_user');
   }
 
   /**

@@ -62,6 +62,7 @@ oauth2 = "4.3"
 open = "4.0.2"
 keyring = "2.3"
 dotenv = "0.15"
+base64 = "0.22"
 
 #[profile.dev]
 #debug = true

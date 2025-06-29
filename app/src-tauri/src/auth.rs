@@ -17,6 +17,7 @@ use tokio::sync::{oneshot, Mutex};
 use keyring::Entry;
 use reqwest;
 use std::collections::HashMap;
+use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Clone)]
 pub struct AuthState {
@@ -168,7 +169,14 @@ pub async fn authenticate(handle: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn logout() -> Result<String, String> {
-    clear_stored_token().map_err(|e| format!("Failed to clear token: {}", e))?;
+    // Clear OAuth tokens
+    if let Err(e) = clear_stored_token() {
+        eprintln!("Warning: Failed to clear OAuth token: {}", e);
+    }
+    
+    // Clear Cognito authentication
+    clear_cognito_auth().map_err(|e| format!("Failed to clear authentication: {}", e))?;
+    
     Ok("Logged out successfully".to_string())
 }
 
@@ -179,9 +187,15 @@ pub async fn get_stored_token() -> Result<Option<AuthToken>, String> {
 
 #[tauri::command]
 pub async fn is_authenticated() -> Result<bool, String> {
-    match retrieve_token() {
-        Ok(Some(_token)) => {
-            // TODO: Check if token is still valid (not expired)
+    // Check OAuth tokens first
+    if let Ok(Some(_token)) = retrieve_token() {
+        return Ok(true);
+    }
+    
+    // Check Cognito authentication
+    match retrieve_cognito_auth() {
+        Ok(Some(_auth)) => {
+            // TODO: Check if token is expired
             Ok(true)
         }
         Ok(None) => Ok(false),
@@ -375,6 +389,62 @@ pub async fn cognito_resend_confirmation_code(username: String) -> Result<SignUp
     })
 }
 
+// AWS Cognito InitiateAuth API structures
+#[derive(Debug, Serialize)]
+struct CognitoInitiateAuthRequest {
+    #[serde(rename = "AuthFlow")]
+    auth_flow: String,
+    #[serde(rename = "ClientId")]
+    client_id: String,
+    #[serde(rename = "AuthParameters")]
+    auth_parameters: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CognitoInitiateAuthResponse {
+    #[serde(rename = "AuthenticationResult")]
+    authentication_result: Option<CognitoAuthenticationResult>,
+    #[serde(rename = "ChallengeName")]
+    challenge_name: Option<String>,
+    #[serde(rename = "Session")]
+    session: Option<String>,
+    #[serde(rename = "ChallengeParameters")]
+    challenge_parameters: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CognitoAuthenticationResult {
+    #[serde(rename = "AccessToken")]
+    access_token: String,
+    #[serde(rename = "IdToken")]
+    id_token: String,
+    #[serde(rename = "RefreshToken")]
+    refresh_token: String,
+    #[serde(rename = "ExpiresIn")]
+    expires_in: i64,
+    #[serde(rename = "TokenType")]
+    token_type: String,
+}
+
+// Extended AuthToken that includes user information and JWT claims
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CognitoUserInfo {
+    pub username: String,
+    pub email: Option<String>,
+    pub given_name: Option<String>,
+    pub family_name: Option<String>,
+    pub sub: String, // User's unique identifier
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SignInResult {
+    pub access_token: String,
+    pub id_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+    pub user_info: CognitoUserInfo,
+}
+
 async fn authorize(
     handle: Extension<tauri::AppHandle>,
     query: Query<CallbackQuery>,
@@ -453,10 +523,10 @@ fn create_client(redirect_url: RedirectUrl) -> BasicClient {
             .expect("Missing COGNITO_CLIENT_ID environment variable")
     );
 
-    // Use the new environment variables for URLs
+    // Use the OAuth2 URLs from environment variables
     let auth_url = AuthUrl::new(
-        std::env::var("COGNITO_USER_POOL_DOMAIN")
-            .expect("Missing COGNITO_USER_POOL_DOMAIN environment variable")
+        std::env::var("COGNITO_AUTH_URL")
+            .expect("Missing COGNITO_AUTH_URL environment variable")
     ).expect("Invalid authorization URL");
 
     let token_url = TokenUrl::new(
@@ -505,4 +575,181 @@ fn clear_stored_token() -> Result<(), Box<dyn std::error::Error>> {
     let entry = Entry::new(KEYRING_SERVICE, KEYRING_USER)?;
     entry.delete_password()?;
     Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+struct JwtClaims {
+    sub: String,
+    email: Option<String>,
+    given_name: Option<String>,
+    family_name: Option<String>,
+    #[serde(rename = "cognito:username")]
+    username: Option<String>,
+    exp: i64,
+}
+
+// Helper function to decode JWT without verification (for extracting user info)
+fn decode_jwt_claims(token: &str) -> Result<JwtClaims, String> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return Err("Invalid JWT token format".to_string());
+    }
+
+    let payload = parts[1];
+    // Add padding if needed
+    let padded_payload = match payload.len() % 4 {
+        0 => payload.to_string(),
+        n => format!("{}{}", payload, "=".repeat(4 - n)),
+    };
+
+    let decoded = general_purpose::STANDARD
+        .decode(padded_payload)
+        .map_err(|e| format!("Failed to decode JWT payload: {}", e))?;
+
+    let json_str = String::from_utf8(decoded)
+        .map_err(|e| format!("Failed to convert JWT payload to string: {}", e))?;
+
+    serde_json::from_str::<JwtClaims>(&json_str)
+        .map_err(|e| format!("Failed to parse JWT claims: {}", e))
+}
+
+#[tauri::command]
+pub async fn cognito_sign_in(
+    username: String,
+    password: String,
+) -> Result<SignInResult, String> {
+    // Load environment variables
+    if let Err(e) = dotenv::dotenv() {
+        eprintln!("Warning: Could not load .env file: {}", e);
+    }
+
+    let client_id = std::env::var("COGNITO_CLIENT_ID")
+        .map_err(|_| "Missing COGNITO_CLIENT_ID environment variable".to_string())?;
+
+    let region = std::env::var("COGNITO_REGION")
+        .map_err(|_| "Missing COGNITO_REGION environment variable".to_string())?;
+
+    let endpoint = format!("https://cognito-idp.{}.amazonaws.com/", region);
+
+    // Prepare auth parameters for USER_PASSWORD_AUTH flow
+    let mut auth_parameters = HashMap::new();
+    auth_parameters.insert("USERNAME".to_string(), username.clone());
+    auth_parameters.insert("PASSWORD".to_string(), password);
+
+    let request_body = CognitoInitiateAuthRequest {
+        auth_flow: "USER_PASSWORD_AUTH".to_string(),
+        client_id,
+        auth_parameters,
+    };
+
+    // Make the request to AWS Cognito
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .header("X-Amz-Target", "AWSCognitoIdentityProviderService.InitiateAuth")
+        .header("Content-Type", "application/x-amz-json-1.1")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        println!("SignIn failed: {}", error_text);
+        return Err(format!("SignIn failed: {}", error_text));
+    }
+
+    let auth_response: CognitoInitiateAuthResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    // Check if we got an authentication result (successful login)
+    if let Some(auth_result) = auth_response.authentication_result {
+        // Decode the ID token to extract user information
+        let claims = decode_jwt_claims(&auth_result.id_token)?;
+        
+        let user_info = CognitoUserInfo {
+            username: claims.username.unwrap_or_else(|| username.clone()),
+            email: claims.email,
+            given_name: claims.given_name,
+            family_name: claims.family_name,
+            sub: claims.sub,
+        };
+
+        let sign_in_result = SignInResult {
+            access_token: auth_result.access_token,
+            id_token: auth_result.id_token,
+            refresh_token: auth_result.refresh_token,
+            expires_in: auth_result.expires_in,
+            user_info,
+        };
+
+        // Store the authentication result securely
+        store_cognito_auth(&sign_in_result)
+            .map_err(|e| format!("Failed to store authentication: {}", e))?;
+
+        Ok(sign_in_result)
+    } else if let Some(challenge_name) = auth_response.challenge_name {
+        // Handle authentication challenges (MFA, new password required, etc.)
+        match challenge_name.as_str() {
+            "NEW_PASSWORD_REQUIRED" => {
+                Err("New password required. Please change your password first.".to_string())
+            }
+            "SMS_MFA" => {
+                Err("SMS MFA required. Please implement MFA challenge handling.".to_string())
+            }
+            "SOFTWARE_TOKEN_MFA" => {
+                Err("TOTP MFA required. Please implement MFA challenge handling.".to_string())
+            }
+            _ => {
+                Err(format!("Authentication challenge required: {}", challenge_name))
+            }
+        }
+    } else {
+        Err("Unexpected response from Cognito".to_string())
+    }
+}
+
+// Store Cognito authentication result securely
+fn store_cognito_auth(sign_in_result: &SignInResult) -> Result<(), Box<dyn std::error::Error>> {
+    let entry = Entry::new(KEYRING_SERVICE, "cognito_auth")?;
+    let auth_json = serde_json::to_string(sign_in_result)?;
+    entry.set_password(&auth_json)?;
+    Ok(())
+}
+
+// Retrieve stored Cognito authentication
+pub fn retrieve_cognito_auth() -> Result<Option<SignInResult>, Box<dyn std::error::Error>> {
+    let entry = Entry::new(KEYRING_SERVICE, "cognito_auth")?;
+    match entry.get_password() {
+        Ok(auth_json) => {
+            let auth: SignInResult = serde_json::from_str(&auth_json)?;
+            Ok(Some(auth))
+        }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
+// Clear stored Cognito authentication
+fn clear_cognito_auth() -> Result<(), Box<dyn std::error::Error>> {
+    let entry = Entry::new(KEYRING_SERVICE, "cognito_auth")?;
+    entry.delete_password()?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_current_user() -> Result<Option<CognitoUserInfo>, String> {
+    match retrieve_cognito_auth() {
+        Ok(Some(auth)) => {
+            // TODO: Check if token is expired and refresh if needed
+            Ok(Some(auth.user_info))
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("Failed to retrieve user info: {}", e)),
+    }
 }

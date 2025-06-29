@@ -1,2 +1,4 @@
 *.exe
 .env
+app/src-tauri/.env
+

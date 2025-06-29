@@ -107,8 +107,10 @@ pub fn run() {
         auth::get_stored_token,
         auth::is_authenticated,
         auth::cognito_sign_up,
+        auth::cognito_sign_in,
         auth::cognito_confirm_sign_up,
-        auth::cognito_resend_confirmation_code
+        auth::cognito_resend_confirmation_code,
+        auth::get_current_user
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
