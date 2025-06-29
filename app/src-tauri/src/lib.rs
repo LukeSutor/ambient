@@ -24,7 +24,7 @@ pub fn run() {
   
   tauri::Builder::default()
     .manage(DbState(Mutex::new(None))) // Initialize state with None (using the imported DbState)
-    .manage(auth::create_auth_state()) // Initialize auth state
+    // .manage(auth::create_auth_state()) // Initialize auth state
     .setup(|app| {
         // Initialize the database connection during setup
         let app_handle = app.handle().clone(); // Get the app handle
@@ -105,7 +105,10 @@ pub fn run() {
         auth::authenticate,
         auth::logout,
         auth::get_stored_token,
-        auth::is_authenticated
+        auth::is_authenticated,
+        auth::cognito_sign_up,
+        auth::cognito_confirm_sign_up,
+        auth::cognito_resend_confirmation_code
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

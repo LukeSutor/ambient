@@ -41,6 +41,8 @@ axum = { version = "0.6", features = ["ws", "headers"] }
 futures = "0.3.4"
 dashmap = "6.1.0"
 uuid = { version = "1.17.0", features = ["v4"] }
+
+# Windows crates
 windows = { version = "0.60.0", features = [
     "Win32_UI_Accessibility", 
     "Win32_System_Com",
@@ -50,13 +52,16 @@ windows = { version = "0.60.0", features = [
     "Win32_System_Ole",
     "Win32_System_Com"
 ] }
+
+# LLM crates
 mistralrs = { git = "https://github.com/EricLBuehler/mistral.rs.git" }
 anyhow = "1.0.98"
+
+# Auth crates
 oauth2 = "4.3"
 open = "4.0.2"
 keyring = "2.3"
 dotenv = "0.15"
-
 
 #[profile.dev]
 #debug = true

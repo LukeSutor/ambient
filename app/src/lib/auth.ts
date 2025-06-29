@@ -8,6 +8,23 @@ export interface AuthToken {
   expires_in?: number; // Duration in seconds
 }
 
+export interface SignUpResult {
+  user_sub: string;
+  user_confirmed: boolean;
+  verification_required: boolean;
+  destination?: string;
+  delivery_medium?: string;
+  session?: string;
+}
+
+export interface SignUpRequest {
+  username: string;
+  password: string;
+  email: string;
+  given_name?: string;
+  family_name?: string;
+}
+
 // Auth service for interacting with Tauri backend
 export class AuthService {
   /**
@@ -41,6 +58,46 @@ export class AuthService {
   static async isAuthenticated(): Promise<boolean> {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<boolean>('is_authenticated');
+  }
+
+  /**
+   * Sign up a new user with AWS Cognito
+   */
+  static async signUp(request: SignUpRequest): Promise<SignUpResult> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<SignUpResult>('cognito_sign_up', {
+      username: request.username,
+      password: request.password,
+      email: request.email,
+      givenName: request.given_name,
+      familyName: request.family_name,
+    });
+  }
+
+  /**
+   * Confirm user sign up with verification code
+   */
+  static async confirmSignUp(
+    username: string,
+    confirmationCode: string,
+    session?: string
+  ): Promise<string> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string>('cognito_confirm_sign_up', {
+      username,
+      confirmationCode,
+      session,
+    });
+  }
+
+  /**
+   * Resend confirmation code for user verification
+   */
+  static async resendConfirmationCode(username: string): Promise<SignUpResult> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<SignUpResult>('cognito_resend_confirmation_code', {
+      username,
+    });
   }
 
   /**

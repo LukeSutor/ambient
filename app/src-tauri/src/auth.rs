@@ -1,5 +1,3 @@
-
-
 use std::net::{SocketAddr, TcpListener};
 use std::sync::Arc;
 use axum::{
@@ -13,10 +11,12 @@ use oauth2::{
     PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use oauth2::reqwest::async_http_client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use tokio::sync::{oneshot, Mutex};
 use keyring::Entry;
+use reqwest;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct AuthState {
@@ -33,6 +33,77 @@ pub struct AuthToken {
     pub refresh_token: Option<String>,
     pub id_token: Option<String>,
     pub expires_in: Option<std::time::Duration>,
+}
+
+// AWS Cognito SignUp API structures
+#[derive(Debug, Serialize)]
+struct CognitoSignUpRequest {
+    #[serde(rename = "ClientId")]
+    client_id: String,
+    #[serde(rename = "Username")]
+    username: String,
+    #[serde(rename = "Password")]
+    password: String,
+    #[serde(rename = "UserAttributes")]
+    user_attributes: Vec<CognitoAttribute>,
+}
+
+#[derive(Debug, Serialize)]
+struct CognitoAttribute {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "Value")]
+    value: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CognitoSignUpResponse {
+    #[serde(rename = "UserSub")]
+    user_sub: String,
+    #[serde(rename = "UserConfirmed")]
+    user_confirmed: bool,
+    #[serde(rename = "CodeDeliveryDetails")]
+    code_delivery_details: Option<CognitoCodeDeliveryDetails>,
+    #[serde(rename = "Session")]
+    session: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CognitoCodeDeliveryDetails {
+    #[serde(rename = "Destination")]
+    destination: String,
+    #[serde(rename = "DeliveryMedium")]
+    delivery_medium: String,
+    #[serde(rename = "AttributeName")]
+    attribute_name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CognitoConfirmSignUpRequest {
+    #[serde(rename = "ClientId")]
+    client_id: String,
+    #[serde(rename = "Username")]
+    username: String,
+    #[serde(rename = "ConfirmationCode")]
+    confirmation_code: String,
+    #[serde(rename = "Session")]
+    session: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CognitoConfirmSignUpResponse {
+    #[serde(rename = "Session")]
+    session: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignUpResult {
+    pub user_sub: String,
+    pub user_confirmed: bool,
+    pub verification_required: bool,
+    pub destination: Option<String>,
+    pub delivery_medium: Option<String>,
+    pub session: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -116,6 +187,192 @@ pub async fn is_authenticated() -> Result<bool, String> {
         Ok(None) => Ok(false),
         Err(_) => Ok(false),
     }
+}
+
+#[tauri::command]
+pub async fn cognito_sign_up(
+    username: String,
+    password: String,
+    email: String,
+    given_name: Option<String>,
+    family_name: Option<String>,
+) -> Result<SignUpResult, String> {
+    // Load environment variables
+    if let Err(e) = dotenv::dotenv() {
+        eprintln!("Warning: Could not load .env file: {}", e);
+    }
+
+    let client_id = std::env::var("COGNITO_CLIENT_ID")
+        .map_err(|_| "Missing COGNITO_CLIENT_ID environment variable".to_string())?;
+
+    let region = std::env::var("COGNITO_REGION")
+        .map_err(|_| "Missing COGNITO_REGION environment variable".to_string())?;
+
+    let endpoint = format!("https://cognito-idp.{}.amazonaws.com/", region);
+
+    // Prepare user attributes
+    let mut user_attributes = vec![
+        CognitoAttribute {
+            name: "email".to_string(),
+            value: email,
+        }
+    ];
+
+    if let Some(given_name) = given_name {
+        user_attributes.push(CognitoAttribute {
+            name: "given_name".to_string(),
+            value: given_name,
+        });
+    }
+
+    if let Some(family_name) = family_name {
+        user_attributes.push(CognitoAttribute {
+            name: "family_name".to_string(),
+            value: family_name,
+        });
+    }
+
+    let request_body = CognitoSignUpRequest {
+        client_id,
+        username: username.clone(),
+        password,
+        user_attributes,
+    };
+
+    // Make the request to AWS Cognito
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .header("X-Amz-Target", "AWSCognitoIdentityProviderService.SignUp")
+        .header("Content-Type", "application/x-amz-json-1.1")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        println!("SignUp failed: {}", error_text);
+        return Err(format!("SignUp failed: {}", error_text));
+    }
+
+    let signup_response: CognitoSignUpResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    Ok(SignUpResult {
+        user_sub: signup_response.user_sub,
+        user_confirmed: signup_response.user_confirmed,
+        verification_required: !signup_response.user_confirmed,
+        destination: signup_response.code_delivery_details.as_ref().map(|cd| cd.destination.clone()),
+        delivery_medium: signup_response.code_delivery_details.as_ref().map(|cd| cd.delivery_medium.clone()),
+        session: signup_response.session,
+    })
+}
+
+#[tauri::command]
+pub async fn cognito_confirm_sign_up(
+    username: String,
+    confirmation_code: String,
+    session: Option<String>,
+) -> Result<String, String> {
+    // Load environment variables
+    if let Err(e) = dotenv::dotenv() {
+        eprintln!("Warning: Could not load .env file: {}", e);
+    }
+
+    let client_id = std::env::var("COGNITO_CLIENT_ID")
+        .map_err(|_| "Missing COGNITO_CLIENT_ID environment variable".to_string())?;
+
+    let region = std::env::var("COGNITO_REGION")
+        .map_err(|_| "Missing COGNITO_REGION environment variable".to_string())?;
+
+    let endpoint = format!("https://cognito-idp.{}.amazonaws.com/", region);
+
+    let request_body = CognitoConfirmSignUpRequest {
+        client_id,
+        username,
+        confirmation_code,
+        session,
+    };
+
+    // Make the request to AWS Cognito
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .header("X-Amz-Target", "AWSCognitoIdentityProviderService.ConfirmSignUp")
+        .header("Content-Type", "application/x-amz-json-1.1")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("Confirmation failed: {}", error_text));
+    }
+
+    Ok("User confirmed successfully".to_string())
+}
+
+#[tauri::command]
+pub async fn cognito_resend_confirmation_code(username: String) -> Result<SignUpResult, String> {
+    // Load environment variables
+    if let Err(e) = dotenv::dotenv() {
+        eprintln!("Warning: Could not load .env file: {}", e);
+    }
+
+    let client_id = std::env::var("COGNITO_CLIENT_ID")
+        .map_err(|_| "Missing COGNITO_CLIENT_ID environment variable".to_string())?;
+
+    let region = std::env::var("COGNITO_REGION")
+        .map_err(|_| "Missing COGNITO_REGION environment variable".to_string())?;
+
+    let endpoint = format!("https://cognito-idp.{}.amazonaws.com/", region);
+
+    let mut request_body = HashMap::new();
+    request_body.insert("ClientId", client_id);
+    request_body.insert("Username", username);
+
+    // Make the request to AWS Cognito
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .header("X-Amz-Target", "AWSCognitoIdentityProviderService.ResendConfirmationCode")
+        .header("Content-Type", "application/x-amz-json-1.1")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("Resend confirmation code failed: {}", error_text));
+    }
+
+    let resend_response: CognitoSignUpResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    Ok(SignUpResult {
+        user_sub: "".to_string(), // Not returned in resend response
+        user_confirmed: false,
+        verification_required: true,
+        destination: resend_response.code_delivery_details.as_ref().map(|cd| cd.destination.clone()),
+        delivery_medium: resend_response.code_delivery_details.as_ref().map(|cd| cd.delivery_medium.clone()),
+        session: resend_response.session,
+    })
 }
 
 async fn authorize(

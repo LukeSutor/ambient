@@ -349,8 +349,8 @@ export default function Home() {
         </form>
       </div>
       <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
-        <Link href="/auth-demo" className="text-blue-600 hover:underline">
-          Go to Auth Demo
+        <Link href="/signin" className="text-blue-600 hover:underline">
+          Go to Sign In
         </Link>
         {/* Results Box */}
         <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
