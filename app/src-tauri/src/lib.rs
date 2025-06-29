@@ -10,15 +10,21 @@ pub mod constants;
 pub mod integrations;
 pub mod os_utils;
 pub mod models;
+pub mod auth;
 use crate::integrations::chromium::server::start_server_on_available_port;
 use tauri::Manager;
 use std::sync::Mutex;
 use db::DbState;
+extern crate dotenv;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // Load environment variables from .env file
+  dotenv::dotenv().ok();
+  
   tauri::Builder::default()
     .manage(DbState(Mutex::new(None))) // Initialize state with None (using the imported DbState)
+    .manage(auth::create_auth_state()) // Initialize auth state
     .setup(|app| {
         // Initialize the database connection during setup
         let app_handle = app.handle().clone(); // Get the app handle
@@ -81,11 +87,13 @@ pub fn run() {
         setup::check_vlm_mmproj_model_download,
         setup::get_fastembed_model_path,
         setup::check_fastembed_model_download,
-        setup::check_setup_complete,        integrations::chromium::server::run_workflow_by_id,
+        setup::check_setup_complete,
+        integrations::chromium::server::run_workflow_by_id,
         integrations::chromium::server::ping_chromium_extension,
         os_utils::windows::window::get_focused_window_name,
         os_utils::windows::window::get_all_text_from_focused_app,
-        os_utils::windows::window::get_brave_url,        models::llm::qwen3::generate,
+        os_utils::windows::window::get_brave_url,
+        models::llm::qwen3::generate,
         models::llm::qwen3::generate_qwen3,
         models::llm::qwen3::stream_qwen3,
         models::llm::qwen3::get_conversation_history,
@@ -93,7 +101,11 @@ pub fn run() {
         models::llm::qwen3::list_conversations,
         models::llm::qwen3::get_current_conversation_id,
         models::llm::qwen3::is_qwen3_model_initialized,
-        models::llm::qwen3::get_qwen3_status
+        models::llm::qwen3::get_qwen3_status,
+        auth::authenticate,
+        auth::logout,
+        auth::get_stored_token,
+        auth::is_authenticated
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
