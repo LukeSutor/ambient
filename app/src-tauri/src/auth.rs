@@ -18,6 +18,8 @@ use keyring::Entry;
 use reqwest;
 use std::collections::HashMap;
 use base64::{Engine as _, engine::general_purpose};
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct AuthState {
@@ -194,9 +196,24 @@ pub async fn is_authenticated() -> Result<bool, String> {
     
     // Check Cognito authentication
     match retrieve_cognito_auth() {
-        Ok(Some(_auth)) => {
-            // TODO: Check if token is expired
-            Ok(true)
+        Ok(Some(auth)) => {
+            // Check if the access token is expired
+            match is_token_expired(&auth.access_token) {
+                Ok(true) => {
+                    // Token is expired, clear auth and return false
+                    let _ = clear_cognito_auth();
+                    Ok(false)
+                }
+                Ok(false) => {
+                    // Token is still valid
+                    Ok(true)
+                }
+                Err(_) => {
+                    // Error checking expiration, assume expired and clear
+                    let _ = clear_cognito_auth();
+                    Ok(false)
+                }
+            }
         }
         Ok(None) => Ok(false),
         Err(_) => Ok(false),
@@ -613,6 +630,17 @@ fn decode_jwt_claims(token: &str) -> Result<JwtClaims, String> {
         .map_err(|e| format!("Failed to parse JWT claims: {}", e))
 }
 
+// Helper function to check if JWT token is expired
+fn is_token_expired(token: &str) -> Result<bool, String> {
+    let claims = decode_jwt_claims(token)?;
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| format!("Failed to get current time: {}", e))?
+        .as_secs() as i64;
+    
+    Ok(claims.exp < current_time)
+}
+
 #[tauri::command]
 pub async fn cognito_sign_in(
     username: String,
@@ -689,10 +717,17 @@ pub async fn cognito_sign_in(
         };
 
         // Store the authentication result securely
-        store_cognito_auth(&sign_in_result)
-            .map_err(|e| format!("Failed to store authentication: {}", e))?;
-
-        Ok(sign_in_result)
+        match store_cognito_auth(&sign_in_result) {
+            Ok(()) => {
+                println!("Successfully stored authentication data");
+                Ok(sign_in_result)
+            }
+            Err(e) => {
+                eprintln!("Failed to store authentication: {}", e);
+                // Return the result anyway since authentication was successful
+                Ok(sign_in_result)
+            }
+        }
     } else if let Some(challenge_name) = auth_response.challenge_name {
         // Handle authentication challenges (MFA, new password required, etc.)
         match challenge_name.as_str() {
@@ -714,21 +749,44 @@ pub async fn cognito_sign_in(
     }
 }
 
-// Store Cognito authentication result securely
+// Store Cognito authentication result securely using file storage for large tokens
 fn store_cognito_auth(sign_in_result: &SignInResult) -> Result<(), Box<dyn std::error::Error>> {
-    let entry = Entry::new(KEYRING_SERVICE, "cognito_auth")?;
+    // Get the app data directory
+    let app_data_dir = get_app_data_dir()?;
+    let auth_file_path = app_data_dir.join("cognito_auth.json");
+    
+    // Serialize the auth result
     let auth_json = serde_json::to_string(sign_in_result)?;
-    entry.set_password(&auth_json)?;
+    
+    // Write to file with secure permissions
+    fs::write(&auth_file_path, auth_json)?;
+    
+    // Also store a flag in keyring to indicate we have auth stored
+    let entry = Entry::new(KEYRING_SERVICE, "has_cognito_auth")?;
+    entry.set_password("true")?;
+    
     Ok(())
 }
 
-// Retrieve stored Cognito authentication
+// Retrieve stored Cognito authentication from file storage
 pub fn retrieve_cognito_auth() -> Result<Option<SignInResult>, Box<dyn std::error::Error>> {
-    let entry = Entry::new(KEYRING_SERVICE, "cognito_auth")?;
+    // First check if we have auth stored
+    let entry = Entry::new(KEYRING_SERVICE, "has_cognito_auth")?;
     match entry.get_password() {
-        Ok(auth_json) => {
-            let auth: SignInResult = serde_json::from_str(&auth_json)?;
-            Ok(Some(auth))
+        Ok(_) => {
+            // We have auth, try to read from file
+            let app_data_dir = get_app_data_dir()?;
+            let auth_file_path = app_data_dir.join("cognito_auth.json");
+            
+            if auth_file_path.exists() {
+                let auth_json = fs::read_to_string(&auth_file_path)?;
+                let auth: SignInResult = serde_json::from_str(&auth_json)?;
+                Ok(Some(auth))
+            } else {
+                // File doesn't exist, clear the flag
+                let _ = entry.delete_password();
+                Ok(None)
+            }
         }
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(e) => Err(Box::new(e)),
@@ -737,19 +795,103 @@ pub fn retrieve_cognito_auth() -> Result<Option<SignInResult>, Box<dyn std::erro
 
 // Clear stored Cognito authentication
 fn clear_cognito_auth() -> Result<(), Box<dyn std::error::Error>> {
-    let entry = Entry::new(KEYRING_SERVICE, "cognito_auth")?;
-    entry.delete_password()?;
+    // Clear the keyring flag
+    let entry = Entry::new(KEYRING_SERVICE, "has_cognito_auth")?;
+    let _ = entry.delete_password();
+    
+    // Remove the auth file
+    let app_data_dir = get_app_data_dir()?;
+    let auth_file_path = app_data_dir.join("cognito_auth.json");
+    
+    if auth_file_path.exists() {
+        fs::remove_file(&auth_file_path)?;
+    }
+    
     Ok(())
+}
+
+// Helper function to get app data directory
+fn get_app_data_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let app_data_dir = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("local-computer-use")
+    } else if cfg!(target_os = "macos") {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join("Library")
+            .join("Application Support")
+            .join("local-computer-use")
+    } else {
+        // Linux
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(".local")
+            .join("share")
+            .join("local-computer-use")
+    };
+    
+    // Create directory if it doesn't exist
+    if !app_data_dir.exists() {
+        fs::create_dir_all(&app_data_dir)?;
+    }
+    
+    Ok(app_data_dir)
 }
 
 #[tauri::command]
 pub async fn get_current_user() -> Result<Option<CognitoUserInfo>, String> {
     match retrieve_cognito_auth() {
         Ok(Some(auth)) => {
-            // TODO: Check if token is expired and refresh if needed
-            Ok(Some(auth.user_info))
+            // Check if the access token is expired
+            match is_token_expired(&auth.access_token) {
+                Ok(true) => {
+                    // Token is expired, clear auth and return None
+                    let _ = clear_cognito_auth();
+                    Ok(None)
+                }
+                Ok(false) => {
+                    // Token is still valid
+                    Ok(Some(auth.user_info))
+                }
+                Err(_) => {
+                    // Error checking expiration, assume expired and clear
+                    let _ = clear_cognito_auth();
+                    Ok(None)
+                }
+            }
         }
         Ok(None) => Ok(None),
         Err(e) => Err(format!("Failed to retrieve user info: {}", e)),
+    }
+}
+
+#[tauri::command]
+pub async fn get_access_token() -> Result<Option<String>, String> {
+    match retrieve_cognito_auth() {
+        Ok(Some(auth)) => {
+            // Check if the access token is expired
+            match is_token_expired(&auth.access_token) {
+                Ok(true) => {
+                    // Token is expired, clear auth and return None
+                    let _ = clear_cognito_auth();
+                    Ok(None)
+                }
+                Ok(false) => {
+                    // Token is still valid
+                    Ok(Some(auth.access_token))
+                }
+                Err(_) => {
+                    // Error checking expiration, assume expired and clear
+                    let _ = clear_cognito_auth();
+                    Ok(None)
+                }
+            }
+        }
+        Ok(None) => Ok(None),
+        Err(e) => Err(format!("Failed to retrieve access token: {}", e)),
     }
 }

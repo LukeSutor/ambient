@@ -137,15 +137,11 @@ export class AuthService {
 
   /**
    * Gets the access token for API requests
-   * Returns null if not authenticated
+   * Returns null if not authenticated or token is expired
    */
   static async getAccessToken(): Promise<string | null> {
-    try {
-      const token = await this.getStoredToken();
-      return token?.access_token || null;
-    } catch {
-      return null;
-    }
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string | null>('get_access_token');
   }
 
   /**
