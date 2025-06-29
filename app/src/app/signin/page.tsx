@@ -48,6 +48,7 @@ export default function SignInPage() {
 
         <SignInComponent 
           onSwitchToSignUp={() => window.location.href = '/signup'}
+          onSignInSuccess={() => window.location.href = '/'}
         />
 
         <div className="text-center">

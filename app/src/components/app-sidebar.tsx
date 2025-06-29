@@ -10,6 +10,7 @@ import {
   Blocks
 } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
+import { AuthService, CognitoUserInfo } from "@/lib/auth"
 
 import { Separator } from "@/components/ui/separator"
 import { NavMain } from "@/components/nav-main"
@@ -24,11 +25,6 @@ import {
 } from "@/components/ui/sidebar"
 
 const data = {
-  user: {
-    name: "user",
-    email: "user@example.com",
-    avatar: "/",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -71,6 +67,25 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [userInfo, setUserInfo] = React.useState<CognitoUserInfo | null>(null);
+  const [isLoadingUser, setIsLoadingUser] = React.useState(true);
+
+  // Fetch user information on mount
+  React.useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const user = await AuthService.getCurrentUser();
+        setUserInfo(user);
+      } catch (error) {
+        console.error('Failed to fetch user info:', error);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+
+    fetchUserInfo();
+  }, []);
+
   // Create a mutable copy of the nav items for this render
   const navItems = [...data.navMain];
 
@@ -82,12 +97,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
        navItems.push({
         title: "Dev",
         url: "/dev", // Point to your debug page route
-        icon: Code,   // Use the Bug icon
+        icon: Code,   // Use the Code icon
       });
     }
   }
 
   const { state } = useSidebar()
+
+  // Create user object for NavUser component
+  const user = userInfo ? {
+    name: userInfo.given_name && userInfo.family_name 
+      ? `${userInfo.given_name} ${userInfo.family_name}`
+      : userInfo.username || 'User',
+    email: userInfo.email || '',
+    avatar: '/', // You can add avatar logic here
+  } : {
+    name: 'User',
+    email: '',
+    avatar: '/',
+  };
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
@@ -100,7 +128,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )

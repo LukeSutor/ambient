@@ -14,9 +14,9 @@ export default function SignUpPage() {
 
   const handleSignUpSuccess = () => {
     setShowSuccess(true);
-    // Optionally redirect to sign-in after a delay
+    // Optionally redirect to home after a delay
     setTimeout(() => {
-      window.location.href = '/signin';
+      window.location.href = '/';
     }, 3000);
   };
 
@@ -54,12 +54,12 @@ export default function SignUpPage() {
                 Account Created Successfully!
               </CardTitle>
               <CardDescription>
-                Your account has been created and verified. You can now sign in.
+                Your account has been created and verified. You can now access your dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <div className="animate-pulse text-sm text-gray-500">
-                Redirecting to sign in...
+                Redirecting to dashboard...
               </div>
             </CardContent>
           </Card>

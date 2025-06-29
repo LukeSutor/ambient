@@ -48,12 +48,49 @@ export default function RootLayout({
   const [isLoadingSetupCheck, setIsLoadingSetupCheck] = React.useState(true);
   const [isSetupComplete, setIsSetupComplete] = React.useState(true);
   const [setupCheckError, setSetupCheckError] = React.useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = React.useState(true);
 
   // Always call usePathname (never conditionally)
   const pathname = usePathname();
 
-  // Only check setup ONCE on mount
+  // Check if current page is an auth page
+  const isAuthPage = pathname === '/signin' || pathname === '/signup';
+
+  // Check authentication for non-auth pages
   React.useEffect(() => {
+    if (isAuthPage) {
+      setIsAuthLoading(false);
+      return;
+    }
+
+    const checkAuth = async () => {
+      try {
+        const { AuthService } = await import('@/lib/auth');
+        const authenticated = await AuthService.isAuthenticated();
+        if (!authenticated) {
+          window.location.href = '/signin';
+          return;
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        window.location.href = '/signin';
+        return;
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [isAuthPage]);
+
+  // Only check setup ONCE on mount, but skip for auth pages
+  React.useEffect(() => {
+    if (isAuthPage) {
+      setIsLoadingSetupCheck(false);
+      setIsSetupComplete(true);
+      return;
+    }
+
     const checkStatus = async () => {
       setIsLoadingSetupCheck(true);
       setSetupCheckError(null);
@@ -69,7 +106,7 @@ export default function RootLayout({
       }
     };
     checkStatus();
-  }, []); // <-- only runs once
+  }, [isAuthPage]); // <-- include isAuthPage dependency
 
   const handleSetupComplete = React.useCallback(() => {
     setIsSetupComplete(true);
@@ -94,7 +131,21 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {/* Render based on setup status */}
-        {setupCheckError ? (
+        {isAuthPage ? (
+          // Render auth pages without sidebar
+          <div className="min-h-screen">
+            {children}
+            <Toaster richColors position="top-center" />
+          </div>
+        ) : isAuthLoading ? (
+          // Show loading while checking authentication
+          <div className="flex h-screen w-full items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+              <p>Checking authentication...</p>
+            </div>
+          </div>
+        ) : setupCheckError ? (
            <div className="flex h-full w-full items-center justify-center p-4 text-center text-red-600">
              <div>
                 <h1 className="text-xl font-bold mb-2">Error</h1>

@@ -223,3 +223,30 @@ export function useAuth() {
     checkAuthStatus,
   };
 }
+
+// Hook for protecting routes - redirects to signin if not authenticated
+export function useAuthGuard() {
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  
+  useEffect(() => {
+    const checkAndRedirect = async () => {
+      try {
+        const authenticated = await AuthService.isAuthenticated();
+        if (!authenticated) {
+          window.location.href = '/signin';
+          return;
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        window.location.href = '/signin';
+        return;
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAndRedirect();
+  }, []);
+
+  return { isLoading };
+}

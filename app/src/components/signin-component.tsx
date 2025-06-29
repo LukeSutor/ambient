@@ -43,8 +43,8 @@ export function SignInComponent({ onSignInSuccess, onSwitchToSignUp }: SignInCom
       if (onSignInSuccess) {
         onSignInSuccess();
       } else {
-        // Redirect to dashboard or main page
-        router.push('/dashboard');
+        // Redirect to home page
+        router.push('/');
       }
     } catch (err) {
       console.error('Sign in failed:', err);
