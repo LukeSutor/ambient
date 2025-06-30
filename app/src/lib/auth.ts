@@ -220,7 +220,6 @@ export class AuthService {
     try {
       const user = await this.getCurrentUser();
       if (!user) return 'unknown';
-      console.log(user.username);
 
       // Google OAuth users typically have email as username or specific patterns
       // This is a heuristic and may need adjustment based on actual data patterns

@@ -45,7 +45,6 @@ export default function AccountPage() {
         // Get current user information
         const currentUser = await AuthService.getCurrentUser()
         setUser(currentUser)
-        console.log('Current User:', currentUser)
 
         // Determine authentication method
         const method = await AuthService.getAuthenticationMethod()
