@@ -105,7 +105,8 @@ export default function SignUpPage() {
       setSignUpResult(result);
       
       if (result.user_confirmed) {
-        // User is automatically confirmed
+        // User is automatically confirmed, sign them in
+        await AuthService.signIn(values.username, values.password);
         setStep('success');
         setTimeout(() => {
           window.location.href = '/';
@@ -132,16 +133,21 @@ export default function SignUpPage() {
       setError(null);
       
       const signUpValues = signUpForm.getValues();
+      
+      // First confirm the signup
       await AuthService.confirmSignUp(
         signUpValues.username,
         values.confirmationCode,
         signUpResult.session
       );
       
+      // Then automatically sign in the user
+      await AuthService.signIn(signUpValues.username, signUpValues.password);
+      
       setStep('success');
       setTimeout(() => {
         window.location.href = '/';
-      }, 3000);
+      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
@@ -387,7 +393,7 @@ export default function SignUpPage() {
                           </Button>
                         </div>
                       </FormControl>
-                      <FormDescription>
+                      <div className="text-muted-foreground text-sm">
                         Password must be at least 8 characters long and contain:
                         <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
                           <li>At least 1 uppercase letter</li>
@@ -395,7 +401,7 @@ export default function SignUpPage() {
                           <li>At least 1 number</li>
                           <li>At least 1 special character</li>
                         </ul>
-                      </FormDescription>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
