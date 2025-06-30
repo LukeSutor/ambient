@@ -34,5 +34,12 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/main", "binaries/llama", "binaries/embedding"]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["cortical"]
+      }
+    }
   }
 }

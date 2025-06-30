@@ -3,11 +3,11 @@ use std::collections::HashMap;
 
 // Use Lazy to initialize the HashMap only once
 static PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
-    let mut map = HashMap::new();
-    // map.insert(
-    //   "SUMMARIZE_ACTION",
-    //   "You are an expert screen activity analyzer helping creating annotations for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots");
-    map.insert(
+  let mut map = HashMap::new();
+  // map.insert(
+  //   "SUMMARIZE_ACTION",
+  //   "You are an expert screen activity analyzer helping creating annotations for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots");
+  map.insert(
         "SUMMARIZE_ACTION",
 r#"You are an expert screen activity analyzer for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots.
 
@@ -81,21 +81,21 @@ Example 7 - Multiple Applications:
 
 Analyze the provided screenshot and generate an accurate, structured description following this format. Focus on making the description extremely specific and information-dense to optimize for vector embedding and pattern recognition."#,
     );
-    // Add more prompts here as needed
-    // map.insert("ANOTHER_KEY", "Another prompt text.");
-    map
+  // Add more prompts here as needed
+  // map.insert("ANOTHER_KEY", "Another prompt text.");
+  map
 });
 
 /// Fetches a prompt by its key.
 pub fn get_prompt(key: &str) -> Option<&'static str> {
-    PROMPTS.get(key).copied()
+  PROMPTS.get(key).copied()
 }
 
 /// Tauri command to fetch a prompt by its key.
 #[tauri::command]
 pub fn get_prompt_command(key: String) -> Result<String, String> {
-    match get_prompt(&key) {
-        Some(prompt) => Ok(prompt.to_string()),
-        None => Err(format!("Prompt with key '{}' not found.", key)),
-    }
+  match get_prompt(&key) {
+    Some(prompt) => Ok(prompt.to_string()),
+    None => Err(format!("Prompt with key '{}' not found.", key)),
+  }
 }

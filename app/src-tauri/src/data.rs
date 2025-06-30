@@ -1,8 +1,8 @@
 use image::imageops::FilterType;
 use screenshots::Screen;
-use tauri::Manager;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
+use tauri::Manager;
 
 #[tauri::command]
 pub fn take_screenshot(app_handle: tauri::AppHandle) -> String {
