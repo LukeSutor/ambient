@@ -1,7 +1,6 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SignInComponent } from '@/components/signin-component';
-import { AuthComponent } from '@/components/auth-component';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
@@ -11,28 +10,11 @@ import Link from 'next/link';
 export default function SignInPage() {
   const { isAuthenticated } = useAuth();
 
-  if (isAuthenticated) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="max-w-md mx-auto">
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="flex items-center justify-center text-green-600">
-                <CheckCircle className="h-5 w-5 mr-2" />
-                Already Authenticated
-              </CardTitle>
-              <CardDescription>
-                You are already signed in to your account
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AuthComponent />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      window.location.href = '/';
+    }
+  }, [isAuthenticated]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

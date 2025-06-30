@@ -23,8 +23,7 @@ pub fn run() {
   dotenv::dotenv().ok();
   
   tauri::Builder::default()
-    .manage(DbState(Mutex::new(None))) // Initialize state with None (using the imported DbState)
-    // .manage(auth::create_auth_state()) // Initialize auth state
+    .manage(DbState(Mutex::new(None)))
     .setup(|app| {
         // Initialize the database connection during setup
         let app_handle = app.handle().clone(); // Get the app handle
@@ -102,7 +101,6 @@ pub fn run() {
         models::llm::qwen3::get_current_conversation_id,
         models::llm::qwen3::is_qwen3_model_initialized,
         models::llm::qwen3::get_qwen3_status,
-        auth::authenticate,
         auth::logout,
         auth::get_stored_token,
         auth::is_authenticated,

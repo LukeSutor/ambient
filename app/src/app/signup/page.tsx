@@ -1,7 +1,6 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SignUpComponent } from '@/components/signup-component';
-import { AuthComponent } from '@/components/auth-component';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
@@ -12,6 +11,12 @@ export default function SignUpPage() {
   const [showSuccess, setShowSuccess] = useState(false);
   const { isAuthenticated } = useAuth();
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      window.location.href = '/';
+    }
+  }, [isAuthenticated]);
+
   const handleSignUpSuccess = () => {
     setShowSuccess(true);
     // Optionally redirect to home after a delay
@@ -19,29 +24,6 @@ export default function SignUpPage() {
       window.location.href = '/';
     }, 3000);
   };
-
-  if (isAuthenticated) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="max-w-md mx-auto">
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="flex items-center justify-center text-green-600">
-                <CheckCircle className="h-5 w-5 mr-2" />
-                Already Authenticated
-              </CardTitle>
-              <CardDescription>
-                You are already signed in to your account
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <AuthComponent />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
 
   if (showSuccess) {
     return (
