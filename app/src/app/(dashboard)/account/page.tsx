@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { AuthService, CognitoUserInfo } from '@/lib/auth'
-import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
@@ -11,13 +15,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { 
   User, 
   Mail, 
-  Shield, 
-  Clock, 
-  Key,
   AlertCircle,
-  CheckCircle2
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+const googleLogo = "/google-logo.png";
 
 export default function AccountPage() {
   const [user, setUser] = useState<CognitoUserInfo | null>(null)
@@ -44,6 +45,7 @@ export default function AccountPage() {
         // Get current user information
         const currentUser = await AuthService.getCurrentUser()
         setUser(currentUser)
+        console.log('Current User:', currentUser)
 
         // Determine authentication method
         const method = await AuthService.getAuthenticationMethod()
@@ -59,16 +61,6 @@ export default function AccountPage() {
 
     loadUserData()
   }, [router])
-
-  const handleLogout = async () => {
-    try {
-      await AuthService.logoutAll()
-      router.push('/signin')
-    } catch (error) {
-      console.error('Logout failed:', error)
-      router.push('/signin')
-    }
-  }
 
   if (isLoading) {
     return (
@@ -174,6 +166,18 @@ export default function AccountPage() {
               <p className="text-muted-foreground flex items-center space-x-1">
                 <Mail className="h-4 w-4" />
                 <span>{user.email || 'No email available'}</span>
+                {authMethod === 'google' && (
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Badge className="ml-2 h-7 w-7 rounded-full p-1" variant="outline">
+                        <img src={googleLogo} alt="Google Logo" className="w-4 h-4" />
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span>Authenticated via Google</span>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </p>
             </div>
           </div>
@@ -184,7 +188,7 @@ export default function AccountPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Username</label>
-              <p className="text-sm font-mono bg-muted p-2 rounded">{user.username || 'N/A'}</p>
+              <p className="text-sm font-mono bg-muted p-2 rounded truncate">{user.username || 'N/A'}</p>
             </div>
             
             <div className="space-y-2">
@@ -197,14 +201,14 @@ export default function AccountPage() {
             {user.given_name && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">First Name</label>
-                <p className="text-sm bg-muted p-2 rounded">{user.given_name}</p>
+                <p className="text-sm bg-muted p-2 rounded truncate">{user.given_name}</p>
               </div>
             )}
 
             {user.family_name && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Last Name</label>
-                <p className="text-sm bg-muted p-2 rounded">{user.family_name}</p>
+                <p className="text-sm bg-muted p-2 rounded truncate">{user.family_name}</p>
               </div>
             )}
 
@@ -212,109 +216,11 @@ export default function AccountPage() {
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium text-muted-foreground">Email Address</label>
                 <div className="flex items-center space-x-2">
-                  <p className="text-sm bg-muted p-2 rounded flex-1">{user.email}</p>
-                  <Badge variant="secondary" className="flex items-center space-x-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>Verified</span>
-                  </Badge>
+                  <p className="text-sm bg-muted p-2 rounded flex-1 truncate">{user.email}</p>
                 </div>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Security Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Shield className="h-5 w-5" />
-            <span>Security & Authentication</span>
-          </CardTitle>
-          <CardDescription>
-            Manage your account security and authentication methods
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Shield className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Authentication Method</p>
-                <p className="text-sm text-muted-foreground">
-                  {authMethod === 'google' ? 'Google OAuth' : 
-                   authMethod === 'cognito' ? 'Email & Password' : 'Unknown'}
-                </p>
-              </div>
-            </div>
-            <Badge variant={authMethod === 'google' ? 'default' : 'secondary'}>
-              {authMethod === 'google' ? 'Google' : 
-               authMethod === 'cognito' ? 'Cognito' : 'Unknown'}
-            </Badge>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Key className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Account Status</p>
-                <p className="text-sm text-muted-foreground">Your account is active and secure</p>
-              </div>
-            </div>
-            <Badge variant="secondary" className="flex items-center space-x-1">
-              <CheckCircle2 className="h-3 w-3" />
-              <span>Active</span>
-            </Badge>
-          </div>
-
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">Session Management</p>
-                <p className="text-sm text-muted-foreground">Manage your active sessions</p>
-              </div>
-            </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleLogout}
-            >
-              Sign Out
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Actions Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Account Actions</CardTitle>
-          <CardDescription>
-            Manage your account settings and preferences
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Button variant="outline" className="w-full justify-start">
-            <Mail className="h-4 w-4 mr-2" />
-            Update Email Preferences
-          </Button>
-          
-          <Button variant="outline" className="w-full justify-start">
-            <Shield className="h-4 w-4 mr-2" />
-            Security Settings
-          </Button>
-          
-          <Separator />
-          
-          <Button 
-            variant="destructive" 
-            className="w-full justify-start"
-            onClick={handleLogout}
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Sign Out of All Devices
-          </Button>
         </CardContent>
       </Card>
     </div>

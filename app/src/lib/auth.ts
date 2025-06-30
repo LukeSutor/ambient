@@ -220,18 +220,14 @@ export class AuthService {
     try {
       const user = await this.getCurrentUser();
       if (!user) return 'unknown';
+      console.log(user.username);
 
       // Google OAuth users typically have email as username or specific patterns
       // This is a heuristic and may need adjustment based on actual data patterns
-      if (user.username && user.username.startsWith('google-')) {
+      if (user.username && user.username.startsWith('google_')) {
         return 'google';
       }
 
-      // If we have detailed user info with given_name/family_name but no email-like username,
-      // it's likely a regular Cognito user
-      if (user.given_name || user.family_name) {
-        return 'cognito';
-      }
 
       // Default to cognito for regular usernames
       return 'cognito';
