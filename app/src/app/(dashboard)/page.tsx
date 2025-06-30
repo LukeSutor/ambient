@@ -240,11 +240,6 @@ export default function Home() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
-  // Effect to scroll to the bottom of the results box when new results arrive
-  useEffect(() => {
-    resultsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [taskResults]);
-
   return (
     <div className="relative flex flex-col items-center justify-center p-4">      {/* Chat Window */}
       <div className="w-full max-w-md mb-6 bg-white border rounded shadow p-4">        <div className="flex justify-between items-center mb-2">
@@ -349,9 +344,6 @@ export default function Home() {
         </form>
       </div>
       <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
-        <Link href="/signin" className="text-blue-600 hover:underline">
-          Go to Sign In
-        </Link>
         {/* Results Box */}
         <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
           <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
