@@ -47,7 +47,7 @@ export function NavUser({
 
   const handleLogout = async () => {
     try {
-      await AuthService.logout()
+      await AuthService.logoutAll()
       // Redirect to signin page
       router.push('/signin')
     } catch (error) {
@@ -104,7 +104,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/account')}>
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>

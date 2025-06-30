@@ -50,6 +50,48 @@ export class AuthService {
   }
 
   /**
+   * Comprehensive logout that handles both regular and Google authentication
+   * This function attempts to log out from all possible authentication methods
+   */
+  static async logoutAll(): Promise<string> {
+    try {
+      // First, check if user is authenticated and get user info to determine auth method
+      const isAuth = await this.isAuthenticated();
+      if (!isAuth) {
+        console.log('AuthService.logoutAll: User already logged out');
+        return 'User already logged out';
+      }
+
+      console.log('AuthService.logoutAll: Starting comprehensive logout process');
+
+      // Try Google logout first (this is safe to call even if not Google authenticated)
+      try {
+        console.log('AuthService.logoutAll: Attempting Google sign out');
+        await this.googleSignOut();
+        console.log('AuthService.logoutAll: Google sign out completed');
+      } catch (error) {
+        console.warn('AuthService.logoutAll: Google sign out failed or not applicable:', error);
+      }
+
+      // Then perform regular logout to clear all tokens
+      console.log('AuthService.logoutAll: Attempting regular logout');
+      const result = await this.logout();
+      console.log('AuthService.logoutAll: Regular logout completed:', result);
+      return result;
+    } catch (error) {
+      console.error('AuthService.logoutAll: Logout failed:', error);
+      // Still try regular logout as fallback
+      try {
+        console.log('AuthService.logoutAll: Attempting fallback logout');
+        return await this.logout();
+      } catch (fallbackError) {
+        console.error('AuthService.logoutAll: Fallback logout also failed:', fallbackError);
+        throw fallbackError;
+      }
+    }
+  }
+
+  /**
    * Retrieves the stored authentication token
    */
   static async getStoredToken(): Promise<AuthToken | null> {
@@ -172,5 +214,34 @@ export class AuthService {
   static async googleSignOut(): Promise<string> {
     const { invoke } = await import('@tauri-apps/api/core');
     return invoke<string>('google_sign_out');
+  }
+
+  /**
+   * Determines the authentication method used by checking user info patterns
+   * This is a best-effort detection based on available user data
+   */
+  static async getAuthenticationMethod(): Promise<'google' | 'cognito' | 'unknown'> {
+    try {
+      const user = await this.getCurrentUser();
+      if (!user) return 'unknown';
+
+      // Google OAuth users typically have email as username or specific patterns
+      // This is a heuristic and may need adjustment based on actual data patterns
+      if (user.username && user.username.startsWith('google-')) {
+        return 'google';
+      }
+
+      // If we have detailed user info with given_name/family_name but no email-like username,
+      // it's likely a regular Cognito user
+      if (user.given_name || user.family_name) {
+        return 'cognito';
+      }
+
+      // Default to cognito for regular usernames
+      return 'cognito';
+    } catch (error) {
+      console.error('Failed to determine authentication method:', error);
+      return 'unknown';
+    }
   }
 }

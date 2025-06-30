@@ -213,6 +213,11 @@ pub async fn google_sign_out() -> Result<String, String> {
     // Revoke refresh token
     let mut params = HashMap::new();
     params.insert("token", &auth.refresh_token);
+    
+    // For public clients, include client_id in the body instead of Authorization header
+    if client_secret.is_none() {
+        params.insert("client_id", &client_id);
+    }
 
     let client = reqwest::Client::new();
     let mut request = client
