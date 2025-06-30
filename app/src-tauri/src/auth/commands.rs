@@ -165,8 +165,8 @@ pub async fn google_sign_in(app_handle: tauri::AppHandle) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub async fn google_handle_callback(code: String, state: Option<String>) -> Result<SignInResult, String> {
-  google::handle_google_callback(code, state).await
+pub async fn google_handle_callback(code: String) -> Result<SignInResult, String> {
+  google::handle_google_callback(code).await
 }
 
 #[tauri::command]

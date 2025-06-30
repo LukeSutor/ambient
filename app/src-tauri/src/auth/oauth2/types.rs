@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+
+// Google types
+#[derive(Debug, Deserialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub id_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+    pub token_type: String,
+}
+
 // OAuth2 provider types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum OAuth2Provider {

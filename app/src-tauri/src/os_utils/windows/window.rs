@@ -1,6 +1,4 @@
 use std::result::Result;
-use windows::core::*;
-use windows::Win32::Foundation::*;
 use windows::{
   core::*,
   Win32::{
@@ -9,7 +7,7 @@ use windows::{
         CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
         COINIT_APARTMENTTHREADED,
       },
-      Variant::{VARIANT, VT_BSTR},
+      Variant::{VARIANT},
     },
     UI::Accessibility::{
       CUIAutomation, IUIAutomation, IUIAutomationValuePattern, TreeScope_Descendants,
@@ -141,7 +139,7 @@ pub fn get_brave_url() -> Result<String, String> {
 
       // Step 3: Create a condition for the name "Address and search bar"
       let name = BSTR::from("Address and search bar");
-      let mut name_variant = VARIANT::from(name.clone());
+      let name_variant = VARIANT::from(name.clone());
       // name_variant.vt = VT_BSTR;
       // name_variant.bstrVal = name;
 

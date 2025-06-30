@@ -1,42 +1,10 @@
 use crate::auth::storage::store_cognito_auth;
+use crate::auth::oauth2::types::*;
 use crate::auth::types::{CognitoUserInfo, SignInResult};
-use base64::{engine::general_purpose, Engine as _};
 use reqwest;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 extern crate dotenv;
 
-#[derive(Debug, Serialize)]
-struct AuthorizeParams {
-    response_type: String,
-    client_id: String,
-    redirect_uri: String,
-    state: String,
-    identity_provider: String,
-    scope: String,
-}
-
-#[derive(Debug, Serialize)]
-struct TokenRequest {
-    grant_type: String,
-    client_id: String,
-    code: String,
-    redirect_uri: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct TokenResponse {
-    access_token: String,
-    id_token: String,
-    refresh_token: String,
-    expires_in: i64,
-    token_type: String,
-}
-
-#[derive(Debug, Serialize)]
-struct RevokeRequest {
-    token: String,
-}
 
 /// Initiate Google OAuth2 authentication through AWS Cognito
 pub async fn initiate_google_auth() -> Result<String, String> {
@@ -82,7 +50,7 @@ pub async fn initiate_google_auth() -> Result<String, String> {
 }
 
 /// Handle the OAuth2 callback from Google through Cognito
-pub async fn handle_google_callback(code: String, state: Option<String>) -> Result<SignInResult, String> {
+pub async fn handle_google_callback(code: String) -> Result<SignInResult, String> {
     // Load environment variables
     if let Err(e) = dotenv::dotenv() {
         eprintln!("Warning: Could not load .env file: {}", e);
@@ -116,7 +84,7 @@ pub async fn handle_google_callback(code: String, state: Option<String>) -> Resu
 
     // Make token request
     let client = reqwest::Client::new();
-    let mut request = client
+    let request = client
         .post(format!("{}/oauth2/token", cognito_domain))
         .header("Content-Type", "application/x-www-form-urlencoded");
     
@@ -192,7 +160,7 @@ pub async fn google_sign_out() -> Result<String, String> {
     params.insert("client_id", &client_id);
 
     let client = reqwest::Client::new();
-    let mut request = client
+    let request = client
         .post(format!("{}/oauth2/revoke", cognito_domain))
         .header("Content-Type", "application/x-www-form-urlencoded");
     

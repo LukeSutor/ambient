@@ -53,7 +53,7 @@ pub fn run() {
           if url_str.starts_with("cortical://auth/callback") {
             println!("[deep_link] Processing OAuth2 callback: {}", url_str);
             
-            // Parse URL to extract code and state
+            // Parse URL to extract code
             if let Ok(parsed_url) = url::Url::parse(url_str) {
               let query_pairs: std::collections::HashMap<String, String> = parsed_url
                 .query_pairs()
@@ -61,13 +61,12 @@ pub fn run() {
                 .collect();
               
               if let Some(code) = query_pairs.get("code") {
-                let state = query_pairs.get("state").cloned();
                 let code = code.clone();
                 let app_handle_clone = app_handle_for_deep_link.clone();
                 
                 // Handle the callback asynchronously
                 tauri::async_runtime::spawn(async move {
-                  match auth::google_handle_callback(code, state).await {
+                  match auth::google_handle_callback(code).await {
                     Ok(result) => {
                       println!("[deep_link] OAuth2 callback handled successfully");
                       // Emit event to frontend
@@ -123,7 +122,6 @@ pub fn run() {
       // });
 
       // Initialize Qwen3 model on startup
-      let app_handle_clone = app_handle.clone();
       tauri::async_runtime::spawn(async move {
         match models::llm::qwen3::initialize_qwen3_model().await {
           Ok(()) => println!("[setup] Qwen3 model initialized successfully."),
