@@ -3,19 +3,27 @@ import React, { useState, useEffect } from 'react';
 import { SignUpComponent } from '@/components/signup-component';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/lib/auth';
+import { AuthService } from '@/lib/auth';
 import { CheckCircle, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 
 export default function SignUpPage() {
   const [showSuccess, setShowSuccess] = useState(false);
-  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      window.location.href = '/';
-    }
-  }, [isAuthenticated]);
+    const checkAuth = async () => {
+      try {
+        const isAuthenticated = await AuthService.isAuthenticated();
+        if (isAuthenticated) {
+          window.location.href = '/';
+        }
+      } catch (error) {
+        console.error('Error checking authentication:', error);
+      }
+    };
+    
+    checkAuth();
+  }, []);
 
   const handleSignUpSuccess = () => {
     setShowSuccess(true);
