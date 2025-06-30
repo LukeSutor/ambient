@@ -12,6 +12,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
+import { GoogleLoginButton } from '@/components/google-login-button';
+
 
 const formSchema = z.object({
   username: z.string().min(1, {
@@ -86,6 +88,11 @@ export default function SignInPage() {
                   <span className="text-sm">{error}</span>
                 </div>
               )}
+
+              <GoogleLoginButton 
+                onSignInSuccess={() => window.location.href = '/'}
+                className="w-full mb-6"
+              />
 
             <Form {...form}>
 

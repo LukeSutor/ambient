@@ -11,6 +11,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
+import { GoogleLoginButton } from '@/components/google-login-button';
+
 
 const signUpSchema = z.object({
   given_name: z.string().optional(),
@@ -292,6 +294,11 @@ export default function SignUpPage() {
                 <span className="text-red-700 text-sm">{error}</span>
               </div>
             )}
+
+            <GoogleLoginButton 
+              onSignInSuccess={() => window.location.href = '/'}
+              className="w-full mb-6"
+            />
             
             <Form {...signUpForm}>
               <form onSubmit={signUpForm.handleSubmit(onSignUpSubmit)} className="space-y-6">

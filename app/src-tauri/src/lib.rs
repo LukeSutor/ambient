@@ -31,12 +31,24 @@ pub fn run() {
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
     .setup(|app| {
+      // Register deep link scheme for development/testing
+      #[cfg(any(windows, target_os = "linux"))]
+      {
+        use tauri_plugin_deep_link::DeepLinkExt;
+        if let Err(e) = app.deep_link().register_all() {
+          eprintln!("[deep_link] Failed to register deep link schemes: {}", e);
+        } else {
+          println!("[deep_link] Deep link schemes registered successfully");
+        }
+      }
+
       // Handle deep link events for OAuth2 callbacks
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
-        println!("[deep_link] Received URLs: {:?}", event.urls());
+        let urls = event.urls();
+        println!("[deep_link] Received URLs: {:?}", urls);
         
-        for url in &event.urls() {
+        for url in &urls {
           let url_str = url.as_str();
           if url_str.starts_with("cortical://auth/callback") {
             println!("[deep_link] Processing OAuth2 callback: {}", url_str);

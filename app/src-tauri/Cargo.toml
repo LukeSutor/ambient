@@ -67,9 +67,9 @@ tauri-plugin-deep-link = "2"
 urlencoding = "2.1"
 url = "2.4"
 
-[profile.dev]
-debug = true
-opt-level = 3
+#[profile.dev]
+#debug = true
+#opt-level = 3
 
 [features]
 # by default Tauri runs in production mode
@@ -80,4 +80,4 @@ default = [ "custom-protocol" ]
 custom-protocol = [ "tauri/custom-protocol" ]
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-single-instance = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }

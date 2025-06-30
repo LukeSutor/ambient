@@ -39,6 +39,8 @@
         { "args": true, "name": "binaries/mtmd_shared.dll", "sidecar": true }
       ]
     },
-    "fs:default"
+    "fs:default",
+    "core:event:default",
+    "deep-link:default"
   ]
 }
