@@ -42,15 +42,6 @@ export interface SignInResult {
 // Auth service for interacting with Tauri backend
 export class AuthService {
   /**
-   * Initiates the OAuth2 authentication flow
-   * Opens the browser for user authentication
-   */
-  static async authenticate(): Promise<string> {
-    const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<string>('authenticate');
-  }
-
-  /**
    * Logs out the user and clears stored tokens
    */
   static async logout(): Promise<string> {
