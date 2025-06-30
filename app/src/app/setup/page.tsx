@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-// Remove redirect import as it's handled by layout change now
-// import { redirect } from 'next/navigation'
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -52,13 +51,14 @@ function formatBytes(bytes: number, decimals = 1): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
-// Define props for the component
-interface SetupPageProps {
-  onSetupComplete: () => void;
-}
+// Define props for the component - no longer needed
+// interface SetupPageProps {
+//   onSetupComplete: () => void;
+// }
 
-// Accept onSetupComplete prop
-function SetupPage({ onSetupComplete }: SetupPageProps) {
+// Remove onSetupComplete prop
+export default function SetupPage() {
+  const router = useRouter();
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [overallStatus, setOverallStatus] = useState("");
 
@@ -114,8 +114,8 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
       setOverallStatus("Setup completed successfully!");
       toast.success("Setup completed successfully!");
 
-      // Call the callback to notify RootLayout
-      onSetupComplete();
+      // Redirect to dashboard after successful setup
+      router.push('/');
 
     } catch (err) {
       console.error("[SetupPage] Setup failed:", err);
@@ -132,8 +132,8 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
       listeners.forEach(unlisten => unlisten());
       console.log("[SetupPage] Event listeners cleaned up.");
     }
-  // Add onSetupComplete to dependency array
-  }, [onSetupComplete, overallStatus]);
+  // Remove onSetupComplete from dependency array
+  }, [router, overallStatus]);
 
   const progressPercent = vlmTotalSize > 0 ? (vlmCurrentProgress / vlmTotalSize) * 100 : 0;
 
@@ -196,5 +196,3 @@ function SetupPage({ onSetupComplete }: SetupPageProps) {
     </div>
   );
 }
-
-export default SetupPage;
