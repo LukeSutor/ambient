@@ -64,9 +64,9 @@ keyring = "2.3"
 dotenv = "0.15"
 base64 = "0.22"
 
-#[profile.dev]
-#debug = true
-#opt-level = 3
+[profile.dev]
+debug = true
+opt-level = 3
 
 [features]
 # by default Tauri runs in production mode
