@@ -64,6 +64,8 @@ keyring = "2.3"
 dotenv = "0.15"
 base64 = "0.22"
 tauri-plugin-deep-link = "2"
+urlencoding = "2.1"
+url = "2.4"
 
 [profile.dev]
 debug = true

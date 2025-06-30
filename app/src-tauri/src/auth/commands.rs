@@ -1,5 +1,6 @@
 use crate::auth::cognito;
 use crate::auth::jwt::is_token_expired;
+use crate::auth::oauth2::google; // Add this import
 use crate::auth::storage::{
   clear_cognito_auth, clear_stored_token, retrieve_cognito_auth, retrieve_token,
 };
@@ -138,4 +139,20 @@ pub async fn get_access_token() -> Result<Option<String>, String> {
     Ok(None) => Ok(None),
     Err(e) => Err(format!("Failed to retrieve access token: {}", e)),
   }
+}
+
+// Google OAuth2 commands
+#[tauri::command]
+pub async fn google_initiate_auth() -> Result<String, String> {
+  google::initiate_google_auth().await
+}
+
+#[tauri::command]
+pub async fn google_handle_callback(code: String, state: Option<String>) -> Result<SignInResult, String> {
+  google::handle_google_callback(code, state).await
+}
+
+#[tauri::command]
+pub async fn google_sign_out() -> Result<String, String> {
+  google::google_sign_out().await
 }

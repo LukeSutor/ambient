@@ -144,4 +144,33 @@ export class AuthService {
       Authorization: `Bearer ${token}`
     };
   }
+
+  /**
+   * Initiate Google OAuth2 authentication
+   * Returns the authorization URL to open in browser/external app
+   */
+  static async initiateGoogleAuth(): Promise<string> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string>('google_initiate_auth');
+  }
+
+  /**
+   * Handle Google OAuth2 callback
+   * This is typically called automatically by the deep link handler
+   */
+  static async handleGoogleCallback(code: string, state?: string): Promise<SignInResult> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<SignInResult>('google_handle_callback', {
+      code,
+      state,
+    });
+  }
+
+  /**
+   * Sign out from Google OAuth2
+   */
+  static async googleSignOut(): Promise<string> {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return invoke<string>('google_sign_out');
+  }
 }

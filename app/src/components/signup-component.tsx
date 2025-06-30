@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Mail, User, Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { GoogleLoginButton } from '@/components/google-login-button';
 
 interface SignUpComponentProps {
   onSignUpSuccess?: () => void;
@@ -207,6 +208,23 @@ export function SignUpComponent({ onSignUpSuccess, onSwitchToLogin }: SignUpComp
         </CardDescription>
       </CardHeader>
       <CardContent>
+        <div className="space-y-4">
+          {/* Google Sign Up Button */}
+          <GoogleLoginButton 
+            onSignInSuccess={onSignUpSuccess}
+            disabled={isLoading}
+          />
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or create account with email
+              </span>
+            </div>
+          </div>
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
             <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
@@ -324,6 +342,7 @@ export function SignUpComponent({ onSignUpSuccess, onSwitchToLogin }: SignUpComp
             </div>
           )}
         </form>
+        </div>
       </CardContent>
     </Card>
   );

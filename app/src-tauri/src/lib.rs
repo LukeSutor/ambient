@@ -15,6 +15,7 @@ pub mod vlm;
 use db::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri::{Emitter};
 use tauri_plugin_deep_link::DeepLinkExt;
 extern crate dotenv;
 
@@ -30,10 +31,61 @@ pub fn run() {
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
     .setup(|app| {
-      // Handle deep link events
-      app.deep_link().on_open_url(|event| {
-                println!("deep link URLs: {:?}", event.urls());
-            });
+      // Handle deep link events for OAuth2 callbacks
+      let app_handle_for_deep_link = app.handle().clone();
+      app.deep_link().on_open_url(move |event| {
+        println!("[deep_link] Received URLs: {:?}", event.urls());
+        
+        for url in &event.urls() {
+          let url_str = url.as_str();
+          if url_str.starts_with("cortical://auth/callback") {
+            println!("[deep_link] Processing OAuth2 callback: {}", url_str);
+            
+            // Parse URL to extract code and state
+            if let Ok(parsed_url) = url::Url::parse(url_str) {
+              let query_pairs: std::collections::HashMap<String, String> = parsed_url
+                .query_pairs()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+              
+              if let Some(code) = query_pairs.get("code") {
+                let state = query_pairs.get("state").cloned();
+                let code = code.clone();
+                let app_handle_clone = app_handle_for_deep_link.clone();
+                
+                // Handle the callback asynchronously
+                tauri::async_runtime::spawn(async move {
+                  match auth::google_handle_callback(code, state).await {
+                    Ok(result) => {
+                      println!("[deep_link] OAuth2 callback handled successfully");
+                      // Emit event to frontend
+                      if let Err(e) = app_handle_clone.emit("oauth2-success", &result) {
+                        eprintln!("[deep_link] Failed to emit oauth2-success event: {}", e);
+                      }
+                    },
+                    Err(e) => {
+                      eprintln!("[deep_link] Failed to handle OAuth2 callback: {}", e);
+                      // Emit error event to frontend
+                      if let Err(emit_err) = app_handle_clone.emit("oauth2-error", &e) {
+                        eprintln!("[deep_link] Failed to emit oauth2-error event: {}", emit_err);
+                      }
+                    }
+                  }
+                });
+              } else if let Some(error) = query_pairs.get("error") {
+                let error_description = query_pairs.get("error_description").cloned();
+                let error_msg = format!("OAuth2 error: {} - {}", error, error_description.unwrap_or_default());
+                eprintln!("[deep_link] {}", error_msg);
+                
+                // Emit error event to frontend
+                if let Err(e) = app_handle_for_deep_link.emit("oauth2-error", &error_msg) {
+                  eprintln!("[deep_link] Failed to emit oauth2-error event: {}", e);
+                }
+              }
+            }
+          }
+        }
+      });
 
       // Initialize the database connection during setup
       let app_handle = app.handle().clone();
@@ -117,7 +169,10 @@ pub fn run() {
       auth::cognito_confirm_sign_up,
       auth::cognito_resend_confirmation_code,
       auth::get_current_user,
-      auth::get_access_token
+      auth::get_access_token,
+      auth::google_initiate_auth,
+      auth::google_handle_callback,
+      auth::google_sign_out
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
