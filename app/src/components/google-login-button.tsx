@@ -98,14 +98,12 @@ export function GoogleLoginButton({
     setIsLoading(true);
 
     try {
-      // Get the authorization URL from the backend
-      const authUrl = await AuthService.initiateGoogleAuth();
-      console.log('Opening Google OAuth URL:', authUrl);
+      console.log('[auth] Starting Google sign-in via backend...');
       
-      // Open the URL in the default browser
-      const { openUrl } = await import('@tauri-apps/plugin-opener');
-      await openUrl(authUrl);
+      // Use the simplified backend method that handles everything
+      await AuthService.signInWithGoogle();
       
+      console.log('[auth] Backend sign-in initiated successfully');
       // Note: The actual authentication will be handled by the deep link callback
       // The loading state will be cleared by the event listeners above
     } catch (err) {

@@ -25,8 +25,8 @@ pub fn run() {
   dotenv::dotenv().ok();
 
   tauri::Builder::default()
-    .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-      // Write your code here...
+    .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
+      // Do nothing for now...
     }))
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
@@ -110,7 +110,6 @@ pub fn run() {
         }
         Err(e) => {
           eprintln!("[setup] Failed to initialize database: {}", e);
-          // Handle error appropriately, maybe panic or show an error dialog
           panic!("Database initialization failed: {}", e);
         }
       }
@@ -182,8 +181,7 @@ pub fn run() {
       auth::cognito_resend_confirmation_code,
       auth::get_current_user,
       auth::get_access_token,
-      auth::google_initiate_auth,
-      auth::google_handle_callback,
+      auth::google_sign_in,
       auth::google_sign_out
     ])
     .run(tauri::generate_context!())

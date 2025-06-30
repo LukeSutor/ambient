@@ -22,25 +22,87 @@
           "name": "binaries/llama",
           "sidecar": true
         },
-        { "args": true, "name": "binaries/ggml-base.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-alderlake.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-haswell.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-icelake.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-sandybridge.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-sapphirerapids.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-skylakex.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-sse42.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-cpu-x64.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml-rpc.dll", "sidecar": true },
-        { "args": true, "name": "binaries/ggml.dll", "sidecar": true },
-        { "args": true, "name": "binaries/libcurl-x64.dll", "sidecar": true },
-        { "args": true, "name": "binaries/llama.dll", "sidecar": true },
-        { "args": true, "name": "binaries/llava_shared.dll", "sidecar": true },
-        { "args": true, "name": "binaries/mtmd_shared.dll", "sidecar": true }
+        {
+          "args": true,
+          "name": "binaries/ggml-base.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-alderlake.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-haswell.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-icelake.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-sandybridge.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-sapphirerapids.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-skylakex.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-sse42.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-x64.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-rpc.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/libcurl-x64.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/llama.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/llava_shared.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/mtmd_shared.dll",
+          "sidecar": true
+        }
       ]
     },
     "fs:default",
     "core:event:default",
-    "deep-link:default"
+    "deep-link:default",
+    "opener:default",
+    "opener:default"
   ]
 }

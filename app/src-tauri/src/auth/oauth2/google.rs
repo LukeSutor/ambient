@@ -93,9 +93,6 @@ pub async fn handle_google_callback(code: String, state: Option<String>) -> Resu
     let client_id = std::env::var("COGNITO_CLIENT_ID")
         .map_err(|_| "Missing COGNITO_CLIENT_ID environment variable".to_string())?;
     
-    // For public clients, no client secret is needed
-    let client_secret = std::env::var("COGNITO_CLIENT_SECRET").ok();
-    
     let domain = std::env::var("COGNITO_USER_POOL_DOMAIN")
         .map_err(|_| "Missing COGNITO_USER_POOL_DOMAIN environment variable".to_string())?;
     
@@ -107,13 +104,6 @@ pub async fn handle_google_callback(code: String, state: Option<String>) -> Resu
         domain
     } else {
         format!("https://{}.auth.{}.amazoncognito.com", domain, region)
-    };
-
-    // Create authorization header (only if client secret exists)
-    let auth_header = if let Some(secret) = &client_secret {
-        Some(base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", client_id, secret)))
-    } else {
-        None
     };
     
     // Prepare token request
@@ -129,11 +119,6 @@ pub async fn handle_google_callback(code: String, state: Option<String>) -> Resu
     let mut request = client
         .post(format!("{}/oauth2/token", cognito_domain))
         .header("Content-Type", "application/x-www-form-urlencoded");
-    
-    // Add authorization header only if we have a client secret
-    if let Some(auth) = auth_header {
-        request = request.header("Authorization", format!("Basic {}", auth));
-    }
     
     let response = request
         .form(&params)
@@ -186,10 +171,7 @@ pub async fn google_sign_out() -> Result<String, String> {
 
     let client_id = std::env::var("COGNITO_CLIENT_ID")
         .map_err(|_| "Missing COGNITO_CLIENT_ID environment variable".to_string())?;
-    
-    // For public clients, no client secret is needed
-    let client_secret = std::env::var("COGNITO_CLIENT_SECRET").ok();
-    
+        
     let domain = std::env::var("COGNITO_USER_POOL_DOMAIN")
         .map_err(|_| "Missing COGNITO_USER_POOL_DOMAIN environment variable".to_string())?;
     
@@ -202,32 +184,17 @@ pub async fn google_sign_out() -> Result<String, String> {
     } else {
         format!("https://{}.auth.{}.amazoncognito.com", domain, region)
     };
-
-    // Create authorization header (only if client secret exists)
-    let auth_header = if let Some(secret) = &client_secret {
-        Some(base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", client_id, secret)))
-    } else {
-        None
-    };
     
     // Revoke refresh token
     let mut params = HashMap::new();
     params.insert("token", &auth.refresh_token);
     
-    // For public clients, include client_id in the body instead of Authorization header
-    if client_secret.is_none() {
-        params.insert("client_id", &client_id);
-    }
+    params.insert("client_id", &client_id);
 
     let client = reqwest::Client::new();
     let mut request = client
         .post(format!("{}/oauth2/revoke", cognito_domain))
         .header("Content-Type", "application/x-www-form-urlencoded");
-    
-    // Add authorization header only if we have a client secret
-    if let Some(auth) = auth_header {
-        request = request.header("Authorization", format!("Basic {}", auth));
-    }
     
     let response = request
         .form(&params)

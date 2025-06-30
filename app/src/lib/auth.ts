@@ -197,15 +197,11 @@ export class AuthService {
   }
 
   /**
-   * Handle Google OAuth2 callback
-   * This is typically called automatically by the deep link handler
+   * Sign in with Google (simplified - handles URL generation and opening in backend)
    */
-  static async handleGoogleCallback(code: string, state?: string): Promise<SignInResult> {
+  static async signInWithGoogle(): Promise<void> {
     const { invoke } = await import('@tauri-apps/api/core');
-    return invoke<SignInResult>('google_handle_callback', {
-      code,
-      state,
-    });
+    return invoke<void>('google_sign_in');
   }
 
   /**

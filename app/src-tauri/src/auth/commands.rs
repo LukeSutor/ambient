@@ -5,6 +5,7 @@ use crate::auth::storage::{
   clear_cognito_auth, clear_stored_token, retrieve_cognito_auth, retrieve_token,
 };
 use crate::auth::types::{CognitoUserInfo, SignInResult, SignUpResult};
+use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 pub async fn logout() -> Result<String, String> {
@@ -145,6 +146,22 @@ pub async fn get_access_token() -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn google_initiate_auth() -> Result<String, String> {
   google::initiate_google_auth().await
+}
+
+#[tauri::command]
+pub async fn google_sign_in(app_handle: tauri::AppHandle) -> Result<(), String> {
+  println!("[auth] Starting Google sign-in process");
+  
+  // Generate the OAuth URL
+  let auth_url = google::initiate_google_auth().await?;
+  println!("[auth] Generated OAuth URL: {}", auth_url);
+  
+  // Open the URL in the default browser
+  app_handle.opener().open_url(&auth_url, None::<&str>)
+    .map_err(|e| format!("Failed to open OAuth URL: {}", e))?;
+  
+  println!("[auth] Successfully opened OAuth URL in browser");
+  Ok(())
 }
 
 #[tauri::command]
