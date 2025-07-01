@@ -43,8 +43,9 @@ pub fn run() {
         }
       }
 
-      // Initialize the event emitter
+      // Initialize the event emitter and add all event listeners
       events::get_emitter().set_app_handle(app.handle().clone());
+      events::initialize_event_listeners(app.handle().clone());
 
       // Handle deep link events for OAuth2 callbacks
       let app_handle_for_deep_link = app.handle().clone();
