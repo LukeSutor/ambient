@@ -11,6 +11,7 @@ pub mod prompts;
 pub mod scheduler;
 pub mod setup;
 pub mod vlm;
+pub mod events;
 // use crate::integrations::chromium::server::start_server_on_available_port;
 use db::DbState;
 use std::sync::Mutex;
@@ -41,6 +42,9 @@ pub fn run() {
           println!("[deep_link] Deep link schemes registered successfully");
         }
       }
+
+      // Initialize the event emitter
+      events::get_emitter().set_app_handle(app.handle().clone());
 
       // Handle deep link events for OAuth2 callbacks
       let app_handle_for_deep_link = app.handle().clone();
