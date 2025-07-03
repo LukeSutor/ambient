@@ -100,13 +100,9 @@ We envision future integrations with:
 
 ## 📂 Project Structure
 
-/src-tauri/
-└── rust backend for events, LLMs, automation
-/frontend/
-└── Next.js UI
-/models/
-└── Downloaded llama.cpp models
-/utils/
-└── Text formatting, auth hooks, helpers
-/docs/
-└── Future documentation for task schemas and integration
+/app/
+└── Tauri application with Next.js frontend
+/backend/
+└── `llama.cpp` code and other utilities
+/ml/
+└── Model training scripts and machine learning experiments
