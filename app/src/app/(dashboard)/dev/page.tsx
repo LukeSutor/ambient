@@ -270,37 +270,24 @@ export default function Dev() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
-  // --- Focused Window Name ---
-  const [focusedWindowName, setFocusedWindowName] = useState<string | null>(null);
-  const [focusedWindowError, setFocusedWindowError] = useState<string | null>(null);
+  // --- Screen Text by Application ---
+  const [screenTextData, setScreenTextData] = useState<any>(null);
+  const [screenTextError, setScreenTextError] = useState<string | null>(null);
+  const [screenTextLoading, setScreenTextLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    let isMounted = true;
-    let interval: NodeJS.Timeout;
-
-    const fetchWindowName = async () => {
-      try {
-        const name = await invoke<string>("get_screen_text_by_application");
-        if (isMounted) {
-          setFocusedWindowName(name);
-          setFocusedWindowError(null);
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          setFocusedWindowError(typeof err === "string" ? err : JSON.stringify(err));
-          setFocusedWindowName(null);
-        }
-      }
-    };
-
-    fetchWindowName(); // Initial fetch
-    interval = setInterval(fetchWindowName, 2000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  const fetchScreenText = async () => {
+    setScreenTextLoading(true);
+    setScreenTextError(null);
+    try {
+      const data = await invoke("get_screen_text_by_application");
+      setScreenTextData(data);
+    } catch (err: any) {
+      setScreenTextError(typeof err === "string" ? err : JSON.stringify(err));
+      setScreenTextData(null);
+    } finally {
+      setScreenTextLoading(false);
+    }
+  };
 
   // --- Browser URL ---
   const [browserUrl, setBrowserUrl] = useState<string | null>(null);
@@ -365,6 +352,9 @@ export default function Dev() {
         <Button onClick={takeScreenshot}>Take Screenshot</Button>
         <Button onClick={startScheduler}>Start Scheduler</Button>
         <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
+        <Button onClick={fetchScreenText} disabled={screenTextLoading}>
+          {screenTextLoading ? "Loading..." : "Get Screen Text"}
+        </Button>
         <Button asChild><Link href="/setup">Setup</Link></Button>
       </div>
 
@@ -527,14 +517,19 @@ export default function Dev() {
         )}
       </div>
 
-      {/* --- Focused Window Name Section --- */}
+      {/* --- Screen Text by Application Section --- */}
       <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-yellow-50">
-        <h2 className="text-lg font-semibold mb-2">Focused Window Name</h2>
-        {focusedWindowName && (
-          <div className="mt-2 text-green-700 font-mono whitespace-pre-wrap">{focusedWindowName}</div>
+        <h2 className="text-lg font-semibold mb-2">Screen Text by Application</h2>
+        {screenTextData && (
+          <div className="mt-2 text-green-700 font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
+            {JSON.stringify(screenTextData, null, 2)}
+          </div>
         )}
-        {focusedWindowError && (
-          <div className="mt-2 text-red-700 font-mono">Error: {focusedWindowError}</div>
+        {screenTextError && (
+          <div className="mt-2 text-red-700 font-mono">Error: {screenTextError}</div>
+        )}
+        {!screenTextData && !screenTextError && !screenTextLoading && (
+          <div className="mt-2 text-gray-500">Click "Get Screen Text" button to fetch application text data.</div>
         )}
       </div>
 
