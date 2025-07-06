@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
 use serde::Serialize;
@@ -22,7 +22,7 @@ impl EventEmitter {
     pub fn emit<T: Serialize + Clone>(&self, event: &str, payload: T) -> Result<(), String> {
         let app_handle = self.app_handle.lock().unwrap();
         if let Some(handle) = app_handle.as_ref() {
-            handle.emit_all(event, payload)
+            handle.emit(event, payload)
                 .map_err(|e| format!("Failed to emit event '{}': {}", event, e))
         } else {
             Err("AppHandle not initialized".to_string())
@@ -32,7 +32,7 @@ impl EventEmitter {
     pub fn emit_to_window<T: Serialize + Clone>(&self, window_label: &str, event: &str, payload: T) -> Result<(), String> {
         let app_handle = self.app_handle.lock().unwrap();
         if let Some(handle) = app_handle.as_ref() {
-            if let Some(window) = handle.get_window(window_label) {
+            if let Some(window) = handle.get_webview_window(window_label) {
                 window.emit(event, payload)
                     .map_err(|e| format!("Failed to emit event '{}' to window '{}': {}", event, window_label, e))
             } else {

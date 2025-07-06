@@ -1,22 +1,29 @@
-use crate::{data, prompts, vlm};
+use crate::events::{emitter, types::*};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, Duration};
+use tokio::time::{interval, Duration};
+use tokio_util::sync::CancellationToken;
+use chrono;
 
 struct SchedulerState {
   task_handle: Option<JoinHandle<()>>,
+  capture_handle: Option<JoinHandle<()>>,
+  capture_cancel_token: Option<CancellationToken>,
   interval_minutes: u64,
+  capture_enabled: bool,
 }
 
 // Global state to hold the scheduler task handle and interval
 static SCHEDULER_STATE: Lazy<Arc<Mutex<SchedulerState>>> = Lazy::new(|| {
   Arc::new(Mutex::new(SchedulerState {
     task_handle: None,
-    interval_minutes: 1, // Default interval: 1 minute
+    capture_handle: None,
+    capture_cancel_token: None,
+    interval_minutes: 1,
+    capture_enabled: false,
   }))
 });
 
@@ -26,187 +33,27 @@ struct TaskResultPayload {
   result: String,
 }
 
-// The core function that runs periodically
-async fn run_scheduled_task(app_handle: tauri::AppHandle) {
-  println!("[scheduler] Running scheduled task...");
-
-  // Take screenshot
-  let screenshot_path_result = data::take_screenshot(app_handle.clone());
-  let screenshot_path = match screenshot_path_result {
-    path => {
-      println!("[scheduler] Screenshot taken: {}", path);
-      path
-    }
-  };
-
-  // Get prompt
-  let prompt_key = "SUMMARIZE_ACTION";
-  let prompt = match prompts::get_prompt(prompt_key) {
-    Some(p) => {
-      println!("[scheduler] Fetched prompt for key '{}'", prompt_key);
-      p.to_string()
-    }
-    None => {
-      eprintln!("[scheduler] Error: Prompt key '{}' not found.", prompt_key);
-      return;
-    }
-  };
-
-  // Call VLM to get response (now returns serde_json::Value)
-  let vlm_response =
-    vlm::get_vlm_response(app_handle.clone(), screenshot_path.clone(), prompt).await;
-
-  let mut application = String::new();
-  let mut description = String::new();
-
-  match &vlm_response {
-    Ok(json_val) => {
-      println!("[scheduler] VLM response received successfully.");
-      // Extract "application" and "description" fields from JSON
-      application = json_val
-        .get("application")
-        .and_then(|v| v.as_str())
-        .unwrap_or("unknown")
-        .to_string();
-      description = json_val
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    }
-    Err(e) => {
-      eprintln!("[scheduler] Error getting VLM response: {}", e);
-    }
-  }
-
-  // Embed the description text and save to a Vec<f32>
-  let embedding: Vec<f32> = match &vlm_response {
-    Ok(json_val) => {
-      let desc = json_val
-        .get("description")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-      match crate::embedding::get_embedding(app_handle.clone(), desc).await {
-        Ok(json_val) => {
-          if let serde_json::Value::Array(arr) = json_val {
-            arr
-              .iter()
-              .filter_map(|v| v.as_f64().map(|f| f as f32))
-              .collect()
-          } else {
-            eprintln!("[scheduler] Embedding result is not an array.");
-            Vec::new()
-          }
-        }
-        Err(e) => {
-          eprintln!("[scheduler] Failed to get embedding: {}", e);
-          Vec::new()
+// Function to emit CAPTURE_SCREEN event every 10 seconds
+async fn run_capture_screen_task(cancel_token: CancellationToken) {
+  let mut interval = interval(Duration::from_secs(10));
+  
+  loop {
+    tokio::select! {
+      _ = interval.tick() => {
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        let capture_event = CaptureScreenEvent { timestamp };
+        
+        if let Err(e) = emitter::emit(CAPTURE_SCREEN, capture_event) {
+          eprintln!("[scheduler] Failed to emit CAPTURE_SCREEN event: {}", e);
+        } else {
+          println!("[scheduler] Emitted CAPTURE_SCREEN event");
         }
       }
-    }
-    Err(_) => Vec::new(),
-  };
-
-  // Insert the event into the database
-  if !embedding.is_empty() && !description.is_empty() {
-    let timestamp = chrono::Utc::now().timestamp();
-    let application_opt = application.clone();
-    let description_opt = Some(description.clone());
-    let description_embedding = embedding.clone();
-
-    // Get the tauri::State<DbState>
-    let db_state = app_handle.state::<crate::db::DbState>();
-
-    match crate::db::insert_event(
-      db_state,
-      timestamp,
-      application_opt,
-      description_opt,
-      description_embedding,
-    ) {
-      Ok(_) => {
-        println!("[scheduler] Event inserted into database successfully.");
-      }
-      Err(e) => {
-        eprintln!("[scheduler] Failed to insert event into database: {}", e);
+      _ = cancel_token.cancelled() => {
+        println!("[scheduler] Capture task cancelled gracefully");
+        break;
       }
     }
-  } else {
-    eprintln!("[scheduler] Skipping DB insert: embedding or description is empty.");
-  }
-
-  // Emit the result to the frontend (send the whole JSON if available, else error string)
-  let emit_result = match &vlm_response {
-    Ok(json_val) => serde_json::to_string(json_val).unwrap_or_else(|_| "".to_string()),
-    Err(e) => e.to_string(),
-  };
-
-  if let Err(e) = app_handle.emit(
-    "task-completed",
-    TaskResultPayload {
-      result: emit_result,
-    },
-  ) {
-    eprintln!("[scheduler] Failed to emit task-completed event: {}", e);
-  }
-  println!("[scheduler] Scheduled task finished.");
-}
-
-#[tauri::command]
-pub async fn start_scheduler(
-  app_handle: tauri::AppHandle,
-  interval: Option<u64>,
-) -> Result<(), String> {
-  let mut state = SCHEDULER_STATE.lock().await;
-
-  // Stop existing task if running
-  if let Some(handle) = state.task_handle.take() {
-    println!("[scheduler] Aborting previous task...");
-    handle.abort();
-  }
-
-  // Update interval if provided, otherwise use existing or default
-  if let Some(new_interval) = interval {
-    if new_interval == 0 {
-      return Err("Interval must be greater than 0.".to_string());
-    }
-    state.interval_minutes = new_interval;
-  }
-  let current_interval = state.interval_minutes;
-  let interval_duration = Duration::from_secs(current_interval * 60);
-
-  println!(
-    "[scheduler] Starting scheduler with interval: {} minutes",
-    current_interval
-  );
-
-  // Spawn the new task
-  let handle = tokio::spawn(async move {
-    loop {
-      let app_handle_clone = app_handle.clone();
-      run_scheduled_task(app_handle_clone).await;
-      sleep(interval_duration).await;
-    }
-  });
-
-  state.task_handle = Some(handle);
-  println!("[scheduler] Scheduler started successfully.");
-  Ok(())
-}
-
-#[tauri::command]
-pub async fn stop_scheduler() -> Result<(), String> {
-  let mut state = SCHEDULER_STATE.lock().await;
-
-  if let Some(handle) = state.task_handle.take() {
-    println!("[scheduler] Stopping scheduler...");
-    handle.abort();
-    println!("[scheduler] Scheduler stopped successfully.");
-    Ok(())
-  } else {
-    println!("[scheduler] Scheduler is not running.");
-    Err("Scheduler is not running.".to_string())
   }
 }
 
@@ -214,4 +61,73 @@ pub async fn stop_scheduler() -> Result<(), String> {
 pub async fn get_scheduler_interval() -> Result<u64, String> {
   let state = SCHEDULER_STATE.lock().await;
   Ok(state.interval_minutes)
+}
+
+#[tauri::command]
+pub async fn start_capture_scheduler() -> Result<(), String> {
+  let mut state = SCHEDULER_STATE.lock().await;
+
+  // Stop existing capture task if running
+  if let Some(cancel_token) = state.capture_cancel_token.take() {
+    println!("[scheduler] Cancelling previous capture task...");
+    cancel_token.cancel();
+  }
+  
+  if let Some(handle) = state.capture_handle.take() {
+    // Wait a moment for graceful shutdown, then abort if needed
+    tokio::time::timeout(Duration::from_millis(100), async {
+      let _ = handle.await;
+    }).await.ok();
+  }
+
+  println!("[scheduler] Starting capture screen scheduler (10 second interval)");
+
+  // Create new cancellation token
+  let cancel_token = CancellationToken::new();
+  let cancel_token_clone = cancel_token.clone();
+
+  // Spawn the new capture task
+  let handle = tokio::spawn(async move {
+    run_capture_screen_task(cancel_token_clone).await;
+  });
+
+  state.capture_handle = Some(handle);
+  state.capture_cancel_token = Some(cancel_token);
+  state.capture_enabled = true;
+  println!("[scheduler] Capture scheduler started successfully.");
+  Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_capture_scheduler() -> Result<(), String> {
+  let mut state = SCHEDULER_STATE.lock().await;
+
+  if let Some(cancel_token) = state.capture_cancel_token.take() {
+    println!("[scheduler] Stopping capture scheduler...");
+    
+    // Request graceful cancellation
+    cancel_token.cancel();
+    
+    // Wait for the task to finish gracefully
+    if let Some(handle) = state.capture_handle.take() {
+      match tokio::time::timeout(Duration::from_secs(1), handle).await {
+        Ok(_) => println!("[scheduler] Capture scheduler stopped gracefully."),
+        Err(_) => {
+          println!("[scheduler] Capture scheduler timed out, but should stop soon.");
+        }
+      }
+    }
+    
+    state.capture_enabled = false;
+    Ok(())
+  } else {
+    println!("[scheduler] Capture scheduler is not running.");
+    Err("Capture scheduler is not running.".to_string())
+  }
+}
+
+#[tauri::command]
+pub async fn is_scheduler_running() -> Result<bool, String> {
+  let state = SCHEDULER_STATE.lock().await;
+  Ok(state.capture_enabled)
 }

@@ -33,6 +33,10 @@ export default function Home() {
   const [modelStatus, setModelStatus] = useState<{initialized: boolean, loading: boolean}>({ initialized: false, loading: true });
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamContentRef = useRef<string>("");
+  
+  // Capture scheduler state
+  const [isCaptureSchedulerRunning, setIsCaptureSchedulerRunning] = useState(false);
+  const [captureEvents, setCaptureEvents] = useState<string[]>([]);
   // Load conversation history on component mount
   useEffect(() => {
     loadConversationHistory();
@@ -76,6 +80,25 @@ export default function Home() {
     
     setupStreamListener();
     
+    // Set up capture screen event listener
+    let unlistenCapture: (() => void) | undefined;
+    
+    async function setupCaptureListener() {
+      try {
+        unlistenCapture = await listen('capture_screen', (event) => {
+          const timestamp = new Date().toLocaleTimeString();
+          setCaptureEvents(prev => [...prev, `Capture event at ${timestamp}`].slice(-10)); // Keep last 10 events
+          console.log("Received capture_screen event:", event);
+        });
+        console.log("Capture event listener set up.");
+      } catch (error) {
+        console.error("Failed to set up capture listener:", error);
+      }
+    }
+    
+    setupCaptureListener();
+    checkCaptureSchedulerStatus();
+    
     // Check model status periodically until initialized
     const statusInterval = setInterval(async () => {
       const isInitialized = await checkModelStatus();
@@ -88,6 +111,9 @@ export default function Home() {
       clearInterval(statusInterval);
       if (unlistenStream) {
         unlistenStream();
+      }
+      if (unlistenCapture) {
+        unlistenCapture();
       }
     };
   }, []);
@@ -240,6 +266,36 @@ export default function Home() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
+  // Capture scheduler functions
+  async function startCaptureScheduler() {
+    try {
+      await invoke("start_capture_scheduler");
+      setIsCaptureSchedulerRunning(true);
+      console.log("Capture scheduler started successfully.");
+    } catch (err) {
+      console.error("Error starting capture scheduler:", err);
+    }
+  }
+
+  async function stopCaptureScheduler() {
+    try {
+      await invoke("stop_capture_scheduler");
+      setIsCaptureSchedulerRunning(false);
+      console.log("Capture scheduler stopped successfully.");
+    } catch (err) {
+      console.error("Error stopping capture scheduler:", err);
+    }
+  }
+
+  async function checkCaptureSchedulerStatus() {
+    try {
+      const isRunning = await invoke<boolean>("is_scheduler_running");
+      setIsCaptureSchedulerRunning(isRunning);
+    } catch (err) {
+      console.error("Error checking capture scheduler status:", err);
+    }
+  }
+
   return (
     <div className="relative flex flex-col items-center justify-center p-4">      {/* Chat Window */}
       <div className="w-full max-w-md mb-6 bg-white border rounded shadow p-4">        <div className="flex justify-between items-center mb-2">
@@ -344,6 +400,43 @@ export default function Home() {
         </form>
       </div>
       <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
+        {/* Capture Scheduler Controls */}
+        <div className="w-full p-4 border rounded-md bg-white">
+          <h2 className="text-lg font-semibold mb-2">Capture Scheduler</h2>
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`w-2 h-2 rounded-full ${isCaptureSchedulerRunning ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span className="text-sm text-gray-600">
+              {isCaptureSchedulerRunning ? 'Running (every 10 seconds)' : 'Stopped'}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={startCaptureScheduler}
+              disabled={isCaptureSchedulerRunning}
+              className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700 disabled:bg-gray-400"
+            >
+              Start Capture
+            </button>
+            <button
+              onClick={stopCaptureScheduler}
+              disabled={!isCaptureSchedulerRunning}
+              className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700 disabled:bg-gray-400"
+            >
+              Stop Capture
+            </button>
+          </div>
+          {captureEvents.length > 0 && (
+            <div className="mt-2">
+              <h3 className="text-sm font-semibold mb-1">Recent Capture Events:</h3>
+              <div className="text-xs text-gray-600 max-h-20 overflow-y-auto">
+                {captureEvents.map((event, index) => (
+                  <div key={index}>{event}</div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        
         {/* Results Box */}
         <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
           <h2 className="text-lg font-semibold mb-2">Task Results:</h2>

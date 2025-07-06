@@ -43,8 +43,9 @@ pub fn run() {
         }
       }
 
-      // Initialize the event emitter and add all event listeners
+      // Initialize the event emitter
       events::get_emitter().set_app_handle(app.handle().clone());
+      // Initialize event listeners
       events::initialize_event_listeners(app.handle().clone());
 
       // Handle deep link events for OAuth2 callbacks
@@ -143,9 +144,10 @@ pub fn run() {
       vlm::get_vlm_response,
       data::take_screenshot,
       prompts::get_prompt_command,
-      scheduler::start_scheduler,
-      scheduler::stop_scheduler,
+      scheduler::start_capture_scheduler,
+      scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
+      scheduler::is_scheduler_running,
       embedding::get_embedding,
       db::execute_sql,
       db::reset_database,
