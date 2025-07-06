@@ -1,6 +1,5 @@
 use crate::events::{emitter, types::*};
 use once_cell::sync::Lazy;
-use serde::Serialize;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -9,29 +8,21 @@ use tokio_util::sync::CancellationToken;
 use chrono;
 
 struct SchedulerState {
-  task_handle: Option<JoinHandle<()>>,
   capture_handle: Option<JoinHandle<()>>,
   capture_cancel_token: Option<CancellationToken>,
   interval_minutes: u64,
   capture_enabled: bool,
 }
 
-// Global state to hold the scheduler task handle and interval
+// Global state to hold the scheduler and interval
 static SCHEDULER_STATE: Lazy<Arc<Mutex<SchedulerState>>> = Lazy::new(|| {
   Arc::new(Mutex::new(SchedulerState {
-    task_handle: None,
     capture_handle: None,
     capture_cancel_token: None,
     interval_minutes: 1,
     capture_enabled: false,
   }))
 });
-
-// Define the payload for the event
-#[derive(Clone, Serialize)]
-struct TaskResultPayload {
-  result: String,
-}
 
 // Function to emit CAPTURE_SCREEN event every 10 seconds
 async fn run_capture_screen_task(cancel_token: CancellationToken) {
