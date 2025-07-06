@@ -280,7 +280,7 @@ export default function Dev() {
 
     const fetchWindowName = async () => {
       try {
-        const name = await invoke<string>("get_all_text_from_focused_app");
+        const name = await invoke<string>("get_screen_text_by_application");
         if (isMounted) {
           setFocusedWindowName(name);
           setFocusedWindowError(null);
