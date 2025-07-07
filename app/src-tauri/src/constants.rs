@@ -3,10 +3,17 @@
 // Directory names
 pub const EMBEDDING_DIR: &str = "models/embedding";
 pub const VLM_DIR: &str = "models/vlm";
+pub const LLM_DIR: &str = "models/llm";
 
 // VLM model filenames
 pub const TEXT_FILE: &str = "text-model.gguf";
 pub const MMPROJ_FILE: &str = "mmproj-model.gguf";
+
+// LLM model filename
+pub const LLM_FILE: &str = "model.gguf";
+
+// LLM model download link (example - update with actual model)
+pub const LLM_LINK: &str = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf";
 
 // VLM model download links
 // pub const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf";
