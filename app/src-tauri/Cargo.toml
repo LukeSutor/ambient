@@ -1,7 +1,3 @@
-cargo-features = ["profile-rustflags"]
-# Remove this if the builds get unstable
-
-
 [package]
 name = "local-computer-use"
 version = "0.1.0"
@@ -74,8 +70,6 @@ url = "2.4"
 [profile.dev]
 debug = true
 opt-level = 3
-rustflags = ["-Zthreads=8"]
-
 
 [features]
 # by default Tauri runs in production mode

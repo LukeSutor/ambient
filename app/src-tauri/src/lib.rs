@@ -12,13 +12,16 @@ pub mod scheduler;
 pub mod setup;
 pub mod vlm;
 pub mod events;
+pub mod types;
 // use crate::integrations::chromium::server::start_server_on_available_port;
 use db::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
 use tauri::{Emitter};
 use tauri_plugin_deep_link::DeepLinkExt;
+use types::AppState;
 extern crate dotenv;
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -43,9 +46,13 @@ pub fn run() {
         }
       }
 
-      // Initialize the event emitter
+      // Get the PID and save it in the app state
+      let pid = std::process::id();
+      app.manage(AppState { pid });
+      println!("[setup] Application PID: {}", pid);
+
+      // Initialize the event emitter and listeners
       events::get_emitter().set_app_handle(app.handle().clone());
-      // Initialize event listeners
       events::initialize_event_listeners(app.handle().clone());
 
       // Handle deep link events for OAuth2 callbacks
@@ -168,7 +175,6 @@ pub fn run() {
       os_utils::windows::window::get_focused_window_name,
       os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
-      os_utils::windows::window::get_screen_text_by_application,
       os_utils::windows::window::get_screen_text_formatted,
       os_utils::windows::window::get_all_visible_windows,
       models::llm::qwen3::generate,

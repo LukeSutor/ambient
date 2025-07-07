@@ -1,5 +1,6 @@
 use std::result::Result;
-use tauri::AppHandle;
+use crate::types::AppState;
+use tauri::{AppHandle, Manager};
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::task;
@@ -189,8 +190,7 @@ pub fn get_brave_url() -> Result<String, String> {
   }
 }
 
-#[tauri::command]
-pub fn get_screen_text_by_application() -> Result<Vec<ApplicationTextData>, String> {
+pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTextData>, String> {
   println!("get_screen_text_by_application called");
   unsafe {
     let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
@@ -261,6 +261,18 @@ pub fn get_screen_text_by_application() -> Result<Vec<ApplicationTextData>, Stri
           .GetElement(i)
           .map_err(|e| format!("Failed to get element {}: {:?}", i, e))?;
 
+        // Get the process ID from the cached element
+        let process_id = if let Ok(pid) = element.CachedProcessId() {
+          pid
+        } else {
+          continue; // Skip elements without process ID
+        };
+
+        // Skip if this matches the app's PID
+        if process_id == app_pid as i32 {
+          continue;
+        }
+
         // Get the text content
         let text = if let Ok(name_bstr) = element.CachedName() {
           let text = name_bstr.to_string();
@@ -270,13 +282,6 @@ pub fn get_screen_text_by_application() -> Result<Vec<ApplicationTextData>, Stri
           text
         } else {
           continue; // Skip elements without text
-        };
-
-        // Get the process ID from the cached element
-        let process_id = if let Ok(pid) = element.CachedProcessId() {
-          pid
-        } else {
-          continue; // Skip elements without process ID
         };
 
         // Add text to the appropriate process group
@@ -447,6 +452,33 @@ fn is_junk_text(text: &str) -> bool {
     return true;
   }
   
+  // Filter out strings that contain only non-printable characters or replacement characters
+  if text.chars().all(|c| c.is_control() || c == '\u{FFFD}' || c == '�') {
+    return true;
+  }
+  
+  // Filter out strings containing Unicode Private Use Area characters (icon fonts, custom symbols)
+  if text.chars().any(|c| {
+    let code = c as u32;
+    // Private Use Area ranges
+    (code >= 0xE000 && code <= 0xF8FF) || // Basic Private Use Area
+    (code >= 0xF0000 && code <= 0xFFFFD) || // Supplementary Private Use Area-A
+    (code >= 0x100000 && code <= 0x10FFFD) // Supplementary Private Use Area-B
+  }) {
+    return true;
+  }
+  
+  // Filter out strings that are mostly Unicode replacement characters (emoji fallbacks)
+  let replacement_count = text.chars().filter(|&c| c == '\u{FFFD}' || c == '�').count();
+  if replacement_count > 0 && replacement_count >= text.chars().count() / 2 {
+    return true;
+  }
+  
+  // Filter out strings that are just whitespace mixed with replacement characters
+  if text.chars().all(|c| c.is_whitespace() || c == '\u{FFFD}' || c == '�' || c.is_control()) {
+    return true;
+  }
+  
   // Filter out very short strings that are likely UI artifacts
   if text.len() <= 3 && text.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',' || c == '$') {
     return true;
@@ -454,6 +486,20 @@ fn is_junk_text(text: &str) -> bool {
   
   // Filter out strings that are just numbers or basic UI text
   if text.chars().all(|c| c.is_ascii_digit() || c.is_whitespace()) {
+    return true;
+  }
+  
+  // Filter out strings that are only special Unicode characters (box drawing, etc.)
+  if text.chars().all(|c| {
+    let code = c as u32;
+    // Box drawing characters, geometric shapes, symbols, etc.
+    (code >= 0x2500 && code <= 0x257F) || // Box drawing
+    (code >= 0x2580 && code <= 0x259F) || // Block elements
+    (code >= 0x25A0 && code <= 0x25FF) || // Geometric shapes
+    (code >= 0x2600 && code <= 0x26FF) || // Miscellaneous symbols
+    (code >= 0x2700 && code <= 0x27BF) || // Dingbats
+    c.is_whitespace()
+  }) {
     return true;
   }
   
@@ -480,11 +526,6 @@ fn clean_text_content(text_content: &[String]) -> Vec<String> {
   // Remove duplicates while preserving order
   cleaned.dedup();
   
-  // Limit to reasonable number of text items per app
-  if cleaned.len() > 50 {
-    cleaned.truncate(50);
-  }
-  
   cleaned
 }
 
@@ -505,7 +546,7 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
     
     // Group similar content together
     for text in cleaned_content {
-      markdown.push_str(&format!("- {}\n", text));
+      markdown.push_str(&format!("{}\n", text));
     }
     
     markdown.push_str("\n");
@@ -520,17 +561,21 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
 
 // Parent function that gets screen text and formats it as markdown
 #[tauri::command]
-pub async fn get_screen_text_formatted(app_handle: &AppHandle) -> Result<String, String> {
+pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, String> {
   println!("get_screen_text_formatted called");
-  
-  // Run the expensive operation in a separate thread
-  let result = task::spawn_blocking(|| {
-    get_screen_text_by_application()
+
+  // Get app PID from app state
+  let state = app_handle.state::<AppState>();
+  let app_pid = state.pid;
+
+  // Get the screen text in another thread
+  let result = task::spawn_blocking(move || {
+    get_screen_text_by_application(app_pid)
   }).await;
   
   match result {
     Ok(Ok(applications)) => {
-      let markdown = format_as_markdown(applications, app_pid);
+      let markdown = format_as_markdown(applications);
       Ok(markdown)
     }
     Ok(Err(e)) => Err(e),
