@@ -73,48 +73,6 @@ pub struct Conversation {
     pub message_count: i32,
 }
 
-/// Initialize the conversations database tables
-pub fn initialize_conversations_db(conn: &Connection) -> SqliteResult<()> {
-    // Create conversations table
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS conversations (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            message_count INTEGER NOT NULL DEFAULT 0
-        )",
-        [],
-    )?;
-
-    // Create messages table
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS conversation_messages (
-            id TEXT PRIMARY KEY,
-            conversation_id TEXT NOT NULL,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
-        )",
-        [],
-    )?;
-
-    // Create indexes for performance
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id)",
-        [],
-    )?;
-    
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp)",
-        [],
-    )?;
-
-    println!("[conversations] Database tables initialized successfully");
-    Ok(())
-}
-
 /// Generate a conversation name from the first message
 fn generate_conversation_name(first_message: Option<&str>) -> String {
     if let Some(message) = first_message {

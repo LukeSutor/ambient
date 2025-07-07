@@ -63,6 +63,28 @@ lazy_static::lazy_static! {
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_workflows_url ON workflows (url);
+
+                -- Conversation tables
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    message_count INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
+
+                CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
             ")
             // Add more migrations here as needed
             // M::up("
@@ -125,14 +147,7 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
   })?;
   println!("[db] Migrations applied successfully.");
 
-  // 5. Initialize conversation tables
-  crate::models::conversations::initialize_conversations_db(&conn).map_err(|e| {
-    let err_msg = format!("Failed to initialize conversations database: {}", e);
-    println!("[db] {}", err_msg);
-    err_msg
-  })?;
-
-  // 6. Return the connection
+  // 5. Return the connection
   Ok(conn)
 }
 
