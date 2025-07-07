@@ -36,8 +36,8 @@ The goal of TaskAware is to create a system that:
 Below is a checklist of the features and components that still need to be designed and implemented.
 
 ### 👁️ Screen Understanding & Text Formatting
-- [ ] Develop more intelligent screen parsing logic to extract structured information from UI elements.
-- [ ] Apply heuristics or LLM-driven summarization to remove noise from extracted text.
+- [x] Develop more intelligent screen parsing logic to extract structured information from UI elements.
+- [x] Apply heuristics or LLM-driven summarization to remove noise from extracted text.
 
 ### 🧠 Task Modeling & Progress Tracking
 - [ ] Design a system for representing structured task checklists.
