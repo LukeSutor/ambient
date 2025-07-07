@@ -14,8 +14,8 @@
         "binaries/ggml.dll": "ggml.dll",
         "binaries/libcurl-x64.dll": "libcurl-x64.dll",
         "binaries/llama.dll": "llama.dll",
-        "binaries/llava_shared.dll": "llava_shared.dll",
-        "binaries/mtmd_shared.dll": "mtmd_shared.dll"
+        "binaries/libomp140.x86_64.dll": "libomp140.x86_64.dll",
+        "binaries/mtmd.dll": "mtmd.dll"
       }
     }
 }

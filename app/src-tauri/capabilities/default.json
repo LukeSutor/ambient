@@ -14,12 +14,32 @@
       "allow": [
         {
           "args": true,
-          "name": "binaries/main",
+          "name": "binaries/server",
+          "sidecar": true
+        },
+        {
+          "args": [
+            "-m",
+            {
+              "validator": ".*"
+            },
+            "--port",
+            {
+              "validator": "\\d+"
+            },
+            "--api-key",
+            {
+              "validator": ".*"
+            },
+            "--no-webui",
+            "--log-disable"
+          ],
+          "name": "binaries/server",
           "sidecar": true
         },
         {
           "args": true,
-          "name": "binaries/llama",
+          "name": "llama",
           "sidecar": true
         },
         {
@@ -89,20 +109,18 @@
         },
         {
           "args": true,
-          "name": "binaries/llava_shared.dll",
+          "name": "binaries/libomp140.x86_64.dll",
           "sidecar": true
         },
         {
           "args": true,
-          "name": "binaries/mtmd_shared.dll",
+          "name": "binaries/mtmd.dll",
           "sidecar": true
         }
       ]
     },
     "fs:default",
     "core:event:default",
-    "deep-link:default",
-    "opener:default",
-    "opener:default"
+    "deep-link:default"
   ]
 }
