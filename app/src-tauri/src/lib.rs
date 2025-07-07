@@ -169,6 +169,7 @@ pub fn run() {
       os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_by_application,
+      os_utils::windows::window::get_all_visible_windows,
       models::llm::qwen3::generate,
       models::llm::qwen3::generate_qwen3,
       models::llm::qwen3::stream_qwen3,

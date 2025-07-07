@@ -289,6 +289,25 @@ export default function Dev() {
     }
   };
 
+  // --- Visible Windows ---
+  const [windowsData, setWindowsData] = useState<any>(null);
+  const [windowsError, setWindowsError] = useState<string | null>(null);
+  const [windowsLoading, setWindowsLoading] = useState<boolean>(false);
+
+  const fetchVisibleWindows = async () => {
+    setWindowsLoading(true);
+    setWindowsError(null);
+    try {
+      const data = await invoke("get_all_visible_windows");
+      setWindowsData(data);
+    } catch (err: any) {
+      setWindowsError(typeof err === "string" ? err : JSON.stringify(err));
+      setWindowsData(null);
+    } finally {
+      setWindowsLoading(false);
+    }
+  };
+
   // --- Browser URL ---
   const [browserUrl, setBrowserUrl] = useState<string | null>(null);
   const [browserUrlError, setBrowserUrlError] = useState<string | null>(null);
@@ -354,6 +373,9 @@ export default function Dev() {
         <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
           {screenTextLoading ? "Loading..." : "Get Screen Text"}
+        </Button>
+        <Button onClick={fetchVisibleWindows} disabled={windowsLoading}>
+          {windowsLoading ? "Loading..." : "Get All Windows"}
         </Button>
         <Button asChild><Link href="/setup">Setup</Link></Button>
       </div>
@@ -530,6 +552,36 @@ export default function Dev() {
         )}
         {!screenTextData && !screenTextError && !screenTextLoading && (
           <div className="mt-2 text-gray-500">Click "Get Screen Text" button to fetch application text data.</div>
+        )}
+      </div>
+
+      {/* --- Visible Windows Section --- */}
+      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-purple-50">
+        <h2 className="text-lg font-semibold mb-2">All Visible Windows</h2>
+        {windowsData && (
+          <div className="mt-2 max-h-64 overflow-y-auto">
+            {Array.isArray(windowsData) && windowsData.length > 0 ? (
+              windowsData.map((window: any, index: number) => (
+                <div key={index} className="mb-2 p-2 border rounded bg-white">
+                  <div className="font-semibold text-purple-800">{window.window_title}</div>
+                  <div className="text-sm text-gray-600">
+                    <span className="font-mono">App: {window.application_name}</span>
+                    {window.process_id && (
+                      <span className="ml-4 font-mono">PID: {window.process_id}</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-gray-500">No windows found</div>
+            )}
+          </div>
+        )}
+        {windowsError && (
+          <div className="mt-2 text-red-700 font-mono">Error: {windowsError}</div>
+        )}
+        {!windowsData && !windowsError && !windowsLoading && (
+          <div className="mt-2 text-gray-500">Click "Get All Windows" button to fetch visible windows.</div>
         )}
       </div>
 
