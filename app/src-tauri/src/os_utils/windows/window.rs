@@ -1,4 +1,5 @@
 use std::result::Result;
+use tauri::AppHandle;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::task;
@@ -17,15 +18,14 @@ use windows::{
       TreeScope_Descendants, TreeScope_Children, TreeScope_Subtree, UIA_NamePropertyId, 
       UIA_ValuePatternId, UIA_WindowControlTypeId, UIA_ControlTypePropertyId,
       UIA_TextControlTypeId, UIA_EditControlTypeId, UIA_DocumentControlTypeId,
-      UIA_IsOffscreenPropertyId,
+      UIA_IsOffscreenPropertyId, UIA_ProcessIdPropertyId
     },
   },
 };
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApplicationTextData {
-  pub application_name: String,
-  pub window_title: String,
+  pub process_id: i32,
   pub text_content: Vec<String>,
 }
 
@@ -208,139 +208,93 @@ pub fn get_screen_text_by_application() -> Result<Vec<ApplicationTextData>, Stri
       
       println!("Root element obtained");
 
-      // First, find all top-level windows
-      let window_type_variant = VARIANT::from(UIA_WindowControlTypeId.0 as i32);
-      let window_condition = automation
-        .CreatePropertyCondition(UIA_ControlTypePropertyId, &window_type_variant)
-        .map_err(|e| format!("Failed to create window condition: {:?}", e))?;
+      // Create cache request for efficient property access
+      let cache_request = automation
+        .CreateCacheRequest()
+        .map_err(|e| format!("Failed to create cache request: {:?}", e))?;
       
-      let windows = root
-        .FindAll(TreeScope_Children, &window_condition)
-        .map_err(|e| format!("Failed to find windows: {:?}", e))?;
+      // Cache the properties we need
+      cache_request
+        .AddProperty(UIA_NamePropertyId)
+        .map_err(|e| format!("Failed to add Name property to cache: {:?}", e))?;
       
-      let window_count = windows
+      cache_request
+        .AddProperty(UIA_ControlTypePropertyId)
+        .map_err(|e| format!("Failed to add ControlType property to cache: {:?}", e))?;
+      
+      cache_request
+        .AddProperty(UIA_IsOffscreenPropertyId)
+        .map_err(|e| format!("Failed to add IsOffscreen property to cache: {:?}", e))?;
+
+      cache_request
+        .AddProperty(UIA_ProcessIdPropertyId)
+        .map_err(|e| format!("Failed to add ProcessId property to cache: {:?}", e))?;
+
+      // Set tree scope to subtree for efficient traversal
+      cache_request
+        .SetTreeScope(TreeScope_Subtree)
+        .map_err(|e| format!("Failed to set tree scope: {:?}", e))?;
+
+      println!("Cache request created");
+
+      // Create condition for visible text elements only
+      let visible_condition = create_visible_text_condition(&automation)?;
+      
+      println!("Condition created, finding all visible text elements...");
+
+      // Find ALL visible text elements directly from root
+      let text_elements = root
+        .FindAllBuildCache(TreeScope_Subtree, &visible_condition, &cache_request)
+        .map_err(|e| format!("Failed to find text elements: {:?}", e))?;
+
+      let element_count = text_elements
         .Length()
-        .map_err(|e| format!("Failed to get window count: {:?}", e))?;
+        .map_err(|e| format!("Failed to get element count: {:?}", e))?;
 
-      println!("Found {} top-level windows", window_count);
+      println!("Found {} text elements", element_count);
 
-      let mut applications_data: Vec<ApplicationTextData> = Vec::new();
+      // Group text elements by their PID
+      let mut app_map: HashMap<i32, ApplicationTextData> = HashMap::new();
 
-      // Process each window individually to maintain proper grouping
-      for i in 0..window_count {
-        let window = windows
+      for i in 0..element_count {
+        let element = text_elements
           .GetElement(i)
-          .map_err(|e| format!("Failed to get window {}: {:?}", i, e))?;
+          .map_err(|e| format!("Failed to get element {}: {:?}", i, e))?;
 
-        // Skip if window is not visible
-        if let Ok(is_offscreen) = window.CurrentIsOffscreen() {
-          if is_offscreen.as_bool() {
-            continue;
+        // Get the text content
+        let text = if let Ok(name_bstr) = element.CachedName() {
+          let text = name_bstr.to_string();
+          if text.trim().is_empty() || text.len() <= 1 {
+            continue; // Skip empty or single-character text
           }
-        }
-
-        // Get window title and application name
-        let window_title = if let Ok(name_bstr) = window.CurrentName() {
-          let title = name_bstr.to_string();
-          if title.trim().is_empty() {
-            continue; // Skip windows without titles
-          }
-          title
+          text
         } else {
-          continue; // Skip windows we can't get names for
+          continue; // Skip elements without text
         };
 
-        let app_name = extract_app_name_from_title(&window_title);
-        
-        // Get text content from this specific window
-        let text_content = get_text_from_window(&automation, &window)?;
-        
-        // Only add if we found some text content
-        if !text_content.is_empty() {
-          applications_data.push(ApplicationTextData {
-            application_name: app_name,
-            window_title,
-            text_content,
-          });
-        }
+        // Get the process ID from the cached element
+        let process_id = if let Ok(pid) = element.CachedProcessId() {
+          pid
+        } else {
+          continue; // Skip elements without process ID
+        };
+
+        // Add text to the appropriate process group
+        app_map.entry(process_id).or_insert_with(|| ApplicationTextData {
+          process_id,
+          text_content: Vec::new(),
+        }).text_content.push(text);
       }
 
-      println!("Processed {} applications with text content", applications_data.len());
+      // Convert HashMap to Vec
+      let applications_data: Vec<ApplicationTextData> = app_map.into_values().collect();
+
+      println!("Grouped into {} applications", applications_data.len());
       Ok(applications_data)
     })();
 
     CoUninitialize();
     result
-  }
-}
-
-fn get_text_from_window(
-  automation: &IUIAutomation,
-  window: &windows::Win32::UI::Accessibility::IUIAutomationElement,
-) -> Result<Vec<String>, String> {
-  unsafe {
-    // Create cache request for efficient property access
-    let cache_request = automation
-      .CreateCacheRequest()
-      .map_err(|e| format!("Failed to create cache request: {:?}", e))?;
-    
-    // Cache the properties we need
-    cache_request
-      .AddProperty(UIA_NamePropertyId)
-      .map_err(|e| format!("Failed to add Name property to cache: {:?}", e))?;
-    
-    cache_request
-      .AddProperty(UIA_ControlTypePropertyId)
-      .map_err(|e| format!("Failed to add ControlType property to cache: {:?}", e))?;
-    
-    cache_request
-      .AddProperty(UIA_IsOffscreenPropertyId)
-      .map_err(|e| format!("Failed to add IsOffscreen property to cache: {:?}", e))?;
-    
-    // Set tree scope to subtree for efficient traversal
-    cache_request
-      .SetTreeScope(TreeScope_Subtree)
-      .map_err(|e| format!("Failed to set tree scope: {:?}", e))?;
-
-    // Create condition for visible text elements only
-    let visible_condition = create_visible_text_condition(automation)?;
-
-    // Use FindAllBuildCache for efficient querying
-    let elements = window
-      .FindAllBuildCache(TreeScope_Subtree, &visible_condition, &cache_request)
-      .map_err(|e| format!("Failed to find text elements with cache: {:?}", e))?;
-
-    let count = elements
-      .Length()
-      .map_err(|e| format!("Failed to get element count: {:?}", e))?;
-
-    let mut text_content = Vec::new();
-
-    for i in 0..count {
-      let element = elements
-        .GetElement(i)
-        .map_err(|e| format!("Failed to get element {}: {:?}", i, e))?;
-
-      // Get cached name property (more efficient than CurrentName)
-      if let Ok(name_bstr) = element.CachedName() {
-        let text = name_bstr.to_string();
-        if !text.trim().is_empty() && text.len() > 1 {
-          text_content.push(text);
-        }
-      }
-
-      // Also try to get value for edit controls
-      if let Ok(value_pattern) = element.GetCachedPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId) {
-        if let Ok(value_bstr) = value_pattern.CurrentValue() {
-          let value = value_bstr.to_string();
-          if !value.trim().is_empty() && value.len() > 1 {
-            text_content.push(value);
-          }
-        }
-      }
-    }
-
-    Ok(text_content)
   }
 }
 
@@ -390,60 +344,6 @@ fn create_visible_text_condition(
   }
 }
 
-
-fn extract_app_name_from_title(title: &str) -> String {
-  // Extract application name from window title
-  if title.contains("Visual Studio Code") {
-    "Visual Studio Code".to_string()
-  } else if title.contains("Chrome") || title.contains("Google Chrome") {
-    "Google Chrome".to_string()
-  } else if title.contains("Firefox") {
-    "Mozilla Firefox".to_string()
-  } else if title.contains("Edge") {
-    "Microsoft Edge".to_string()
-  } else if title.contains("Brave") {
-    "Brave Browser".to_string()
-  } else if title.contains("Men's Wearhouse") {
-    "Web Browser".to_string()
-  } else if title.contains("Notepad") {
-    "Notepad".to_string()
-  } else if title.contains("Excel") {
-    "Microsoft Excel".to_string()
-  } else if title.contains("Word") {
-    "Microsoft Word".to_string()
-  } else if title.contains("PowerPoint") {
-    "Microsoft PowerPoint".to_string()
-  } else if title.contains("Outlook") {
-    "Microsoft Outlook".to_string()
-  } else if title.contains("Teams") {
-    "Microsoft Teams".to_string()
-  } else if title.contains("Slack") {
-    "Slack".to_string()
-  } else if title.contains("Discord") {
-    "Discord".to_string()
-  } else if title.contains("Zoom") {
-    "Zoom".to_string()
-  } else {
-    // Try to extract from patterns like "filename - AppName"
-    if let Some(dash_pos) = title.rfind(" - ") {
-      let app_part = &title[dash_pos + 3..];
-      if !app_part.is_empty() && app_part.len() < 50 {
-        app_part.to_string()
-      } else {
-        "Unknown App".to_string()
-      }
-    } else if let Some(pipe_pos) = title.rfind(" | ") {
-      let app_part = &title[pipe_pos + 3..];
-      if !app_part.is_empty() && app_part.len() < 50 {
-        app_part.to_string()
-      } else {
-        "Unknown App".to_string()
-      }
-    } else {
-      "Unknown App".to_string()
-    }
-  }
-}
 
 #[tauri::command]
 pub fn get_all_visible_windows() -> Result<Vec<WindowInfo>, String> {
@@ -601,7 +501,7 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
       continue;
     }
     
-    markdown.push_str(&format!("## {} - {}\n\n", app.application_name, app.window_title));
+    markdown.push_str(&format!("## Process ID: {}\n\n", app.process_id));
     
     // Group similar content together
     for text in cleaned_content {
@@ -620,7 +520,7 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
 
 // Parent function that gets screen text and formats it as markdown
 #[tauri::command]
-pub async fn get_screen_text_formatted() -> Result<String, String> {
+pub async fn get_screen_text_formatted(app_handle: &AppHandle) -> Result<String, String> {
   println!("get_screen_text_formatted called");
   
   // Run the expensive operation in a separate thread
@@ -630,7 +530,7 @@ pub async fn get_screen_text_formatted() -> Result<String, String> {
   
   match result {
     Ok(Ok(applications)) => {
-      let markdown = format_as_markdown(applications);
+      let markdown = format_as_markdown(applications, app_pid);
       Ok(markdown)
     }
     Ok(Err(e)) => Err(e),
