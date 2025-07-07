@@ -172,7 +172,6 @@ pub fn run() {
       setup::check_setup_complete,
       integrations::chromium::server::run_workflow_by_id,
       integrations::chromium::server::ping_chromium_extension,
-      os_utils::windows::window::get_focused_window_name,
       os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_formatted,

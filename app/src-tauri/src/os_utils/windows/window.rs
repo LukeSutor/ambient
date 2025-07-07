@@ -13,7 +13,10 @@ use windows::{
         COINIT_APARTMENTTHREADED,
       },
       Variant::{VARIANT},
+      ProcessStatus::{GetModuleBaseNameW},
+      Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
     },
+    Foundation::{CloseHandle, HANDLE},
     UI::Accessibility::{
       CUIAutomation, IUIAutomation, IUIAutomationValuePattern, IUIAutomationCacheRequest,
       TreeScope_Descendants, TreeScope_Children, TreeScope_Subtree, UIA_NamePropertyId, 
@@ -35,41 +38,6 @@ pub struct WindowInfo {
   pub window_title: String,
   pub process_id: u32,
   pub application_name: String,
-}
-
-#[tauri::command]
-pub fn get_focused_window_name() -> Result<String, String> {
-  unsafe {
-    // Initialize COM
-    let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-    if hr.is_err() {
-      return Err(format!("CoInitializeEx failed: {:?}", hr));
-    }
-
-    let result = (|| {
-      // Create UIAutomation instance
-      let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
-        .map_err(|e| format!("Failed to create UIAutomation: {:?}", e))?;
-
-      // Get focused element
-      let element = automation
-        .GetFocusedElement()
-        .map_err(|e| format!("Failed to get focused element: {:?}", e))?;
-
-      // Get the element's name
-      let name_bstr = element
-        .CurrentName()
-        .map_err(|e| format!("Failed to get element name: {:?}", e))?;
-
-      let name_str = name_bstr.to_string();
-
-      Ok(name_str)
-    })();
-
-    CoUninitialize();
-
-    result
-  }
 }
 
 #[tauri::command]
@@ -191,7 +159,6 @@ pub fn get_brave_url() -> Result<String, String> {
 }
 
 pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTextData>, String> {
-  println!("get_screen_text_by_application called");
   unsafe {
     let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     if hr.is_err() {
@@ -206,8 +173,6 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         .GetRootElement()
         .map_err(|e| format!("Failed to get root element: {:?}", e))?;
       
-      println!("Root element obtained");
-
       // Create cache request for efficient property access
       let cache_request = automation
         .CreateCacheRequest()
@@ -235,13 +200,9 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         .SetTreeScope(TreeScope_Subtree)
         .map_err(|e| format!("Failed to set tree scope: {:?}", e))?;
 
-      println!("Cache request created");
-
       // Create condition for visible text elements only
       let visible_condition = create_visible_text_condition(&automation)?;
       
-      println!("Condition created, finding all visible text elements...");
-
       // Find ALL visible text elements directly from root
       let text_elements = root
         .FindAllBuildCache(TreeScope_Subtree, &visible_condition, &cache_request)
@@ -250,8 +211,6 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
       let element_count = text_elements
         .Length()
         .map_err(|e| format!("Failed to get element count: {:?}", e))?;
-
-      println!("Found {} text elements", element_count);
 
       // Group text elements by their PID
       let mut app_map: HashMap<i32, ApplicationTextData> = HashMap::new();
@@ -285,16 +244,17 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         };
 
         // Add text to the appropriate process group
-        app_map.entry(process_id).or_insert_with(|| ApplicationTextData {
-          process_id,
-          text_content: Vec::new(),
+        app_map.entry(process_id).or_insert_with(|| {
+          ApplicationTextData {
+            process_id,
+            text_content: Vec::new(),
+          }
         }).text_content.push(text);
       }
 
       // Convert HashMap to Vec
       let applications_data: Vec<ApplicationTextData> = app_map.into_values().collect();
 
-      println!("Grouped into {} applications", applications_data.len());
       Ok(applications_data)
     })();
 
@@ -541,8 +501,11 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
     if cleaned_content.is_empty() {
       continue;
     }
-    
-    markdown.push_str(&format!("## Process ID: {}\n\n", app.process_id));
+
+    // Get the app name from the pid and map it to a common name
+    let process_name = get_process_name(app.process_id as u32);
+    let app_name = map_process_name_to_app_name(&process_name);
+    markdown.push_str(&format!("## {} (PID: {})\n\n", app_name, app.process_id));
     
     // Group similar content together
     for text in cleaned_content {
@@ -562,8 +525,6 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
 // Parent function that gets screen text and formats it as markdown
 #[tauri::command]
 pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, String> {
-  println!("get_screen_text_formatted called");
-
   // Get app PID from app state
   let state = app_handle.state::<AppState>();
   let app_pid = state.pid;
@@ -580,5 +541,157 @@ pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, 
     }
     Ok(Err(e)) => Err(e),
     Err(e) => Err(format!("Task execution failed: {:?}", e)),
+  }
+}
+
+// Helper function to get process name from PID
+fn get_process_name(pid: u32) -> String {
+  unsafe {
+    let process_handle = OpenProcess(
+      PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 
+      false, 
+      pid
+    );
+    
+    if let Ok(handle) = process_handle {
+      let mut module_name = [0u16; 260]; // MAX_PATH
+      let result = GetModuleBaseNameW(
+        handle, 
+        None, 
+        &mut module_name
+      );
+      
+      let _ = CloseHandle(handle);
+      
+      if result > 0 {
+        // Convert wide string to String
+        let name = String::from_utf16_lossy(&module_name[..result as usize]);
+        return name;
+      }
+    }
+    
+    format!("Unknown app name") // Fallback to PID if we can't get the name
+  }
+}
+
+// Helper function to map process names to user-friendly app names
+fn map_process_name_to_app_name(process_name: &str) -> String {
+  match process_name.to_lowercase().as_str() {
+    // Code editors and IDEs
+    "code.exe" => "Visual Studio Code".to_string(),
+    "devenv.exe" => "Visual Studio".to_string(),
+    "notepad++.exe" => "Notepad++".to_string(),
+    "sublime_text.exe" => "Sublime Text".to_string(),
+    "atom.exe" => "Atom".to_string(),
+    "webstorm64.exe" | "webstorm.exe" => "WebStorm".to_string(),
+    "idea64.exe" | "idea.exe" => "IntelliJ IDEA".to_string(),
+    "pycharm64.exe" | "pycharm.exe" => "PyCharm".to_string(),
+    "phpstorm64.exe" | "phpstorm.exe" => "PhpStorm".to_string(),
+    "clion64.exe" | "clion.exe" => "CLion".to_string(),
+    "rider64.exe" | "rider.exe" => "JetBrains Rider".to_string(),
+    "vim.exe" | "gvim.exe" => "Vim".to_string(),
+    "emacs.exe" => "Emacs".to_string(),
+    "notepad.exe" => "Notepad".to_string(),
+    
+    // Web browsers
+    "chrome.exe" => "Google Chrome".to_string(),
+    "firefox.exe" => "Mozilla Firefox".to_string(),
+    "msedge.exe" => "Microsoft Edge".to_string(),
+    "brave.exe" => "Brave Browser".to_string(),
+    "opera.exe" => "Opera".to_string(),
+    "safari.exe" => "Safari".to_string(),
+    "vivaldi.exe" => "Vivaldi".to_string(),
+    "iexplore.exe" => "Internet Explorer".to_string(),
+    
+    // Communication apps
+    "discord.exe" => "Discord".to_string(),
+    "slack.exe" => "Slack".to_string(),
+    "teams.exe" | "ms-teams.exe" => "Microsoft Teams".to_string(),
+    "zoom.exe" => "Zoom".to_string(),
+    "skype.exe" => "Skype".to_string(),
+    "whatsapp.exe" => "WhatsApp".to_string(),
+    "telegram.exe" => "Telegram".to_string(),
+    "signal.exe" => "Signal".to_string(),
+    
+    // Office applications
+    "winword.exe" => "Microsoft Word".to_string(),
+    "excel.exe" => "Microsoft Excel".to_string(),
+    "powerpnt.exe" => "Microsoft PowerPoint".to_string(),
+    "outlook.exe" => "Microsoft Outlook".to_string(),
+    "onenote.exe" => "Microsoft OneNote".to_string(),
+    "visio.exe" => "Microsoft Visio".to_string(),
+    "project.exe" => "Microsoft Project".to_string(),
+    "access.exe" => "Microsoft Access".to_string(),
+    
+    // Media and entertainment
+    "spotify.exe" => "Spotify".to_string(),
+    "vlc.exe" => "VLC Media Player".to_string(),
+    "steam.exe" => "Steam".to_string(),
+    "epicgameslauncher.exe" => "Epic Games Launcher".to_string(),
+    "netflix.exe" => "Netflix".to_string(),
+    "youtube.exe" => "YouTube".to_string(),
+    "itunes.exe" => "iTunes".to_string(),
+    "audacity.exe" => "Audacity".to_string(),
+    
+    // System and utilities
+    "explorer.exe" => "Windows Explorer".to_string(),
+    "cmd.exe" => "Command Prompt".to_string(),
+    "powershell.exe" => "PowerShell".to_string(),
+    "winrar.exe" => "WinRAR".to_string(),
+    "7zfm.exe" => "7-Zip".to_string(),
+    "taskmgr.exe" => "Task Manager".to_string(),
+    "regedit.exe" => "Registry Editor".to_string(),
+    "mmc.exe" => "Microsoft Management Console".to_string(),
+    "control.exe" => "Control Panel".to_string(),
+    "calc.exe" => "Calculator".to_string(),
+    "mspaint.exe" => "Paint".to_string(),
+    "snip.exe" | "snippingtool.exe" => "Snipping Tool".to_string(),
+    
+    // Development tools
+    "git.exe" => "Git".to_string(),
+    "node.exe" => "Node.js".to_string(),
+    "python.exe" => "Python".to_string(),
+    "java.exe" | "javaw.exe" => "Java".to_string(),
+    "docker.exe" => "Docker".to_string(),
+    "postman.exe" => "Postman".to_string(),
+    "fiddler.exe" => "Fiddler".to_string(),
+    "wireshark.exe" => "Wireshark".to_string(),
+    
+    // Graphics and design
+    "photoshop.exe" => "Adobe Photoshop".to_string(),
+    "illustrator.exe" => "Adobe Illustrator".to_string(),
+    "indesign.exe" => "Adobe InDesign".to_string(),
+    "aftereffects.exe" => "Adobe After Effects".to_string(),
+    "premiere.exe" => "Adobe Premiere Pro".to_string(),
+    "figma.exe" => "Figma".to_string(),
+    "blender.exe" => "Blender".to_string(),
+    "gimp.exe" => "GIMP".to_string(),
+    
+    // Security
+    "windefend.exe" => "Windows Defender".to_string(),
+    "mbam.exe" => "Malwarebytes".to_string(),
+    "avast.exe" => "Avast Antivirus".to_string(),
+    "avg.exe" => "AVG Antivirus".to_string(),
+    "norton.exe" => "Norton Antivirus".to_string(),
+    
+    // Database tools
+    "ssms.exe" => "SQL Server Management Studio".to_string(),
+    "mysql.exe" => "MySQL".to_string(),
+    "postgres.exe" => "PostgreSQL".to_string(),
+    "mongodb.exe" => "MongoDB".to_string(),
+    
+    // Virtual machines
+    "vmware.exe" => "VMware".to_string(),
+    "virtualbox.exe" => "VirtualBox".to_string(),
+    
+    // If no mapping found, return the original process name
+    _ => {
+      // Remove .exe extension if present for cleaner display
+      if process_name.to_lowercase().ends_with(".exe") {
+        process_name[..process_name.len() - 4].to_string()
+      } else {
+        process_name.to_string()
+      }
+    }
   }
 }

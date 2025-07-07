@@ -116,67 +116,6 @@ function useWebSocketEventMonitor() {
 }
 
 export default function Dev() {
-  const [greeted, setGreeted] = useState<string | null>(null);
-  const greet = useCallback((): void => {
-    invoke<string>("greet")
-      .then((s) => {
-        setGreeted(s);
-      })
-      .catch((err: unknown) => {
-        console.error(err);
-      });
-  }, []);
-
-  // New function to call the sidecar command
-  async function callVLMSidecar() {
-    // Replace with actual image path
-    const image = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/sample_images/gmail.png";
-    // Define model and mmproj paths
-    const model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
-    const mmproj = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/mmproj.gguf";
-    const promptKey = "SUMMARIZE_ACTION"; // Key for the desired prompt
-
-    try {
-      // Fetch the prompt using the new command
-      const prompt = await invoke<string>("get_prompt_command", { key: promptKey });
-      console.log(`Fetched prompt for key '${promptKey}': ${prompt}`);
-
-      console.log(`Calling sidecar with image: ${image}, prompt: ${prompt}`);
-      const result = await invoke("get_vlm_response", { model, mmproj, image, prompt });
-      console.log("Sidecar response:", result);
-      // Handle the successful response string (result)
-    } catch (error) {
-      console.error("Error calling sidecar or fetching prompt:", error);
-      // Handle the error string (error)
-    }
-  }
-
-  async function callEmbeddingSidecar() {
-    const model = "C:/Users/Luke/Desktop/coding/local-computer-use/backend/models/smol.gguf";
-    const prompt = "Hello world!";
-
-    try {
-      console.log(`Calling embedding sidecar with model: ${model}, prompt: ${prompt}`);
-      const embedding = await invoke<string>("get_embedding", { model, prompt });
-      console.log("Embedding response:", embedding);
-      // Handle the successful embedding response (embedding)
-    } catch (error) {
-      console.error("Error calling embedding sidecar:", error);
-      // Handle the error string (error)
-    }
-  }
-
-  async function takeScreenshot() {
-    try {
-      const screenshotPath = await invoke<string>("take_screenshot");
-      console.log("Screenshot saved at:", screenshotPath);
-      // Handle the successful screenshot path (screenshotPath)
-    } catch (error) {
-      console.error("Error taking screenshot:", error);
-      // Handle the error string (error)
-    }
-  }
-
   // Function to start the scheduler
   async function startScheduler() {
     try {
@@ -366,9 +305,6 @@ export default function Dev() {
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
       {/* Existing Buttons Section */}
       <div className="flex flex-wrap gap-2 justify-center">
-        <Button variant="outline" onClick={callVLMSidecar}>Call VLM Sidecar</Button>
-        <Button variant="outline" onClick={callEmbeddingSidecar}>Call Embedding Sidecar</Button>
-        <Button onClick={takeScreenshot}>Take Screenshot</Button>
         <Button onClick={startScheduler}>Start Scheduler</Button>
         <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
