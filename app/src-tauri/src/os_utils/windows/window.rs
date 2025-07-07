@@ -1,6 +1,7 @@
 use std::result::Result;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use tokio::task;
 use windows::{
   core::*,
   Win32::{
@@ -207,84 +208,64 @@ pub fn get_screen_text_by_application() -> Result<Vec<ApplicationTextData>, Stri
       
       println!("Root element obtained");
 
-      // Create cache request for efficient property access
-      let cache_request = automation
-        .CreateCacheRequest()
-        .map_err(|e| format!("Failed to create cache request: {:?}", e))?;
+      // First, find all top-level windows
+      let window_type_variant = VARIANT::from(UIA_WindowControlTypeId.0 as i32);
+      let window_condition = automation
+        .CreatePropertyCondition(UIA_ControlTypePropertyId, &window_type_variant)
+        .map_err(|e| format!("Failed to create window condition: {:?}", e))?;
       
-      // Cache the properties we need
-      cache_request
-        .AddProperty(UIA_NamePropertyId)
-        .map_err(|e| format!("Failed to add Name property to cache: {:?}", e))?;
+      let windows = root
+        .FindAll(TreeScope_Children, &window_condition)
+        .map_err(|e| format!("Failed to find windows: {:?}", e))?;
       
-      cache_request
-        .AddProperty(UIA_ControlTypePropertyId)
-        .map_err(|e| format!("Failed to add ControlType property to cache: {:?}", e))?;
-      
-      cache_request
-        .AddProperty(UIA_IsOffscreenPropertyId)
-        .map_err(|e| format!("Failed to add IsOffscreen property to cache: {:?}", e))?;
-      
-      // Set tree scope to subtree for efficient traversal
-      cache_request
-        .SetTreeScope(TreeScope_Subtree)
-        .map_err(|e| format!("Failed to set tree scope: {:?}", e))?;
-
-      println!("Cache request created");
-
-      // Create condition for visible text elements only
-      let visible_condition = create_visible_text_condition(&automation)?;
-      
-      println!("Condition created, finding all visible text elements...");
-
-      // Find ALL visible text elements directly from root - this is much more efficient
-      let text_elements = root
-        .FindAllBuildCache(TreeScope_Subtree, &visible_condition, &cache_request)
-        .map_err(|e| format!("Failed to find text elements: {:?}", e))?;
-
-      let element_count = text_elements
+      let window_count = windows
         .Length()
-        .map_err(|e| format!("Failed to get element count: {:?}", e))?;
+        .map_err(|e| format!("Failed to get window count: {:?}", e))?;
 
-      println!("Found {} text elements", element_count);
+      println!("Found {} top-level windows", window_count);
 
-      // Group text elements by their parent window/application
-      let mut app_map: HashMap<String, ApplicationTextData> = HashMap::new();
+      let mut applications_data: Vec<ApplicationTextData> = Vec::new();
 
-      for i in 0..element_count {
-        let element = text_elements
+      // Process each window individually to maintain proper grouping
+      for i in 0..window_count {
+        let window = windows
           .GetElement(i)
-          .map_err(|e| format!("Failed to get element {}: {:?}", i, e))?;
+          .map_err(|e| format!("Failed to get window {}: {:?}", i, e))?;
 
-        // Get the text content
-        let text = if let Ok(name_bstr) = element.CachedName() {
-          let text = name_bstr.to_string();
-          if text.trim().is_empty() || text.len() <= 1 {
-            continue; // Skip empty or single-character text
+        // Skip if window is not visible
+        if let Ok(is_offscreen) = window.CurrentIsOffscreen() {
+          if is_offscreen.as_bool() {
+            continue;
           }
-          text
+        }
+
+        // Get window title and application name
+        let window_title = if let Ok(name_bstr) = window.CurrentName() {
+          let title = name_bstr.to_string();
+          if title.trim().is_empty() {
+            continue; // Skip windows without titles
+          }
+          title
         } else {
-          continue; // Skip elements without text
+          continue; // Skip windows we can't get names for
         };
 
-        // Find the parent window for this text element
-        let (app_name, window_title) = get_parent_window_info(&element)?;
+        let app_name = extract_app_name_from_title(&window_title);
         
-        // Create a unique key for this application window
-        let app_key = format!("{}::{}", app_name, window_title);
+        // Get text content from this specific window
+        let text_content = get_text_from_window(&automation, &window)?;
         
-        // Add text to the appropriate application group
-        app_map.entry(app_key).or_insert_with(|| ApplicationTextData {
-          application_name: app_name.clone(),
-          window_title: window_title.clone(),
-          text_content: Vec::new(),
-        }).text_content.push(text);
+        // Only add if we found some text content
+        if !text_content.is_empty() {
+          applications_data.push(ApplicationTextData {
+            application_name: app_name,
+            window_title,
+            text_content,
+          });
+        }
       }
 
-      // Convert HashMap to Vec
-      let applications_data: Vec<ApplicationTextData> = app_map.into_values().collect();
-
-      println!("Grouped into {} applications", applications_data.len());
+      println!("Processed {} applications with text content", applications_data.len());
       Ok(applications_data)
     })();
 
@@ -409,49 +390,57 @@ fn create_visible_text_condition(
   }
 }
 
-fn get_parent_window_info(
-  element: &windows::Win32::UI::Accessibility::IUIAutomationElement,
-) -> Result<(String, String), String> {
-  unsafe {
-    let mut current_element = element.clone();
-    
-    // Walk up the tree to find the parent window
-    loop {
-      // Try to get the parent
-      match current_element.GetCachedParent() {
-        Ok(parent) => {
-          // Check if this parent is a window
-          if let Ok(control_type_variant) = parent.CachedControlType() {
-            let control_type = control_type_variant.0 as i32;
-            if control_type == UIA_WindowControlTypeId.0 as i32 {
-              // This is a window, get its info
-              let window_title = if let Ok(name_bstr) = parent.CachedName() {
-                let title = name_bstr.to_string();
-                if title.trim().is_empty() {
-                  "Untitled Window".to_string()
-                } else {
-                  title
-                }
-              } else {
-                "Unknown Window".to_string()
-              };
-              
-              let app_name = if let Ok(pid) = parent.CurrentProcessId() {
-                format!("PID_{}", pid)
-              } else {
-                "Unknown App".to_string()
-              };
-              
-              return Ok((app_name, window_title));
-            }
-          }
-          current_element = parent;
-        }
-        Err(_) => {
-          // No more parents, use fallback
-          return Ok(("Unknown App".to_string(), "Unknown Window".to_string()));
-        }
+
+fn extract_app_name_from_title(title: &str) -> String {
+  // Extract application name from window title
+  if title.contains("Visual Studio Code") {
+    "Visual Studio Code".to_string()
+  } else if title.contains("Chrome") || title.contains("Google Chrome") {
+    "Google Chrome".to_string()
+  } else if title.contains("Firefox") {
+    "Mozilla Firefox".to_string()
+  } else if title.contains("Edge") {
+    "Microsoft Edge".to_string()
+  } else if title.contains("Brave") {
+    "Brave Browser".to_string()
+  } else if title.contains("Men's Wearhouse") {
+    "Web Browser".to_string()
+  } else if title.contains("Notepad") {
+    "Notepad".to_string()
+  } else if title.contains("Excel") {
+    "Microsoft Excel".to_string()
+  } else if title.contains("Word") {
+    "Microsoft Word".to_string()
+  } else if title.contains("PowerPoint") {
+    "Microsoft PowerPoint".to_string()
+  } else if title.contains("Outlook") {
+    "Microsoft Outlook".to_string()
+  } else if title.contains("Teams") {
+    "Microsoft Teams".to_string()
+  } else if title.contains("Slack") {
+    "Slack".to_string()
+  } else if title.contains("Discord") {
+    "Discord".to_string()
+  } else if title.contains("Zoom") {
+    "Zoom".to_string()
+  } else {
+    // Try to extract from patterns like "filename - AppName"
+    if let Some(dash_pos) = title.rfind(" - ") {
+      let app_part = &title[dash_pos + 3..];
+      if !app_part.is_empty() && app_part.len() < 50 {
+        app_part.to_string()
+      } else {
+        "Unknown App".to_string()
       }
+    } else if let Some(pipe_pos) = title.rfind(" | ") {
+      let app_part = &title[pipe_pos + 3..];
+      if !app_part.is_empty() && app_part.len() < 50 {
+        app_part.to_string()
+      } else {
+        "Unknown App".to_string()
+      }
+    } else {
+      "Unknown App".to_string()
     }
   }
 }
@@ -541,5 +530,110 @@ pub fn get_all_visible_windows() -> Result<Vec<WindowInfo>, String> {
 
     CoUninitialize();
     result
+  }
+}
+
+// Helper function to filter out junk text
+fn is_junk_text(text: &str) -> bool {
+  let text = text.trim();
+  
+  // Filter out empty strings and single characters
+  if text.is_empty() || text.len() <= 1 {
+    return true;
+  }
+  
+  // Filter out strings that are just whitespace or special characters
+  if text.chars().all(|c| c.is_whitespace() || c.is_ascii_punctuation()) {
+    return true;
+  }
+  
+  // Filter out very short strings that are likely UI artifacts
+  if text.len() <= 3 && text.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',' || c == '$') {
+    return true;
+  }
+  
+  // Filter out strings that are just numbers or basic UI text
+  if text.chars().all(|c| c.is_ascii_digit() || c.is_whitespace()) {
+    return true;
+  }
+  
+  // Filter out common UI elements that aren't useful
+  let lower_text = text.to_lowercase();
+  if lower_text == "ok" || lower_text == "cancel" || lower_text == "close" || 
+     lower_text == "minimize" || lower_text == "maximize" || lower_text == "restore" ||
+     lower_text == "help" || lower_text == "file" || lower_text == "edit" || 
+     lower_text == "view" || lower_text == "new" || lower_text == "save" {
+    return true;
+  }
+  
+  false
+}
+
+// Helper function to clean and format text content
+fn clean_text_content(text_content: &[String]) -> Vec<String> {
+  let mut cleaned: Vec<String> = text_content
+    .iter()
+    .filter(|text| !is_junk_text(text))
+    .map(|text| text.trim().to_string())
+    .collect();
+  
+  // Remove duplicates while preserving order
+  cleaned.dedup();
+  
+  // Limit to reasonable number of text items per app
+  if cleaned.len() > 50 {
+    cleaned.truncate(50);
+  }
+  
+  cleaned
+}
+
+// Function to format application data as markdown
+fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
+  let mut markdown = String::new();
+  markdown.push_str("# Screen Text by Application\n\n");
+  
+  for app in applications {
+    let cleaned_content = clean_text_content(&app.text_content);
+    
+    // Skip apps with no meaningful content
+    if cleaned_content.is_empty() {
+      continue;
+    }
+    
+    markdown.push_str(&format!("## {} - {}\n\n", app.application_name, app.window_title));
+    
+    // Group similar content together
+    for text in cleaned_content {
+      markdown.push_str(&format!("- {}\n", text));
+    }
+    
+    markdown.push_str("\n");
+  }
+  
+  if markdown == "# Screen Text by Application\n\n" {
+    markdown.push_str("*No meaningful text content found.*\n");
+  }
+  
+  markdown
+}
+
+// Parent function that gets screen text and formats it as markdown
+#[tauri::command]
+pub async fn get_screen_text_formatted() -> Result<String, String> {
+  println!("get_screen_text_formatted called");
+  
+  // Run the expensive operation in a separate thread
+  let result = task::spawn_blocking(|| {
+    get_screen_text_by_application()
+  }).await;
+  
+  match result {
+    Ok(Ok(applications)) => {
+      let markdown = format_as_markdown(applications);
+      Ok(markdown)
+    }
+    Ok(Err(e)) => Err(e),
+    Err(e) => Err(format!("Task execution failed: {:?}", e)),
   }
 }

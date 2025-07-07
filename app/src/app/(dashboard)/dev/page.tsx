@@ -271,7 +271,7 @@ export default function Dev() {
   }, []); // Empty dependency array ensures this runs only once on mount
 
   // --- Screen Text by Application ---
-  const [screenTextData, setScreenTextData] = useState<any>(null);
+  const [screenTextData, setScreenTextData] = useState<string | null>(null);
   const [screenTextError, setScreenTextError] = useState<string | null>(null);
   const [screenTextLoading, setScreenTextLoading] = useState<boolean>(false);
 
@@ -279,7 +279,7 @@ export default function Dev() {
     setScreenTextLoading(true);
     setScreenTextError(null);
     try {
-      const data = await invoke("get_screen_text_by_application");
+      const data = await invoke<string>("get_screen_text_formatted");
       setScreenTextData(data);
     } catch (err: any) {
       setScreenTextError(typeof err === "string" ? err : JSON.stringify(err));
@@ -372,7 +372,7 @@ export default function Dev() {
         <Button onClick={startScheduler}>Start Scheduler</Button>
         <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
-          {screenTextLoading ? "Loading..." : "Get Screen Text"}
+          {screenTextLoading ? "Loading..." : "Get Screen Text (Formatted)"}
         </Button>
         <Button onClick={fetchVisibleWindows} disabled={windowsLoading}>
           {windowsLoading ? "Loading..." : "Get All Windows"}
@@ -540,18 +540,21 @@ export default function Dev() {
       </div>
 
       {/* --- Screen Text by Application Section --- */}
-      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-yellow-50">
-        <h2 className="text-lg font-semibold mb-2">Screen Text by Application</h2>
+      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50">
+        <h2 className="text-lg font-semibold mb-2">Screen Text by Application (Formatted)</h2>
         {screenTextData && (
-          <div className="mt-2 text-green-700 font-mono whitespace-pre-wrap max-h-64 overflow-y-auto">
-            {JSON.stringify(screenTextData, null, 2)}
+          <div className="mt-2 prose prose-sm max-w-none max-h-96 overflow-y-auto bg-white p-4 rounded border">
+            <pre className="whitespace-pre-wrap text-sm">{screenTextData}</pre>
           </div>
         )}
         {screenTextError && (
           <div className="mt-2 text-red-700 font-mono">Error: {screenTextError}</div>
         )}
         {!screenTextData && !screenTextError && !screenTextLoading && (
-          <div className="mt-2 text-gray-500">Click "Get Screen Text" button to fetch application text data.</div>
+          <div className="mt-2 text-gray-500">Click "Get Screen Text (Formatted)" button to fetch clean, organized application text data.</div>
+        )}
+        {screenTextLoading && (
+          <div className="mt-2 text-blue-600">Loading screen text data (this may take a moment)...</div>
         )}
       </div>
 
