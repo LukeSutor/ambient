@@ -125,7 +125,14 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
   })?;
   println!("[db] Migrations applied successfully.");
 
-  // 5. Return the connection
+  // 5. Initialize conversation tables
+  crate::models::conversations::initialize_conversations_db(&conn).map_err(|e| {
+    let err_msg = format!("Failed to initialize conversations database: {}", e);
+    println!("[db] {}", err_msg);
+    err_msg
+  })?;
+
+  // 6. Return the connection
   Ok(conn)
 }
 
