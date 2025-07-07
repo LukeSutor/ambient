@@ -424,7 +424,7 @@ pub fn get_conversation_history(
 
 /// Reset a specific conversation or the current one
 #[tauri::command]
-pub fn reset_conversation(conversation_id: Option<String>) -> Result<(), String> {
+pub fn reset_qwen3_conversation(conversation_id: Option<String>) -> Result<(), String> {
   let mut state = GLOBAL_QWEN3_STATE
     .lock()
     .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;
@@ -445,7 +445,7 @@ pub fn reset_conversation(conversation_id: Option<String>) -> Result<(), String>
 
 /// List all conversation IDs
 #[tauri::command]
-pub fn list_conversations() -> Result<Vec<String>, String> {
+pub fn list_qwen3_conversations() -> Result<Vec<String>, String> {
   let state = GLOBAL_QWEN3_STATE
     .lock()
     .map_err(|_| "Failed to acquire Qwen3 state lock".to_string())?;

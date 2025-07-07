@@ -48,7 +48,7 @@
 
 use crate::db::DbState;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, Result as SqliteResult};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
