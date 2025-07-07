@@ -1,148 +1,11 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from '@tauri-apps/api/event'; // Import listen
-import { useCallback, useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea" // Import Textarea
-import { Label } from "@/components/ui/label" // Import Label
-import Link from 'next/link'
-
-// Define the expected payload structure
-interface TaskResultPayload {
-  result: string;
-}
-
-// --- Workflow Format Types ---
-export interface Workflow {
-  steps: Step[];
-  name: string;
-  description: string;
-  version: string;
-  input_schema: [];
-}
-export type Step =
-  | NavigationStep
-  | ClickStep
-  | InputStep
-  | KeyPressStep
-  | ScrollStep;
-
-export interface BaseStep {
-  type: string;
-  timestamp: number;
-  tabId: number;
-  url?: string;
-}
-export interface NavigationStep extends BaseStep {
-  type: "navigation";
-  url: string;
-}
-export interface ClickStep extends BaseStep {
-  type: "click";
-  url: string;
-  xpath: string;
-  cssSelector?: string;
-  elementTag: string;
-  elementText: string;
-}
-export interface InputStep extends BaseStep {
-  type: "input";
-  url: string;
-  xpath: string;
-  cssSelector?: string;
-  elementTag: string;
-  value: string;
-}
-export interface KeyPressStep extends BaseStep {
-  type: "key_press";
-  url?: string;
-  key: string;
-  xpath?: string;
-  cssSelector?: string;
-  elementTag?: string;
-}
-export interface ScrollStep extends BaseStep {
-  type: "scroll";
-  targetId: number;
-  scrollX: number;
-  scrollY: number;
-}
-
-import React from "react";
-
-// --- WebSocket Event Monitor ---
-const WS_PORT_RANGE = Array.from({ length: 11 }, (_, i) => 3010 + i);
-
-function useWebSocketEventMonitor() {
-  const [events, setEvents] = useState<Step[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    let connected = false;
-    let ws: WebSocket | null = null;
-    (async () => {
-      for (const port of WS_PORT_RANGE) {
-        try {
-          ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
-          await new Promise((resolve, reject) => {
-            ws!.onopen = () => resolve(undefined);
-            ws!.onerror = () => reject(undefined);
-            setTimeout(() => reject(undefined), 500);
-          });
-          connected = true;
-          wsRef.current = ws;
-          ws.onmessage = (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              // Only add if it matches a Step type (basic check)
-              if (data && typeof data.type === "string" && data.timestamp) {
-                setEvents((prev) => [...prev, data]);
-              }
-            } catch (e) {
-              // Ignore non-JSON or non-event messages
-            }
-          };
-          break;
-        } catch {
-          // Try next port
-        }
-      }
-    })();
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
-  return events;
-}
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 
 export default function Dev() {
-  // Function to start the scheduler
-  async function startScheduler() {
-    try {
-      // Optionally pass an interval in minutes: await invoke("start_scheduler", { interval: 5 });
-      await invoke("start_scheduler");
-      console.log("Scheduler started successfully.");
-      // You could update UI state here, e.g., disable start button, enable stop button
-    } catch (error) {
-      console.error("Error starting scheduler:", error);
-      // Handle the error
-    }
-  }
-
-  // Function to stop the scheduler
-  async function stopScheduler() {
-    try {
-      await invoke("stop_scheduler");
-      console.log("Scheduler stopped successfully.");
-      // You could update UI state here, e.g., enable start button, disable stop button
-    } catch (error) {
-      console.error("Error stopping scheduler:", error);
-      // Handle the error (e.g., scheduler wasn't running)
-    }
-  }
-
-  const [taskResults, setTaskResults] = useState<string[]>([]); // State for task results
-
   // State for SQL execution
   const [sqlQuery, setSqlQuery] = useState<string>("SELECT * FROM documents LIMIT 5;");
   const [sqlParams, setSqlParams] = useState<string>("[]"); // Store params as JSON string
@@ -182,33 +45,6 @@ export default function Dev() {
     }
   };
 
-  // Effect to listen for task results
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-
-    async function setupListener() {
-      try {
-        unlisten = await listen<TaskResultPayload>('task-completed', (event) => {
-          console.log("Received task result:", event.payload.result);
-          setTaskResults((prevResults) => [...prevResults, event.payload.result]);
-        });
-        console.log("Event listener for 'task-completed' set up.");
-      } catch (error) {
-        console.error("Failed to set up event listener:", error);
-      }
-    }
-
-    setupListener();
-
-    // Cleanup listener on component unmount
-    return () => {
-      if (unlisten) {
-        unlisten();
-        console.log("Event listener for 'task-completed' cleaned up.");
-      }
-    };
-  }, []); // Empty dependency array ensures this runs only once on mount
-
   // --- Screen Text by Application ---
   const [screenTextData, setScreenTextData] = useState<string | null>(null);
   const [screenTextError, setScreenTextError] = useState<string | null>(null);
@@ -228,92 +64,13 @@ export default function Dev() {
     }
   };
 
-  // --- Visible Windows ---
-  const [windowsData, setWindowsData] = useState<any>(null);
-  const [windowsError, setWindowsError] = useState<string | null>(null);
-  const [windowsLoading, setWindowsLoading] = useState<boolean>(false);
-
-  const fetchVisibleWindows = async () => {
-    setWindowsLoading(true);
-    setWindowsError(null);
-    try {
-      const data = await invoke("get_all_visible_windows");
-      setWindowsData(data);
-    } catch (err: any) {
-      setWindowsError(typeof err === "string" ? err : JSON.stringify(err));
-      setWindowsData(null);
-    } finally {
-      setWindowsLoading(false);
-    }
-  };
-
-  // --- Browser URL ---
-  const [browserUrl, setBrowserUrl] = useState<string | null>(null);
-  const [browserUrlError, setBrowserUrlError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    let interval: NodeJS.Timeout;
-
-    const fetchBrowserUrl = async () => {
-      try {
-        const url = await invoke<string>("get_brave_url");
-        if (isMounted) {
-          setBrowserUrl(url);
-          setBrowserUrlError(null);
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          setBrowserUrlError(typeof err === "string" ? err : JSON.stringify(err));
-          setBrowserUrl(null);
-        }
-      }
-    };
-
-    fetchBrowserUrl(); // Initial fetch
-    interval = setInterval(fetchBrowserUrl, 2000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const events = useWebSocketEventMonitor();
-
-  // --- Workflows Viewer ---
-  const [workflows, setWorkflows] = useState<any[]>([]);
-  const [workflowsLoading, setWorkflowsLoading] = useState(false);
-  const [workflowsError, setWorkflowsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setWorkflowsLoading(true);
-    setWorkflowsError(null);
-    invoke<any[]>("get_workflows", { offset: 0, limit: 10 })
-      .then((result) => {
-        // result is expected to be an array of workflow objects
-        setWorkflows(Array.isArray(result) ? result : []);
-        setWorkflowsLoading(false);
-      })
-      .catch((err) => {
-        setWorkflowsError(typeof err === "string" ? err : JSON.stringify(err));
-        setWorkflowsLoading(false);
-      });
-  }, []);
-
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
-      {/* Existing Buttons Section */}
-      <div className="flex flex-wrap gap-2 justify-center">
-        <Button onClick={startScheduler}>Start Scheduler</Button>
-        <Button onClick={stopScheduler} variant="destructive">Stop Scheduler</Button>
+      {/* Screen Text Button */}
+      <div className="flex justify-center">
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
           {screenTextLoading ? "Loading..." : "Get Screen Text (Formatted)"}
         </Button>
-        <Button onClick={fetchVisibleWindows} disabled={windowsLoading}>
-          {windowsLoading ? "Loading..." : "Get All Windows"}
-        </Button>
-        <Button asChild><Link href="/setup">Setup</Link></Button>
       </div>
 
       {/* SQL Execution Section */}
@@ -350,131 +107,6 @@ export default function Dev() {
         )}
       </div>
 
-      {/* Results Box */}
-      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
-        <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
-        {taskResults.length === 0 ? (
-          <p className="text-gray-500">No results yet. Start the scheduler.</p>
-        ) : (
-          taskResults.map((result, index) => (
-            <pre key={index} className="whitespace-pre-wrap text-sm p-2 mb-2 border-b last:border-b-0">
-              {result}
-            </pre>
-          ))
-        )}
-      </div>
-
-      {/* --- Browser Event Monitor --- */}
-      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-blue-50">
-        <h2 className="text-lg font-semibold mb-2">Browser Event Monitor</h2>
-        {events.length === 0 ? (
-          <p className="text-gray-500">No browser events received yet.</p>
-        ) : (
-          events.slice(-50).map((event, idx) => (
-            <div key={idx} className="mb-2 p-2 border-b last:border-b-0 bg-white rounded">
-              <div className="font-mono text-xs text-gray-700">
-                <b>{event.type}</b> @ {new Date(event.timestamp).toLocaleTimeString()} (tab {event.tabId})
-              </div>
-              <div className="text-xs text-gray-600">
-                {Object.entries(event)
-                  .filter(([k]) => !["type", "timestamp", "tabId"].includes(k))
-                  .map(([k, v]) => (
-                    <span key={k} className="mr-2">
-                      <b>{k}:</b> {typeof v === "string" || typeof v === "number" ? v : JSON.stringify(v)}
-                    </span>
-                  ))}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* --- Workflows Table Viewer --- */}
-      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-green-50">
-        <h2 className="text-lg font-semibold mb-2">Saved Workflows (First 10)</h2>
-        {workflowsLoading ? (
-          <p className="text-gray-500">Loading workflows...</p>
-        ) : workflowsError ? (
-          <p className="text-red-500">Error: {workflowsError}</p>
-        ) : workflows.length === 0 ? (
-          <p className="text-gray-500">No workflows found.</p>
-        ) : (
-          workflows.map((wf, idx) => {
-            let steps: any[] = [];
-            try {
-              steps = JSON.parse(wf.steps_json ?? "[]");
-            } catch {
-              steps = [];
-            }
-            return (
-              <div key={wf.id ?? idx} className="mb-2 p-2 border-b last:border-b-0 bg-white rounded">
-                <div className="font-mono text-xs text-gray-700">
-                  <b>{wf.name}</b> ({wf.url ?? "no url"})
-                </div>
-                <div className="text-xs text-gray-600">
-                  <b>Description:</b> {wf.description ?? <span className="italic text-gray-400">none</span>}
-                  <br />
-                  <b>Steps:</b> {steps.length}
-                  <br />
-                  <b>Recorded:</b>{" "}
-                  {typeof wf.recording_start === "number" && wf.recording_start > 0
-                    ? (() => {
-                        // Defensive: if value is too large, assume ms and convert to seconds
-                        const ts = wf.recording_start > 1e12
-                          ? Math.floor(wf.recording_start / 1000)
-                          : wf.recording_start;
-                        return new Date(ts * 1000).toLocaleString();
-                      })()
-                    : "?"}
-                  {" - "}
-                  {typeof wf.recording_end === "number" && wf.recording_end > 0
-                    ? (() => {
-                        const ts = wf.recording_end > 1e12
-                          ? Math.floor(wf.recording_end / 1000)
-                          : wf.recording_end;
-                        return new Date(ts * 1000).toLocaleString();
-                      })()
-                    : "?"}
-                  {/* Steps List */}
-                  {steps.length > 0 && (
-                    <div className="mt-2 border rounded bg-gray-50 p-2 max-h-32 overflow-y-auto">
-                      <div className="font-semibold mb-1">Captured Steps:</div>
-                      {steps.map((step, sidx) => (
-                        <div key={sidx} className="mb-1 p-1 border-b last:border-b-0">
-                          <span className="font-mono text-xs">
-                            <b>{step.event_type || step.type}</b>
-                            {" @ "}
-                            {step.timestamp
-                              ? new Date(
-                                  (typeof step.timestamp === "number" && step.timestamp > 1e12
-                                    ? step.timestamp / 1000
-                                    : step.timestamp) * 1000
-                                ).toLocaleString()
-                              : "?"}
-                          </span>
-                          <div className="text-xs text-gray-700">
-                            {Object.entries(step.payload || step)
-                              .filter(([k]) => !["event_type", "timestamp", "payload"].includes(k))
-                              .map(([k, v]) => (
-                                <span key={k} className="mr-2">
-                                  <b>{k}:</b>{" "}
-                                  {typeof v === "string" || typeof v === "number"
-                                    ? v
-                                    : JSON.stringify(v)}
-                                </span>
-                              ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
       {/* --- Screen Text by Application Section --- */}
       <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50">
         <h2 className="text-lg font-semibold mb-2">Screen Text by Application (Formatted)</h2>
@@ -491,47 +123,6 @@ export default function Dev() {
         )}
         {screenTextLoading && (
           <div className="mt-2 text-blue-600">Loading screen text data (this may take a moment)...</div>
-        )}
-      </div>
-
-      {/* --- Visible Windows Section --- */}
-      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-purple-50">
-        <h2 className="text-lg font-semibold mb-2">All Visible Windows</h2>
-        {windowsData && (
-          <div className="mt-2 max-h-64 overflow-y-auto">
-            {Array.isArray(windowsData) && windowsData.length > 0 ? (
-              windowsData.map((window: any, index: number) => (
-                <div key={index} className="mb-2 p-2 border rounded bg-white">
-                  <div className="font-semibold text-purple-800">{window.window_title}</div>
-                  <div className="text-sm text-gray-600">
-                    <span className="font-mono">App: {window.application_name}</span>
-                    {window.process_id && (
-                      <span className="ml-4 font-mono">PID: {window.process_id}</span>
-                    )}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-gray-500">No windows found</div>
-            )}
-          </div>
-        )}
-        {windowsError && (
-          <div className="mt-2 text-red-700 font-mono">Error: {windowsError}</div>
-        )}
-        {!windowsData && !windowsError && !windowsLoading && (
-          <div className="mt-2 text-gray-500">Click "Get All Windows" button to fetch visible windows.</div>
-        )}
-      </div>
-
-      {/* --- Browser URL Section --- */}
-      <div className="w-full max-w-2xl mt-4 p-4 border rounded-md bg-orange-50">
-        <h2 className="text-lg font-semibold mb-2">Current Browser URL (Brave)</h2>
-        {browserUrl && (
-          <div className="mt-2 text-blue-700 font-mono break-all">{browserUrl}</div>
-        )}
-        {browserUrlError && (
-          <div className="mt-2 text-red-700 font-mono">Error: {browserUrlError}</div>
         )}
       </div>
     </div>
