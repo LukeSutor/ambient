@@ -61,14 +61,12 @@
 use crate::setup;
 use reqwest;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::env;
-use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, Emitter};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use rand::Rng;
-use futures_util::StreamExt;
 
 /// Global state to track the running server process and port
 #[derive(Debug)]
@@ -597,15 +595,16 @@ pub async fn generate(
             .map_err(|e| format!("Failed to send streaming request: {}", e))?;
         
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Server returned error {}: {}", response.status(), error_text));
+            return Err(format!("Server returned error {}: {}", status, error_text));
         }
         
         // Process streaming response
         let mut full_response = String::new();
         let mut stream = response.bytes_stream();
         
-        use futures_util::StreamExt;
+        use futures::StreamExt;
         
         while let Some(chunk_result) = stream.next().await {
             match chunk_result {
@@ -687,8 +686,9 @@ pub async fn generate(
             .map_err(|e| format!("Failed to send request: {}", e))?;
         
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("Server returned error {}: {}", response.status(), error_text));
+            return Err(format!("Server returned error {}: {}", status, error_text));
         }
         
         let result: Value = response

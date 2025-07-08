@@ -487,12 +487,6 @@ pub fn get_qwen3_status() -> Result<serde_json::Value, String> {
   }))
 }
 
-/// Legacy generate function for backward compatibility
-#[tauri::command]
-pub async fn generate(prompt: String) -> Result<String, String> {
-  generate_qwen3(prompt, Some(false), Some(false), None, None).await
-}
-
 /*
 Frontend Usage Example:
 
