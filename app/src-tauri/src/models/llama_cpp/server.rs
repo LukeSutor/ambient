@@ -64,10 +64,11 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Emitter};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use rand::Rng;
+use futures_util::StreamExt;
 
 /// Global state to track the running server process and port
 #[derive(Debug)]
@@ -495,4 +496,236 @@ pub async fn restart_llama_server(app_handle: AppHandle) -> Result<String, Strin
     
     // Start the server again
     spawn_llama_server(app_handle).await
+}
+
+/// Generate chat completion using OpenAI-compatible endpoint
+#[tauri::command]
+pub async fn generate(
+    app_handle: AppHandle,
+    prompt: String,
+    json_schema: Option<String>,
+    conv_id: Option<String>,
+    use_thinking: Option<bool>,
+    stream: Option<bool>,
+) -> Result<String, String> {
+    println!("[llama_server] Starting chat completion generation");
+    
+    // Get the current port from server state
+    let port = get_current_port().ok_or_else(|| "Server is not running".to_string())?;
+    
+    let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
+    
+    // Check if server is healthy first
+    if let Err(e) = perform_health_check(&config).await {
+        return Err(format!("Server health check failed: {}", e));
+    }
+
+    let should_stream = stream.unwrap_or(false);
+    let enable_thinking = use_thinking.unwrap_or(true);
+    
+    // Build messages array from conversation history and new prompt
+    let mut messages = Vec::new();
+    
+    // If conversation ID is provided, load existing messages
+    if let Some(conversation_id) = &conv_id {
+        match crate::models::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await {
+            Ok(conv_messages) => {
+                for msg in conv_messages {
+                    messages.push(json!({
+                        "role": msg.role,
+                        "content": msg.content
+                    }));
+                }
+            }
+            Err(e) => {
+                println!("[llama_server] Warning: Failed to load conversation messages: {}", e);
+            }
+        }
+    }
+    
+    // Add thinking prefix/suffix to user message if specified
+    let formatted_prompt = if !enable_thinking {
+        format!("{} /no_think", prompt)
+    } else {
+        format!("{} /think", prompt)
+    };
+    
+    // Add the new user message
+    messages.push(json!({
+        "role": "user",
+        "content": formatted_prompt
+    }));
+    
+    // Build request body
+    let mut request_body = json!({
+        "model": "gpt-6",
+        "messages": messages,
+        "stream": should_stream
+    });
+    
+    // Add JSON schema if provided
+    if let Some(schema) = json_schema {
+        if let Ok(schema_value) = serde_json::from_str::<Value>(&schema) {
+            request_body["response_format"] = json!({
+                "type": "json_object",
+                "schema": schema_value
+            });
+        } else {
+            return Err("Invalid JSON schema provided".to_string());
+        }
+    }
+    
+    // Add thinking parameter
+    request_body["chat_template_kwargs"] = json!({
+        "enable_thinking": enable_thinking
+    });
+    
+    let client = reqwest::Client::new();
+    let completion_url = format!("{}/v1/chat/completions", config.base_url());
+    
+    println!("[llama_server] Making request to: {}", completion_url);
+    
+    if should_stream {
+        // Handle streaming response
+        let response = client
+            .post(&completion_url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", config.api_key))
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send streaming request: {}", e))?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Server returned error {}: {}", response.status(), error_text));
+        }
+        
+        // Process streaming response
+        let mut full_response = String::new();
+        let mut stream = response.bytes_stream();
+        
+        use futures_util::StreamExt;
+        
+        while let Some(chunk_result) = stream.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    let chunk_str = String::from_utf8_lossy(&chunk);
+                    
+                    // Parse SSE format
+                    for line in chunk_str.lines() {
+                        if line.starts_with("data: ") {
+                            let data = &line[6..]; // Remove "data: " prefix
+                            
+                            if data == "[DONE]" {
+                                break;
+                            }
+                            
+                            if let Ok(json_data) = serde_json::from_str::<Value>(data) {
+                                if let Some(choices) = json_data["choices"].as_array() {
+                                    if let Some(choice) = choices.get(0) {
+                                        if let Some(delta) = choice["delta"].as_object() {
+                                            if let Some(content) = delta["content"].as_str() {
+                                                full_response.push_str(content);
+                                                
+                                                // Emit stream event to frontend
+                                                let stream_data = json!({
+                                                    "delta": content,
+                                                    "full_response": full_response
+                                                });
+                                                
+                                                if let Err(e) = app_handle.emit("chat-stream", &stream_data) {
+                                                    println!("[llama_server] Failed to emit stream event: {}", e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(format!("Error reading stream: {}", e));
+                }
+            }
+        }
+        
+        // Store messages in conversation if conv_id is provided
+        if let Some(conversation_id) = conv_id {
+            // Add user message
+            if let Err(e) = crate::models::conversations::add_message(
+                app_handle.clone(),
+                conversation_id.clone(),
+                "user".to_string(),
+                prompt,
+            ).await {
+                println!("[llama_server] Warning: Failed to save user message: {}", e);
+            }
+            
+            // Add assistant response
+            if let Err(e) = crate::models::conversations::add_message(
+                app_handle.clone(),
+                conversation_id,
+                "assistant".to_string(),
+                full_response.clone(),
+            ).await {
+                println!("[llama_server] Warning: Failed to save assistant message: {}", e);
+            }
+        }
+        
+        Ok(full_response)
+    } else {
+        // Handle non-streaming response
+        let response = client
+            .post(&completion_url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", config.api_key))
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+        
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(format!("Server returned error {}: {}", response.status(), error_text));
+        }
+        
+        let result: Value = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse response: {}", e))?;
+        
+        // Extract the generated content
+        let generated_text = result["choices"][0]["message"]["content"]
+            .as_str()
+            .ok_or("No content in response")?
+            .to_string();
+        
+        // Store messages in conversation if conv_id is provided
+        if let Some(conversation_id) = conv_id {
+            // Add user message
+            if let Err(e) = crate::models::conversations::add_message(
+                app_handle.clone(),
+                conversation_id.clone(),
+                "user".to_string(),
+                prompt,
+            ).await {
+                println!("[llama_server] Warning: Failed to save user message: {}", e);
+            }
+            
+            // Add assistant response
+            if let Err(e) = crate::models::conversations::add_message(
+                app_handle.clone(),
+                conversation_id,
+                "assistant".to_string(),
+                generated_text.clone(),
+            ).await {
+                println!("[llama_server] Warning: Failed to save assistant message: {}", e);
+            }
+        }
+        
+        println!("[llama_server] Generated {} characters", generated_text.len());
+        Ok(generated_text)
+    }
 }

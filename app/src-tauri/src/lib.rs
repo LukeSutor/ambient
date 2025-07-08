@@ -194,6 +194,7 @@ pub fn run() {
       models::llama_cpp::server::get_server_port,
       models::llama_cpp::server::restart_llama_server,
       models::llama_cpp::server::make_completion_request,
+      models::llama_cpp::server::generate,
       models::conversations::create_conversation,
       models::conversations::add_message,
       models::conversations::get_messages,
