@@ -16,9 +16,9 @@ use windows::{
       ProcessStatus::{GetModuleBaseNameW},
       Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
     },
-    Foundation::{CloseHandle, HANDLE},
+    Foundation::CloseHandle,
     UI::Accessibility::{
-      CUIAutomation, IUIAutomation, IUIAutomationValuePattern, IUIAutomationCacheRequest,
+      CUIAutomation, IUIAutomation, IUIAutomationValuePattern,
       TreeScope_Descendants, TreeScope_Children, TreeScope_Subtree, UIA_NamePropertyId, 
       UIA_ValuePatternId, UIA_WindowControlTypeId, UIA_ControlTypePropertyId,
       UIA_TextControlTypeId, UIA_EditControlTypeId, UIA_DocumentControlTypeId,

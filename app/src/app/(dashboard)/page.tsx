@@ -1,54 +1,62 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from '@tauri-apps/api/event'; // Import listen
+import { listen } from '@tauri-apps/api/event';
 import Image from "next/image";
-import { useCallback, useState, useEffect, useRef } from "react"; // Import useEffect, useRef
+import { useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button"
 import Link from 'next/link'
 
 // Define the expected payload structure
-interface TaskResultPayload {
-  result: string;
+interface Message {
+  id: string;
+  conversation_id: string;
+  role: string; // "user" or "assistant"
+  content: string;
+  timestamp: string;
 }
 
-interface ConversationMessage {
-  role: string;
-  content: string;
+interface Conversation {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
 }
 
 interface StreamResponsePayload {
-  content: string;
+  delta: string;
   is_finished: boolean;
-  conversation_id: string;
+  full_response: string;
 }
 
 export default function Home() {
   // Chat state
-  const [chatInput, setChatInput] = useState("");  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [thinkingEnabled, setThinkingEnabled] = useState(false);
-  const [streamingEnabled, setStreamingEnabled] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
+  const [streamingEnabled, setStreamingEnabled] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentStreamContent, setCurrentStreamContent] = useState("");
-  const [modelStatus, setModelStatus] = useState<{initialized: boolean, loading: boolean}>({ initialized: false, loading: true });
+  const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamContentRef = useRef<string>("");
   
-  // Capture scheduler state
-  const [isCaptureSchedulerRunning, setIsCaptureSchedulerRunning] = useState(false);
-  const [captureEvents, setCaptureEvents] = useState<string[]>([]);
-  // Load conversation history on component mount
+  // Conversation management state
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);  // Load conversation history on component mount
   useEffect(() => {
-    loadConversationHistory();
-    checkModelStatus();
+    loadConversations();
     
     // Set up streaming listener
     let unlistenStream: (() => void) | undefined;
     
     async function setupStreamListener() {
       try {
-        unlistenStream = await listen<StreamResponsePayload>('qwen3-stream', (event) => {
-          const { content, is_finished, conversation_id } = event.payload;
+        unlistenStream = await listen<StreamResponsePayload>('chat-stream', (event) => {
+          const { delta, full_response, is_finished } = event.payload;
+          
+          console.log('Stream event:', { delta, is_finished, deltaLength: delta?.length });
           
           if (is_finished) {
             // When stream finishes, update the last bot message with the complete content
@@ -58,7 +66,7 @@ export default function Home() {
               if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
                 newHistory[lastIndex] = {
                   ...newHistory[lastIndex],
-                  text: content // Use the content from the final event
+                  text: full_response // Use the full_response from the final event
                 };
               }
               return newHistory;
@@ -66,10 +74,45 @@ export default function Home() {
             setIsStreaming(false);
             setCurrentStreamContent("");
             streamContentRef.current = "";
-            console.log('Stream finished for conversation:', conversation_id);
+            
+            // Reload conversations to update the sidebar
+            loadConversations();
           } else {
-            streamContentRef.current = streamContentRef.current + content;
-            setCurrentStreamContent(prev => prev + content);
+            // Check if delta contains the full response or just incremental text
+            // If it's full response, use it directly; if incremental, accumulate
+            if (full_response && full_response.length > 0) {
+              // Backend is sending full response, use it directly
+              streamContentRef.current = full_response;
+              setCurrentStreamContent(full_response);
+              
+              setChatHistory((h) => {
+                const newHistory = [...h];
+                const lastIndex = newHistory.length - 1;
+                if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
+                  newHistory[lastIndex] = {
+                    ...newHistory[lastIndex],
+                    text: full_response
+                  };
+                }
+                return newHistory;
+              });
+            } else {
+              // Backend is sending incremental delta, accumulate it
+              streamContentRef.current += delta;
+              setCurrentStreamContent(streamContentRef.current);
+              
+              setChatHistory((h) => {
+                const newHistory = [...h];
+                const lastIndex = newHistory.length - 1;
+                if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
+                  newHistory[lastIndex] = {
+                    ...newHistory[lastIndex],
+                    text: streamContentRef.current
+                  };
+                }
+                return newHistory;
+              });
+            }
           }
         });
         console.log("Stream event listener set up.");
@@ -77,33 +120,19 @@ export default function Home() {
         console.error("Failed to set up stream listener:", error);
       }
     }
-    
+
     setupStreamListener();
-    
-    // Set up capture screen event listener
-    let unlistenCapture: (() => void) | undefined;
-    
-    async function setupCaptureListener() {
-      try {
-        unlistenCapture = await listen('capture_screen', (event) => {
-          const timestamp = new Date().toLocaleTimeString();
-          setCaptureEvents(prev => [...prev, `Capture event at ${timestamp}`].slice(-10)); // Keep last 10 events
-          console.log("Received capture_screen event:", event);
-        });
-        console.log("Capture event listener set up.");
-      } catch (error) {
-        console.error("Failed to set up capture listener:", error);
-      }
-    }
-    
-    setupCaptureListener();
-    checkCaptureSchedulerStatus();
     
     // Check model status periodically until initialized
     const statusInterval = setInterval(async () => {
-      const isInitialized = await checkModelStatus();
-      if (isInitialized) {
-        clearInterval(statusInterval);
+      // Check if llama server is running
+      try {
+        const status = await invoke<boolean>("get_server_status");
+        if (status) {
+          clearInterval(statusInterval);
+        }
+      } catch (e) {
+        console.log("Llama server not yet ready:", e);
       }
     }, 2000);
     
@@ -112,53 +141,85 @@ export default function Home() {
       if (unlistenStream) {
         unlistenStream();
       }
-      if (unlistenCapture) {
-        unlistenCapture();
-      }
     };
   }, []);
 
-  // Check model initialization status
-  async function checkModelStatus(): Promise<boolean> {
+  // Load all conversations for the sidebar
+  async function loadConversations() {
     try {
-      const status = await invoke<{model_initialized: boolean, conversation_count: number}>("get_qwen3_status");
-      setModelStatus({ 
-        initialized: status.model_initialized, 
-        loading: !status.model_initialized 
-      });
-      return status.model_initialized;
+      const convs = await invoke<Conversation[]>("list_conversations");
+      setConversations(convs);
     } catch (err) {
-      console.error("Error checking model status:", err);
-      setModelStatus({ initialized: false, loading: true });
-      return false;
+      console.error("Error loading conversations:", err);
     }
   }
 
-  // Load conversation history from backend
-  async function loadConversationHistory() {
+  // Load a specific conversation
+  async function loadConversation(conversationId: string) {
     try {
-      const history = await invoke<ConversationMessage[]>("get_conversation_history");
-      const formattedHistory = history.map(msg => ({
-        sender: msg.role === "User" ? "user" as const : "bot" as const,
+      const messages = await invoke<Message[]>("get_messages", { conversationId });
+      const formattedHistory = messages.map(msg => ({
+        sender: msg.role === "user" ? "user" as const : "bot" as const,
         text: msg.content
       }));
       setChatHistory(formattedHistory);
-      
-      // Get current conversation ID
-      const convId = await invoke<string | null>("get_current_conversation_id");
-      setCurrentConversationId(convId);
+      setCurrentConversationId(conversationId);
     } catch (err) {
-      console.log("No existing conversation history or error loading:", err);
+      console.error("Error loading conversation:", err);
     }
   }
-  // Handle chat send
+
+  // Create a new conversation
+  async function createNewConversation() {
+    try {
+      const newConv = await invoke<Conversation>("create_conversation", { name: null });
+      setCurrentConversationId(newConv.id);
+      setChatHistory([]);
+      setConversations(prev => [newConv, ...prev]);
+    } catch (err) {
+      console.error("Error creating conversation:", err);
+    }
+  }
+
+  // Delete a conversation
+  async function deleteConversation(conversationId: string) {
+    try {
+      await invoke("delete_conversation", { conversationId });
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+      
+      // If deleting current conversation, clear it
+      if (conversationId === currentConversationId) {
+        setCurrentConversationId(null);
+        setChatHistory([]);
+      }
+    } catch (err) {
+      console.error("Error deleting conversation:", err);
+    }
+  }
+  // Handle chat send with new generate function
   async function handleSendChat(e?: React.FormEvent) {
     if (e) e.preventDefault();
     const prompt = chatInput.trim();
-    if (!prompt || !modelStatus.initialized || isStreaming) return;
+    if (!prompt || isStreaming || isLoading) return;
     
     setChatHistory((h) => [...h, { sender: "user", text: prompt }]);
     setChatInput("");
+    setIsLoading(true);
+    
+    // Create conversation if none exists
+    let convId = currentConversationId;
+    if (!convId) {
+      try {
+        const newConv = await invoke<Conversation>("create_conversation", { name: null });
+        convId = newConv.id;
+        setCurrentConversationId(convId);
+        setConversations(prev => [newConv, ...prev]);
+      } catch (err) {
+        console.error("Error creating conversation:", err);
+        setIsLoading(false);
+        return;
+      }
+    }
     
     if (streamingEnabled) {
       // Handle streaming
@@ -170,19 +231,13 @@ export default function Home() {
       setChatHistory((h) => [...h, { sender: "bot", text: "" }]);
       
       try {
-        await invoke<string>("stream_qwen3", { 
+        await invoke<string>("generate", { 
           prompt,
-          thinking: thinkingEnabled,
-          resetConversation: false,
-          conversationId: currentConversationId,
-          systemPrompt: "You are a helpful assistant."
+          jsonSchema: null,
+          convId,
+          useThinking: thinkingEnabled,
+          stream: true
         });
-        
-        // Update conversation ID if this was the first message
-        if (!currentConversationId) {
-          const convId = await invoke<string | null>("get_current_conversation_id");
-          setCurrentConversationId(convId);
-        }
       } catch (err) {
         console.error("Error generating streaming response:", err);
         setChatHistory((h) => h.slice(0, -1).concat([{ sender: "bot", text: "[Error generating response]" }]));
@@ -193,25 +248,24 @@ export default function Home() {
     } else {
       // Handle regular non-streaming
       try {
-        const response = await invoke<string>("generate_qwen3", { 
+        const response = await invoke<string>("generate", { 
           prompt,
-          thinking: thinkingEnabled,
-          resetConversation: false,
-          conversationId: currentConversationId,
-          systemPrompt: "You are a helpful assistant."
+          jsonSchema: null,
+          convId,
+          useThinking: thinkingEnabled,
+          stream: false
         });
         setChatHistory((h) => [...h, { sender: "bot", text: response }]);
         
-        // Update conversation ID if this was the first message
-        if (!currentConversationId) {
-          const convId = await invoke<string | null>("get_current_conversation_id");
-          setCurrentConversationId(convId);
-        }
+        // Reload conversations to update the sidebar
+        loadConversations();
       } catch (err) {
         console.error("Error generating response:", err);
         setChatHistory((h) => [...h, { sender: "bot", text: "[Error generating response]" }]);
       }
     }
+    
+    setIsLoading(false);
   }
 
   // Reset conversation
@@ -219,9 +273,9 @@ export default function Home() {
     try {
       if (currentConversationId) {
         await invoke("reset_conversation", { conversationId: currentConversationId });
+        loadConversations(); // Refresh sidebar
       }
       setChatHistory([]);
-      setCurrentConversationId(null);
       setIsStreaming(false);
       setCurrentStreamContent("");
       streamContentRef.current = "";
@@ -245,7 +299,7 @@ export default function Home() {
 
     async function setupListener() {
       try {
-        unlisten = await listen<TaskResultPayload>('task-completed', (event) => {
+        unlisten = await listen<any>('task-completed', (event) => {
           console.log("Received task result:", event.payload.result);
           setTaskResults((prevResults) => [...prevResults, event.payload.result]);
         });
@@ -266,193 +320,180 @@ export default function Home() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
-  // Capture scheduler functions
-  async function startCaptureScheduler() {
-    try {
-      await invoke("start_capture_scheduler");
-      setIsCaptureSchedulerRunning(true);
-      console.log("Capture scheduler started successfully.");
-    } catch (err) {
-      console.error("Error starting capture scheduler:", err);
-    }
-  }
-
-  async function stopCaptureScheduler() {
-    try {
-      await invoke("stop_capture_scheduler");
-      setIsCaptureSchedulerRunning(false);
-      console.log("Capture scheduler stopped successfully.");
-    } catch (err) {
-      console.error("Error stopping capture scheduler:", err);
-    }
-  }
-
-  async function checkCaptureSchedulerStatus() {
-    try {
-      const isRunning = await invoke<boolean>("is_scheduler_running");
-      setIsCaptureSchedulerRunning(isRunning);
-    } catch (err) {
-      console.error("Error checking capture scheduler status:", err);
-    }
-  }
-
   return (
-    <div className="relative flex flex-col items-center justify-center p-4">      {/* Chat Window */}
-      <div className="w-full max-w-md mb-6 bg-white border rounded shadow p-4">        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold">Chat with Qwen3</h2>
-          <div className="flex items-center gap-2">
-            {/* Model status indicator */}
-            <div className="flex items-center text-xs">
-              <div className={`w-2 h-2 rounded-full mr-1 ${
-                modelStatus.initialized ? 'bg-green-500' : 
-                modelStatus.loading ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-              }`}></div>
-              <span className="text-gray-600">
-                {modelStatus.initialized ? 'Ready' : 
-                 modelStatus.loading ? 'Loading...' : 'Error'}
-              </span>
-            </div>
+    <div className="flex h-screen bg-gray-100">
+      {/* Conversations Sidebar */}
+      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 bg-white border-r overflow-hidden`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Conversations</h2>
             <button
-              onClick={resetConversation}
-              className="text-sm bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-gray-500 hover:text-gray-700"
             >
-              Reset
+              {sidebarOpen ? '←' : '→'}
             </button>
           </div>
-        </div>
-        
-        {/* Thinking and Streaming toggles */}
-        <div className="mb-2 space-y-1">
-          <label className="flex items-center text-sm">
-            <input
-              type="checkbox"
-              checked={thinkingEnabled}
-              onChange={(e) => setThinkingEnabled(e.target.checked)}
-              className="mr-2"
-            />
-            Enable thinking mode
-          </label>
-          <label className="flex items-center text-sm">
-            <input
-              type="checkbox"
-              checked={streamingEnabled}
-              onChange={(e) => setStreamingEnabled(e.target.checked)}
-              className="mr-2"
-            />
-            Enable streaming responses
-          </label>
-        </div>
-        
-        <div className="h-48 overflow-y-auto mb-2 bg-gray-50 p-2 rounded">
-          {chatHistory.length === 0 ? (
-            <p className="text-gray-400">Start the conversation...</p>
-          ) : (
-            chatHistory.map((msg, idx) => {
-              // For the last bot message during streaming, show the streaming content
-              const isLastBotMessage = msg.sender === "bot" && idx === chatHistory.length - 1;
-              const displayText = isLastBotMessage && isStreaming && currentStreamContent 
-                ? currentStreamContent 
-                : msg.text;
-              
-              return (
-                <div key={idx} className={msg.sender === "user" ? "text-right mb-2" : "text-left mb-2"}>
-                  <span className={msg.sender === "user" ? "text-blue-700" : "text-green-700"}>
-                    <b>{msg.sender === "user" ? "You" : "Qwen3"}:</b> 
-                    {isLastBotMessage && isStreaming && (
-                      <span className="ml-1 text-xs text-gray-500">(streaming...)</span>
-                    )}
-                  </span>
-                  <div className="mt-1 text-gray-800 whitespace-pre-wrap">
-                    {displayText}
-                    {isLastBotMessage && isStreaming && (
-                      <span className="animate-pulse">▊</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-          <div ref={chatEndRef} />
-        </div>
-        
-        {/* Conversation info */}
-        {currentConversationId && (
-          <div className="text-xs text-gray-500 mb-2">
-            Conversation ID: {currentConversationId.substring(0, 8)}...
-          </div>
-        )}
-        
-        <form className="flex gap-2" onSubmit={handleSendChat}>
-          <input
-            className="flex-1 border rounded px-2 py-1"
-            type="text"
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            placeholder="Type your message..."
-            autoFocus
-          />          <button
-            className="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 disabled:bg-gray-400"
-            type="submit"
-            disabled={!chatInput.trim() || !modelStatus.initialized || isStreaming}
+          <button
+            onClick={createNewConversation}
+            className="w-full bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center justify-center gap-2"
           >
-            {isStreaming ? 'Streaming...' : modelStatus.initialized ? 'Send' : 'Loading...'}
+            <span>+</span> New Chat
           </button>
-        </form>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-2">
+          {conversations.map((conv) => (
+            <div
+              key={conv.id}
+              className={`group flex items-center justify-between p-3 rounded cursor-pointer hover:bg-gray-100 ${
+                currentConversationId === conv.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+              }`}
+              onClick={() => loadConversation(conv.id)}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {conv.name}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {conv.message_count} messages
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteConversation(conv.id);
+                }}
+                className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 p-1"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
-      <main className="flex flex-col gap-4 items-center sm:items-start w-full max-w-md">
-        {/* Capture Scheduler Controls */}
-        <div className="w-full p-4 border rounded-md bg-white">
-          <h2 className="text-lg font-semibold mb-2">Capture Scheduler</h2>
-          <div className="flex items-center gap-2 mb-2">
-            <div className={`w-2 h-2 rounded-full ${isCaptureSchedulerRunning ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <span className="text-sm text-gray-600">
-              {isCaptureSchedulerRunning ? 'Running (every 10 seconds)' : 'Stopped'}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={startCaptureScheduler}
-              disabled={isCaptureSchedulerRunning}
-              className="bg-green-600 text-white px-4 py-1 rounded hover:bg-green-700 disabled:bg-gray-400"
-            >
-              Start Capture
-            </button>
-            <button
-              onClick={stopCaptureScheduler}
-              disabled={!isCaptureSchedulerRunning}
-              className="bg-red-600 text-white px-4 py-1 rounded hover:bg-red-700 disabled:bg-gray-400"
-            >
-              Stop Capture
-            </button>
-          </div>
-          {captureEvents.length > 0 && (
-            <div className="mt-2">
-              <h3 className="text-sm font-semibold mb-1">Recent Capture Events:</h3>
-              <div className="text-xs text-gray-600 max-h-20 overflow-y-auto">
-                {captureEvents.map((event, index) => (
-                  <div key={index}>{event}</div>
-                ))}
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Toggle sidebar button for mobile */}
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="absolute top-4 left-4 z-10 bg-white border rounded p-2 shadow-lg"
+          >
+            ☰
+          </button>
+        )}
+
+        {/* Chat Window */}
+        <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full p-4">
+          <div className="bg-white border rounded shadow flex-1 flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h2 className="text-lg font-semibold">Chat with Llama</h2>
+              <div className="flex items-center gap-2">
+                {/* Server status indicator */}
+                <div className="flex items-center text-xs">
+                  <div className={`w-2 h-2 rounded-full mr-1 ${
+                    !isLoading ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'
+                  }`}></div>
+                  <span className="text-gray-600">
+                    {!isLoading ? 'Ready' : 'Loading...'}
+                  </span>
+                </div>
+                <button
+                  onClick={resetConversation}
+                  className="text-sm bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+                >
+                  Reset
+                </button>
               </div>
             </div>
-          )}
+            
+            {/* Thinking and Streaming toggles */}
+            <div className="p-4 border-b space-y-2">
+              <label className="flex items-center text-sm">
+                <input
+                  type="checkbox"
+                  checked={thinkingEnabled}
+                  onChange={(e) => setThinkingEnabled(e.target.checked)}
+                  className="mr-2"
+                />
+                Enable thinking mode
+              </label>
+              <label className="flex items-center text-sm">
+                <input
+                  type="checkbox"
+                  checked={streamingEnabled}
+                  onChange={(e) => setStreamingEnabled(e.target.checked)}
+                  className="mr-2"
+                />
+                Enable streaming responses
+              </label>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+              {chatHistory.length === 0 ? (
+                <p className="text-gray-400 text-center mt-8">Start the conversation...</p>
+              ) : (
+                chatHistory.map((msg, idx) => {
+                  // For streaming messages, the text is already updated in real-time in the chat history
+                  const isLastBotMessage = msg.sender === "bot" && idx === chatHistory.length - 1;
+                  const displayText = msg.text;
+                  
+                  return (
+                    <div key={idx} className={`mb-4 ${msg.sender === "user" ? "text-right" : "text-left"}`}>
+                      <div className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                        msg.sender === "user" 
+                          ? "bg-blue-600 text-white" 
+                          : "bg-white border"
+                      }`}>
+                        <div className="font-semibold text-xs mb-1">
+                          {msg.sender === "user" ? "You" : "Llama"}
+                          {isLastBotMessage && isStreaming && (
+                            <span className="ml-1 text-xs opacity-70">(streaming...)</span>
+                          )}
+                        </div>
+                        <div className="whitespace-pre-wrap">
+                          {displayText}
+                          {isLastBotMessage && isStreaming && (
+                            <span className="animate-pulse">▊</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+            
+            {/* Conversation info */}
+            {currentConversationId && (
+              <div className="px-4 py-2 text-xs text-gray-500 border-t">
+                Conversation ID: {currentConversationId.substring(0, 8)}...
+              </div>
+            )}
+            
+            <form className="p-4 border-t flex gap-2" onSubmit={handleSendChat}>
+              <input
+                className="flex-1 border rounded px-3 py-2"
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="Type your message..."
+                autoFocus
+              />
+              <button
+                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                type="submit"
+                disabled={!chatInput.trim() || isStreaming || isLoading}
+              >
+                {isStreaming ? 'Streaming...' : isLoading ? 'Loading...' : 'Send'}
+              </button>
+            </form>
+          </div>
         </div>
-        
-        {/* Results Box */}
-        <div className="w-full mt-4 p-4 border rounded-md h-64 overflow-y-auto bg-gray-50">
-          <h2 className="text-lg font-semibold mb-2">Task Results:</h2>
-          {taskResults.length === 0 ? (
-            <p className="text-gray-500">No results yet. Start the scheduler.</p>
-          ) : (
-            taskResults.map((result, index) => (
-              <pre key={index} className="whitespace-pre-wrap text-sm p-2 mb-2 border-b last:border-b-0">
-                {result}
-              </pre>
-            ))
-          )}
-          {/* Invisible element to scroll to */}
-          <div ref={resultsEndRef} />
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

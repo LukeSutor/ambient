@@ -142,6 +142,18 @@ pub fn run() {
         }
       });
 
+      // Start llama.cpp server on startup
+      let app_handle_for_llama = app.handle().clone();
+      tauri::async_runtime::spawn(async move {
+        // Wait a bit to ensure the app is fully initialized
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        
+        match models::llama_cpp::server::spawn_llama_server(app_handle_for_llama).await {
+          Ok(message) => println!("[setup] {}", message),
+          Err(e) => eprintln!("[setup] Failed to start llama.cpp server: {}", e),
+        }
+      });
+
       Ok(())
     })
     .plugin(tauri_plugin_fs::init())

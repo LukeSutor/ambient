@@ -279,7 +279,7 @@ pub async fn stop_llama_server() -> Result<String, String> {
     let mut server_state = SERVER_STATE.lock().unwrap();
     
     match server_state.child.take() {
-        Some(mut child) => {
+        Some(child) => {
             child
                 .kill()
                 .map_err(|e| format!("Failed to kill server process: {}", e))?;
@@ -610,6 +610,8 @@ pub async fn generate(
             match chunk_result {
                 Ok(chunk) => {
                     let chunk_str = String::from_utf8_lossy(&chunk);
+
+                    println!("[llama_server] Received chunk: {}", chunk_str);
                     
                     // Parse SSE format
                     for line in chunk_str.lines() {
@@ -623,8 +625,17 @@ pub async fn generate(
                             if let Ok(json_data) = serde_json::from_str::<Value>(data) {
                                 if let Some(choices) = json_data["choices"].as_array() {
                                     if let Some(choice) = choices.get(0) {
+                                        // Check if stream is finished
+                                        if let Some(finish_reason) = choice["finish_reason"].as_str() {
+                                            if finish_reason == "stop" {
+                                                println!("[llama_server] Stream finished with reason: {}", finish_reason);
+                                                break;
+                                            }
+                                        }
+                                        
+                                        // Process delta content if available
                                         if let Some(delta) = choice["delta"].as_object() {
-                                            if let Some(content) = delta["content"].as_str() {
+                                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
                                                 full_response.push_str(content);
                                                 
                                                 // Emit stream event to frontend
@@ -637,6 +648,7 @@ pub async fn generate(
                                                     println!("[llama_server] Failed to emit stream event: {}", e);
                                                 }
                                             }
+                                            // If no content in delta, just continue (this is normal for some chunks)
                                         }
                                     }
                                 }
@@ -648,6 +660,17 @@ pub async fn generate(
                     return Err(format!("Error reading stream: {}", e));
                 }
             }
+        }
+        
+        // Emit final stream completion event
+        let final_stream_data = json!({
+            "delta": "",
+            "full_response": full_response,
+            "is_finished": true
+        });
+        
+        if let Err(e) = app_handle.emit("chat-stream", &final_stream_data) {
+            println!("[llama_server] Failed to emit final stream event: {}", e);
         }
         
         // Store messages in conversation if conv_id is provided
