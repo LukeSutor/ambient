@@ -30,9 +30,34 @@ interface StreamResponsePayload {
 }
 
 export default function Home() {
+  // Helper function to extract thinking content from text
+  function extractThinkingContent(text: string) {
+    const thinkStartIndex = text.indexOf('<think>');
+    const thinkEndIndex = text.indexOf('</think>');
+    
+    let cleanText = text;
+    let thinkingText = "";
+    let isCurrentlyThinking = false;
+    
+    if (thinkStartIndex !== -1) {
+      if (thinkEndIndex !== -1) {
+        // Complete thinking block found
+        thinkingText = text.substring(thinkStartIndex + 7, thinkEndIndex);
+        cleanText = text.substring(0, thinkStartIndex) + text.substring(thinkEndIndex + 8);
+      } else {
+        // Thinking started but not finished yet
+        thinkingText = text.substring(thinkStartIndex + 7);
+        cleanText = text.substring(0, thinkStartIndex);
+        isCurrentlyThinking = true;
+      }
+    }
+    
+    return { cleanText, thinkingText, isCurrentlyThinking };
+  }
+
   // Chat state
   const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ sender: "user" | "bot"; text: string; thinking?: string }[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [thinkingEnabled, setThinkingEnabled] = useState(true);
   const [streamingEnabled, setStreamingEnabled] = useState(true);
@@ -41,6 +66,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamContentRef = useRef<string>("");
+  
+  // Thinking state
+  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingContent, setThinkingContent] = useState("");
+  const [expandedThinking, setExpandedThinking] = useState<{[key: number]: boolean}>({});
   
   // Conversation management state
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -64,15 +94,20 @@ export default function Home() {
               const newHistory = [...h];
               const lastIndex = newHistory.length - 1;
               if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
+                // Extract thinking content if present
+                const { cleanText, thinkingText } = extractThinkingContent(full_response);
                 newHistory[lastIndex] = {
                   ...newHistory[lastIndex],
-                  text: full_response // Use the full_response from the final event
+                  text: cleanText,
+                  thinking: thinkingEnabled ? thinkingText : undefined
                 };
               }
               return newHistory;
             });
             setIsStreaming(false);
+            setIsThinking(false);
             setCurrentStreamContent("");
+            setThinkingContent("");
             streamContentRef.current = "";
             
             // Reload conversations to update the sidebar
@@ -80,39 +115,40 @@ export default function Home() {
           } else {
             // Check if delta contains the full response or just incremental text
             // If it's full response, use it directly; if incremental, accumulate
+            let contentToUse = "";
             if (full_response && full_response.length > 0) {
               // Backend is sending full response, use it directly
               streamContentRef.current = full_response;
               setCurrentStreamContent(full_response);
-              
-              setChatHistory((h) => {
-                const newHistory = [...h];
-                const lastIndex = newHistory.length - 1;
-                if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
-                  newHistory[lastIndex] = {
-                    ...newHistory[lastIndex],
-                    text: full_response
-                  };
-                }
-                return newHistory;
-              });
+              contentToUse = full_response;
             } else {
               // Backend is sending incremental delta, accumulate it
               streamContentRef.current += delta;
               setCurrentStreamContent(streamContentRef.current);
-              
-              setChatHistory((h) => {
-                const newHistory = [...h];
-                const lastIndex = newHistory.length - 1;
-                if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
-                  newHistory[lastIndex] = {
-                    ...newHistory[lastIndex],
-                    text: streamContentRef.current
-                  };
-                }
-                return newHistory;
-              });
+              contentToUse = streamContentRef.current;
             }
+            
+            // Extract thinking content and clean text
+            const { cleanText, thinkingText, isCurrentlyThinking } = extractThinkingContent(contentToUse);
+            
+            // Update thinking state
+            if (thinkingEnabled) {
+              setIsThinking(isCurrentlyThinking);
+              setThinkingContent(thinkingText);
+            }
+            
+            setChatHistory((h) => {
+              const newHistory = [...h];
+              const lastIndex = newHistory.length - 1;
+              if (lastIndex >= 0 && newHistory[lastIndex].sender === "bot") {
+                newHistory[lastIndex] = {
+                  ...newHistory[lastIndex],
+                  text: cleanText,
+                  thinking: thinkingEnabled ? thinkingText : undefined
+                };
+              }
+              return newHistory;
+            });
           }
         });
         console.log("Stream event listener set up.");
@@ -158,10 +194,14 @@ export default function Home() {
   async function loadConversation(conversationId: string) {
     try {
       const messages = await invoke<Message[]>("get_messages", { conversationId });
-      const formattedHistory = messages.map(msg => ({
-        sender: msg.role === "user" ? "user" as const : "bot" as const,
-        text: msg.content
-      }));
+      const formattedHistory = messages.map(msg => {
+        const { cleanText, thinkingText } = extractThinkingContent(msg.content);
+        return {
+          sender: msg.role === "user" ? "user" as const : "bot" as const,
+          text: cleanText,
+          thinking: msg.role === "assistant" && thinkingText ? thinkingText : undefined
+        };
+      });
       setChatHistory(formattedHistory);
       setCurrentConversationId(conversationId);
     } catch (err) {
@@ -242,7 +282,9 @@ export default function Home() {
         console.error("Error generating streaming response:", err);
         setChatHistory((h) => h.slice(0, -1).concat([{ sender: "bot", text: "[Error generating response]" }]));
         setIsStreaming(false);
+        setIsThinking(false);
         setCurrentStreamContent("");
+        setThinkingContent("");
         streamContentRef.current = "";
       }
     } else {
@@ -277,7 +319,9 @@ export default function Home() {
       }
       setChatHistory([]);
       setIsStreaming(false);
+      setIsThinking(false);
       setCurrentStreamContent("");
+      setThinkingContent("");
       streamContentRef.current = "";
       console.log("Conversation reset successfully.");
     } catch (err) {
@@ -439,9 +483,49 @@ export default function Home() {
                   // For streaming messages, the text is already updated in real-time in the chat history
                   const isLastBotMessage = msg.sender === "bot" && idx === chatHistory.length - 1;
                   const displayText = msg.text;
+                  const hasThinking = msg.thinking && msg.thinking.length > 0;
+                  const isThinkingExpanded = expandedThinking[idx] || false;
                   
                   return (
                     <div key={idx} className={`mb-4 ${msg.sender === "user" ? "text-right" : "text-left"}`}>
+                      {/* Thinking indicator for bot messages */}
+                      {msg.sender === "bot" && hasThinking && (
+                        <div className="mb-2">
+                          <button
+                            onClick={() => setExpandedThinking(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-100 rounded-lg px-3 py-2 border transition-colors"
+                          >
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                              <span>Thinking</span>
+                            </div>
+                            <span className="text-xs">
+                              {isThinkingExpanded ? '▼' : '▶'}
+                            </span>
+                          </button>
+                          {isThinkingExpanded && (
+                            <div className="mt-2 bg-gray-50 border rounded-lg p-3 text-sm">
+                              <div className="font-medium text-gray-700 mb-2">Model's thinking process:</div>
+                              <div className="text-gray-600 whitespace-pre-wrap font-mono text-xs">
+                                {msg.thinking}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Current thinking indicator for streaming */}
+                      {isLastBotMessage && isThinking && thinkingEnabled && (
+                        <div className="mb-2">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
+                            <div className="flex items-center gap-1">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                              <span>Thinking...</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className={`inline-block max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                         msg.sender === "user" 
                           ? "bg-blue-600 text-white" 
