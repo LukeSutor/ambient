@@ -525,7 +525,7 @@ export default function Home() {
                             <span className="ml-1 text-xs opacity-70">(streaming...)</span>
                           )}
                         </div>
-                        <div className="whitespace-pre-wrap">
+                        <div>
                           {displayText}
                           {isLastBotMessage && isStreaming && (
                             <span className="animate-pulse">▊</span>
