@@ -148,7 +148,7 @@ pub fn run() {
         // Wait a bit to ensure the app is fully initialized
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         
-        match models::llama_cpp::server::spawn_llama_server(app_handle_for_llama).await {
+        match models::llm::server::spawn_llama_server(app_handle_for_llama).await {
           Ok(message) => println!("[setup] {}", message),
           Err(e) => eprintln!("[setup] Failed to start llama.cpp server: {}", e),
         }
@@ -190,22 +190,14 @@ pub fn run() {
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_formatted,
       os_utils::windows::window::get_all_visible_windows,
-      models::llm::qwen3::generate_qwen3,
-      models::llm::qwen3::stream_qwen3,
-      models::llm::qwen3::get_conversation_history,
-      models::llm::qwen3::reset_qwen3_conversation,
-      models::llm::qwen3::list_qwen3_conversations,
-      models::llm::qwen3::get_current_conversation_id,
-      models::llm::qwen3::is_qwen3_model_initialized,
-      models::llm::qwen3::get_qwen3_status,
-      models::llama_cpp::server::spawn_llama_server,
-      models::llama_cpp::server::stop_llama_server,
-      models::llama_cpp::server::check_server_health,
-      models::llama_cpp::server::get_server_status,
-      models::llama_cpp::server::get_server_port,
-      models::llama_cpp::server::restart_llama_server,
-      models::llama_cpp::server::make_completion_request,
-      models::llama_cpp::server::generate,
+      models::llm::server::spawn_llama_server,
+      models::llm::server::stop_llama_server,
+      models::llm::server::check_server_health,
+      models::llm::server::get_server_status,
+      models::llm::server::get_server_port,
+      models::llm::server::restart_llama_server,
+      models::llm::server::make_completion_request,
+      models::llm::server::generate,
       models::conversations::create_conversation,
       models::conversations::add_message,
       models::conversations::get_messages,

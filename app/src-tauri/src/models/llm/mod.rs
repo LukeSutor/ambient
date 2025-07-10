@@ -1,2 +1,2 @@
-pub mod qwen3;
 pub mod handlers;
+pub mod server;
