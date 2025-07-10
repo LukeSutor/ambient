@@ -493,34 +493,19 @@ export default function Home() {
                         <div className="mb-2">
                           <button
                             onClick={() => setExpandedThinking(prev => ({ ...prev, [idx]: !prev[idx] }))}
-                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-100 rounded-lg px-3 py-2 border transition-colors"
+                            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
                           >
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                              <span>Thinking</span>
+                            <div className="flex items-center gap-1 animate-pulse">
+                              <span>Thinking...</span>
                             </div>
-                            <span className="text-xs">
-                              {isThinkingExpanded ? '▼' : '▶'}
+                            <span className={`text-xs transition-transform animate-pulse ${isThinkingExpanded ? '' : '-rotate-90'}`}>
+                              ▼
                             </span>
                           </button>
-                          {isThinkingExpanded && (
-                            <div className="mt-2 bg-gray-50 border rounded-lg p-3 text-sm">
-                              <div className="font-medium text-gray-700 mb-2">Model's thinking process:</div>
-                              <div className="text-gray-600 whitespace-pre-wrap font-mono text-xs">
-                                {msg.thinking}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Current thinking indicator for streaming */}
-                      {isLastBotMessage && isThinking && thinkingEnabled && (
-                        <div className="mb-2">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
-                            <div className="flex items-center gap-1">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                              <span>Thinking...</span>
+                          <div className={`mt-2 rounded-lg p-3 text-sm overflow-hidden transition-all mb-0 ${isThinkingExpanded ? 'h-auto scale-y-100' : 'h-0 scale-y-0'}`}>
+                            <div className="font-medium text-gray-700 mb-2">Model's thinking process:</div>
+                            <div className="text-gray-600 whitespace-pre-wrap font-mono text-xs">
+                              {msg.thinking}
                             </div>
                           </div>
                         </div>

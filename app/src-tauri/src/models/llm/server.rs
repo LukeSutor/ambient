@@ -245,8 +245,11 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
             &config.port.to_string(),
             "--api-key",
             &config.api_key,
+            "--reasoning-format",
+            "none",
             "--no-webui",
             "--log-disable",
+            "--jinja"
         ]);
 
     // Spawn the server process

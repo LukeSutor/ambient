@@ -11,7 +11,6 @@ pub mod scheduler;
 pub mod setup;
 pub mod events;
 pub mod types;
-// use crate::integrations::chromium::server::start_server_on_available_port;
 use db::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -123,22 +122,6 @@ pub fn run() {
           panic!("Database initialization failed: {}", e);
         }
       }
-
-      // --- Start Chromium integration server on startup ---
-      // tauri::async_runtime::spawn(async {
-      //     match start_server_on_available_port(app_handle).await {
-      //         Ok(port) => println!("[chromium/server] Running on port {}", port),
-      //         Err(e) => eprintln!("[chromium/server] Failed to start: {}", e),
-      //     }
-      // });
-
-      // Initialize Qwen3 model on startup
-      tauri::async_runtime::spawn(async move {
-        match models::llm::qwen3::initialize_qwen3_model().await {
-          Ok(()) => println!("[setup] Qwen3 model initialized successfully."),
-          Err(e) => eprintln!("[setup] Failed to initialize Qwen3 model: {}", e),
-        }
-      });
 
       // Start llama.cpp server on startup
       let app_handle_for_llama = app.handle().clone();

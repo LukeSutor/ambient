@@ -4,9 +4,6 @@ use std::collections::HashMap;
 // Use Lazy to initialize the HashMap only once
 static PROMPTS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
   let mut map = HashMap::new();
-  // map.insert(
-  //   "SUMMARIZE_ACTION",
-  //   "You are an expert screen activity analyzer helping creating annotations for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots");
   map.insert(
         "SUMMARIZE_ACTION",
 r#"You are an expert screen activity analyzer for a user productivity assistant. Your task is to generate concise, structured descriptions of user activities shown in computer screenshots.
@@ -81,8 +78,10 @@ Example 7 - Multiple Applications:
 
 Analyze the provided screenshot and generate an accurate, structured description following this format. Focus on making the description extremely specific and information-dense to optimize for vector embedding and pattern recognition."#,
     );
-  // Add more prompts here as needed
-  // map.insert("ANOTHER_KEY", "Another prompt text.");
+  map.insert(
+        "analyze_screen",
+r#"You are a screen analysis expert"#,
+    );
   map
 });
 

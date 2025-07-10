@@ -31,8 +31,11 @@
             {
               "validator": ".*"
             },
+            "--reasoning-format",
+            "none",
             "--no-webui",
-            "--log-disable"
+            "--log-disable",
+            "--jinja"
           ],
           "name": "binaries/server",
           "sidecar": true

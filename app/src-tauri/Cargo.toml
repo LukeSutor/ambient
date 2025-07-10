@@ -70,7 +70,7 @@ url = "2.4"
 
 [profile.dev]
 debug = true
-opt-level = 3
+opt-level = 0
 
 [features]
 # by default Tauri runs in production mode
