@@ -502,10 +502,13 @@ export default function Home() {
                               ▼
                             </span>
                           </button>
-                          <div className={`mt-2 rounded-lg p-3 text-sm overflow-hidden transition-all mb-0 ${isThinkingExpanded ? 'h-auto scale-y-100' : 'h-0 scale-y-0'}`}>
-                            <div className="font-medium text-gray-700 mb-2">Model's thinking process:</div>
-                            <div className="text-gray-600 whitespace-pre-wrap font-mono text-xs">
-                              {msg.thinking}
+                          <div className={`mt-2 overflow-hidden transition-all duration-300 ease-in-out ${
+                            isThinkingExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                          }`}>
+                            <div className="text-sm">
+                              <div className="text-gray-600 mb-2 font-mono text-xs">
+                                {msg.thinking}
+                              </div>
                             </div>
                           </div>
                         </div>
