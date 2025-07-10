@@ -7,10 +7,8 @@ pub mod embedding;
 pub mod integrations;
 pub mod models;
 pub mod os_utils;
-pub mod prompts;
 pub mod scheduler;
 pub mod setup;
-pub mod vlm;
 pub mod events;
 pub mod types;
 // use crate::integrations::chromium::server::start_server_on_available_port;
@@ -160,9 +158,7 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
-      vlm::get_vlm_response,
       data::take_screenshot,
-      prompts::get_prompt_command,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
