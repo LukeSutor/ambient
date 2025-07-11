@@ -1,5 +1,5 @@
 use crate::tasks::models::{
-    TaskStep, TaskDetectionResult, CompletedStepDetection, InProgressStepDetection, ScreenContext
+    TaskStep, TaskDetectionResult, ScreenContext
 };
 use crate::models::llm::prompts::get_prompt;
 use serde_json;

@@ -155,11 +155,12 @@ pub async fn get_tasks_by_frequency(
 /// Analyze current screen for task progress using LLM
 #[tauri::command]
 pub async fn analyze_current_screen_for_tasks(
+    app_handle: tauri::AppHandle,
     db_state: State<'_, DbState>,
     task_id: i64,
 ) -> Result<TaskProgressUpdate, String> {
     // Get current screen context
-    let screen_text = crate::os_utils::windows::window::get_screen_text_formatted()
+    let screen_text = crate::os_utils::windows::window::get_screen_text_formatted(app_handle)
         .await
         .map_err(|e| format!("Failed to get screen text: {}", e))?;
     
@@ -173,7 +174,7 @@ pub async fn analyze_current_screen_for_tasks(
     };
 
     // Create LLM completion function that calls the existing completion endpoint
-    let llm_completion = |prompt: &str| -> Result<String, String> {
+    let llm_completion = |_prompt: &str| -> Result<String, String> {
         // Use a simpler approach - just return mock data for now
         // You can integrate with the actual LLM service later
         Ok(r#"{"completed_steps": [], "in_progress_steps": []}"#.to_string())

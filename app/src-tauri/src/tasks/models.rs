@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: i64,
     pub name: String,
@@ -17,7 +16,7 @@ pub struct Task {
     pub status: String, // Will be converted to/from TaskStatus
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskStep {
     pub id: i64,
     pub task_id: i64,
@@ -28,7 +27,7 @@ pub struct TaskStep {
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskProgress {
     pub id: i64,
     pub task_id: i64,
@@ -47,7 +46,7 @@ pub enum TaskStatus {
     Paused,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StepStatus {
     Pending,
     InProgress,
@@ -55,7 +54,7 @@ pub enum StepStatus {
     Skipped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TaskFrequency {
     OneTime,     // Task only needs to be completed once
     Daily,       // Every day

@@ -81,7 +81,6 @@ pub fn get_built_in_templates() -> Vec<TaskTemplate> {
             priority: 3,
             frequency: TaskFrequency::OneTime, // Support tickets are one-time
             steps: vec![
-            steps: vec![
                 TaskStepTemplate {
                     title: "Open Support Ticket System".to_string(),
                     description: Some("Access the customer support ticket dashboard".to_string()),

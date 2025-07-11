@@ -1,10 +1,7 @@
 use crate::tasks::models::*;
 use crate::tasks::detection::TaskDetectionService;
 use crate::db::DbState;
-use rusqlite::{params, Connection, Result as SqliteResult};
-use serde_json;
-use std::sync::Mutex;
-use tauri::Manager;
+use rusqlite::{params, Result as SqliteResult};
 use chrono::{DateTime, Utc};
 
 pub struct TaskService;
@@ -161,20 +158,22 @@ impl TaskService {
 
     /// Get all active tasks (not completed or paused)
     pub fn get_active_tasks(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
-        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+        let task_ids: Vec<i64> = {
+            let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
-        let mut stmt = conn
-            .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') ORDER BY priority DESC, created_at ASC")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+            let mut stmt = conn
+                .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') ORDER BY priority DESC, created_at ASC")
+                .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let task_ids: Vec<i64> = stmt
-            .query_map([], |row| Ok(row.get(0)?))
-            .map_err(|e| format!("Failed to query tasks: {}", e))?
-            .collect::<SqliteResult<Vec<_>>>()
-            .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
+            let task_ids: Vec<i64> = stmt
+                .query_map([], |row| Ok(row.get(0)?))
+                .map_err(|e| format!("Failed to query tasks: {}", e))?
+                .collect::<SqliteResult<Vec<_>>>()
+                .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
 
-        drop(db_guard); // Release the lock before calling other methods
+            task_ids
+        }; // db_guard is dropped here
 
         let mut tasks = Vec::new();
         for task_id in task_ids {
@@ -437,21 +436,23 @@ impl TaskService {
 
     /// Get overdue tasks based on their frequency and next due date
     pub fn get_overdue_tasks(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
-        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+        let task_ids: Vec<i64> = {
+            let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
-        let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        let mut stmt = conn
-            .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at < ? ORDER BY next_due_at ASC")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+            let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let mut stmt = conn
+                .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at < ? ORDER BY next_due_at ASC")
+                .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let task_ids: Vec<i64> = stmt
-            .query_map([&now], |row| Ok(row.get(0)?))
-            .map_err(|e| format!("Failed to query overdue tasks: {}", e))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| format!("Failed to collect overdue task IDs: {}", e))?;
+            let task_ids: Vec<i64> = stmt
+                .query_map([&now], |row| Ok(row.get(0)?))
+                .map_err(|e| format!("Failed to query overdue tasks: {}", e))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|e| format!("Failed to collect overdue task IDs: {}", e))?;
 
-        drop(db_guard); // Release the lock
+            task_ids
+        }; // db_guard is dropped here
 
         let mut tasks = Vec::new();
         for task_id in task_ids {
@@ -466,26 +467,28 @@ impl TaskService {
 
     /// Get tasks due today
     pub fn get_tasks_due_today(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
-        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+        let task_ids: Vec<i64> = {
+            let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
-        let today_start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
-        let today_end = Utc::now().date_naive().and_hms_opt(23, 59, 59).unwrap().and_local_timezone(Utc).unwrap();
+            let today_start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
+            let today_end = Utc::now().date_naive().and_hms_opt(23, 59, 59).unwrap().and_local_timezone(Utc).unwrap();
 
-        let mut stmt = conn
-            .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at >= ? AND next_due_at <= ? ORDER BY next_due_at ASC")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+            let mut stmt = conn
+                .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at >= ? AND next_due_at <= ? ORDER BY next_due_at ASC")
+                .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let task_ids: Vec<i64> = stmt
-            .query_map([
-                today_start.format("%Y-%m-%d %H:%M:%S").to_string(),
-                today_end.format("%Y-%m-%d %H:%M:%S").to_string()
-            ], |row| Ok(row.get(0)?))
-            .map_err(|e| format!("Failed to query tasks due today: {}", e))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
+            let task_ids: Vec<i64> = stmt
+                .query_map([
+                    today_start.format("%Y-%m-%d %H:%M:%S").to_string(),
+                    today_end.format("%Y-%m-%d %H:%M:%S").to_string()
+                ], |row| Ok(row.get(0)?))
+                .map_err(|e| format!("Failed to query tasks due today: {}", e))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
 
-        drop(db_guard); // Release the lock
+            task_ids
+        }; // db_guard is dropped here
 
         let mut tasks = Vec::new();
         for task_id in task_ids {
@@ -500,20 +503,22 @@ impl TaskService {
 
     /// Get tasks by frequency type
     pub fn get_tasks_by_frequency(db_state: &DbState, frequency: TaskFrequency) -> Result<Vec<TaskWithSteps>, String> {
-        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+        let task_ids: Vec<i64> = {
+            let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
-        let mut stmt = conn
-            .prepare("SELECT id FROM tasks WHERE frequency = ? ORDER BY next_due_at ASC")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+            let mut stmt = conn
+                .prepare("SELECT id FROM tasks WHERE frequency = ? ORDER BY next_due_at ASC")
+                .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-        let task_ids: Vec<i64> = stmt
-            .query_map([frequency.as_str()], |row| Ok(row.get(0)?))
-            .map_err(|e| format!("Failed to query tasks by frequency: {}", e))?
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
+            let task_ids: Vec<i64> = stmt
+                .query_map([frequency.as_str()], |row| Ok(row.get(0)?))
+                .map_err(|e| format!("Failed to query tasks by frequency: {}", e))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
 
-        drop(db_guard); // Release the lock
+            task_ids
+        }; // db_guard is dropped here
 
         let mut tasks = Vec::new();
         for task_id in task_ids {
