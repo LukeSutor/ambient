@@ -10,6 +10,7 @@ pub mod os_utils;
 pub mod scheduler;
 pub mod setup;
 pub mod events;
+pub mod tasks;
 pub mod types;
 use db::DbState;
 use std::sync::Mutex;
@@ -195,7 +196,18 @@ pub fn run() {
       auth::get_current_user,
       auth::get_access_token,
       auth::google_sign_in,
-      auth::google_sign_out
+      auth::google_sign_out,
+      tasks::commands::create_task,
+      tasks::commands::create_task_from_template,
+      tasks::commands::get_task,
+      tasks::commands::get_active_tasks,
+      tasks::commands::get_task_templates,
+      tasks::commands::get_template_categories,
+      tasks::commands::update_task_status,
+      tasks::commands::update_step_status,
+      tasks::commands::delete_task,
+      tasks::commands::analyze_current_screen_for_tasks,
+      tasks::commands::get_task_progress_history
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

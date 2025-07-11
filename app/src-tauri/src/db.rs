@@ -85,12 +85,56 @@ lazy_static::lazy_static! {
                 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
 
                 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
+            "),
+            M::up("
+                -- Migration 002: Add task tracking tables
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    category TEXT,
+                    priority INTEGER DEFAULT 1,
+                    estimated_duration INTEGER, -- in minutes
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    status TEXT DEFAULT 'pending' -- pending, in_progress, completed, paused
+                );
+
+                CREATE TABLE IF NOT EXISTS task_steps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    step_number INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    completion_criteria TEXT NOT NULL,
+                    application_context TEXT, -- Which apps/windows this step occurs in
+                    status TEXT DEFAULT 'pending', -- pending, in_progress, completed, skipped
+                    completed_at TEXT,
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                    UNIQUE(task_id, step_number)
+                );
+
+                CREATE TABLE IF NOT EXISTS task_progress (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    step_id INTEGER,
+                    screen_context TEXT NOT NULL, -- JSON of screen state when action occurred
+                    llm_confidence REAL NOT NULL, -- How confident the LLM is about completion
+                    evidence TEXT, -- What the LLM found as evidence
+                    reasoning TEXT, -- LLM's reasoning for the decision
+                    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                    FOREIGN KEY (step_id) REFERENCES task_steps(id) ON DELETE CASCADE
+                );
+
+                -- Indexes for task tables
+                CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+                CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
+                CREATE INDEX IF NOT EXISTS idx_task_steps_task_id ON task_steps(task_id);
+                CREATE INDEX IF NOT EXISTS idx_task_steps_status ON task_steps(status);
+                CREATE INDEX IF NOT EXISTS idx_task_progress_task_id ON task_progress(task_id);
+                CREATE INDEX IF NOT EXISTS idx_task_progress_timestamp ON task_progress(timestamp);
             ")
-            // Add more migrations here as needed
-            // M::up("
-            //     -- Migration 002: Add a new column
-            //     ALTER TABLE documents ADD COLUMN source TEXT;
-            // "),
         ]);
 }
 
