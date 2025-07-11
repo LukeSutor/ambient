@@ -82,6 +82,65 @@ Analyze the provided screenshot and generate an accurate, structured description
         "analyze_screen",
 r#"You are a screen analysis expert"#,
     );
+  map.insert(
+        "TASK_DETECTION",
+r#"You are a task completion detection system. Analyze the current screen content to determine if any task steps have been completed or are in progress.
+
+ACTIVE TASK STEPS TO MONITOR:
+{steps}
+
+CURRENT SCREEN INFORMATION:
+Application: {app}
+Window Title: {window_title}
+Screen Text Content:
+{screen_text}
+
+INSTRUCTIONS:
+1. Carefully analyze the screen content against each active task step
+2. Look for evidence that matches the completion criteria for each step
+3. Consider the application context - steps should only be marked complete if they occur in the expected application
+4. Provide confidence scores between 0.0 and 1.0 (only mark as completed if confidence >= 0.8)
+5. Include specific evidence from the screen that supports your decision
+
+Respond with valid JSON in this exact format:
+{{
+  "completed_steps": [
+    {{
+      "step_id": <number>,
+      "confidence": <0.0-1.0>,
+      "evidence": "<specific text or elements from screen that indicate completion>",
+      "reasoning": "<explain why this step is considered complete>"
+    }}
+  ],
+  "in_progress_steps": [
+    {{
+      "step_id": <number>,
+      "confidence": <0.0-1.0>,
+      "evidence": "<indicators of partial progress or setup>"
+    }}
+  ],
+  "suggestions": "<optional guidance for the user or null>"
+}}
+
+Only include steps in the response if there is clear evidence. If no steps are completed or in progress, return empty arrays."#,
+    );
+  map.insert(
+        "SIMPLE_TASK_DETECTION",
+r#"Determine if this task step has been completed based on the screen content.
+
+TASK STEP: {step_title}
+COMPLETION CRITERIA: {completion_criteria}
+CURRENT APPLICATION: {application}
+SCREEN CONTENT: {screen_content}
+
+Has this step been completed? Respond with JSON:
+{{
+  "completed": true/false,
+  "confidence": 0.0-1.0,
+  "evidence": "specific evidence from screen",
+  "reasoning": "explanation of decision"
+}}"#,
+    );
   map
 });
 

@@ -1,6 +1,7 @@
 use crate::tasks::models::{
     TaskStep, TaskDetectionResult, CompletedStepDetection, InProgressStepDetection, ScreenContext
 };
+use crate::models::llm::prompts::get_prompt;
 use serde_json;
 
 pub struct TaskDetectionService;
@@ -13,52 +14,14 @@ impl TaskDetectionService {
     ) -> String {
         let steps_description = Self::format_steps_for_prompt(current_steps);
         
-        format!(
-            r#"You are a task completion detection system. Analyze the current screen content to determine if any task steps have been completed or are in progress.
-
-ACTIVE TASK STEPS TO MONITOR:
-{steps}
-
-CURRENT SCREEN INFORMATION:
-Application: {app}
-Window Title: {window_title}
-Screen Text Content:
-{screen_text}
-
-INSTRUCTIONS:
-1. Carefully analyze the screen content against each active task step
-2. Look for evidence that matches the completion criteria for each step
-3. Consider the application context - steps should only be marked complete if they occur in the expected application
-4. Provide confidence scores between 0.0 and 1.0 (only mark as completed if confidence >= 0.8)
-5. Include specific evidence from the screen that supports your decision
-
-Respond with valid JSON in this exact format:
-{{
-  "completed_steps": [
-    {{
-      "step_id": <number>,
-      "confidence": <0.0-1.0>,
-      "evidence": "<specific text or elements from screen that indicate completion>",
-      "reasoning": "<explain why this step is considered complete>"
-    }}
-  ],
-  "in_progress_steps": [
-    {{
-      "step_id": <number>,
-      "confidence": <0.0-1.0>,
-      "evidence": "<indicators of partial progress or setup>"
-    }}
-  ],
-  "suggestions": "<optional guidance for the user or null>"
-}}
-
-Only include steps in the response if there is clear evidence. If no steps are completed or in progress, return empty arrays.
-"#,
-            steps = steps_description,
-            app = screen_context.application,
-            window_title = screen_context.window_title.as_deref().unwrap_or("Unknown"),
-            screen_text = Self::truncate_screen_text(&screen_context.text, 2000)
-        )
+        let template = get_prompt("TASK_DETECTION")
+            .expect("TASK_DETECTION prompt not found in prompts registry");
+        
+        template
+            .replace("{steps}", &steps_description)
+            .replace("{app}", &screen_context.application)
+            .replace("{window_title}", screen_context.window_title.as_deref().unwrap_or("Unknown"))
+            .replace("{screen_text}", &Self::truncate_screen_text(&screen_context.text, 2000))
     }
 
     /// Format task steps for inclusion in the LLM prompt
@@ -152,35 +115,6 @@ Only include steps in the response if there is clear evidence. If no steps are c
         }
 
         Ok(())
-    }
-
-    /// Create a simplified prompt for testing or when screen context is minimal
-    pub fn build_simple_prompt(
-        step_title: &str,
-        completion_criteria: &str,
-        screen_text: &str,
-        application: &str,
-    ) -> String {
-        format!(
-            r#"Determine if this task step has been completed based on the screen content.
-
-TASK STEP: {}
-COMPLETION CRITERIA: {}
-CURRENT APPLICATION: {}
-SCREEN CONTENT: {}
-
-Has this step been completed? Respond with JSON:
-{{
-  "completed": true/false,
-  "confidence": 0.0-1.0,
-  "evidence": "specific evidence from screen",
-  "reasoning": "explanation of decision"
-}}"#,
-            step_title,
-            completion_criteria,
-            application,
-            Self::truncate_screen_text(screen_text, 1000)
-        )
     }
 }
 
