@@ -1,0 +1,308 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Plus, Minus, ArrowLeft, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { TaskService } from "@/lib/task-service";
+import { TaskWithSteps, TaskFrequency } from "@/types/tasks";
+import { toast } from "sonner";
+
+const taskSchema = z.object({
+  name: z.string().min(1, "Task name is required"),
+  description: z.string().optional(),
+  frequency: z.nativeEnum(TaskFrequency),
+  steps: z.array(z.object({
+    title: z.string().min(1, "Step title is required"),
+    description: z.string().optional()
+  })).min(1, "At least one step is required")
+});
+
+type TaskFormData = z.infer<typeof taskSchema>;
+
+export default function EditTaskPage() {
+  const router = useRouter();
+  const params = useParams();
+  const taskId = parseInt(params.id as string);
+  
+  const [task, setTask] = useState<TaskWithSteps | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors }
+  } = useForm<TaskFormData>({
+    resolver: zodResolver(taskSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      frequency: TaskFrequency.ONCE,
+      steps: [{ title: "", description: "" }]
+    }
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "steps"
+  });
+
+  const frequency = watch("frequency");
+
+  useEffect(() => {
+    loadTask();
+  }, [taskId]);
+
+  const loadTask = async () => {
+    try {
+      setLoading(true);
+      const taskData = await TaskService.getTask(taskId);
+      setTask(taskData);
+      
+      // Reset form with task data
+      reset({
+        name: taskData.task.name,
+        description: taskData.task.description || "",
+        frequency: taskData.task.frequency as TaskFrequency,
+        steps: taskData.steps.map(step => ({ title: step.title, description: step.description || "" }))
+      });
+    } catch (error) {
+      console.error("Failed to load task:", error);
+      toast.error("Failed to load task");
+      router.push("/tasks");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onSubmit = async (data: TaskFormData) => {
+    try {
+      setIsSubmitting(true);
+      
+      const updateRequest = {
+        id: taskId,
+        name: data.name,
+        description: data.description || undefined,
+        category: task?.task.category,
+        priority: task?.task.priority || 1,
+        frequency: data.frequency,
+        steps: data.steps.map(step => ({
+          title: step.title,
+          description: step.description
+        }))
+      };
+
+      await TaskService.updateTask(updateRequest);
+      toast.success("Task updated successfully!");
+      router.push("/tasks");
+    } catch (error) {
+      console.error("Failed to update task:", error);
+      toast.error("Failed to update task");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const addStep = () => {
+    append({ title: "", description: "" });
+  };
+
+  const removeStep = (index: number) => {
+    if (fields.length > 1) {
+      remove(index);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-8 max-w-2xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!task) {
+    return (
+      <div className="container mx-auto py-8 max-w-2xl">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold">Task not found</h2>
+          <Button onClick={() => router.push("/tasks")} className="mt-4">
+            Back to Tasks
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto py-8 max-w-2xl">
+      {/* Header */}
+      <div className="flex items-center gap-4 mb-8">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.back()}
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Edit Task</h1>
+          <p className="text-muted-foreground">
+            Update task details and steps
+          </p>
+        </div>
+      </div>
+
+      {/* Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Task Details</CardTitle>
+          <CardDescription>
+            Modify your task and its steps
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Task Name */}
+            <div className="space-y-2">
+              <Label htmlFor="name">Task Name</Label>
+              <Input
+                id="name"
+                placeholder="Enter task name..."
+                {...register("name")}
+                className={errors.name ? "border-red-500" : ""}
+              />
+              {errors.name && (
+                <p className="text-sm text-red-500">{errors.name.message}</p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description (Optional)</Label>
+              <Textarea
+                id="description"
+                placeholder="Describe what this task involves..."
+                rows={3}
+                {...register("description")}
+              />
+            </div>
+
+            {/* Frequency */}
+            <div className="space-y-2">
+              <Label htmlFor="frequency">Frequency</Label>
+              <Select
+                value={frequency}
+                onValueChange={(value) => setValue("frequency", value as TaskFrequency)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select frequency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TaskFrequency.ONCE}>One-time</SelectItem>
+                  <SelectItem value={TaskFrequency.DAILY}>Daily</SelectItem>
+                  <SelectItem value={TaskFrequency.WEEKLY}>Weekly</SelectItem>
+                  <SelectItem value={TaskFrequency.MONTHLY}>Monthly</SelectItem>
+                  <SelectItem value={TaskFrequency.YEARLY}>Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Steps */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Task Steps</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addStep}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Step
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {fields.map((field, index) => (
+                  <div key={field.id} className="flex items-start gap-2">
+                    <div className="flex-1 space-y-2">
+                      <Input
+                        placeholder={`Step ${index + 1} title`}
+                        {...register(`steps.${index}.title`)}
+                        className={errors.steps?.[index]?.title ? "border-red-500" : ""}
+                      />
+                      {errors.steps?.[index]?.title && (
+                        <p className="text-sm text-red-500">
+                          {errors.steps[index]?.title?.message}
+                        </p>
+                      )}
+                      <Input
+                        placeholder={`Step ${index + 1} description (optional)`}
+                        {...register(`steps.${index}.description`)}
+                      />
+                    </div>
+                    {fields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeStep(index)}
+                        className="mt-0"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {errors.steps && typeof errors.steps.message === 'string' && (
+                <p className="text-sm text-red-500">{errors.steps.message}</p>
+              )}
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex justify-end gap-4 pt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.back()}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Updating..." : "Update Task"}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -7,7 +7,8 @@ import {
   SquareTerminal,
   House,
   Code,
-  Blocks
+  Blocks,
+  CheckSquare
 } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { AuthService, CognitoUserInfo } from "@/lib/auth"
@@ -45,6 +46,11 @@ const data = {
           url: "/activity/recurring",
         }
       ]
+    },
+    {
+      title: "Tasks",
+      url: "/tasks",
+      icon: CheckSquare
     },
     {
       title: "Integrations",
