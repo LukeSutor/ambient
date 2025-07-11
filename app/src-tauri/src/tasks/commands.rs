@@ -126,7 +126,7 @@ pub async fn analyze_current_screen_for_tasks(
     let llm_completion = |prompt: &str| -> Result<String, String> {
         // Use a simpler approach - just return mock data for now
         // You can integrate with the actual LLM service later
-        Ok(r#"{"completed_steps": [], "in_progress_steps": [], "suggestions": "No analysis available yet"}"#.to_string())
+        Ok(r#"{"completed_steps": [], "in_progress_steps": []}"#.to_string())
     };
 
     TaskService::analyze_task_progress(&db_state, task_id, screen_context, llm_completion).await
@@ -142,7 +142,7 @@ pub async fn get_task_progress_history(
     let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
     let mut stmt = conn
-        .prepare("SELECT id, task_id, step_id, screen_context, llm_confidence, evidence, reasoning, timestamp FROM task_progress WHERE task_id = ? ORDER BY timestamp DESC")
+        .prepare("SELECT id, task_id, step_id, llm_confidence, evidence, reasoning, timestamp FROM task_progress WHERE task_id = ? ORDER BY timestamp DESC")
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
     let progress_records = stmt
@@ -151,11 +151,10 @@ pub async fn get_task_progress_history(
                 id: row.get(0)?,
                 task_id: row.get(1)?,
                 step_id: row.get(2)?,
-                screen_context: row.get(3)?,
-                llm_confidence: row.get(4)?,
-                evidence: row.get(5)?,
-                reasoning: row.get(6)?,
-                timestamp: chrono::DateTime::parse_from_str(&row.get::<_, String>(7)?, "%Y-%m-%d %H:%M:%S")
+                llm_confidence: row.get(3)?,
+                evidence: row.get(4)?,
+                reasoning: row.get(5)?,
+                timestamp: chrono::DateTime::parse_from_str(&row.get::<_, String>(6)?, "%Y-%m-%d %H:%M:%S")
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(|_| chrono::Utc::now()),
             })

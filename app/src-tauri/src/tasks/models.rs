@@ -9,7 +9,6 @@ pub struct Task {
     pub description: Option<String>,
     pub category: Option<String>,
     pub priority: i32,
-    pub estimated_duration: Option<i32>, // in minutes
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub status: String, // Will be converted to/from TaskStatus
@@ -22,8 +21,6 @@ pub struct TaskStep {
     pub step_number: i32,
     pub title: String,
     pub description: Option<String>,
-    pub completion_criteria: String,
-    pub application_context: Option<String>,
     pub status: String, // Will be converted to/from StepStatus
     pub completed_at: Option<DateTime<Utc>>,
 }
@@ -33,7 +30,6 @@ pub struct TaskProgress {
     pub id: i64,
     pub task_id: i64,
     pub step_id: Option<i64>,
-    pub screen_context: String, // JSON of screen state when action occurred
     pub llm_confidence: f64, // How confident the LLM is about completion
     pub evidence: Option<String>, // What the LLM found as evidence
     pub reasoning: Option<String>, // LLM's reasoning for the decision
@@ -105,7 +101,6 @@ pub struct CreateTaskRequest {
     pub description: Option<String>,
     pub category: Option<String>,
     pub priority: i32,
-    pub estimated_duration: Option<i32>,
     pub steps: Vec<CreateTaskStepRequest>,
 }
 
@@ -113,8 +108,6 @@ pub struct CreateTaskRequest {
 pub struct CreateTaskStepRequest {
     pub title: String,
     pub description: Option<String>,
-    pub completion_criteria: String,
-    pub application_context: Option<String>,
 }
 
 // Task update structures
@@ -122,7 +115,6 @@ pub struct CreateTaskStepRequest {
 pub struct TaskProgressUpdate {
     pub task_id: i64,
     pub step_updates: Vec<StepUpdate>,
-    pub suggestions: Option<String>,
     pub overall_status: TaskStatus,
 }
 
@@ -140,7 +132,6 @@ pub struct StepUpdate {
 pub struct TaskDetectionResult {
     pub completed_steps: Vec<CompletedStepDetection>,
     pub in_progress_steps: Vec<InProgressStepDetection>,
-    pub suggestions: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -118,8 +118,7 @@ Respond with valid JSON in this exact format:
       "confidence": <0.0-1.0>,
       "evidence": "<indicators of partial progress or setup>"
     }}
-  ],
-  "suggestions": "<optional guidance for the user or null>"
+  ]
 }}
 
 Only include steps in the response if there is clear evidence. If no steps are completed or in progress, return empty arrays."#,
@@ -129,7 +128,7 @@ Only include steps in the response if there is clear evidence. If no steps are c
 r#"Determine if this task step has been completed based on the screen content.
 
 TASK STEP: {step_title}
-COMPLETION CRITERIA: {completion_criteria}
+DESCRIPTION: {step_description}
 CURRENT APPLICATION: {application}
 SCREEN CONTENT: {screen_content}
 

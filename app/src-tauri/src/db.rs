@@ -94,7 +94,6 @@ lazy_static::lazy_static! {
                     description TEXT,
                     category TEXT,
                     priority INTEGER DEFAULT 1,
-                    estimated_duration INTEGER, -- in minutes
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                     status TEXT DEFAULT 'pending' -- pending, in_progress, completed, paused
@@ -106,8 +105,6 @@ lazy_static::lazy_static! {
                     step_number INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     description TEXT,
-                    completion_criteria TEXT NOT NULL,
-                    application_context TEXT, -- Which apps/windows this step occurs in
                     status TEXT DEFAULT 'pending', -- pending, in_progress, completed, skipped
                     completed_at TEXT,
                     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
@@ -118,7 +115,6 @@ lazy_static::lazy_static! {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id INTEGER NOT NULL,
                     step_id INTEGER,
-                    screen_context TEXT NOT NULL, -- JSON of screen state when action occurred
                     llm_confidence REAL NOT NULL, -- How confident the LLM is about completion
                     evidence TEXT, -- What the LLM found as evidence
                     reasoning TEXT, -- LLM's reasoning for the decision

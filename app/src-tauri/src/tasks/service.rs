@@ -23,14 +23,13 @@ impl TaskService {
 
         // Insert task
         let task_id = tx
-            .prepare("INSERT INTO tasks (name, description, category, priority, estimated_duration, status) VALUES (?, ?, ?, ?, ?, 'pending')")
+            .prepare("INSERT INTO tasks (name, description, category, priority, status) VALUES (?, ?, ?, ?, 'pending')")
             .and_then(|mut stmt| {
                 stmt.insert(params![
                     request.name,
                     request.description,
                     request.category,
                     request.priority,
-                    request.estimated_duration,
                 ])
             })
             .map_err(|e| format!("Failed to insert task: {}", e))?;
@@ -39,15 +38,13 @@ impl TaskService {
         let mut steps = Vec::new();
         for (index, step_request) in request.steps.iter().enumerate() {
             let step_id = tx
-                .prepare("INSERT INTO task_steps (task_id, step_number, title, description, completion_criteria, application_context, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
+                .prepare("INSERT INTO task_steps (task_id, step_number, title, description, status) VALUES (?, ?, ?, ?, 'pending')")
                 .and_then(|mut stmt| {
                     stmt.insert(params![
                         task_id,
                         index + 1,
                         step_request.title,
                         step_request.description,
-                        step_request.completion_criteria,
-                        step_request.application_context,
                     ])
                 })
                 .map_err(|e| format!("Failed to insert task step: {}", e))?;
@@ -58,8 +55,6 @@ impl TaskService {
                 step_number: (index + 1) as i32,
                 title: step_request.title.clone(),
                 description: step_request.description.clone(),
-                completion_criteria: step_request.completion_criteria.clone(),
-                application_context: step_request.application_context.clone(),
                 status: "pending".to_string(),
                 completed_at: None,
             });
@@ -84,7 +79,7 @@ impl TaskService {
         let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
         let mut stmt = conn
-            .prepare("SELECT id, name, description, category, priority, estimated_duration, created_at, updated_at, status FROM tasks WHERE id = ?")
+            .prepare("SELECT id, name, description, category, priority, created_at, updated_at, status FROM tasks WHERE id = ?")
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let task = stmt
@@ -95,10 +90,9 @@ impl TaskService {
                     description: row.get(2)?,
                     category: row.get(3)?,
                     priority: row.get(4)?,
-                    estimated_duration: row.get(5)?,
-                    created_at: Self::parse_datetime(row.get::<_, String>(6)?),
-                    updated_at: Self::parse_datetime(row.get::<_, String>(7)?),
-                    status: row.get(8)?,
+                    created_at: Self::parse_datetime(row.get::<_, String>(5)?),
+                    updated_at: Self::parse_datetime(row.get::<_, String>(6)?),
+                    status: row.get(7)?,
                 })
             })
             .map_err(|e| format!("Task not found: {}", e))?;
@@ -125,7 +119,7 @@ impl TaskService {
         let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
         let mut stmt = conn
-            .prepare("SELECT id, task_id, step_number, title, description, completion_criteria, application_context, status, completed_at FROM task_steps WHERE task_id = ? ORDER BY step_number")
+            .prepare("SELECT id, task_id, step_number, title, description, status, completed_at FROM task_steps WHERE task_id = ? ORDER BY step_number")
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let steps = stmt
@@ -136,10 +130,8 @@ impl TaskService {
                     step_number: row.get(2)?,
                     title: row.get(3)?,
                     description: row.get(4)?,
-                    completion_criteria: row.get(5)?,
-                    application_context: row.get(6)?,
-                    status: row.get(7)?,
-                    completed_at: row.get::<_, Option<String>>(8)?.map(|s| Self::parse_datetime(s)),
+                    status: row.get(5)?,
+                    completed_at: row.get::<_, Option<String>>(6)?.map(|s| Self::parse_datetime(s)),
                 })
             })
             .map_err(|e| format!("Failed to query steps: {}", e))?
@@ -215,7 +207,6 @@ impl TaskService {
         db_state: &DbState,
         task_id: i64,
         step_id: Option<i64>,
-        screen_context: &str,
         confidence: f64,
         evidence: Option<&str>,
         reasoning: Option<&str>,
@@ -224,8 +215,8 @@ impl TaskService {
         let conn = db_guard.as_mut().ok_or("Database connection not available")?;
 
         conn.execute(
-            "INSERT INTO task_progress (task_id, step_id, screen_context, llm_confidence, evidence, reasoning) VALUES (?, ?, ?, ?, ?, ?)",
-            params![task_id, step_id, screen_context, confidence, evidence, reasoning],
+            "INSERT INTO task_progress (task_id, step_id, llm_confidence, evidence, reasoning) VALUES (?, ?, ?, ?, ?)",
+            params![task_id, step_id, confidence, evidence, reasoning],
         )
         .map_err(|e| format!("Failed to record progress: {}", e))?;
 
@@ -246,7 +237,6 @@ impl TaskService {
             return Ok(TaskProgressUpdate {
                 task_id,
                 step_updates: vec![],
-                suggestions: Some("All steps completed!".to_string()),
                 overall_status: TaskStatus::Completed,
             });
         }
@@ -272,7 +262,6 @@ impl TaskService {
                     db_state,
                     task_id,
                     Some(completed_step.step_id),
-                    &serde_json::to_string(&screen_context).unwrap_or_default(),
                     completed_step.confidence,
                     Some(&completed_step.evidence),
                     Some(&completed_step.reasoning),
@@ -318,7 +307,6 @@ impl TaskService {
         Ok(TaskProgressUpdate {
             task_id,
             step_updates,
-            suggestions: detection_result.suggestions,
             overall_status,
         })
     }
@@ -387,8 +375,6 @@ mod tests {
                 step_number: 1,
                 title: "Step 1".to_string(),
                 description: None,
-                completion_criteria: "Criteria 1".to_string(),
-                application_context: None,
                 status: "completed".to_string(),
                 completed_at: None,
             },
@@ -398,8 +384,6 @@ mod tests {
                 step_number: 2,
                 title: "Step 2".to_string(),
                 description: None,
-                completion_criteria: "Criteria 2".to_string(),
-                application_context: None,
                 status: "pending".to_string(),
                 completed_at: None,
             },

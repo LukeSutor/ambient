@@ -34,13 +34,11 @@ impl TaskDetectionService {
             .iter()
             .map(|step| {
                 format!(
-                    "Step ID: {}\nStep {}: {}\nDescription: {}\nCompletion Criteria: {}\nExpected Application: {}\nCurrent Status: {}\n",
+                    "Step ID: {}\nStep {}: {}\nDescription: {}\nCurrent Status: {}\n",
                     step.id,
                     step.step_number,
                     step.title,
                     step.description.as_deref().unwrap_or("No description"),
-                    step.completion_criteria,
-                    step.application_context.as_deref().unwrap_or("Any application"),
                     step.status
                 )
             })
@@ -147,8 +145,6 @@ mod tests {
                 step_number: 1,
                 title: "Test Step".to_string(),
                 description: Some("Test description".to_string()),
-                completion_criteria: "Test criteria".to_string(),
-                application_context: Some("Chrome".to_string()),
                 status: "pending".to_string(),
                 completed_at: None,
             }
@@ -156,7 +152,6 @@ mod tests {
 
         let formatted = TaskDetectionService::format_steps_for_prompt(&steps);
         assert!(formatted.contains("Test Step"));
-        assert!(formatted.contains("Test criteria"));
-        assert!(formatted.contains("Chrome"));
+        assert!(formatted.contains("Test description"));
     }
 }
