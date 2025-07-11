@@ -87,13 +87,16 @@ lazy_static::lazy_static! {
                 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
             "),
             M::up("
-                -- Migration 002: Add task tracking tables
+                -- Migration 002: Add task tracking tables with frequency support
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     description TEXT,
                     category TEXT,
                     priority INTEGER DEFAULT 1,
+                    frequency TEXT DEFAULT 'one_time', -- one_time, daily, weekly, bi_weekly, monthly, quarterly, yearly, custom_N
+                    last_completed_at TEXT, -- When the task was last completed
+                    next_due_at TEXT, -- When the task is next due
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                     status TEXT DEFAULT 'pending' -- pending, in_progress, completed, paused
@@ -126,6 +129,9 @@ lazy_static::lazy_static! {
                 -- Indexes for task tables
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
                 CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
+                CREATE INDEX IF NOT EXISTS idx_tasks_frequency ON tasks(frequency);
+                CREATE INDEX IF NOT EXISTS idx_tasks_next_due_at ON tasks(next_due_at);
+                CREATE INDEX IF NOT EXISTS idx_tasks_last_completed_at ON tasks(last_completed_at);
                 CREATE INDEX IF NOT EXISTS idx_task_steps_task_id ON task_steps(task_id);
                 CREATE INDEX IF NOT EXISTS idx_task_steps_status ON task_steps(status);
                 CREATE INDEX IF NOT EXISTS idx_task_progress_task_id ON task_progress(task_id);

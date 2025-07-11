@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::tasks::models::{CreateTaskRequest, CreateTaskStepRequest};
+use crate::tasks::models::{CreateTaskRequest, CreateTaskStepRequest, TaskFrequency};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskTemplate {
@@ -7,6 +7,7 @@ pub struct TaskTemplate {
     pub description: Option<String>,
     pub category: String,
     pub priority: i32,
+    pub frequency: TaskFrequency,
     pub steps: Vec<TaskStepTemplate>,
 }
 
@@ -23,6 +24,7 @@ impl TaskTemplate {
             description: self.description.clone(),
             category: Some(self.category.clone()),
             priority: self.priority,
+            frequency: self.frequency.clone(),
             steps: self.steps.iter().map(|step| step.to_create_request()).collect(),
         }
     }
@@ -46,6 +48,7 @@ pub fn get_built_in_templates() -> Vec<TaskTemplate> {
             description: Some("Create and schedule a marketing email campaign".to_string()),
             category: "Marketing".to_string(),
             priority: 2,
+            frequency: TaskFrequency::Weekly, // Marketing campaigns are often weekly
             steps: vec![
                 TaskStepTemplate {
                     title: "Open Email Marketing Platform".to_string(),
@@ -76,6 +79,8 @@ pub fn get_built_in_templates() -> Vec<TaskTemplate> {
             description: Some("Process and resolve a customer support ticket".to_string()),
             category: "Customer Support".to_string(),
             priority: 3,
+            frequency: TaskFrequency::OneTime, // Support tickets are one-time
+            steps: vec![
             steps: vec![
                 TaskStepTemplate {
                     title: "Open Support Ticket System".to_string(),
@@ -106,6 +111,7 @@ pub fn get_built_in_templates() -> Vec<TaskTemplate> {
             description: Some("Create and schedule social media posts across platforms".to_string()),
             category: "Social Media".to_string(),
             priority: 2,
+            frequency: TaskFrequency::Daily, // Social media content is often daily
             steps: vec![
                 TaskStepTemplate {
                     title: "Open Social Media Management Tool".to_string(),
@@ -136,6 +142,7 @@ pub fn get_built_in_templates() -> Vec<TaskTemplate> {
             description: Some("Follow up with a potential sales lead via email or call".to_string()),
             category: "Sales".to_string(),
             priority: 3,
+            frequency: TaskFrequency::Custom(3), // Follow up every 3 days
             steps: vec![
                 TaskStepTemplate {
                     title: "Open CRM System".to_string(),
@@ -166,6 +173,7 @@ pub fn get_built_in_templates() -> Vec<TaskTemplate> {
             description: Some("Review, edit, and approve a business document".to_string()),
             category: "Administration".to_string(),
             priority: 2,
+            frequency: TaskFrequency::OneTime, // Document reviews are typically one-time
             steps: vec![
                 TaskStepTemplate {
                     title: "Open Document Management System".to_string(),

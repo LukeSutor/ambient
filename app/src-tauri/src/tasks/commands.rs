@@ -57,6 +57,21 @@ pub async fn get_template_categories() -> Result<Vec<String>, String> {
     Ok(get_categories())
 }
 
+/// Get available task frequencies
+#[tauri::command]
+pub async fn get_available_frequencies() -> Result<Vec<(String, String)>, String> {
+    let frequencies = vec![
+        (TaskFrequency::OneTime.as_str(), TaskFrequency::OneTime.description()),
+        (TaskFrequency::Daily.as_str(), TaskFrequency::Daily.description()),
+        (TaskFrequency::Weekly.as_str(), TaskFrequency::Weekly.description()),
+        (TaskFrequency::BiWeekly.as_str(), TaskFrequency::BiWeekly.description()),
+        (TaskFrequency::Monthly.as_str(), TaskFrequency::Monthly.description()),
+        (TaskFrequency::Quarterly.as_str(), TaskFrequency::Quarterly.description()),
+        (TaskFrequency::Yearly.as_str(), TaskFrequency::Yearly.description()),
+    ];
+    Ok(frequencies)
+}
+
 /// Update task status
 #[tauri::command]
 pub async fn update_task_status(
@@ -100,6 +115,41 @@ pub async fn delete_task(
     task_id: i64,
 ) -> Result<(), String> {
     TaskService::delete_task(&db_state, task_id)
+}
+
+/// Complete a task and handle recurring tasks
+#[tauri::command]
+pub async fn complete_task(
+    db_state: State<'_, DbState>,
+    task_id: i64,
+) -> Result<Option<TaskWithSteps>, String> {
+    TaskService::complete_task(&db_state, task_id)
+}
+
+/// Get overdue tasks
+#[tauri::command]
+pub async fn get_overdue_tasks(
+    db_state: State<'_, DbState>,
+) -> Result<Vec<TaskWithSteps>, String> {
+    TaskService::get_overdue_tasks(&db_state)
+}
+
+/// Get tasks due today
+#[tauri::command]
+pub async fn get_tasks_due_today(
+    db_state: State<'_, DbState>,
+) -> Result<Vec<TaskWithSteps>, String> {
+    TaskService::get_tasks_due_today(&db_state)
+}
+
+/// Get tasks by frequency
+#[tauri::command]
+pub async fn get_tasks_by_frequency(
+    db_state: State<'_, DbState>,
+    frequency: String,
+) -> Result<Vec<TaskWithSteps>, String> {
+    let frequency_enum = TaskFrequency::from_str(&frequency);
+    TaskService::get_tasks_by_frequency(&db_state, frequency_enum)
 }
 
 /// Analyze current screen for task progress using LLM

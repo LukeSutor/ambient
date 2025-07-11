@@ -203,9 +203,14 @@ pub fn run() {
       tasks::commands::get_active_tasks,
       tasks::commands::get_task_templates,
       tasks::commands::get_template_categories,
+      tasks::commands::get_available_frequencies,
       tasks::commands::update_task_status,
       tasks::commands::update_step_status,
       tasks::commands::delete_task,
+      tasks::commands::complete_task,
+      tasks::commands::get_overdue_tasks,
+      tasks::commands::get_tasks_due_today,
+      tasks::commands::get_tasks_by_frequency,
       tasks::commands::analyze_current_screen_for_tasks,
       tasks::commands::get_task_progress_history
     ])

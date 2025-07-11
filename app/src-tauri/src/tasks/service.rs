@@ -21,15 +21,21 @@ impl TaskService {
         // Start transaction
         let tx = conn.unchecked_transaction().map_err(|e| format!("Transaction error: {}", e))?;
 
+        // Calculate next due date based on frequency
+        let frequency_enum = &request.frequency;
+        let next_due_at = frequency_enum.next_due_date(None);
+        
         // Insert task
         let task_id = tx
-            .prepare("INSERT INTO tasks (name, description, category, priority, status) VALUES (?, ?, ?, ?, 'pending')")
+            .prepare("INSERT INTO tasks (name, description, category, priority, frequency, next_due_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
             .and_then(|mut stmt| {
                 stmt.insert(params![
                     request.name,
                     request.description,
                     request.category,
                     request.priority,
+                    frequency_enum.as_str(),
+                    next_due_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
                 ])
             })
             .map_err(|e| format!("Failed to insert task: {}", e))?;
@@ -79,7 +85,7 @@ impl TaskService {
         let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
         let mut stmt = conn
-            .prepare("SELECT id, name, description, category, priority, created_at, updated_at, status FROM tasks WHERE id = ?")
+            .prepare("SELECT id, name, description, category, priority, frequency, last_completed_at, next_due_at, created_at, updated_at, status FROM tasks WHERE id = ?")
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let task = stmt
@@ -90,9 +96,12 @@ impl TaskService {
                     description: row.get(2)?,
                     category: row.get(3)?,
                     priority: row.get(4)?,
-                    created_at: Self::parse_datetime(row.get::<_, String>(5)?),
-                    updated_at: Self::parse_datetime(row.get::<_, String>(6)?),
-                    status: row.get(7)?,
+                    frequency: row.get(5)?,
+                    last_completed_at: row.get::<_, Option<String>>(6)?.map(|s| Self::parse_datetime(s)),
+                    next_due_at: row.get::<_, Option<String>>(7)?.map(|s| Self::parse_datetime(s)),
+                    created_at: Self::parse_datetime(row.get::<_, String>(8)?),
+                    updated_at: Self::parse_datetime(row.get::<_, String>(9)?),
+                    status: row.get(10)?,
                 })
             })
             .map_err(|e| format!("Task not found: {}", e))?;
@@ -359,6 +368,162 @@ impl TaskService {
         DateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M:%S")
             .map(|dt| dt.with_timezone(&Utc))
             .unwrap_or_else(|_| Utc::now())
+    }
+
+    /// Complete a task and handle recurring tasks
+    pub fn complete_task(db_state: &DbState, task_id: i64) -> Result<Option<TaskWithSteps>, String> {
+        let mut db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = db_guard.as_mut().ok_or("Database connection not available")?;
+
+        // Get the current task to check its frequency
+        let task = Self::get_task_by_id(db_state, task_id)?;
+        let frequency = TaskFrequency::from_str(&task.frequency);
+        let completion_time = Utc::now();
+
+        // Start transaction
+        let tx = conn.unchecked_transaction().map_err(|e| format!("Transaction error: {}", e))?;
+
+        // Update current task as completed
+        tx.execute(
+            "UPDATE tasks SET status = 'completed', last_completed_at = ?, updated_at = datetime('now') WHERE id = ?",
+            params![completion_time.format("%Y-%m-%d %H:%M:%S").to_string(), task_id],
+        ).map_err(|e| format!("Failed to complete task: {}", e))?;
+
+        // Mark all steps as completed
+        tx.execute(
+            "UPDATE task_steps SET status = 'completed', completed_at = ? WHERE task_id = ?",
+            params![completion_time.format("%Y-%m-%d %H:%M:%S").to_string(), task_id],
+        ).map_err(|e| format!("Failed to complete task steps: {}", e))?;
+
+        // If it's a recurring task, create a new instance
+        let new_task = if frequency != TaskFrequency::OneTime {
+            let next_due = frequency.next_due_date(Some(completion_time));
+            
+            // Create new task for the next occurrence
+            let new_task_id = tx.prepare("INSERT INTO tasks (name, description, category, priority, frequency, next_due_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
+                .and_then(|mut stmt| {
+                    stmt.insert(params![
+                        task.name,
+                        task.description,
+                        task.category,
+                        task.priority,
+                        task.frequency,
+                        next_due.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+                    ])
+                })
+                .map_err(|e| format!("Failed to create recurring task: {}", e))?;
+
+            // Copy steps from original task
+            let steps = Self::get_task_steps(db_state, task_id)?;
+            for step in &steps {
+                tx.execute(
+                    "INSERT INTO task_steps (task_id, step_number, title, description, status) VALUES (?, ?, ?, ?, 'pending')",
+                    params![new_task_id, step.step_number, &step.title, &step.description],
+                ).map_err(|e| format!("Failed to create recurring task step: {}", e))?;
+            }
+
+            // Commit transaction before getting the new task
+            tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
+            drop(db_guard); // Release the lock
+
+            Some(Self::get_task_with_steps(db_state, new_task_id)?)
+        } else {
+            tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
+            None
+        };
+
+        Ok(new_task)
+    }
+
+    /// Get overdue tasks based on their frequency and next due date
+    pub fn get_overdue_tasks(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
+        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+
+        let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let mut stmt = conn
+            .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at < ? ORDER BY next_due_at ASC")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        let task_ids: Vec<i64> = stmt
+            .query_map([&now], |row| Ok(row.get(0)?))
+            .map_err(|e| format!("Failed to query overdue tasks: {}", e))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| format!("Failed to collect overdue task IDs: {}", e))?;
+
+        drop(db_guard); // Release the lock
+
+        let mut tasks = Vec::new();
+        for task_id in task_ids {
+            match Self::get_task_with_steps(db_state, task_id) {
+                Ok(task_with_steps) => tasks.push(task_with_steps),
+                Err(e) => eprintln!("Failed to get overdue task {}: {}", task_id, e),
+            }
+        }
+
+        Ok(tasks)
+    }
+
+    /// Get tasks due today
+    pub fn get_tasks_due_today(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
+        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+
+        let today_start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
+        let today_end = Utc::now().date_naive().and_hms_opt(23, 59, 59).unwrap().and_local_timezone(Utc).unwrap();
+
+        let mut stmt = conn
+            .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at >= ? AND next_due_at <= ? ORDER BY next_due_at ASC")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        let task_ids: Vec<i64> = stmt
+            .query_map([
+                today_start.format("%Y-%m-%d %H:%M:%S").to_string(),
+                today_end.format("%Y-%m-%d %H:%M:%S").to_string()
+            ], |row| Ok(row.get(0)?))
+            .map_err(|e| format!("Failed to query tasks due today: {}", e))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
+
+        drop(db_guard); // Release the lock
+
+        let mut tasks = Vec::new();
+        for task_id in task_ids {
+            match Self::get_task_with_steps(db_state, task_id) {
+                Ok(task_with_steps) => tasks.push(task_with_steps),
+                Err(e) => eprintln!("Failed to get task due today {}: {}", task_id, e),
+            }
+        }
+
+        Ok(tasks)
+    }
+
+    /// Get tasks by frequency type
+    pub fn get_tasks_by_frequency(db_state: &DbState, frequency: TaskFrequency) -> Result<Vec<TaskWithSteps>, String> {
+        let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+        let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+
+        let mut stmt = conn
+            .prepare("SELECT id FROM tasks WHERE frequency = ? ORDER BY next_due_at ASC")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        let task_ids: Vec<i64> = stmt
+            .query_map([frequency.as_str()], |row| Ok(row.get(0)?))
+            .map_err(|e| format!("Failed to query tasks by frequency: {}", e))?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
+
+        drop(db_guard); // Release the lock
+
+        let mut tasks = Vec::new();
+        for task_id in task_ids {
+            match Self::get_task_with_steps(db_state, task_id) {
+                Ok(task_with_steps) => tasks.push(task_with_steps),
+                Err(e) => eprintln!("Failed to get task by frequency {}: {}", task_id, e),
+            }
+        }
+
+        Ok(tasks)
     }
 }
 
