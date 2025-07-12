@@ -70,7 +70,6 @@ impl TaskService {
         drop(db_guard);
 
         // Get the created task
-        Self::get_task_by_id(db_state, task_id)
         let task = Self::get_task_by_id(db_state, task_id)?;
 
         Ok(TaskWithSteps {
