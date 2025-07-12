@@ -34,7 +34,7 @@ export default function TasksPage() {
   };
 
   const handleEdit = (taskWithSteps: TaskWithSteps) => {
-    router.push(`/tasks/edit/${taskWithSteps.task.id}`);
+    router.push(`/tasks/edit?id=${taskWithSteps.task.id}`);
   };
 
   const handleDelete = async (taskWithSteps: TaskWithSteps) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -36,8 +36,8 @@ type TaskFormData = z.infer<typeof taskSchema>;
 
 export default function EditTaskPage() {
   const router = useRouter();
-  const params = useParams();
-  const taskId = parseInt(params.id as string);
+  const searchParams = useSearchParams();
+  const taskId = parseInt(searchParams.get('id') || '0');
   
   const [task, setTask] = useState<TaskWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +69,12 @@ export default function EditTaskPage() {
   const frequency = watch("frequency");
 
   useEffect(() => {
-    loadTask();
+    if (taskId) {
+      loadTask();
+    } else {
+      toast.error("Invalid task ID");
+      router.push("/tasks");
+    }
   }, [taskId]);
 
   const loadTask = async () => {
@@ -158,16 +163,7 @@ export default function EditTaskPage() {
   return (
     <div className="container mx-auto py-8 max-w-2xl">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => router.back()}
-          className="flex items-center gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
+      <div className="flex items-center gap-4 mb-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Edit Task</h1>
           <p className="text-muted-foreground">

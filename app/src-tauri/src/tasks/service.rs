@@ -12,7 +12,6 @@ impl TaskService {
         db_state: &DbState,
         request: CreateTaskRequest,
     ) -> Result<TaskWithSteps, String> {
-        println!("Creating task: {:?}", request);
         let mut db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
         let conn = db_guard.as_mut().ok_or("Database connection not available")?;
 
@@ -67,7 +66,11 @@ impl TaskService {
         // Commit transaction
         tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
+        // Release the database lock before calling get_task_by_id
+        drop(db_guard);
+
         // Get the created task
+        Self::get_task_by_id(db_state, task_id)
         let task = Self::get_task_by_id(db_state, task_id)?;
 
         Ok(TaskWithSteps {
@@ -372,67 +375,74 @@ impl TaskService {
 
     /// Complete a task and handle recurring tasks
     pub fn complete_task(db_state: &DbState, task_id: i64) -> Result<Option<TaskWithSteps>, String> {
-        let mut db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-        let conn = db_guard.as_mut().ok_or("Database connection not available")?;
-
-        // Get the current task to check its frequency
+        // Get the current task and its steps before starting the transaction
         let task = Self::get_task_by_id(db_state, task_id)?;
+        let steps = Self::get_task_steps(db_state, task_id)?;
         let frequency = TaskFrequency::from_str(&task.frequency);
         let completion_time = Utc::now();
 
-        // Start transaction
-        let tx = conn.unchecked_transaction().map_err(|e| format!("Transaction error: {}", e))?;
+        let new_task_id = {
+            let mut db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
+            let conn = db_guard.as_mut().ok_or("Database connection not available")?;
 
-        // Update current task as completed
-        tx.execute(
-            "UPDATE tasks SET status = 'completed', last_completed_at = ?, updated_at = datetime('now') WHERE id = ?",
-            params![completion_time.format("%Y-%m-%d %H:%M:%S").to_string(), task_id],
-        ).map_err(|e| format!("Failed to complete task: {}", e))?;
+            // Start transaction
+            let tx = conn.unchecked_transaction().map_err(|e| format!("Transaction error: {}", e))?;
 
-        // Mark all steps as completed
-        tx.execute(
-            "UPDATE task_steps SET status = 'completed', completed_at = ? WHERE task_id = ?",
-            params![completion_time.format("%Y-%m-%d %H:%M:%S").to_string(), task_id],
-        ).map_err(|e| format!("Failed to complete task steps: {}", e))?;
+            // Update current task as completed
+            tx.execute(
+                "UPDATE tasks SET status = 'completed', last_completed_at = ?, updated_at = datetime('now') WHERE id = ?",
+                params![completion_time.format("%Y-%m-%d %H:%M:%S").to_string(), task_id],
+            ).map_err(|e| format!("Failed to complete task: {}", e))?;
 
-        // If it's a recurring task, create a new instance
-        let new_task = if frequency != TaskFrequency::OneTime {
-            let next_due = frequency.next_due_date(Some(completion_time));
+            // Mark all steps as completed
+            tx.execute(
+                "UPDATE task_steps SET status = 'completed', completed_at = ? WHERE task_id = ?",
+                params![completion_time.format("%Y-%m-%d %H:%M:%S").to_string(), task_id],
+            ).map_err(|e| format!("Failed to complete task steps: {}", e))?;
+
+            // If it's a recurring task, create a new instance
+            let new_task_id = if frequency != TaskFrequency::OneTime {
+                let next_due = frequency.next_due_date(Some(completion_time));
+                
+                // Create new task for the next occurrence
+                let new_task_id = tx.prepare("INSERT INTO tasks (name, description, category, priority, frequency, next_due_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
+                    .and_then(|mut stmt| {
+                        stmt.insert(params![
+                            task.name,
+                            task.description,
+                            task.category,
+                            task.priority,
+                            task.frequency,
+                            next_due.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+                        ])
+                    })
+                    .map_err(|e| format!("Failed to create recurring task: {}", e))?;
+
+                // Copy steps from original task (using the steps we retrieved earlier)
+                for step in &steps {
+                    tx.execute(
+                        "INSERT INTO task_steps (task_id, step_number, title, description, status) VALUES (?, ?, ?, ?, 'pending')",
+                        params![new_task_id, step.step_number, &step.title, &step.description],
+                    ).map_err(|e| format!("Failed to create recurring task step: {}", e))?;
+                }
+
+                Some(new_task_id)
+            } else {
+                None
+            };
+
+            // Commit transaction
+            tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
             
-            // Create new task for the next occurrence
-            let new_task_id = tx.prepare("INSERT INTO tasks (name, description, category, priority, frequency, next_due_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
-                .and_then(|mut stmt| {
-                    stmt.insert(params![
-                        task.name,
-                        task.description,
-                        task.category,
-                        task.priority,
-                        task.frequency,
-                        next_due.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
-                    ])
-                })
-                .map_err(|e| format!("Failed to create recurring task: {}", e))?;
+            new_task_id
+        }; // db_guard is dropped here
 
-            // Copy steps from original task
-            let steps = Self::get_task_steps(db_state, task_id)?;
-            for step in &steps {
-                tx.execute(
-                    "INSERT INTO task_steps (task_id, step_number, title, description, status) VALUES (?, ?, ?, ?, 'pending')",
-                    params![new_task_id, step.step_number, &step.title, &step.description],
-                ).map_err(|e| format!("Failed to create recurring task step: {}", e))?;
-            }
-
-            // Commit transaction before getting the new task
-            tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
-            drop(db_guard); // Release the lock
-
-            Some(Self::get_task_with_steps(db_state, new_task_id)?)
+        // If we created a new recurring task, get it with its steps
+        if let Some(task_id) = new_task_id {
+            Ok(Some(Self::get_task_with_steps(db_state, task_id)?))
         } else {
-            tx.commit().map_err(|e| format!("Failed to commit transaction: {}", e))?;
-            None
-        };
-
-        Ok(new_task)
+            Ok(None)
+        }
     }
 
     /// Get overdue tasks based on their frequency and next due date
