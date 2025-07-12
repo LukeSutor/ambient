@@ -12,6 +12,7 @@ impl TaskService {
         db_state: &DbState,
         request: CreateTaskRequest,
     ) -> Result<TaskWithSteps, String> {
+        println!("Creating task: {:?}", request);
         let mut db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
         let conn = db_guard.as_mut().ok_or("Database connection not available")?;
 

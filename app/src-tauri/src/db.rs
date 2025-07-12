@@ -83,11 +83,9 @@ lazy_static::lazy_static! {
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
-
                 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
-            "),
-            M::up("
-                -- Migration 002: Add task tracking tables with frequency support
+
+                -- Add task tracking tables with frequency support
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
