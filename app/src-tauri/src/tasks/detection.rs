@@ -38,7 +38,7 @@ impl TaskDetectionService {
                     step.id,
                     step.step_number,
                     step.title,
-                    step.description.as_deref().unwrap_or("No description"),
+                    step.description,
                     step.status
                 )
             })

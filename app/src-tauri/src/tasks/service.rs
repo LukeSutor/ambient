@@ -47,7 +47,7 @@ impl TaskService {
                         task_id,
                         index + 1,
                         step_request.title,
-                        step_request.description,
+                        step_request.description.as_deref().unwrap_or(""),
                     ])
                 })
                 .map_err(|e| format!("Failed to insert task step: {}", e))?;
@@ -57,7 +57,7 @@ impl TaskService {
                 task_id,
                 step_number: (index + 1) as i32,
                 title: step_request.title.clone(),
-                description: step_request.description.clone(),
+                description: step_request.description.clone().unwrap_or_default(),
                 status: "pending".to_string(),
                 completed_at: None,
             });

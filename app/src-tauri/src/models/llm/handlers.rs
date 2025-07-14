@@ -1,15 +1,15 @@
 use tauri::{AppHandle, Manager};
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, server::generate};
-use crate::tasks::TaskService;
-use crate::tasks::TaskWithSteps;
+use crate::tasks::{TaskService, TaskWithSteps, StepStatus};
+use crate::db::DbState;
 
-pub fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
+pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
     // Get DB state
     let db_state = app_handle.state::<DbState>();
 
     // Fetch all active tasks
-    let active_tasks = TaskService::get_active_tasks(db_state);
+    let active_tasks = TaskService::get_active_tasks(&db_state);
     if active_tasks.is_err() {
         eprintln!("[detect_tasks] Failed to fetch active tasks: {}", active_tasks.err().unwrap());
         return;
@@ -26,9 +26,21 @@ pub fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
     let formatted_tasks = format_tasks(&tasks);
 
     // Create prompt
-    let prompt = get_prompt("detect_tasks")
+    let prompt_template = get_prompt("detect_tasks")
+        .ok_or_else(|| {
+            eprintln!("[detect_tasks] Failed to get prompt template for 'detect_tasks'");
+            return;
+        });
+    
+    let prompt_template = match prompt_template {
+        Ok(template) => template,
+        Err(_) => return,
+    };
+    
+    let active_url_str = event.active_url.as_deref().unwrap_or("No active URL");
+    let prompt = prompt_template
         .replace("{text}", &event.text)
-        .replace("{active_url}", &event.active_url)
+        .replace("{active_url}", active_url_str)
         .replace("{tasks}", &formatted_tasks);
 
     println!("[detect_tasks] Prompt created:\n{}", prompt);
@@ -46,16 +58,18 @@ pub fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
         None,
     ).await;
 
-    // Handle response
-    if let Ok(response) = task_updates {
-        println!("[detect_tasks] Task updates generated successfully: {:?}", response);
-        
-        // Parse JSON response
-        let parsed_response: serde_json::Value = serde_json::from_str(&response)
-            .unwrap_or_else(|_| serde_json::json!({}));
-    } else {
-        eprintln!("[detect_tasks] Failed to generate task updates: {}", task_updates.unwrap_err());
-    }
+    // Handle response and parse JSON
+    let parsed_response = match task_updates {
+        Ok(response) => {
+            println!("[detect_tasks] Task updates generated successfully: {:?}", response);
+            serde_json::from_str(&response)
+                .unwrap_or_else(|_| serde_json::json!({}))
+        }
+        Err(e) => {
+            eprintln!("[detect_tasks] Failed to generate task updates: {}", e);
+            return;
+        }
+    };
 
     // Loop through response and update step statuses
     if let Some(updates) = parsed_response.get("updates").and_then(|u| u.as_array()) {
@@ -83,7 +97,7 @@ pub fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
     let update_event = UpdateTasksEvent {
         timestamp: chrono::Utc::now().to_string()
     };
-    emit(UPDATE_TASKS, update_event);
+    let _ = emit(UPDATE_TASKS, update_event);
 }
 
 fn format_tasks(tasks: &[TaskWithSteps]) -> String {

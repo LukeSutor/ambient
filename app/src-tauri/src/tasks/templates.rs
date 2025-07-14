@@ -21,7 +21,7 @@ impl TaskTemplate {
     pub fn to_create_request(&self) -> CreateTaskRequest {
         CreateTaskRequest {
             name: self.name.clone(),
-            description: self.description.clone(),
+            description: self.description.clone().unwrap_or_default(),
             category: Some(self.category.clone()),
             priority: self.priority,
             frequency: self.frequency.clone(),

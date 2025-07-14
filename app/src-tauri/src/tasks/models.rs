@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -108,6 +109,20 @@ impl StepStatus {
     }
 }
 
+impl FromStr for StepStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(StepStatus::Pending),
+            "in_progress" => Ok(StepStatus::InProgress),
+            "completed" => Ok(StepStatus::Completed),
+            "skipped" => Ok(StepStatus::Skipped),
+            _ => Err(format!("Invalid status: {}", s)),
+        }
+    }
+}
+
 impl TaskFrequency {
     pub fn as_str(&self) -> String {
         match self {
@@ -200,7 +215,7 @@ impl TaskFrequency {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub category: Option<String>,
     pub priority: i32,
     pub frequency: TaskFrequency,
