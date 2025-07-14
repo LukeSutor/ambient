@@ -34,7 +34,7 @@ impl TaskStepTemplate {
     pub fn to_create_request(&self) -> CreateTaskStepRequest {
         CreateTaskStepRequest {
             title: self.title.clone(),
-            description: self.description.clone(),
+            description: self.description.clone().unwrap_or_default(),
         }
     }
 }

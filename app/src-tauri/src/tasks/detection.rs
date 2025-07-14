@@ -119,7 +119,6 @@ impl TaskDetectionService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
 
     #[test]
     fn test_truncate_screen_text() {
@@ -144,7 +143,7 @@ mod tests {
                 task_id: 1,
                 step_number: 1,
                 title: "Test Step".to_string(),
-                description: Some("Test description".to_string()),
+                description: "Test description".to_string(),
                 status: "pending".to_string(),
                 completed_at: None,
             }

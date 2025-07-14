@@ -613,8 +613,6 @@ pub async fn generate(
             match chunk_result {
                 Ok(chunk) => {
                     let chunk_str = String::from_utf8_lossy(&chunk);
-
-                    println!("[llama_server] Received chunk: {}", chunk_str);
                     
                     // Parse SSE format
                     for line in chunk_str.lines() {
@@ -631,7 +629,6 @@ pub async fn generate(
                                         // Check if stream is finished
                                         if let Some(finish_reason) = choice["finish_reason"].as_str() {
                                             if finish_reason == "stop" {
-                                                println!("[llama_server] Stream finished with reason: {}", finish_reason);
                                                 break;
                                             }
                                         }

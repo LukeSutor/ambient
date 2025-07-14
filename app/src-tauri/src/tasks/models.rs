@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::str::FromStr;
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct Task {
     pub id: i64,
     pub name: String,
@@ -10,14 +12,19 @@ pub struct Task {
     pub category: Option<String>,
     pub priority: i32,
     pub frequency: String, // Will be converted to/from TaskFrequency
+    #[ts(type = "string | null")]
     pub last_completed_at: Option<DateTime<Utc>>,
+    #[ts(type = "string | null")]
     pub next_due_at: Option<DateTime<Utc>>,
+    #[ts(type = "string")]
     pub created_at: DateTime<Utc>,
+    #[ts(type = "string")]
     pub updated_at: DateTime<Utc>,
     pub status: String, // Will be converted to/from TaskStatus
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskStep {
     pub id: i64,
     pub task_id: i64,
@@ -25,10 +32,12 @@ pub struct TaskStep {
     pub title: String,
     pub description: String,
     pub status: String, // Will be converted to/from StepStatus
+    #[ts(type = "string | null")]
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskProgress {
     pub id: i64,
     pub task_id: i64,
@@ -36,10 +45,12 @@ pub struct TaskProgress {
     pub llm_confidence: f64, // How confident the LLM is about completion
     pub evidence: Option<String>, // What the LLM found as evidence
     pub reasoning: Option<String>, // LLM's reasoning for the decision
+    #[ts(type = "string")]
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub enum TaskStatus {
     Pending,
     InProgress,
@@ -47,7 +58,8 @@ pub enum TaskStatus {
     Paused,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub enum StepStatus {
     Pending,
     InProgress,
@@ -55,7 +67,8 @@ pub enum StepStatus {
     Skipped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub enum TaskFrequency {
     OneTime,     // Task only needs to be completed once
     Daily,       // Every day
@@ -212,7 +225,8 @@ impl TaskFrequency {
 }
 
 // Task creation structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct CreateTaskRequest {
     pub name: String,
     pub description: String,
@@ -222,21 +236,24 @@ pub struct CreateTaskRequest {
     pub steps: Vec<CreateTaskStepRequest>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct CreateTaskStepRequest {
     pub title: String,
-    pub description: Option<String>,
+    pub description: String,
 }
 
 // Task update structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskProgressUpdate {
     pub task_id: i64,
     pub step_updates: Vec<StepUpdate>,
     pub overall_status: TaskStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct StepUpdate {
     pub step_id: i64,
     pub status: StepStatus,
@@ -246,13 +263,15 @@ pub struct StepUpdate {
 }
 
 // LLM Detection Result
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskDetectionResult {
     pub completed_steps: Vec<CompletedStepDetection>,
     pub in_progress_steps: Vec<InProgressStepDetection>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct CompletedStepDetection {
     pub step_id: i64,
     pub confidence: f64,
@@ -260,7 +279,8 @@ pub struct CompletedStepDetection {
     pub reasoning: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct InProgressStepDetection {
     pub step_id: i64,
     pub confidence: f64,
@@ -268,16 +288,19 @@ pub struct InProgressStepDetection {
 }
 
 // Screen context for LLM analysis
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct ScreenContext {
     pub text: String,
     pub application: String,
     pub window_title: Option<String>,
+    #[ts(type = "string")]
     pub timestamp: DateTime<Utc>,
 }
 
 // Task with complete step information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskWithSteps {
     pub task: Task,
     pub steps: Vec<TaskStep>,

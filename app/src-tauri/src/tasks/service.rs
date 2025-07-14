@@ -47,7 +47,7 @@ impl TaskService {
                         task_id,
                         index + 1,
                         step_request.title,
-                        step_request.description.as_deref().unwrap_or(""),
+                        step_request.description,
                     ])
                 })
                 .map_err(|e| format!("Failed to insert task step: {}", e))?;
@@ -57,7 +57,7 @@ impl TaskService {
                 task_id,
                 step_number: (index + 1) as i32,
                 title: step_request.title.clone(),
-                description: step_request.description.clone().unwrap_or_default(),
+                description: step_request.description.clone(),
                 status: "pending".to_string(),
                 completed_at: None,
             });
@@ -554,7 +554,7 @@ mod tests {
                 task_id: 1,
                 step_number: 1,
                 title: "Step 1".to_string(),
-                description: None,
+                description: "asdf".to_string(),
                 status: "completed".to_string(),
                 completed_at: None,
             },
@@ -563,7 +563,7 @@ mod tests {
                 task_id: 1,
                 step_number: 2,
                 title: "Step 2".to_string(),
-                description: None,
+                description: "asdf".to_string(),
                 status: "pending".to_string(),
                 completed_at: None,
             },

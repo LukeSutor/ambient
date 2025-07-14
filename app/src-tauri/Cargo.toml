@@ -43,6 +43,7 @@ axum = { version = "0.6", features = ["ws", "headers"] }
 futures = "0.3.4"
 dashmap = "6.1.0"
 uuid = { version = "1.17.0", features = ["v4"] }
+ts-rs = "11.0.1"
 
 # Windows crates
 windows = { version = "0.60.0", features = [
@@ -67,6 +68,9 @@ base64 = "0.22"
 tauri-plugin-deep-link = "2"
 urlencoding = "2.1"
 url = "2.4"
+
+# ts-rs exports types to ../src/types directory
+# Configure this via environment variable or per-type export_to attribute
 
 [profile.dev]
 debug = true
