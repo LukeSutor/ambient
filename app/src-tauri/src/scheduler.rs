@@ -26,7 +26,7 @@ static SCHEDULER_STATE: Lazy<Arc<Mutex<SchedulerState>>> = Lazy::new(|| {
 
 // Function to emit CAPTURE_SCREEN event every 10 seconds
 async fn run_capture_screen_task(cancel_token: CancellationToken) {
-  let mut interval = interval(Duration::from_secs(10));
+  let mut interval = interval(Duration::from_secs(30));
   
   loop {
     tokio::select! {

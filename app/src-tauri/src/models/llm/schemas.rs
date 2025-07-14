@@ -5,23 +5,27 @@ use std::collections::HashMap;
 static SCHEMAS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
   let mut map = HashMap::new();
   map.insert(
-        "detect_tasks_response",
+        "detect_tasks",
 r#"{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "a_reasoning": {
+      "type": "string",
+      "description": "Planning and reasoning behind this task detection"
+    },
     "updates": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "reasoning": {
+          "a_reasoning": {
             "type": "string",
             "description": "Explanation of why this task is relevant based on screen content"
           },
           "evidence": {
             "type": "string",
-            "description": "Specific text or content from the screen that supports this conclusion"
+            "description": "Specific text from the screen that supports this conclusion"
           },
           "step_id": {
             "type": "integer",
@@ -44,7 +48,7 @@ r#"{
       }
     }
   },
-  "required": ["updates"],
+  "required": ["a_reasoning", "updates"],
   "additionalProperties": false
 }"#,
     );

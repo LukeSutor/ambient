@@ -47,6 +47,7 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
 
     // Get response schema
     let schema = get_schema("detect_tasks").unwrap_or("{}");
+    println!("[detect_tasks] Using schema:\n{}", schema);
 
     // Get task updates
     let task_updates = generate(
@@ -103,9 +104,9 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
 fn format_tasks(tasks: &[TaskWithSteps]) -> String {
     tasks.iter().map(|task| {
         let steps = task.steps.iter().map(|step| {
-            format!("\tStep {}, ID: {}, Description: {}, Status: {}", step.title, step.id, step.description, step.status)
+            format!("\tStep: {}, ID: {}, Description: {}, Status: {}", step.title, step.id, step.description, step.status)
         }).collect::<Vec<_>>().join("\n");
 
-        format!("Task {}, ID: {},  Description: {}, Steps: [\n{}\n]", task.task.name, task.task.id, task.task.description, steps)
+        format!("Task {},  Description: {}, Steps: [\n{}\n]", task.task.name, task.task.description, steps)
     }).collect::<Vec<_>>().join("\n\n")
 }

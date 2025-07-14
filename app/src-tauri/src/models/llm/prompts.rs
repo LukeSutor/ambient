@@ -85,11 +85,11 @@ r#"You are a task detection expert. You will be given all the text captured from
 Your response should be a JSON object with the following structure:
 ```json
 {
+  "a_reasoning": "<planning and reasoning behind this task detection>",
   "updates": [
     {
-      "reasoning": "<explanation of why this step is relevant based on screen content>",
-      "evidence": "<specific text or content from the screen that supports this conclusion>",
-      "step_id": <step_id>,
+      "a_reasoning": "<explanation of why this step is relevant based on screen content>",
+      "step_id": <step_id (from the list of tasks provided, do not make up new step IDs)>,
       "status": "completed" | "in_progress",
       "confidence": <0.0-1.0>
     }
@@ -97,19 +97,27 @@ Your response should be a JSON object with the following structure:
 }
 ```
 
+General Guidelines:
+Ensure to only include steps that are present in the list of tasks provided.
 If a step is not relevant, do not include it in the response.
 Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."
 If a step status does not change, do not include it in the response.
 If there are no relevant steps, return an empty array for "updates".
+
+Active Tasks to monitor:
+{tasks}
 
 {text}
 
 Active URL:
 {active_url}
 
-Active Tasks to monitor:
-{tasks}
-
+Once again:
+Ensure to only include steps that are present in the list of tasks provided.
+If a step is not relevant, do not include it in the response.
+Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."
+If a step status does not change, do not include it in the response.
+If there are no relevant steps, return an empty array for "updates".
 "#,
     );
   map
