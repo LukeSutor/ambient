@@ -33,6 +33,7 @@ async fn run_capture_screen_task(cancel_token: CancellationToken) {
       _ = interval.tick() => {
         let timestamp = chrono::Utc::now().to_rfc3339();
         let capture_event = CaptureScreenEvent { timestamp };
+        println!("[scheduler] Emitting CAPTURE_SCREEN event");
         
         if let Err(e) = emitter::emit(CAPTURE_SCREEN, capture_event) {
           eprintln!("[scheduler] Failed to emit CAPTURE_SCREEN event: {}", e);

@@ -14,7 +14,11 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         match serde_json::from_str::<CaptureScreenEvent>(payload_str) {
             Ok(event_data) => {
                 println!("[events] Capture screen event received: {:?}", event_data);
-                handle_capture_screen(event_data, &app_handle_clone1);
+                // For async function, we need to spawn a task
+                let app_handle_clone = app_handle_clone1.clone();
+                tauri::async_runtime::spawn(async move {
+                    handle_capture_screen(event_data, &app_handle_clone).await;
+                });
             }
             Err(e) => {
                 eprintln!("[events] Failed to parse capture screen event: {}", e);

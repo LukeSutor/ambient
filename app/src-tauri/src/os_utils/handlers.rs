@@ -2,10 +2,10 @@ use tauri::AppHandle;
 use chrono;
 use crate::events::types::*;
 use crate::events::emitter::emit;
-use crate::os_utils::windows::window::{get_all_text_from_focused_app, get_brave_url};
+use crate::os_utils::windows::window::{get_screen_text_formatted, get_brave_url};
 
-pub fn handle_capture_screen(_event: CaptureScreenEvent, _app_handle: &AppHandle) {
-    let text = match get_all_text_from_focused_app() {
+pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppHandle) {
+    let text = match get_screen_text_formatted(app_handle.clone()).await {
         Ok(text) => text,
         Err(e) => {
             eprintln!("[capture_screen] Failed to capture text: {}", e);
@@ -21,11 +21,12 @@ pub fn handle_capture_screen(_event: CaptureScreenEvent, _app_handle: &AppHandle
         }
     };
     
-    println!("[capture_screen] Captured text");
+    println!("[capture_screen] Captured text: {}", text);
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     // Emit detect tasks event
     if let Err(e) = emit(DETECT_TASKS, DetectTasksEvent { text, active_url: Some(url), timestamp }) {
         eprintln!("[capture_screen] Failed to emit DETECT_TASKS event: {}", e);
     }
+    println!("[capture_screen] Emitted DETECT_TASKS event with text and URL");
 }
