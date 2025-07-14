@@ -12,6 +12,38 @@ export default function Dev() {
   const [sqlResult, setSqlResult] = useState<string | null>(null);
   const [sqlError, setSqlError] = useState<string | null>(null);
 
+  // State for capture scheduler
+  const [isSchedulerRunning, setIsSchedulerRunning] = useState<boolean>(false);
+  const [schedulerLoading, setSchedulerLoading] = useState<boolean>(false);
+
+  // Function to start capture scheduler
+  const handleStartScheduler = async () => {
+    setSchedulerLoading(true);
+    try {
+      await invoke("start_capture_scheduler");
+      setIsSchedulerRunning(true);
+      console.log("Capture scheduler started");
+    } catch (error: any) {
+      console.error("Error starting scheduler:", error);
+    } finally {
+      setSchedulerLoading(false);
+    }
+  };
+
+  // Function to stop capture scheduler
+  const handleStopScheduler = async () => {
+    setSchedulerLoading(true);
+    try {
+      await invoke("stop_capture_scheduler");
+      setIsSchedulerRunning(false);
+      console.log("Capture scheduler stopped");
+    } catch (error: any) {
+      console.error("Error stopping scheduler:", error);
+    } finally {
+      setSchedulerLoading(false);
+    }
+  };
+
   // Function to execute SQL
   const handleExecuteSql = async () => {
     setSqlResult(null); // Clear previous result
@@ -66,6 +98,31 @@ export default function Dev() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
+      {/* Capture Scheduler Controls */}
+      <div className="flex gap-4 justify-center">
+        <Button 
+          onClick={handleStartScheduler} 
+          disabled={schedulerLoading || isSchedulerRunning}
+          variant={isSchedulerRunning ? "secondary" : "default"}
+        >
+          {schedulerLoading && !isSchedulerRunning ? "Starting..." : "Start Capture Scheduler"}
+        </Button>
+        <Button 
+          onClick={handleStopScheduler} 
+          disabled={schedulerLoading || !isSchedulerRunning}
+          variant={isSchedulerRunning ? "destructive" : "secondary"}
+        >
+          {schedulerLoading && isSchedulerRunning ? "Stopping..." : "Stop Capture Scheduler"}
+        </Button>
+      </div>
+
+      {/* Status indicator */}
+      <div className="text-sm text-center">
+        Status: <span className={isSchedulerRunning ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+          {isSchedulerRunning ? "Running" : "Stopped"}
+        </span>
+      </div>
+
       {/* Screen Text Button */}
       <div className="flex justify-center">
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
