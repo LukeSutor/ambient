@@ -79,66 +79,38 @@ Example 7 - Multiple Applications:
 Analyze the provided screenshot and generate an accurate, structured description following this format. Focus on making the description extremely specific and information-dense to optimize for vector embedding and pattern recognition."#,
     );
   map.insert(
-        "analyze_screen",
-r#"You are a screen analysis expert"#,
-    );
-  map.insert(
-        "TASK_DETECTION",
-r#"You are a task completion detection system. Analyze the current screen content to determine if any task steps have been completed or are in progress.
+        "detect_tasks",
+r#"You are a task detection expert. You will be given all the text captured from a person's screen using accessibility APIs, and a list of tasks and their corresponding steps and completion status. It is your job to return which steps have been completed based on the content on the person's screen.
 
-ACTIVE TASK STEPS TO MONITOR:
-{steps}
-
-CURRENT SCREEN INFORMATION:
-Application: {app}
-Window Title: {window_title}
-Screen Text Content:
-{screen_text}
-
-INSTRUCTIONS:
-1. Carefully analyze the screen content against each active task step
-2. Look for evidence that matches the completion criteria for each step
-3. Consider the application context - steps should only be marked complete if they occur in the expected application
-4. Provide confidence scores between 0.0 and 1.0 (only mark as completed if confidence >= 0.8)
-5. Include specific evidence from the screen that supports your decision
-
-Respond with valid JSON in this exact format:
-{{
-  "completed_steps": [
-    {{
-      "step_id": <number>,
-      "confidence": <0.0-1.0>,
-      "evidence": "<specific text or elements from screen that indicate completion>",
-      "reasoning": "<explain why this step is considered complete>"
-    }}
-  ],
-  "in_progress_steps": [
-    {{
-      "step_id": <number>,
-      "confidence": <0.0-1.0>,
-      "evidence": "<indicators of partial progress or setup>"
-    }}
+Your response should be a JSON object with the following structure:
+```json
+{
+  "updates": [
+    {
+      "reasoning": "<explanation of why this step is relevant based on screen content>",
+      "evidence": "<specific text or content from the screen that supports this conclusion>",
+      "step_id": <step_id>,
+      "status": "completed" | "in_progress",
+      "confidence": <0.0-1.0>
+    }
   ]
-}}
+}
+```
 
-Only include steps in the response if there is clear evidence. If no steps are completed or in progress, return empty arrays."#,
-    );
-  map.insert(
-        "SIMPLE_TASK_DETECTION",
-r#"Determine if this task step has been completed based on the screen content.
+If a step is not relevant, do not include it in the response.
+Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."
+If a step status does not change, do not include it in the response.
+If there are no relevant steps, return an empty array for "updates".
 
-TASK STEP: {step_title}
-DESCRIPTION: {step_description}
-CURRENT APPLICATION: {application}
-SCREEN CONTENT: {screen_content}
+{text}
 
-Has this step been completed? Respond with JSON:
-{{
-  "completed": true/false,
-  "confidence": 0.0-1.0,
-  "evidence": "specific evidence from screen",
-  "reasoning": "explanation of decision"
-}}"#,
+Active URL:
+{active_url}
+
+Active Tasks to monitor:
+{tasks}
+
+"#,
     );
   map
 });

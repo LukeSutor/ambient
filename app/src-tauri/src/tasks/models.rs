@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 pub struct Task {
     pub id: i64,
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub category: Option<String>,
     pub priority: i32,
     pub frequency: String, // Will be converted to/from TaskFrequency
@@ -22,7 +22,7 @@ pub struct TaskStep {
     pub task_id: i64,
     pub step_number: i32,
     pub title: String,
-    pub description: Option<String>,
+    pub description: String,
     pub status: String, // Will be converted to/from StepStatus
     pub completed_at: Option<DateTime<Utc>>,
 }

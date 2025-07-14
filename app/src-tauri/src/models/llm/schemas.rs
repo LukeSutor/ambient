@@ -23,10 +23,6 @@ r#"{
             "type": "string",
             "description": "Specific text or content from the screen that supports this conclusion"
           },
-          "task_id": {
-            "type": "integer",
-            "description": "Unique identifier for the task"
-          },
           "step_id": {
             "type": "integer",
             "description": "Unique identifier for the specific step within the task"
@@ -43,7 +39,7 @@ r#"{
             "description": "Confidence level of the detection (0.0 to 1.0)"
           }
         },
-        "required": ["reasoning", "evidence", "task_id", "step_id", "status", "confidence"],
+        "required": ["reasoning", "evidence", "step_id", "status", "confidence"],
         "additionalProperties": false
       }
     }

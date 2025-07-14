@@ -6,11 +6,17 @@ pub struct CaptureScreenEvent {
     pub timestamp: String
 }
 
-pub const ANALYZE_SCREEN: &str = "analyze_screen";
+pub const DETECT_TASKS: &str = "detect_tasks";
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AnalyzeScreenEvent {
+pub struct DetectTasksEvent {
     pub text: String,
     pub active_url: Option<String>,
+    pub timestamp: String
+}
+
+pub const UPDATE_TASKS: &str = "update_tasks";
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateTasksEvent {
     pub timestamp: String
 }
 
