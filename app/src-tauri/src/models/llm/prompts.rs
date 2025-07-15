@@ -98,6 +98,7 @@ Your response should be a JSON object with the following structure:
 ```
 
 General Guidelines:
+Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most.
 Ensure to only include steps that are present in the list of tasks provided.
 If a step is not relevant, do not include it in the response.
 Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."
@@ -113,6 +114,7 @@ Active URL:
 {active_url}
 
 Once again:
+Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most.
 Ensure to only include steps that are present in the list of tasks provided.
 If a step is not relevant, do not include it in the response.
 Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."

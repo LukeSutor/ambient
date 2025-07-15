@@ -21,11 +21,7 @@ r#"{
         "properties": {
           "a_reasoning": {
             "type": "string",
-            "description": "Explanation of why this task is relevant based on screen content"
-          },
-          "evidence": {
-            "type": "string",
-            "description": "Specific text from the screen that supports this conclusion"
+            "description": "Short explanation of why this task is relevant based on screen content"
           },
           "step_id": {
             "type": "integer",
