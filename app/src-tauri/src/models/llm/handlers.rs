@@ -82,9 +82,10 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
                 println!("[detect_tasks] Updating step {} to status: {}", step_id, status);
                 // Update step status in database
                 if let Ok(step_status) = status.parse::<StepStatus>() {
-                    if let Err(e) = TaskService::update_step_status(&db_state, step_id as i64, step_status) {
-                        eprintln!("[detect_tasks] Failed to update step {}: {}", step_id, e);
-                    }
+                    // Don't actually update for now
+                    // if let Err(e) = TaskService::update_step_status(&db_state, step_id as i64, step_status) {
+                    //     eprintln!("[detect_tasks] Failed to update step {}: {}", step_id, e);
+                    // }
                 } else {
                     eprintln!("[detect_tasks] Invalid status '{}' for step {}", status, step_id);
                 }

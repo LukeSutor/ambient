@@ -10,41 +10,19 @@ r#"{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "a_reasoning": {
+    "analysis": {
       "type": "string",
-      "description": "Planning and reasoning behind this task detection"
+      "description": "Reasoning behind which tasks have been completed"
     },
-    "updates": {
+    "completed": {
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "a_reasoning": {
-            "type": "string",
-            "description": "Short explanation of why this task is relevant based on screen content"
-          },
-          "step_id": {
-            "type": "integer",
-            "description": "Unique identifier for the specific step within the task"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["completed", "in_progress"],
-            "description": "Current status of the task step"
-          },
-          "confidence": {
-            "type": "number",
-            "minimum": 0.0,
-            "maximum": 1.0,
-            "description": "Confidence level of the detection (0.0 to 1.0)"
-          }
-        },
-        "required": ["reasoning", "evidence", "step_id", "status", "confidence"],
-        "additionalProperties": false
+        "type": "integer",
+        "description": "IDs of tasks that have been completed"
       }
     }
   },
-  "required": ["a_reasoning", "updates"],
+  "required": ["analysis", "completed"],
   "additionalProperties": false
 }"#,
     );

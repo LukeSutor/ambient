@@ -82,44 +82,35 @@ Analyze the provided screenshot and generate an accurate, structured description
         "detect_tasks",
 r#"You are a task detection expert. You will be given all the text captured from a person's screen using accessibility APIs, and a list of tasks and their corresponding steps and completion status. It is your job to return which steps have been completed based on the content on the person's screen.
 
-Your response should be a JSON object with the following structure:
-```json
-{
-  "a_reasoning": "<planning and reasoning behind this task detection>",
-  "updates": [
-    {
-      "a_reasoning": "<explanation of why this step is relevant based on screen content>",
-      "step_id": <step_id (from the list of tasks provided, do not make up new step IDs)>,
-      "status": "completed" | "in_progress",
-      "confidence": <0.0-1.0>
-    }
-  ]
-}
-```
+Output JSON format:
+{"analysis":"<reasoning for why steps are completed>","completed":[<completed step IDs>]}
 
-General Guidelines:
-Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most.
-Ensure to only include steps that are present in the list of tasks provided.
-If a step is not relevant, do not include it in the response.
-Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."
-If a step status does not change, do not include it in the response.
-If there are no relevant steps, return an empty array for "updates".
+Rules:
+- Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most
+- Ensure to only include step IDs that are present in the list of tasks provided
+- Do not include a step in the completed array if it is already marked complete
+- If there are no completed steps, return an empty array
 
-Active Tasks to monitor:
+<tasks>
 {tasks}
+</tasks>
 
+<screen_text>
 {text}
+</screen_text>
 
-Active URL:
+<active_url>
 {active_url}
+</active_url>
 
-Once again:
-Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most.
-Ensure to only include steps that are present in the list of tasks provided.
-If a step is not relevant, do not include it in the response.
-Only switch steps to "in_progress" or "completed," do not switch a task to "not_started."
-If a step status does not change, do not include it in the response.
-If there are no relevant steps, return an empty array for "updates".
+IMPORTANT: Only mark task complete if screen shows clear evidence.
+
+Once more:
+You are a task detection expert. You will be given all the text captured from a person's screen using accessibility APIs, and a list of tasks and their corresponding steps and completion status. It is your job to return which steps have been completed based on the content on the person's screen.
+- Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most
+- Ensure to only include step IDs that are present in the list of tasks provided
+- Do not include a step in the completed array if it is already marked complete
+- If there are no completed steps, return an empty array
 "#,
     );
   map
