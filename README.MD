@@ -40,15 +40,15 @@ Below is a checklist of the features and components that still need to be design
 - [x] Apply heuristics or LLM-driven summarization to remove noise from extracted text.
 
 ### 🧠 Task Modeling & Progress Tracking
-- [ ] Design a system for representing structured task checklists.
-- [ ] Define individual task steps in a machine-readable way that the LLM can reference.
+- [x] Design a system for representing structured task checklists.
+- [x] Define individual task steps in a machine-readable way that the LLM can reference.
 - [ ] Support dynamic task assignment and syncing from a remote database.
 
 ### 🤖 LLM-Powered Task Detection
-- [ ] Use function-calling LLM workflows to:
+- [x] Use function-calling LLM workflows to:
   - Parse current screen state
   - Match to known task steps
-  - Mark tasks as complete, in progress, or not started
+  - Mark tasks as complete
 - [ ] Implement a feedback loop where the LLM can nudge the user if steps are skipped.
 - [ ] Implement a chat window where users can get clarification about tasks.
 
@@ -60,7 +60,7 @@ Below is a checklist of the features and components that still need to be design
   - Tracks overall productivity
 
 ### 🛡️ Privacy and Control
-- [ ] Build a toggle or “pause tracking” feature for employees to control when their activity is monitored.
+- [ ] Build a “pause tracking” feature for employees to control when their activity is monitored.
 - [ ] Ensure all monitoring and inference stays strictly local unless explicitly shared by the user.
 
 ### 🔄 Integrations & Syncing
