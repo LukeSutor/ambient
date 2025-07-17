@@ -13,7 +13,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         let payload_str = event.payload();
         match serde_json::from_str::<CaptureScreenEvent>(payload_str) {
             Ok(event_data) => {
-                println!("[events] Capture screen event received: {:?}", event_data);
+                println!("[events] Capture screen event received");
                 // For async function, we need to spawn a task
                 let app_handle_clone = app_handle_clone1.clone();
                 tauri::async_runtime::spawn(async move {
@@ -31,7 +31,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         let payload_str = event.payload();
         match serde_json::from_str::<DetectTasksEvent>(payload_str) {
             Ok(event_data) => {
-                println!("[events] Detect tasks event received: {:?}", event_data);
+                println!("[events] Detect tasks event received");
                 // For async function, we need to spawn a task
                 let app_handle_clone = app_handle_clone2.clone();
                 tauri::async_runtime::spawn(async move {

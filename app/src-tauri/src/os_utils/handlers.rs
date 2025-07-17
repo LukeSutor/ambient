@@ -21,7 +21,6 @@ pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppH
         }
     };
     
-    println!("[capture_screen] Captured text: {}", text);
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     // Emit detect tasks event

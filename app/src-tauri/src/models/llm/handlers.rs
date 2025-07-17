@@ -43,11 +43,8 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
         .replace("{active_url}", active_url_str)
         .replace("{tasks}", &formatted_tasks);
 
-    println!("[detect_tasks] Prompt created:\n{}", prompt);
-
     // Get response schema
     let schema = get_schema("detect_tasks").unwrap_or("{}");
-    println!("[detect_tasks] Using schema:\n{}", schema);
 
     // Get task updates
     let task_updates = generate(
@@ -62,7 +59,7 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
     // Handle response and parse JSON
     let parsed_response = match task_updates {
         Ok(response) => {
-            println!("[detect_tasks] Task updates generated successfully: {:?}", response);
+            println!("[detect_tasks] Response received: {}", response);
             serde_json::from_str(&response)
                 .unwrap_or_else(|_| serde_json::json!({}))
         }
@@ -73,26 +70,21 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
     };
 
     // Loop through response and update step statuses
-    if let Some(updates) = parsed_response.get("updates").and_then(|u| u.as_array()) {
-        for update in updates {
-            if let (Some(step_id), Some(status)) = (
-                update.get("step_id").and_then(|id| id.as_u64()),
-                update.get("status").and_then(|s| s.as_str())
-            ) {
-                println!("[detect_tasks] Updating step {} to status: {}", step_id, status);
+    if let Some(completed_ids) = parsed_response.get("completed").and_then(|c| c.as_array()) {
+        for step_id_value in completed_ids {
+            if let Some(step_id) = step_id_value.as_u64() {
+                println!("[detect_tasks] Updating step {} to status: completed", step_id);
                 // Update step status in database
-                if let Ok(_step_status) = status.parse::<StepStatus>() {
-                    // Don't actually update for now
-                    // if let Err(e) = TaskService::update_step_status(&db_state, step_id as i64, step_status) {
-                    //     eprintln!("[detect_tasks] Failed to update step {}: {}", step_id, e);
-                    // }
-                } else {
-                    eprintln!("[detect_tasks] Invalid status '{}' for step {}", status, step_id);
-                }
+                // Don't actually update for now
+                // if let Err(e) = TaskService::update_step_status(&db_state, step_id as i64, StepStatus::Completed) {
+                //     eprintln!("[detect_tasks] Failed to update step {}: {}", step_id, e);
+                // }
+            } else {
+                eprintln!("[detect_tasks] Invalid step_id format in completed array: {:?}", step_id_value);
             }
         }
     } else {
-        println!("[detect_tasks] No updates found in response");
+        println!("[detect_tasks] No completed step IDs found in response");
     }
 
     // Emit update tasks event

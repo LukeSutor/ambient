@@ -33,6 +33,11 @@
             },
             "--reasoning-format",
             "none",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0",
+            "-fa",
             "--no-webui",
             "--log-disable",
             "--jinja"

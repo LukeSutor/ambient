@@ -247,6 +247,11 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
             &config.api_key,
             "--reasoning-format",
             "none",
+            "-ctk",
+            "q8_0",
+            "-ctv",
+            "q8_0",
+            "-fa",
             "--no-webui",
             "--log-disable",
             "--jinja"
