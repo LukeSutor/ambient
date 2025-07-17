@@ -46,7 +46,20 @@ type TaskFormData = z.infer<typeof taskSchema>;
 export default function EditTaskPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const taskId = parseInt(searchParams.get('id') || '0');
+  
+  // Safely parse the task ID with error handling
+  let taskId: bigint;
+  try {
+    const idParam = searchParams.get('id');
+    if (!idParam || idParam === '0') {
+      throw new Error('Invalid task ID');
+    }
+    taskId = BigInt(idParam);
+  } catch (error) {
+    toast.error("Invalid task ID");
+    router.push("/tasks");
+    return null;
+  }
   
   const [task, setTask] = useState<TaskWithSteps | null>(null);
   const [loading, setLoading] = useState(true);

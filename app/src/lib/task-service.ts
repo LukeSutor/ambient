@@ -20,7 +20,7 @@ export class TaskService {
     }
   }
 
-  static async getTask(taskId: number): Promise<TaskWithSteps> {
+  static async getTask(taskId: bigint): Promise<TaskWithSteps> {
     try {
       return await invoke<TaskWithSteps>("get_task", { taskId });
     } catch (error) {
@@ -57,7 +57,7 @@ export class TaskService {
     }
   }
 
-  static async deleteTask(taskId: number): Promise<void> {
+  static async deleteTask(taskId: bigint): Promise<void> {
     try {
       await invoke<void>("delete_task", { taskId });
     } catch (error) {
@@ -66,7 +66,7 @@ export class TaskService {
     }
   }
 
-  static async completeTask(taskId: number): Promise<TaskWithSteps | null> {
+  static async completeTask(taskId: bigint): Promise<TaskWithSteps | null> {
     try {
       return await invoke<TaskWithSteps | null>("complete_task", { taskId });
     } catch (error) {
@@ -75,7 +75,7 @@ export class TaskService {
     }
   }
 
-  static async updateTaskStatus(taskId: number, status: string): Promise<void> {
+  static async updateTaskStatus(taskId: bigint, status: string): Promise<void> {
     try {
       await invoke<void>("update_task_status", { taskId, status });
     } catch (error) {
@@ -84,7 +84,7 @@ export class TaskService {
     }
   }
 
-  static async updateStepStatus(stepId: number, status: string): Promise<void> {
+  static async updateStepStatus(stepId: bigint, status: string): Promise<void> {
     try {
       await invoke<void>("update_step_status", { stepId, status });
     } catch (error) {

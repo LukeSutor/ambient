@@ -91,24 +91,8 @@ impl TaskDetectionService {
     fn validate_detection_result(result: &TaskDetectionResult) -> Result<(), String> {
         // Check completed steps
         for step in &result.completed_steps {
-            if step.confidence < 0.0 || step.confidence > 1.0 {
-                return Err(format!("Invalid confidence score for step {}: {}", step.step_id, step.confidence));
-            }
-            if step.evidence.trim().is_empty() {
-                return Err(format!("Empty evidence for completed step {}", step.step_id));
-            }
             if step.reasoning.trim().is_empty() {
                 return Err(format!("Empty reasoning for completed step {}", step.step_id));
-            }
-        }
-
-        // Check in-progress steps
-        for step in &result.in_progress_steps {
-            if step.confidence < 0.0 || step.confidence > 1.0 {
-                return Err(format!("Invalid confidence score for in-progress step {}: {}", step.step_id, step.confidence));
-            }
-            if step.evidence.trim().is_empty() {
-                return Err(format!("Empty evidence for in-progress step {}", step.step_id));
             }
         }
 

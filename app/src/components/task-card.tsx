@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TaskStatusBadge } from "@/components/task-status-badge";
 import { TaskWithSteps } from "@/types/tasks";
-import { getTaskCompletionProgress, formatDueDate, getFrequencyDisplayName } from "@/lib/task-utils";
+import { getTaskCompletionProgress, formatDueDate, getFrequencyDisplayName, calculateNextDueDate } from "@/lib/task-utils";
 
 interface TaskCardProps {
   taskWithSteps: TaskWithSteps;
@@ -27,6 +27,9 @@ export function TaskCard({ taskWithSteps, onEdit, onDelete, onComplete }: TaskCa
   const [isLoading, setIsLoading] = useState(false);
   const { completed, total, percentage } = getTaskCompletionProgress(taskWithSteps);
   const { task, steps } = taskWithSteps;
+  
+  // Calculate the next due date
+  const nextDueDate = calculateNextDueDate(task.first_scheduled_at, task.frequency, task.last_completed_at);
 
   const handleComplete = async () => {
     setIsLoading(true);
@@ -100,10 +103,10 @@ export function TaskCard({ taskWithSteps, onEdit, onDelete, onComplete }: TaskCa
               <Clock className="h-3 w-3" />
               <span>{getFrequencyDisplayName(task.frequency)}</span>
             </div>
-            {task.next_due_at && (
+            {nextDueDate && (
               <div className="flex items-center gap-1">
                 <CalendarDays className="h-3 w-3" />
-                <span>{formatDueDate(task.next_due_at)}</span>
+                <span>{formatDueDate(nextDueDate.toISOString())}</span>
               </div>
             )}
           </div>

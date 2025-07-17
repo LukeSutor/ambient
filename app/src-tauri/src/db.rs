@@ -94,10 +94,10 @@ lazy_static::lazy_static! {
                     priority INTEGER DEFAULT 1,
                     frequency TEXT DEFAULT 'one_time', -- one_time, daily, weekly, bi_weekly, monthly, quarterly, yearly, custom_N
                     last_completed_at TEXT, -- When the task was last completed
-                    next_due_at TEXT, -- When the task is next due
+                    first_scheduled_at TEXT NOT NULL DEFAULT (datetime('now')), -- When the task was first scheduled
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    status TEXT DEFAULT 'pending' -- pending, in_progress, completed, paused
+                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed'))
                 );
 
                 CREATE TABLE IF NOT EXISTS task_steps (
@@ -106,7 +106,7 @@ lazy_static::lazy_static! {
                     step_number INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     description TEXT,
-                    status TEXT DEFAULT 'pending', -- pending, in_progress, completed, skipped
+                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
                     completed_at TEXT,
                     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                     UNIQUE(task_id, step_number)
@@ -116,8 +116,6 @@ lazy_static::lazy_static! {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id INTEGER NOT NULL,
                     step_id INTEGER,
-                    llm_confidence REAL NOT NULL, -- How confident the LLM is about completion
-                    evidence TEXT, -- What the LLM found as evidence
                     reasoning TEXT, -- LLM's reasoning for the decision
                     timestamp TEXT NOT NULL DEFAULT (datetime('now')),
                     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
@@ -128,7 +126,7 @@ lazy_static::lazy_static! {
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
                 CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
                 CREATE INDEX IF NOT EXISTS idx_tasks_frequency ON tasks(frequency);
-                CREATE INDEX IF NOT EXISTS idx_tasks_next_due_at ON tasks(next_due_at);
+                CREATE INDEX IF NOT EXISTS idx_tasks_first_scheduled_at ON tasks(first_scheduled_at);
                 CREATE INDEX IF NOT EXISTS idx_tasks_last_completed_at ON tasks(last_completed_at);
                 CREATE INDEX IF NOT EXISTS idx_task_steps_task_id ON task_steps(task_id);
                 CREATE INDEX IF NOT EXISTS idx_task_steps_status ON task_steps(status);

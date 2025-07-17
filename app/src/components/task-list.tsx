@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { TaskCard } from "@/components/task-card";
 import { TaskWithSteps, TaskFrequency } from "@/types/tasks";
-import { sortTasksByPriority, getTaskStatus } from "@/lib/task-utils";
+import { sortTasksByPriority, getTaskStatus, calculateNextDueDate } from "@/lib/task-utils";
 import { 
   Select,
   SelectContent,
@@ -55,10 +55,12 @@ export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps)
       case "created":
         return new Date(b.task.created_at).getTime() - new Date(a.task.created_at).getTime();
       case "due":
-        if (!a.task.next_due_at && !b.task.next_due_at) return 0;
-        if (!a.task.next_due_at) return 1;
-        if (!b.task.next_due_at) return -1;
-        return new Date(a.task.next_due_at).getTime() - new Date(b.task.next_due_at).getTime();
+        const aDueDate = calculateNextDueDate(a.task.first_scheduled_at, a.task.frequency, a.task.last_completed_at);
+        const bDueDate = calculateNextDueDate(b.task.first_scheduled_at, b.task.frequency, b.task.last_completed_at);
+        if (!aDueDate && !bDueDate) return 0;
+        if (!aDueDate) return 1;
+        if (!bDueDate) return -1;
+        return aDueDate.getTime() - bDueDate.getTime();
       default:
         return 0;
     }
