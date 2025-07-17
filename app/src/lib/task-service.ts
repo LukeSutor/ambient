@@ -22,7 +22,7 @@ export class TaskService {
 
   static async getTask(taskId: bigint): Promise<TaskWithSteps> {
     try {
-      return await invoke<TaskWithSteps>("get_task", { taskId });
+      return await invoke<TaskWithSteps>("get_task", { taskId: Number(taskId) });
     } catch (error) {
       console.error("Failed to get task:", error);
       throw error;
@@ -59,7 +59,7 @@ export class TaskService {
 
   static async deleteTask(taskId: bigint): Promise<void> {
     try {
-      await invoke<void>("delete_task", { taskId });
+      await invoke<void>("delete_task", { taskId: Number(taskId) });
     } catch (error) {
       console.error("Failed to delete task:", error);
       throw error;
@@ -68,7 +68,7 @@ export class TaskService {
 
   static async completeTask(taskId: bigint): Promise<TaskWithSteps | null> {
     try {
-      return await invoke<TaskWithSteps | null>("complete_task", { taskId });
+      return await invoke<TaskWithSteps | null>("complete_task", { taskId: Number(taskId) });
     } catch (error) {
       console.error("Failed to complete task:", error);
       throw error;
@@ -77,7 +77,7 @@ export class TaskService {
 
   static async updateTaskStatus(taskId: bigint, status: string): Promise<void> {
     try {
-      await invoke<void>("update_task_status", { taskId, status });
+      await invoke<void>("update_task_status", { taskId: Number(taskId), status });
     } catch (error) {
       console.error("Failed to update task status:", error);
       throw error;
@@ -86,7 +86,7 @@ export class TaskService {
 
   static async updateStepStatus(stepId: bigint, status: string): Promise<void> {
     try {
-      await invoke<void>("update_step_status", { stepId, status });
+      await invoke<void>("update_step_status", { stepId: Number(stepId), status });
     } catch (error) {
       console.error("Failed to update step status:", error);
       throw error;
