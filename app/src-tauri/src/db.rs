@@ -20,50 +20,6 @@ lazy_static::lazy_static! {
     static ref MIGRATIONS: Migrations<'static> =
         Migrations::new(vec![
             M::up("
-                -- Migration 001: Create core activity tracking tables
-                CREATE TABLE IF NOT EXISTS events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp INTEGER NOT NULL,              -- Unix epoch seconds UTC
-                    application TEXT NOT NULL,               -- e.g., 'Code.exe', 'chrome.exe'
-                    description TEXT,                        -- More specific details, nullable
-                    description_embedding BLOB NOT NULL      -- Text embedding of activity (for sqlite-vec)
-                );
-
-                -- Indexes for common queries
-                CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);
-                CREATE INDEX IF NOT EXISTS idx_events_app_name ON events (application);
-
-                -- Table for discovered patterns
-                CREATE TABLE IF NOT EXISTS patterns (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    pattern_type TEXT NOT NULL,              -- e.g., 'sequence', 'periodicity', 'cluster'
-                    trigger_conditions TEXT NOT NULL,        -- JSON describing triggers (time, preceding events, app, etc.)
-                    predicted_next_event TEXT,               -- JSON describing likely next event(s), nullable
-                    recommended_action TEXT,                 -- JSON describing suggested action, nullable
-                    confidence_score REAL NOT NULL,          -- Reliability metric (support, confidence, etc.)
-                    frequency_metric REAL,                   -- How often it occurs (e.g., per week), nullable
-                    last_detected_timestamp INTEGER,         -- When this pattern was last updated/seen
-                    created_timestamp INTEGER NOT NULL,      -- When the pattern was first discovered
-                    is_active INTEGER NOT NULL DEFAULT 1     -- Boolean (0/1) if the pattern is enabled for recommendations
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_patterns_type ON patterns (pattern_type);
-                CREATE INDEX IF NOT EXISTS idx_patterns_active_timestamp ON patterns (is_active, last_detected_timestamp);
-            
-                -- Table for captured workflows
-                CREATE TABLE IF NOT EXISTS workflows (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    url TEXT NOT NULL,
-                    steps_json TEXT NOT NULL,
-                    recording_start INTEGER NOT NULL,
-                    recording_end INTEGER NOT NULL,
-                    last_updated INTEGER NOT NULL
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_workflows_url ON workflows (url);
-
                 -- Conversation tables
                 CREATE TABLE IF NOT EXISTS conversations (
                     id TEXT PRIMARY KEY,
@@ -85,7 +41,7 @@ lazy_static::lazy_static! {
                 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
                 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
 
-                -- Add task tracking tables with frequency support
+                -- Task tracking
                 CREATE TABLE IF NOT EXISTS tasks (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
@@ -122,7 +78,6 @@ lazy_static::lazy_static! {
                     FOREIGN KEY (step_id) REFERENCES task_steps(id) ON DELETE CASCADE
                 );
 
-                -- Indexes for task tables
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
                 CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
                 CREATE INDEX IF NOT EXISTS idx_tasks_frequency ON tasks(frequency);
@@ -132,6 +87,18 @@ lazy_static::lazy_static! {
                 CREATE INDEX IF NOT EXISTS idx_task_steps_status ON task_steps(status);
                 CREATE INDEX IF NOT EXISTS idx_task_progress_task_id ON task_progress(task_id);
                 CREATE INDEX IF NOT EXISTS idx_task_progress_timestamp ON task_progress(timestamp);
+
+                -- User activity summaries
+                CREATE TABLE IF NOT EXISTS activity_summaries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    summary TEXT NOT NULL, -- Compressed summary of current user activity
+                    active_url TEXT, -- Current active browser URL if applicable
+                    active_applications TEXT, -- JSON array of active application names
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                );
+
+                -- Indexes for activity summaries (optimized for recent queries)
+                CREATE INDEX IF NOT EXISTS idx_activity_summaries_created_at ON activity_summaries(created_at DESC);
             ")
         ]);
 }
@@ -635,4 +602,119 @@ pub fn get_workflow_by_id(
     })
     .map_err(|e| format!("Workflow not found: {}", e))?;
   Ok(wf)
+}
+
+/// Inserts a new activity summary into the database.
+#[tauri::command]
+pub fn insert_activity_summary(
+    state: tauri::State<DbState>,
+    summary: String,
+    active_url: Option<String>,
+    active_applications: Option<String>, // JSON string of application names
+) -> Result<i64, String> {
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    let sql = r#"
+        INSERT INTO activity_summaries (summary, active_url, active_applications)
+        VALUES (?1, ?2, ?3)
+    "#;
+
+    conn
+        .execute(
+            sql,
+            rusqlite::params![summary, active_url, active_applications],
+        )
+        .map_err(|e| format!("Failed to insert activity summary: {}", e))?;
+
+    // Return the ID of the inserted row
+    Ok(conn.last_insert_rowid())
+}
+
+/// Gets the most recent activity summary from the database.
+pub fn get_latest_activity_summary(
+    state: &tauri::State<DbState>,
+) -> Result<Option<serde_json::Value>, String> {
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    let sql = r#"
+        SELECT id, summary, active_url, active_applications, created_at
+        FROM activity_summaries
+        ORDER BY created_at DESC
+        LIMIT 1
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let result = stmt
+        .query_row([], |row| {
+            let mut map = serde_json::Map::new();
+            map.insert("id".to_string(), serde_json::json!(row.get::<_, i64>(0)?));
+            map.insert("summary".to_string(), serde_json::json!(row.get::<_, String>(1)?));
+            map.insert("active_url".to_string(), serde_json::json!(row.get::<_, Option<String>>(2)?));
+            map.insert("active_applications".to_string(), serde_json::json!(row.get::<_, Option<String>>(3)?));
+            map.insert("created_at".to_string(), serde_json::json!(row.get::<_, String>(4)?));
+            Ok(serde_json::Value::Object(map))
+        });
+
+    match result {
+        Ok(summary) => Ok(Some(summary)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(format!("Failed to get latest activity summary: {}", e)),
+    }
+}
+
+/// Gets recent activity summaries with pagination.
+#[tauri::command]
+pub fn get_activity_summaries(
+    state: tauri::State<DbState>,
+    offset: u32,
+    limit: u32,
+) -> Result<serde_json::Value, String> {
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    let sql = r#"
+        SELECT id, summary, active_url, active_applications, created_at
+        FROM activity_summaries
+        ORDER BY created_at DESC
+        LIMIT ?1 OFFSET ?2
+    "#;
+
+    let mut stmt = conn
+        .prepare(sql)
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+    let rows = stmt
+        .query_map(rusqlite::params![limit, offset], |row| {
+            let mut map = serde_json::Map::new();
+            map.insert("id".to_string(), serde_json::json!(row.get::<_, i64>(0)?));
+            map.insert("summary".to_string(), serde_json::json!(row.get::<_, String>(1)?));
+            map.insert("active_url".to_string(), serde_json::json!(row.get::<_, Option<String>>(2)?));
+            map.insert("active_applications".to_string(), serde_json::json!(row.get::<_, Option<String>>(3)?));
+            map.insert("created_at".to_string(), serde_json::json!(row.get::<_, String>(4)?));
+            Ok(serde_json::Value::Object(map))
+        })
+        .map_err(|e| format!("Query map failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row processing failed: {}", e))?;
+
+    Ok(serde_json::Value::Array(rows))
 }
