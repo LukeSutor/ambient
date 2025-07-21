@@ -37,6 +37,7 @@
             "q8_0",
             "-ctv",
             "q8_0",
+            "--mlock",
             "-fa",
             "--no-webui",
             "--log-disable",

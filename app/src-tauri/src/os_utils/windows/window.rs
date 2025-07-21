@@ -27,9 +27,11 @@ use windows::{
   },
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApplicationTextData {
   pub process_id: i32,
+  pub process_name: Option<String>,
+  pub application_name: Option<String>,
   pub text_content: Vec<String>,
 }
 
@@ -247,6 +249,8 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         app_map.entry(process_id).or_insert_with(|| {
           ApplicationTextData {
             process_id,
+            process_name: None,
+            application_name: None,
             text_content: Vec::new(),
           }
         }).text_content.push(text);
@@ -490,7 +494,7 @@ fn clean_text_content(text_content: &[String]) -> Vec<String> {
 }
 
 // Function to format application data as markdown
-fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
+pub fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
   let mut markdown = String::new();
   markdown.push_str("# Screen Text by Application\n\n");
   
@@ -503,8 +507,13 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
     }
 
     // Get the app name from the pid and map it to a common name
-    let process_name = get_process_name(app.process_id as u32);
-    let app_name = map_process_name_to_app_name(&process_name);
+    let (_process_name, app_name) = if app.process_name.is_some() && app.application_name.is_some() {
+      (app.process_name.clone().unwrap(), app.application_name.clone().unwrap())
+    } else {
+      let process_name = get_process_name(app.process_id as u32);
+      let app_name = map_process_name_to_app_name(&process_name);
+      (process_name, app_name)
+    };
     markdown.push_str(&format!("## {} (PID: {})\n\n", app_name, app.process_id));
     
     // Group similar content together
@@ -520,6 +529,30 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
   }
   
   markdown
+}
+
+pub async fn get_screen_text(app_handle: AppHandle) -> Result<Vec<ApplicationTextData>, String> {
+  // Get app PID from app state
+  let state = app_handle.state::<AppState>();
+  let app_pid = state.pid;
+
+  // Get the screen text in another thread
+  let result = task::spawn_blocking(move || {
+    get_screen_text_by_application(app_pid)
+  }).await;
+  
+  match result {
+    Ok(applications) => {
+      // Get the app name from the PID for each application
+      let mut applications_data = applications?;
+      for app in &mut applications_data {
+        app.process_name = Some(get_process_name(app.process_id as u32));
+        app.application_name = Some(map_process_name_to_app_name(&app.process_name.as_ref().unwrap()));
+      }
+      Ok(applications_data)
+    },
+    Err(e) => Err(format!("Task execution failed: {:?}", e)),
+  }
 }
 
 // Parent function that gets screen text and formats it as markdown

@@ -1,8 +1,17 @@
 use serde::{Serialize, Deserialize};
+use crate::os_utils::windows::window::ApplicationTextData;
 
 pub const CAPTURE_SCREEN: &str = "capture_screen";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CaptureScreenEvent {
+    pub timestamp: String
+}
+
+pub const GET_SCREEN_DIFF: &str = "get_screen_diff";
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GetScreenDiffEvent {
+    pub data: Vec<ApplicationTextData>,
+    pub active_url: Option<String>,
     pub timestamp: String
 }
 

@@ -233,11 +233,14 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
             &config.api_key,
             "--reasoning-format",
             "none",
-            "-ctk",
+            "--ctx-size",               // Use smaller context size for faster responses
+            "2048",
+            "-ctk",                     // Use q8 quant for kv cache
             "q8_0",
             "-ctv",
             "q8_0",
-            "-fa",
+            "--mlock",                  // Keep model in RAM
+            "-fa",                      // Use fast attention
             "--no-webui",
             "--log-disable",
             "--jinja"
@@ -304,9 +307,9 @@ pub async fn check_server_health(app_handle: AppHandle) -> Result<Value, String>
 #[tauri::command]
 pub async fn get_server_status(app_handle: AppHandle) -> Result<Value, String> {
     // Check if process is running and get port
-    let (process_running, port) = {
+    let process_running = {
         let server_state = SERVER_STATE.lock().unwrap();
-        (server_state.child.is_some(), server_state.port)
+        server_state.child.is_some()
     };
 
     if !process_running {
@@ -319,7 +322,6 @@ pub async fn get_server_status(app_handle: AppHandle) -> Result<Value, String> {
         }));
     }
 
-    let port = port.ok_or_else(|| "Server is running but port is unknown".to_string())?;
     let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
 
     // Perform health check
@@ -413,10 +415,7 @@ pub async fn make_completion_request(
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     top_p: Option<f32>,
-) -> Result<Value, String> {
-    // Get the current port from server state
-    let port = get_current_port().ok_or_else(|| "Server is not running".to_string())?;
-    
+) -> Result<Value, String> {    
     let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
     
     // Check if server is healthy first
@@ -500,11 +499,7 @@ pub async fn generate(
     use_thinking: Option<bool>,
     stream: Option<bool>,
 ) -> Result<String, String> {
-    println!("[llama_server] Starting chat completion generation");
-    
-    // Get the current port from server state
-    let port = get_current_port().ok_or_else(|| "Server is not running".to_string())?;
-    
+    println!("[llama_server] Starting chat completion generation");    
     let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
     
     // Check if server is healthy first
