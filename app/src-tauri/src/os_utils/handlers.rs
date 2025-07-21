@@ -108,8 +108,6 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
 
     // Format changes as markdown
     let markdown = format_as_markdown(changes);
-
-    println!("[get_screen_diff] Changes detected:\n{}", markdown);
     
     let timestamp = chrono::Utc::now().to_rfc3339();
 

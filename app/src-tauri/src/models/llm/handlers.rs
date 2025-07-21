@@ -124,11 +124,13 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
                 .and_then(|c| c.as_str())
                 .unwrap_or("");
             
-            // Parse the SQLite datetime string (ISO 8601 format)
-            let is_recent = match chrono::DateTime::parse_from_rfc3339(created_at_str) {
-                Ok(created_at) => {
+            // Parse the SQLite datetime string (format: "2025-07-21 21:22:24")
+            let is_recent = match chrono::NaiveDateTime::parse_from_str(created_at_str, "%Y-%m-%d %H:%M:%S") {
+                Ok(naive_dt) => {
+                    // Convert to UTC DateTime
+                    let created_at_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive_dt, chrono::Utc);
                     let ten_minutes_ago = chrono::Utc::now() - chrono::Duration::minutes(10);
-                    created_at.with_timezone(&chrono::Utc) >= ten_minutes_ago
+                    created_at_utc >= ten_minutes_ago
                 }
                 Err(_) => {
                     eprintln!("[summarize_screen] Failed to parse created_at timestamp: {}", created_at_str);
