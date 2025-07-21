@@ -233,6 +233,8 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
             &config.api_key,
             "--reasoning-format",
             "none",
+            "-np",                      // Decode up to 3 sequences in parallel
+            "3",
             "--ctx-size",               // Use smaller context size for faster responses
             "2048",
             "-ctk",                     // Use q8 quant for kv cache

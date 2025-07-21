@@ -8,6 +8,9 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
     // Get DB state
     let db_state = app_handle.state::<DbState>();
 
+    // Fetch most recent screen summary
+    let summary_text = get_recent_summary_text(&db_state, "[detect_tasks]");
+
     // Fetch all active tasks
     let active_tasks = TaskService::get_active_tasks(&db_state);
     if active_tasks.is_err() {
@@ -26,47 +29,35 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
     let formatted_tasks = format_tasks(&tasks);
 
     // Create prompt
-    let prompt_template = get_prompt("detect_tasks")
-        .ok_or_else(|| {
+    let prompt_template = match get_prompt("detect_tasks") {
+        Some(template) => template,
+        None => {
             eprintln!("[detect_tasks] Failed to get prompt template for 'detect_tasks'");
             return;
-        });
-    
-    let prompt_template = match prompt_template {
-        Ok(template) => template,
-        Err(_) => return,
+        }
     };
     
     let active_url_str = event.active_url.as_deref().unwrap_or("No active URL");
     let prompt = prompt_template
         .replace("{text}", &event.text)
         .replace("{active_url}", active_url_str)
+        .replace("{previous_summary}", &summary_text)
         .replace("{tasks}", &formatted_tasks);
+
+    println!("[detect_tasks] Generated prompt:\n{}", prompt);
 
     // Get response schema
     let schema = get_schema("detect_tasks").unwrap_or("{}");
 
-    // Get task updates
-    let task_updates = generate(
+    // Generate task updates
+    let parsed_response = match generate_and_parse_response(
         app_handle.clone(),
         prompt,
-        Some(schema.to_string()),
-        None,
-        None,
-        None,
-    ).await;
-
-    // Handle response and parse JSON
-    let parsed_response = match task_updates {
-        Ok(response) => {
-            println!("[detect_tasks] Response received: {}", response);
-            serde_json::from_str(&response)
-                .unwrap_or_else(|_| serde_json::json!({}))
-        }
-        Err(e) => {
-            eprintln!("[detect_tasks] Failed to generate task updates: {}", e);
-            return;
-        }
+        schema,
+        "[detect_tasks]"
+    ).await {
+        Some(response) => response,
+        None => return,
     };
 
     // Loop through response and update step statuses
@@ -94,67 +85,12 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
     let _ = emit(UPDATE_TASKS, update_event);
 }
 
-fn format_tasks(tasks: &[TaskWithSteps]) -> String {
-    tasks.iter().map(|task| {
-        let steps = task.steps.iter().map(|step| {
-            format!("\tStep: {}, ID: {}, Description: {}, Status: {}", step.title, step.id, step.description, step.status)
-        }).collect::<Vec<_>>().join("\n");
-
-        format!("Task {},  Description: {}, Steps: [\n{}\n]", task.task.name, task.task.description, steps)
-    }).collect::<Vec<_>>().join("\n\n")
-}
-
 pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &AppHandle) {
     // Get DB state
     let db_state = app_handle.state::<DbState>();
 
     // Fetch most recent screen summary
-    let prev_summary = match get_latest_activity_summary(&db_state) {
-        Ok(summary) => summary,
-        Err(e) => {
-            eprintln!("[summarize_screen] Failed to fetch latest activity summary: {}", e);
-            None
-        }
-    };
-
-    // Check if summary exists and is recent (within 10 minutes)
-    let summary_text = match prev_summary {
-        Some(summary) => {
-            let created_at_str = summary.get("created_at")
-                .and_then(|c| c.as_str())
-                .unwrap_or("");
-            
-            // Parse the SQLite datetime string (format: "2025-07-21 21:22:24")
-            let is_recent = match chrono::NaiveDateTime::parse_from_str(created_at_str, "%Y-%m-%d %H:%M:%S") {
-                Ok(naive_dt) => {
-                    // Convert to UTC DateTime
-                    let created_at_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive_dt, chrono::Utc);
-                    let ten_minutes_ago = chrono::Utc::now() - chrono::Duration::minutes(10);
-                    created_at_utc >= ten_minutes_ago
-                }
-                Err(_) => {
-                    eprintln!("[summarize_screen] Failed to parse created_at timestamp: {}", created_at_str);
-                    false
-                }
-            };
-
-            if is_recent {
-                summary.get("summary")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("No previous summary available")
-                    .to_string()
-            } else {
-                println!("[summarize_screen] Previous summary is older than 10 minutes, treating as stale");
-                "No recent summary available".to_string()
-            }
-        }
-        None => {
-            println!("[summarize_screen] No previous summary found in database");
-            "No previous summary available".to_string()
-        }
-    };
-
-    println!("[summarize_screen] Using previous summary: {}", summary_text);
+    let summary_text = get_recent_summary_text(&db_state, "[summarize_screen]");
 
     // Get prompt template
     let prompt_template = match get_prompt("summarize_screen") {
@@ -182,31 +118,14 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
     };
 
     // Generate summary
-    let summary_response = match generate(
+    let parsed_response = match generate_and_parse_response(
         app_handle.clone(),
         prompt,
-        Some(schema.to_string()),
-        None,
-        None,
-        None,
+        schema,
+        "[summarize_screen]"
     ).await {
-        Ok(response) => {
-            println!("[summarize_screen] Response received: {}", response);
-            response
-        }
-        Err(e) => {
-            eprintln!("[summarize_screen] Failed to generate summary: {}", e);
-            return;
-        }
-    };
-
-    // Parse JSON response
-    let parsed_response = match serde_json::from_str::<serde_json::Value>(&summary_response) {
-        Ok(json) => json,
-        Err(e) => {
-            eprintln!("[summarize_screen] Failed to parse JSON response: {}", e);
-            return;
-        }
+        Some(response) => response,
+        None => return,
     };
 
     // Extract summary text
@@ -215,18 +134,7 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
         .unwrap_or("No summary generated");
 
     // Prepare active applications JSON (only include apps with names)
-    let active_applications: Vec<String> = event.data.iter()
-        .filter_map(|app| app.application_name.as_ref())
-        .cloned()
-        .collect();
-
-    let active_applications_json = match serde_json::to_string(&active_applications) {
-        Ok(json) => json,
-        Err(_) => {
-            eprintln!("[summarize_screen] Failed to serialize active applications");
-            "[]".to_string()
-        }
-    };
+    let active_applications_json = serialize_active_applications(&event.data);
 
     // Save summary to database
     match insert_activity_summary(
@@ -240,6 +148,118 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
         }
         Err(e) => {
             eprintln!("[summarize_screen] Failed to save summary to database: {}", e);
+        }
+    }
+}
+
+// Helper functions
+
+/// Formats tasks with their steps for use in prompts
+fn format_tasks(tasks: &[TaskWithSteps]) -> String {
+    tasks.iter().map(|task| {
+        let steps = task.steps.iter().map(|step| {
+            format!("\tStep: {}, ID: {}, Description: {}, Status: {}", step.title, step.id, step.description, step.status)
+        }).collect::<Vec<_>>().join("\n");
+
+        format!("Task {},  Description: {}, Steps: [\n{}\n]", task.task.name, task.task.description, steps)
+    }).collect::<Vec<_>>().join("\n\n")
+}
+
+/// Fetches the most recent activity summary and returns the summary text if it's recent (within 10 minutes)
+fn get_recent_summary_text(db_state: &tauri::State<DbState>, log_prefix: &str) -> String {
+    let prev_summary = match get_latest_activity_summary(db_state) {
+        Ok(summary) => summary,
+        Err(e) => {
+            eprintln!("{} Failed to fetch latest activity summary: {}", log_prefix, e);
+            None
+        }
+    };
+
+    match prev_summary {
+        Some(summary) => {
+            let created_at_str = summary.get("created_at")
+                .and_then(|c| c.as_str())
+                .unwrap_or("");
+            
+            // Parse the SQLite datetime string (format: "2025-07-21 21:22:24")
+            let is_recent = match chrono::NaiveDateTime::parse_from_str(created_at_str, "%Y-%m-%d %H:%M:%S") {
+                Ok(naive_dt) => {
+                    // Convert to UTC DateTime
+                    let created_at_utc = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive_dt, chrono::Utc);
+                    let ten_minutes_ago = chrono::Utc::now() - chrono::Duration::minutes(10);
+                    created_at_utc >= ten_minutes_ago
+                }
+                Err(_) => {
+                    eprintln!("{} Failed to parse created_at timestamp: {}", log_prefix, created_at_str);
+                    false
+                }
+            };
+
+            if is_recent {
+                summary.get("summary")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("No previous summary available")
+                    .to_string()
+            } else {
+                println!("{} Previous summary is older than 10 minutes, treating as stale", log_prefix);
+                "No recent summary available".to_string()
+            }
+        }
+        None => {
+            println!("{} No previous summary found in database", log_prefix);
+            "No previous summary available".to_string()
+        }
+    }
+}
+
+/// Generates a response using the LLM and parses it as JSON
+async fn generate_and_parse_response(
+    app_handle: AppHandle,
+    prompt: String,
+    schema: &str,
+    log_prefix: &str,
+) -> Option<serde_json::Value> {
+    // Generate response
+    let response = match generate(
+        app_handle,
+        prompt,
+        Some(schema.to_string()),
+        None,
+        None,
+        None,
+    ).await {
+        Ok(response) => {
+            println!("{} Response received: {}", log_prefix, response);
+            response
+        }
+        Err(e) => {
+            eprintln!("{} Failed to generate response: {}", log_prefix, e);
+            return None;
+        }
+    };
+
+    // Parse JSON response
+    match serde_json::from_str::<serde_json::Value>(&response) {
+        Ok(json) => Some(json),
+        Err(e) => {
+            eprintln!("{} Failed to parse JSON response: {}", log_prefix, e);
+            None
+        }
+    }
+}
+
+/// Serializes active applications to JSON string, filtering out apps without names
+fn serialize_active_applications(data: &[crate::os_utils::windows::window::ApplicationTextData]) -> String {
+    let active_applications: Vec<String> = data.iter()
+        .filter_map(|app| app.application_name.as_ref())
+        .cloned()
+        .collect();
+
+    match serde_json::to_string(&active_applications) {
+        Ok(json) => json,
+        Err(_) => {
+            eprintln!("[serialize_active_applications] Failed to serialize active applications");
+            "[]".to_string()
         }
     }
 }
