@@ -1,83 +1,25 @@
-//! Llama.cpp Server Integration Module
-//!
-//! This module provides integration with llama.cpp server as a Tauri sidecar process.
-//!
-//! ## Features
-//! - Spawn/stop llama.cpp server with automatic port discovery
-//! - Health checking with automatic retry logic
-//! - Server status monitoring with port tracking
-//! - Completion API integration
-//! - Proper error handling and process management
-//! - Random port selection to avoid conflicts
-//!
-//! ## Port Management
-//! The server automatically finds an available port in the range 8000-9999 by:
-//! 1. Generating random port numbers in the safe range
-//! 2. Testing port availability before use
-//! 3. Storing the successful port for subsequent requests
-//! 4. Providing commands to query the current port
-//!
-//! ## Usage
-//!
-//! ### Starting the server:
-//! ```typescript
-//! import { invoke } from '@tauri-apps/api/core';
-//!
-//! try {
-//!   const result = await invoke('spawn_llama_server');
-//!   console.log(result); // "Server started on port 8347"
-//! } catch (error) {
-//!   console.error('Failed to start server:', error);
-//! }
-//! ```
-//!
-//! ### Getting the current port:
-//! ```typescript
-//! const port = await invoke('get_server_port');
-//! console.log(`Server is running on port: ${port}`);
-//! ```
-//!
-//! ### Checking server health:
-//! ```typescript
-//! const health = await invoke('check_server_health');
-//! console.log(health); // { status: "healthy", response: { status: "ok" } }
-//! ```
-//!
-//! ### Making completion requests:
-//! ```typescript
-//! const completion = await invoke('make_completion_request', {
-//!   prompt: "Hello, how are you?",
-//!   maxTokens: 100,
-//!   temperature: 0.7
-//! });
-//! ```
-//!
-//! ## Configuration
-//! - Model path: Retrieved from setup module using LLM_DIR/LLM_FILE constants
-//! - API key: Read from LLAMA_API_KEY environment variable
-//! - Port range: 8000-9999 (randomly selected)
-//! - Additional args: --no-webui, --log-disable
-
 use crate::setup;
 use reqwest;
 use serde_json::{json, Value};
-use std::env;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use rand::Rng;
+use uuid::Uuid;
 
 /// Global state to track the running server process and port
 #[derive(Debug)]
 struct ServerState {
     child: Option<CommandChild>,
     port: Option<u16>,
+    api_key: Option<String>,
 }
 
 static SERVER_STATE: Mutex<ServerState> = Mutex::new(ServerState {
     child: None,
     port: None,
+    api_key: None,
 });
 
 /// Server configuration
@@ -131,10 +73,17 @@ pub struct ServerConfig {
 
 impl ServerConfig {
     pub fn new(app_handle: &AppHandle, port: u16) -> Result<Self, ServerError> {
-        // Get API key from environment
-        let api_key = env::var("LLAMA_API_KEY").map_err(|_| {
-            ServerError::ConfigError("LLAMA_API_KEY not found in environment".to_string())
-        })?;
+        // Try to get existing API key from server state first
+        let api_key = {
+            let server_state = SERVER_STATE.lock().unwrap();
+            server_state.api_key.clone()
+        };
+        
+        let api_key = api_key.unwrap_or_else(|| {
+            let new_key = format!("session-{}", Uuid::new_v4().to_string());
+            println!("[llama_server] Generated API key: {}", new_key);
+            new_key
+        });
 
         // Get model path
         let model_path = setup::get_llm_model_path(app_handle.clone())
@@ -212,6 +161,43 @@ fn get_current_port() -> Option<u16> {
     server_state.port
 }
 
+/// Get the current API key (if server is running)
+fn get_current_api_key() -> Option<String> {
+    let server_state = SERVER_STATE.lock().unwrap();
+    server_state.api_key.clone()
+}
+
+/// Get server config using stored port and API key
+fn get_current_server_config(app_handle: &AppHandle) -> Result<ServerConfig, ServerError> {
+    let (port, api_key) = {
+        let server_state = SERVER_STATE.lock().unwrap();
+        (server_state.port, server_state.api_key.clone())
+    };
+    
+    let port = port.ok_or_else(|| ServerError::ServerNotRunning)?;
+    let api_key = api_key.ok_or_else(|| ServerError::ServerNotRunning)?;
+    
+    // Get model path
+    let model_path = setup::get_llm_model_path(app_handle.clone())
+        .map_err(|e| ServerError::ModelNotFound(e))?;
+
+    let model_path_str = model_path
+        .to_str()
+        .ok_or_else(|| {
+            ServerError::ConfigError(format!(
+                "Model path is not valid UTF-8: {:?}",
+                model_path
+            ))
+        })?
+        .to_string();
+
+    Ok(ServerConfig {
+        port,
+        api_key,
+        model_path: model_path_str,
+    })
+}
+
 /// Spawn the llama.cpp server as a sidecar process
 #[tauri::command]
 pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String> {
@@ -262,11 +248,12 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
         .spawn()
         .map_err(|e| format!("Failed to spawn server process: {}", e))?;
 
-    // Store the child process and port in global state
+    // Store the child process, port, and API key in global state
     {
         let mut server_state = SERVER_STATE.lock().unwrap();
         server_state.child = Some(child);
         server_state.port = Some(config.port);
+        server_state.api_key = Some(config.api_key.clone());
     }
 
     // Wait for server to be ready
@@ -292,8 +279,9 @@ pub async fn stop_llama_server() -> Result<String, String> {
                 .kill()
                 .map_err(|e| format!("Failed to kill server process: {}", e))?;
             
-            // Clear the port as well
+            // Clear the port and API key as well
             server_state.port = None;
+            server_state.api_key = None;
             
             println!("[llama_server] Server stopped successfully");
             Ok("Server stopped successfully".to_string())
@@ -304,10 +292,8 @@ pub async fn stop_llama_server() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn check_server_health(app_handle: AppHandle) -> Result<Value, String> {
-    // Get the current port from server state
-    let port = get_current_port().ok_or_else(|| "Server is not running".to_string())?;
-    
-    let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
+    // Get the current server config
+    let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
     
     match perform_health_check(&config).await {
         Ok(response) => Ok(response),
@@ -334,7 +320,7 @@ pub async fn get_server_status(app_handle: AppHandle) -> Result<Value, String> {
     }
 
     let port = port.ok_or_else(|| "Server is running but port is unknown".to_string())?;
-    let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
+    let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
 
     // Perform health check
     let health_result = perform_health_check(&config).await;
@@ -431,7 +417,7 @@ pub async fn make_completion_request(
     // Get the current port from server state
     let port = get_current_port().ok_or_else(|| "Server is not running".to_string())?;
     
-    let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
+    let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
     
     // Check if server is healthy first
     match perform_health_check(&config).await {
@@ -519,7 +505,7 @@ pub async fn generate(
     // Get the current port from server state
     let port = get_current_port().ok_or_else(|| "Server is not running".to_string())?;
     
-    let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
+    let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
     
     // Check if server is healthy first
     if let Err(e) = perform_health_check(&config).await {

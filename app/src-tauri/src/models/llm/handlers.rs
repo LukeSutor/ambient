@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Manager};
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, server::generate};
-use crate::tasks::{TaskService, TaskWithSteps, StepStatus};
+use crate::tasks::{TaskService, TaskWithSteps};
 use crate::db::DbState;
 
 pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
