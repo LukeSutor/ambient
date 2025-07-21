@@ -46,7 +46,7 @@ pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppH
     println!("[capture_screen] Emitted GET_SCREEN_DIFF event with text and URL");
 }
 
-pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, app_handle: &AppHandle) {
+pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &AppHandle) {
     // Fetch the previous and current screen state
     let previous_state = unsafe { PREVIOUS_SCREEN_STATE.clone() };
     let new_data = event.data;
@@ -102,7 +102,6 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, app_handle: &AppH
 
     // Format changes as markdown
     let markdown = format_as_markdown(changes);
-    println!("[get_screen_diff] Changes detected:\n{}", markdown);
     
     // Emit detect tasks event
     if let Err(e) = emit(DETECT_TASKS, DetectTasksEvent { text: markdown, active_url: event.active_url.clone(), timestamp }) {
