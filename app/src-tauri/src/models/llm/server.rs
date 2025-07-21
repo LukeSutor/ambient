@@ -687,6 +687,8 @@ pub async fn generate(
         Ok(full_response)
     } else {
         // Handle non-streaming response
+        let start_time = std::time::Instant::now();
+        
         let response = client
             .post(&completion_url)
             .header("Content-Type", "application/json")
@@ -707,36 +709,51 @@ pub async fn generate(
             .await
             .map_err(|e| format!("Failed to parse response: {}", e))?;
         
+        let elapsed = start_time.elapsed();
+        
         // Extract the generated content
         let generated_text = result["choices"][0]["message"]["content"]
             .as_str()
             .ok_or("No content in response")?
             .to_string();
         
+        // Extract token usage if available
+        let tokens_generated = result["usage"]["completion_tokens"]
+            .as_u64()
+            .unwrap_or(0);
+        
         // Store messages in conversation if conv_id is provided
         if let Some(conversation_id) = conv_id {
             // Add user message
             if let Err(e) = crate::models::conversations::add_message(
-                app_handle.clone(),
-                conversation_id.clone(),
-                "user".to_string(),
-                prompt,
+            app_handle.clone(),
+            conversation_id.clone(),
+            "user".to_string(),
+            prompt,
             ).await {
-                println!("[llama_server] Warning: Failed to save user message: {}", e);
+            println!("[llama_server] Warning: Failed to save user message: {}", e);
             }
             
             // Add assistant response
             if let Err(e) = crate::models::conversations::add_message(
-                app_handle.clone(),
-                conversation_id,
-                "assistant".to_string(),
-                generated_text.clone(),
+            app_handle.clone(),
+            conversation_id,
+            "assistant".to_string(),
+            generated_text.clone(),
             ).await {
-                println!("[llama_server] Warning: Failed to save assistant message: {}", e);
+            println!("[llama_server] Warning: Failed to save assistant message: {}", e);
             }
         }
         
-        println!("[llama_server] Generated {} characters", generated_text.len());
+        let total_seconds = elapsed.as_secs_f64();
+        let tokens_per_second = if total_seconds > 0.0 && tokens_generated > 0 {
+            tokens_generated as f64 / total_seconds
+        } else {
+            0.0
+        };
+        
+        println!("[llama_server] Generated {} characters, {} tokens in {:.2}s ({:.2} tokens/sec)", 
+             generated_text.len(), tokens_generated, total_seconds, tokens_per_second);
         Ok(generated_text)
     }
 }
