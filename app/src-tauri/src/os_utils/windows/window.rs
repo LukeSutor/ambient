@@ -1,7 +1,7 @@
 use std::result::Result;
 use crate::types::AppState;
 use tauri::{AppHandle, Manager};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use windows::{
@@ -15,6 +15,10 @@ use windows::{
       Variant::{VARIANT},
       ProcessStatus::{GetModuleBaseNameW},
       Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+      Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, 
+        PROCESSENTRY32W, TH32CS_SNAPPROCESS
+      },
     },
     Foundation::CloseHandle,
     UI::Accessibility::{
@@ -40,6 +44,42 @@ pub struct WindowInfo {
   pub window_title: String,
   pub process_id: u32,
   pub application_name: String,
+}
+
+// Function to get all child processes (including nested children) of a parent PID
+fn get_child_processes(parent_pid: u32) -> Result<HashSet<u32>, String> {
+  unsafe {
+    let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+      .map_err(|e| format!("Failed to create snapshot: {:?}", e))?;
+
+    let mut process_entry = PROCESSENTRY32W {
+      dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+      ..Default::default()
+    };
+
+    let mut child_pids = HashSet::new();
+    child_pids.insert(parent_pid); // Include the parent itself
+
+    if Process32FirstW(snapshot, &mut process_entry).is_ok() {
+      loop {
+        if process_entry.th32ParentProcessID == parent_pid {
+          child_pids.insert(process_entry.th32ProcessID);
+          
+          // Recursively get children of children
+          if let Ok(grandchildren) = get_child_processes(process_entry.th32ProcessID) {
+            child_pids.extend(grandchildren);
+          }
+        }
+
+        if Process32NextW(snapshot, &mut process_entry).is_err() {
+          break;
+        }
+      }
+    }
+
+    let _ = CloseHandle(snapshot);
+    Ok(child_pids)
+  }
 }
 
 #[tauri::command]
@@ -168,6 +208,14 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
     }
 
     let result = (|| {
+      // Get all child processes to filter out
+      let processes_to_filter = get_child_processes(app_pid)
+        .unwrap_or_else(|_| {
+          let mut set = HashSet::new();
+          set.insert(app_pid); // Fallback to just parent
+          set
+        });
+
       let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
         .map_err(|e| format!("Failed to create UIAutomation: {:?}", e))?;
 
@@ -229,8 +277,8 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
           continue; // Skip elements without process ID
         };
 
-        // Skip if this matches the app's PID
-        if process_id == app_pid as i32 {
+        // Skip if this matches any process we want to filter (parent + children)
+        if processes_to_filter.contains(&(process_id as u32)) {
           continue;
         }
 

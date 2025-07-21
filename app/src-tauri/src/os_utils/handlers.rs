@@ -4,6 +4,8 @@ use crate::events::types::*;
 use crate::events::emitter::emit;
 use crate::os_utils::windows::window::{get_screen_text, get_brave_url, ApplicationTextData, format_as_markdown};
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
+use once_cell::sync::Lazy;
 
 // Struct to hold previous screen state
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -13,12 +15,14 @@ pub struct PreviousScreenState {
     pub timestamp: String,
 }
 
-// Initialize this as a static variable
-static mut PREVIOUS_SCREEN_STATE: PreviousScreenState = PreviousScreenState {
-    data: Vec::new(),
-    active_url: None,
-    timestamp: String::new(),
-};
+// Thread-safe static variable using Lazy and Arc<Mutex<T>>
+static PREVIOUS_SCREEN_STATE: Lazy<Arc<Mutex<PreviousScreenState>>> = Lazy::new(|| {
+    Arc::new(Mutex::new(PreviousScreenState {
+        data: Vec::new(),
+        active_url: None,
+        timestamp: String::new(),
+    }))
+});
 
 pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppHandle) {
     let data = match get_screen_text(app_handle.clone()).await {
@@ -47,8 +51,11 @@ pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppH
 }
 
 pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &AppHandle) {
-    // Fetch the previous and current screen state
-    let previous_state = unsafe { PREVIOUS_SCREEN_STATE.clone() };
+    // Fetch the previous screen state in a thread-safe way
+    let previous_state = {
+        let state_guard = PREVIOUS_SCREEN_STATE.lock().unwrap();
+        state_guard.clone()
+    };
     let new_data = event.data;
 
     // Iterate over the new data and compare with previous state
@@ -84,8 +91,9 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
     }
 
     // Update the previous state with the current data
-    unsafe {
-        PREVIOUS_SCREEN_STATE = PreviousScreenState {
+    {
+        let mut state_guard = PREVIOUS_SCREEN_STATE.lock().unwrap();
+        *state_guard = PreviousScreenState {
             data: new_data,
             active_url: event.active_url.clone(),
             timestamp: event.timestamp.clone(),
@@ -98,11 +106,13 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
         return;
     }
 
-    let timestamp = chrono::Utc::now().to_rfc3339();
-
     // Format changes as markdown
     let markdown = format_as_markdown(changes);
+
+    println!("[get_screen_diff] Changes detected:\n{}", markdown);
     
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
     // Emit detect tasks event
     if let Err(e) = emit(DETECT_TASKS, DetectTasksEvent { text: markdown, active_url: event.active_url.clone(), timestamp }) {
         eprintln!("[get_screen_diff] Failed to emit DETECT_TASKS event: {}", e);
