@@ -23,6 +23,15 @@ pub struct DetectTasksEvent {
     pub timestamp: String
 }
 
+pub const SUMMARIZE_SCREEN: &str = "summarize_screen";
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SummarizeScreenEvent {
+    pub text: String,
+    pub data: Vec<ApplicationTextData>,
+    pub active_url: Option<String>,
+    pub timestamp: String
+}
+
 pub const UPDATE_TASKS: &str = "update_tasks";
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UpdateTasksEvent {

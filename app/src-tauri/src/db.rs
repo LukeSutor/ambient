@@ -94,7 +94,7 @@ lazy_static::lazy_static! {
                     summary TEXT NOT NULL, -- Compressed summary of current user activity
                     active_url TEXT, -- Current active browser URL if applicable
                     active_applications TEXT, -- JSON array of active application names
-                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
 
                 -- Indexes for activity summaries (optimized for recent queries)

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 static SCHEMAS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
   let mut map = HashMap::new();
   map.insert(
-        "detect_tasks",
+  "detect_tasks",
 r#"{
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
@@ -25,7 +25,22 @@ r#"{
   "required": ["analysis", "completed"],
   "additionalProperties": false
 }"#,
-    );
+  );
+  map.insert(
+  "summarize_screen",
+r#"{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "A concise 2-3 sentence summary of the user's current primary activity"
+    }
+  },
+  "required": ["summary"],
+  "additionalProperties": false
+}"#,
+  );
   map
 });
 

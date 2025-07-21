@@ -56,7 +56,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
         let state_guard = PREVIOUS_SCREEN_STATE.lock().unwrap();
         state_guard.clone()
     };
-    let new_data = event.data;
+    let new_data = event.data.clone();
 
     // Iterate over the new data and compare with previous state
     let mut changes: Vec<ApplicationTextData> = Vec::new();
@@ -94,7 +94,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
     {
         let mut state_guard = PREVIOUS_SCREEN_STATE.lock().unwrap();
         *state_guard = PreviousScreenState {
-            data: new_data,
+            data: new_data.clone(),
             active_url: event.active_url.clone(),
             timestamp: event.timestamp.clone(),
         };
@@ -114,8 +114,14 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     // Emit detect tasks event
-    if let Err(e) = emit(DETECT_TASKS, DetectTasksEvent { text: markdown, active_url: event.active_url.clone(), timestamp }) {
+    if let Err(e) = emit(DETECT_TASKS, DetectTasksEvent { text: markdown.clone(), active_url: event.active_url.clone(), timestamp: timestamp.clone() }) {
         eprintln!("[get_screen_diff] Failed to emit DETECT_TASKS event: {}", e);
     }
-    println!("[capture_screen] Emitted DETECT_TASKS event with text and URL");
+    println!("[capture_screen] Emitted DETECT_TASKS event");
+
+    // Emit summarize screen event
+    if let Err(e) = emit(SUMMARIZE_SCREEN, SummarizeScreenEvent { text: markdown, data: event.data, active_url: event.active_url, timestamp }) {
+        eprintln!("[get_screen_diff] Failed to emit SUMMARIZE_SCREEN event: {}", e);
+    }
+    println!("[capture_screen] Emitted SUMMARIZE_SCREEN event");
 }

@@ -277,6 +277,8 @@ pub fn run() {
       db::get_workflows,
       db::insert_workflow,
       db::delete_workflow,
+      db::insert_activity_summary,
+      db::get_activity_summaries,
       setup::setup,
       setup::get_vlm_text_model_path,
       setup::get_vlm_mmproj_model_path,
