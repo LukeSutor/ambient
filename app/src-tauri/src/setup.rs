@@ -194,6 +194,17 @@ pub fn get_llm_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, Strin
   Ok(llm_models_dir.join(LLM_FILE))
 }
 
+/// Gets the path of the speculative decoder LLM model file.
+#[tauri::command]
+pub fn get_spec_llm_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+  let app_data_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
+  let llm_models_dir = app_data_path.join(LLM_DIR);
+  Ok(llm_models_dir.join(SPEC_LLM_FILE))
+}
+
 /// Checks if the VLM text model file is downloaded.
 #[tauri::command]
 pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
@@ -224,6 +235,15 @@ pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<b
 #[tauri::command]
 pub fn check_llm_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
   match get_llm_model_path(app_handle) {
+    Ok(path) => Ok(path.exists() && path.is_file()),
+    Err(e) => Err(e),
+  }
+}
+
+/// Checks if the speculative decoder LLM model file is downloaded.
+#[tauri::command]
+pub fn check_spec_llm_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+  match get_spec_llm_model_path(app_handle) {
     Ok(path) => Ok(path.exists() && path.is_file()),
     Err(e) => Err(e),
   }

@@ -23,6 +23,10 @@
             {
               "validator": ".*"
             },
+            "-md",
+            {
+              "validator": ".*"
+            },
             "--port",
             {
               "validator": "\\d+"
@@ -40,6 +44,10 @@
             "-ctk",
             "q8_0",
             "-ctv",
+            "q8_0",
+            "-ctkd",
+            "q8_0",
+            "-ctvd",
             "q8_0",
             "--mlock",
             "-fa",

@@ -69,6 +69,7 @@ pub struct ServerConfig {
     pub port: u16,
     pub api_key: String,
     pub model_path: String,
+    pub spec_model_path: String,
 }
 
 impl ServerConfig {
@@ -96,7 +97,7 @@ impl ServerConfig {
                 model_path
             )));
         }
-
+    
         let model_path_str = model_path
             .to_str()
             .ok_or_else(|| {
@@ -107,10 +108,33 @@ impl ServerConfig {
             })?
             .to_string();
 
+        // Get speculative decoder model path
+        let spec_model_path = setup::get_spec_llm_model_path(app_handle.clone())
+            .map_err(|e| ServerError::ModelNotFound(e))?;
+
+        // Check if speculative decoder model file exists
+        if !spec_model_path.exists() {
+            return Err(ServerError::ModelNotFound(format!(
+                "Speculative decoder model file does not exist: {:?}",
+                spec_model_path
+            )));
+        }
+
+        let spec_model_path_str = spec_model_path
+            .to_str()
+            .ok_or_else(|| {
+                ServerError::ConfigError(format!(
+                    "Speculative decoder model path is not valid UTF-8: {:?}",
+                    spec_model_path
+                ))
+            })?
+            .to_string();
+
         Ok(ServerConfig {
             port,
             api_key,
             model_path: model_path_str,
+            spec_model_path: spec_model_path_str,
         })
     }
 
@@ -191,10 +215,25 @@ fn get_current_server_config(app_handle: &AppHandle) -> Result<ServerConfig, Ser
         })?
         .to_string();
 
+    // Get speculative decoder model path
+    let spec_model_path = setup::get_spec_llm_model_path(app_handle.clone())
+        .map_err(|e| ServerError::ModelNotFound(e))?;
+
+    let spec_model_path_str = spec_model_path
+        .to_str()
+        .ok_or_else(|| {
+            ServerError::ConfigError(format!(
+                "Speculative decoder model path is not valid UTF-8: {:?}",
+                spec_model_path
+            ))
+        })?
+        .to_string();
+
     Ok(ServerConfig {
         port,
         api_key,
         model_path: model_path_str,
+        spec_model_path: spec_model_path_str,
     })
 }
 
@@ -227,6 +266,8 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
         .args([
             "-m",
             &config.model_path,
+            "-md",
+            &config.spec_model_path,
             "--port",
             &config.port.to_string(),
             "--api-key",
@@ -237,9 +278,13 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
             "3",
             "--ctx-size",               // Use smaller context size for faster responses
             "2048",
-            "-ctk",                     // Use q8 quant for kv cache
+            "-ctk",                     // Use q8 quant for main model kv cache
             "q8_0",
             "-ctv",
+            "q8_0",
+            "-ctkd",                     // Use q8 quant for speculative model kv cache
+            "q8_0",
+            "-ctvd",
             "q8_0",
             "--mlock",                  // Keep model in RAM
             "-fa",                      // Use fast attention
