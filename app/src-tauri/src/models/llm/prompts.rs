@@ -36,22 +36,9 @@ Generate a concise summary that captures the user's current primary activity in 
 );
   map.insert(
     "detect_tasks",
-r#"You are a task detection expert. You will be given a summary of the user's previous screen state and the new text that has appeared on their screen since the last check. Based on these changes and the context from the previous summary, determine which task steps have been completed.
+r#"TASK: Detect which steps completed based on screen changes.
 
-Output JSON format:
-{"analysis":"<reasoning for why steps are completed>","completed":[<completed step IDs>]}
-
-Rules:
-- Make sure your reasoning is clear and concise, 2 sentences maximum.
-- Make sure your reasoning is relevant to task completion, not just a summary of the text.
-- Ensure to only include step IDs that are present in the list of tasks provided
-- Do not include a step in the completed array if it is already marked complete
-- If there are no completed steps, return an empty array
-- Focus on what the NEW text indicates about task completion, using the previous summary for context
-
-<tasks>
-{tasks}
-</tasks>
+OUTPUT: {"analysis":"<why step completed>","completed":[<step IDs>]}
 
 <previous_summary>
 {previous_summary}
@@ -61,14 +48,28 @@ Rules:
 {text}
 </new_screen_text>
 
-<active_url>
-{active_url}
-</active_url>
+URL: {active_url}
 
-IMPORTANT: Only mark steps complete if the NEW screen text shows clear evidence of completion. Use the previous summary to understand what the user was doing before, then analyze what the new text indicates about their progress.
-Use your reasoning extremely concisely, focusing on the specific steps are are completed rather than summarizing the entire screen text.
-You are analyzing CHANGES in the user's screen, not the full screen state. The previous summary tells you what they were doing before, and the new screen text shows what has changed or appeared since then.
-"#,
+<tasks>
+{tasks}
+</tasks>
+
+KEY RULE: Analysis must explain WHY a step is done, NOT summarize screen.
+
+ANALYZE THE CHANGES:
+1. Previous summary = what user WAS doing
+2. New text = what CHANGED on screen
+3. Your job = identify COMPLETED steps from changes
+
+CRITICAL RULES:
+- Only mark step complete if NEW text proves completion
+- Analysis = reasoning about task completion (not screen summary!)
+- Skip already-complete steps
+- Empty array if nothing new completed
+- Max 2 sentences reasoning
+
+REMEMBER: {"analysis":"<why step completed>","completed":[<step IDs>]}
+Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis."#
       );
   map
 });
