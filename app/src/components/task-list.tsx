@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { TaskCard } from "@/components/task-card";
 import { TaskWithSteps, TaskFrequency } from "@/types/tasks";
-import { sortTasksByPriority, getTaskStatus } from "@/lib/task-utils";
-import { Button } from "@/components/ui/button";
+import { sortTasksByPriority, getTaskStatus, calculateNextDueDate } from "@/lib/task-utils";
 import { 
   Select,
   SelectContent,
@@ -22,7 +21,7 @@ interface TaskListProps {
 }
 
 type SortOption = "priority" | "name" | "created" | "due";
-type FilterOption = "all" | "due-today" | "overdue" | "upcoming" | TaskFrequency;
+type FilterOption = "all" | "due-today" | "overdue" | "upcoming" | "once" | "daily" | "weekly" | "monthly" | "yearly";
 
 export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps) {
   const [sortBy, setSortBy] = useState<SortOption>("priority");
@@ -44,12 +43,7 @@ export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps)
       return status === "upcoming";
     }
     
-    // Filter by frequency
-    if (Object.values(TaskFrequency).includes(filterBy as TaskFrequency)) {
-      return taskWithSteps.task.frequency === filterBy;
-    }
-    
-    return true;
+    return taskWithSteps.task.frequency === filterBy;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
@@ -61,10 +55,12 @@ export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps)
       case "created":
         return new Date(b.task.created_at).getTime() - new Date(a.task.created_at).getTime();
       case "due":
-        if (!a.task.next_due_at && !b.task.next_due_at) return 0;
-        if (!a.task.next_due_at) return 1;
-        if (!b.task.next_due_at) return -1;
-        return new Date(a.task.next_due_at).getTime() - new Date(b.task.next_due_at).getTime();
+        const aDueDate = calculateNextDueDate(a.task.first_scheduled_at, a.task.frequency, a.task.last_completed_at);
+        const bDueDate = calculateNextDueDate(b.task.first_scheduled_at, b.task.frequency, b.task.last_completed_at);
+        if (!aDueDate && !bDueDate) return 0;
+        if (!aDueDate) return 1;
+        if (!bDueDate) return -1;
+        return aDueDate.getTime() - bDueDate.getTime();
       default:
         return 0;
     }
@@ -89,18 +85,18 @@ export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps)
           <Filter className="h-4 w-4" />
           <Select value={filterBy} onValueChange={(value: string) => setFilterBy(value as FilterOption)}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter tasks" />
+              <SelectValue placeholder="Filter by" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Tasks</SelectItem>
+              <SelectItem value="once">One-time</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="yearly">Yearly</SelectItem>
               <SelectItem value="due-today">Due Today</SelectItem>
               <SelectItem value="overdue">Overdue</SelectItem>
               <SelectItem value="upcoming">Upcoming</SelectItem>
-              <SelectItem value={TaskFrequency.ONCE}>One-time</SelectItem>
-              <SelectItem value={TaskFrequency.DAILY}>Daily</SelectItem>
-              <SelectItem value={TaskFrequency.WEEKLY}>Weekly</SelectItem>
-              <SelectItem value={TaskFrequency.MONTHLY}>Monthly</SelectItem>
-              <SelectItem value={TaskFrequency.YEARLY}>Yearly</SelectItem>
             </SelectContent>
           </Select>
         </div>

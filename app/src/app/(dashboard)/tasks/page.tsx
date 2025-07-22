@@ -8,13 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TaskList } from "@/components/task-list";
 import { TaskService } from "@/lib/task-service";
 import { TaskWithSteps } from "@/types/tasks";
+import { getTaskStatus } from "@/lib/task-utils";
 import { toast } from "sonner";
 
 export default function TasksPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskWithSteps[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<bigint | null>(null);
 
   useEffect(() => {
     loadTasks();
@@ -34,7 +35,7 @@ export default function TasksPage() {
   };
 
   const handleEdit = (taskWithSteps: TaskWithSteps) => {
-    router.push(`/tasks/edit?id=${taskWithSteps.task.id}`);
+    router.push(`/tasks/edit?id=${taskWithSteps.task.id.toString()}`);
   };
 
   const handleDelete = async (taskWithSteps: TaskWithSteps) => {
@@ -70,13 +71,13 @@ export default function TasksPage() {
     router.push("/tasks/new");
   };
 
-  // Calculate stats
+  // Calculate stats using task status functions
   const dueToday = tasks.filter(taskWithSteps => 
-    taskWithSteps.task.next_due_at && new Date(taskWithSteps.task.next_due_at).toDateString() === new Date().toDateString()
+    getTaskStatus(taskWithSteps) === "due-today"
   ).length;
   
   const overdue = tasks.filter(taskWithSteps => 
-    taskWithSteps.task.next_due_at && new Date(taskWithSteps.task.next_due_at) < new Date()
+    getTaskStatus(taskWithSteps) === "overdue"
   ).length;
 
   if (loading) {

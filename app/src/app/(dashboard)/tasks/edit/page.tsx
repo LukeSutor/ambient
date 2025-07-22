@@ -25,7 +25,16 @@ import { toast } from "sonner";
 const taskSchema = z.object({
   name: z.string().min(1, "Task name is required"),
   description: z.string().optional(),
-  frequency: z.nativeEnum(TaskFrequency),
+  frequency: z.union([
+    z.literal("OneTime"),
+    z.literal("Daily"),
+    z.literal("Weekly"),
+    z.literal("BiWeekly"),
+    z.literal("Monthly"),
+    z.literal("Quarterly"),
+    z.literal("Yearly"),
+    z.object({ Custom: z.number() })
+  ]),
   steps: z.array(z.object({
     title: z.string().min(1, "Step title is required"),
     description: z.string().optional()
@@ -37,7 +46,20 @@ type TaskFormData = z.infer<typeof taskSchema>;
 export default function EditTaskPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const taskId = parseInt(searchParams.get('id') || '0');
+  
+  // Safely parse the task ID with error handling
+  let taskId: bigint;
+  try {
+    const idParam = searchParams.get('id');
+    if (!idParam || idParam === '0') {
+      throw new Error('Invalid task ID');
+    }
+    taskId = BigInt(idParam);
+  } catch (error) {
+    toast.error("Invalid task ID");
+    router.push("/tasks");
+    return null;
+  }
   
   const [task, setTask] = useState<TaskWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +78,7 @@ export default function EditTaskPage() {
     defaultValues: {
       name: "",
       description: "",
-      frequency: TaskFrequency.ONCE,
+      frequency: "OneTime" as TaskFrequency,
       steps: [{ title: "", description: "" }]
     }
   });
@@ -106,13 +128,13 @@ export default function EditTaskPage() {
       const updateRequest = {
         id: taskId,
         name: data.name,
-        description: data.description || undefined,
-        category: task?.task.category,
+        description: data.description || "",
+        category: task?.task.category || null,
         priority: task?.task.priority || 1,
         frequency: data.frequency,
         steps: data.steps.map(step => ({
           title: step.title,
-          description: step.description
+          description: step.description || ""
         }))
       };
 
@@ -211,18 +233,20 @@ export default function EditTaskPage() {
             <div className="space-y-2">
               <Label htmlFor="frequency">Frequency</Label>
               <Select
-                value={frequency}
+                value={typeof frequency === 'string' ? frequency : 'OneTime'}
                 onValueChange={(value) => setValue("frequency", value as TaskFrequency)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select frequency" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={TaskFrequency.ONCE}>One-time</SelectItem>
-                  <SelectItem value={TaskFrequency.DAILY}>Daily</SelectItem>
-                  <SelectItem value={TaskFrequency.WEEKLY}>Weekly</SelectItem>
-                  <SelectItem value={TaskFrequency.MONTHLY}>Monthly</SelectItem>
-                  <SelectItem value={TaskFrequency.YEARLY}>Yearly</SelectItem>
+                  <SelectItem value="OneTime">One-time</SelectItem>
+                  <SelectItem value="Daily">Daily</SelectItem>
+                  <SelectItem value="Weekly">Weekly</SelectItem>
+                  <SelectItem value="BiWeekly">Bi-weekly</SelectItem>
+                  <SelectItem value="Monthly">Monthly</SelectItem>
+                  <SelectItem value="Quarterly">Quarterly</SelectItem>
+                  <SelectItem value="Yearly">Yearly</SelectItem>
                 </SelectContent>
               </Select>
             </div>

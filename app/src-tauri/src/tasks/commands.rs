@@ -81,9 +81,7 @@ pub async fn update_task_status(
 ) -> Result<(), String> {
     let status_enum = match status.as_str() {
         "pending" => TaskStatus::Pending,
-        "in_progress" => TaskStatus::InProgress,
         "completed" => TaskStatus::Completed,
-        "paused" => TaskStatus::Paused,
         _ => return Err(format!("Invalid status: {}", status)),
     };
     
@@ -99,9 +97,7 @@ pub async fn update_step_status(
 ) -> Result<(), String> {
     let status_enum = match status.as_str() {
         "pending" => StepStatus::Pending,
-        "in_progress" => StepStatus::InProgress,
         "completed" => StepStatus::Completed,
-        "skipped" => StepStatus::Skipped,
         _ => return Err(format!("Invalid status: {}", status)),
     };
     
@@ -193,7 +189,7 @@ pub async fn get_task_progress_history(
     let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
     let mut stmt = conn
-        .prepare("SELECT id, task_id, step_id, llm_confidence, evidence, reasoning, timestamp FROM task_progress WHERE task_id = ? ORDER BY timestamp DESC")
+        .prepare("SELECT id, task_id, step_id, reasoning, timestamp FROM task_progress WHERE task_id = ? ORDER BY timestamp DESC")
         .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
     let progress_records = stmt
@@ -202,10 +198,8 @@ pub async fn get_task_progress_history(
                 id: row.get(0)?,
                 task_id: row.get(1)?,
                 step_id: row.get(2)?,
-                llm_confidence: row.get(3)?,
-                evidence: row.get(4)?,
-                reasoning: row.get(5)?,
-                timestamp: chrono::DateTime::parse_from_str(&row.get::<_, String>(6)?, "%Y-%m-%d %H:%M:%S")
+                reasoning: row.get(3)?,
+                timestamp: chrono::DateTime::parse_from_str(&row.get::<_, String>(4)?, "%Y-%m-%d %H:%M:%S")
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(|_| chrono::Utc::now()),
             })

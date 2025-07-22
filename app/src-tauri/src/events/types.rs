@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use crate::os_utils::windows::window::ApplicationTextData;
 
 pub const CAPTURE_SCREEN: &str = "capture_screen";
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -6,11 +7,34 @@ pub struct CaptureScreenEvent {
     pub timestamp: String
 }
 
-pub const ANALYZE_SCREEN: &str = "analyze_screen";
+pub const GET_SCREEN_DIFF: &str = "get_screen_diff";
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AnalyzeScreenEvent {
+pub struct GetScreenDiffEvent {
+    pub data: Vec<ApplicationTextData>,
+    pub active_url: Option<String>,
+    pub timestamp: String
+}
+
+pub const DETECT_TASKS: &str = "detect_tasks";
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DetectTasksEvent {
     pub text: String,
     pub active_url: Option<String>,
+    pub timestamp: String
+}
+
+pub const SUMMARIZE_SCREEN: &str = "summarize_screen";
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SummarizeScreenEvent {
+    pub text: String,
+    pub data: Vec<ApplicationTextData>,
+    pub active_url: Option<String>,
+    pub timestamp: String
+}
+
+pub const UPDATE_TASKS: &str = "update_tasks";
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct UpdateTasksEvent {
     pub timestamp: String
 }
 

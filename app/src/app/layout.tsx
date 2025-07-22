@@ -20,6 +20,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Add BigInt serialization support
+  React.useEffect(() => {
+    // @ts-ignore
+    BigInt.prototype.toJSON = function() {
+      return this.toString();
+    };
+  }, []);
   return (
     <html lang="en">
       <body

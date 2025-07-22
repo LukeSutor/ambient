@@ -1,7 +1,7 @@
 use std::result::Result;
 use crate::types::AppState;
 use tauri::{AppHandle, Manager};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use windows::{
@@ -15,6 +15,10 @@ use windows::{
       Variant::{VARIANT},
       ProcessStatus::{GetModuleBaseNameW},
       Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+      Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, 
+        PROCESSENTRY32W, TH32CS_SNAPPROCESS
+      },
     },
     Foundation::CloseHandle,
     UI::Accessibility::{
@@ -27,9 +31,11 @@ use windows::{
   },
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApplicationTextData {
   pub process_id: i32,
+  pub process_name: Option<String>,
+  pub application_name: Option<String>,
   pub text_content: Vec<String>,
 }
 
@@ -38,6 +44,42 @@ pub struct WindowInfo {
   pub window_title: String,
   pub process_id: u32,
   pub application_name: String,
+}
+
+// Function to get all child processes (including nested children) of a parent PID
+fn get_child_processes(parent_pid: u32) -> Result<HashSet<u32>, String> {
+  unsafe {
+    let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+      .map_err(|e| format!("Failed to create snapshot: {:?}", e))?;
+
+    let mut process_entry = PROCESSENTRY32W {
+      dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+      ..Default::default()
+    };
+
+    let mut child_pids = HashSet::new();
+    child_pids.insert(parent_pid); // Include the parent itself
+
+    if Process32FirstW(snapshot, &mut process_entry).is_ok() {
+      loop {
+        if process_entry.th32ParentProcessID == parent_pid {
+          child_pids.insert(process_entry.th32ProcessID);
+          
+          // Recursively get children of children
+          if let Ok(grandchildren) = get_child_processes(process_entry.th32ProcessID) {
+            child_pids.extend(grandchildren);
+          }
+        }
+
+        if Process32NextW(snapshot, &mut process_entry).is_err() {
+          break;
+        }
+      }
+    }
+
+    let _ = CloseHandle(snapshot);
+    Ok(child_pids)
+  }
 }
 
 #[tauri::command]
@@ -166,6 +208,14 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
     }
 
     let result = (|| {
+      // Get all child processes to filter out
+      let processes_to_filter = get_child_processes(app_pid)
+        .unwrap_or_else(|_| {
+          let mut set = HashSet::new();
+          set.insert(app_pid); // Fallback to just parent
+          set
+        });
+
       let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
         .map_err(|e| format!("Failed to create UIAutomation: {:?}", e))?;
 
@@ -227,8 +277,8 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
           continue; // Skip elements without process ID
         };
 
-        // Skip if this matches the app's PID
-        if process_id == app_pid as i32 {
+        // Skip if this matches any process we want to filter (parent + children)
+        if processes_to_filter.contains(&(process_id as u32)) {
           continue;
         }
 
@@ -247,6 +297,8 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         app_map.entry(process_id).or_insert_with(|| {
           ApplicationTextData {
             process_id,
+            process_name: None,
+            application_name: None,
             text_content: Vec::new(),
           }
         }).text_content.push(text);
@@ -490,7 +542,7 @@ fn clean_text_content(text_content: &[String]) -> Vec<String> {
 }
 
 // Function to format application data as markdown
-fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
+pub fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
   let mut markdown = String::new();
   markdown.push_str("# Screen Text by Application\n\n");
   
@@ -503,8 +555,13 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
     }
 
     // Get the app name from the pid and map it to a common name
-    let process_name = get_process_name(app.process_id as u32);
-    let app_name = map_process_name_to_app_name(&process_name);
+    let (_process_name, app_name) = if app.process_name.is_some() && app.application_name.is_some() {
+      (app.process_name.clone().unwrap(), app.application_name.clone().unwrap())
+    } else {
+      let process_name = get_process_name(app.process_id as u32);
+      let app_name = map_process_name_to_app_name(&process_name);
+      (process_name, app_name)
+    };
     markdown.push_str(&format!("## {} (PID: {})\n\n", app_name, app.process_id));
     
     // Group similar content together
@@ -520,6 +577,30 @@ fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
   }
   
   markdown
+}
+
+pub async fn get_screen_text(app_handle: AppHandle) -> Result<Vec<ApplicationTextData>, String> {
+  // Get app PID from app state
+  let state = app_handle.state::<AppState>();
+  let app_pid = state.pid;
+
+  // Get the screen text in another thread
+  let result = task::spawn_blocking(move || {
+    get_screen_text_by_application(app_pid)
+  }).await;
+  
+  match result {
+    Ok(applications) => {
+      // Get the app name from the PID for each application
+      let mut applications_data = applications?;
+      for app in &mut applications_data {
+        app.process_name = Some(get_process_name(app.process_id as u32));
+        app.application_name = Some(map_process_name_to_app_name(&app.process_name.as_ref().unwrap()));
+      }
+      Ok(applications_data)
+    },
+    Err(e) => Err(format!("Task execution failed: {:?}", e)),
+  }
 }
 
 // Parent function that gets screen text and formats it as markdown

@@ -38,7 +38,7 @@ impl TaskDetectionService {
                     step.id,
                     step.step_number,
                     step.title,
-                    step.description.as_deref().unwrap_or("No description"),
+                    step.description,
                     step.status
                 )
             })
@@ -91,24 +91,8 @@ impl TaskDetectionService {
     fn validate_detection_result(result: &TaskDetectionResult) -> Result<(), String> {
         // Check completed steps
         for step in &result.completed_steps {
-            if step.confidence < 0.0 || step.confidence > 1.0 {
-                return Err(format!("Invalid confidence score for step {}: {}", step.step_id, step.confidence));
-            }
-            if step.evidence.trim().is_empty() {
-                return Err(format!("Empty evidence for completed step {}", step.step_id));
-            }
             if step.reasoning.trim().is_empty() {
                 return Err(format!("Empty reasoning for completed step {}", step.step_id));
-            }
-        }
-
-        // Check in-progress steps
-        for step in &result.in_progress_steps {
-            if step.confidence < 0.0 || step.confidence > 1.0 {
-                return Err(format!("Invalid confidence score for in-progress step {}: {}", step.step_id, step.confidence));
-            }
-            if step.evidence.trim().is_empty() {
-                return Err(format!("Empty evidence for in-progress step {}", step.step_id));
             }
         }
 
@@ -119,7 +103,6 @@ impl TaskDetectionService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
 
     #[test]
     fn test_truncate_screen_text() {
@@ -144,7 +127,7 @@ mod tests {
                 task_id: 1,
                 step_number: 1,
                 title: "Test Step".to_string(),
-                description: Some("Test description".to_string()),
+                description: "Test description".to_string(),
                 status: "pending".to_string(),
                 completed_at: None,
             }

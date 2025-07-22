@@ -18,13 +18,13 @@ impl TaskService {
         // Start transaction
         let tx = conn.unchecked_transaction().map_err(|e| format!("Transaction error: {}", e))?;
 
-        // Calculate next due date based on frequency
+        // Calculate first scheduled date (current time for new tasks)
         let frequency_enum = &request.frequency;
-        let next_due_at = frequency_enum.next_due_date(None);
+        let first_scheduled_at = Utc::now();
         
         // Insert task
         let task_id = tx
-            .prepare("INSERT INTO tasks (name, description, category, priority, frequency, next_due_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
+            .prepare("INSERT INTO tasks (name, description, category, priority, frequency, first_scheduled_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
             .and_then(|mut stmt| {
                 stmt.insert(params![
                     request.name,
@@ -32,7 +32,7 @@ impl TaskService {
                     request.category,
                     request.priority,
                     frequency_enum.as_str(),
-                    next_due_at.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+                    first_scheduled_at.format("%Y-%m-%d %H:%M:%S").to_string(),
                 ])
             })
             .map_err(|e| format!("Failed to insert task: {}", e))?;
@@ -85,7 +85,7 @@ impl TaskService {
         let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
         let mut stmt = conn
-            .prepare("SELECT id, name, description, category, priority, frequency, last_completed_at, next_due_at, created_at, updated_at, status FROM tasks WHERE id = ?")
+            .prepare("SELECT id, name, description, category, priority, frequency, last_completed_at, first_scheduled_at, created_at, updated_at, status FROM tasks WHERE id = ?")
             .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
         let task = stmt
@@ -98,7 +98,7 @@ impl TaskService {
                     priority: row.get(4)?,
                     frequency: row.get(5)?,
                     last_completed_at: row.get::<_, Option<String>>(6)?.map(|s| Self::parse_datetime(s)),
-                    next_due_at: row.get::<_, Option<String>>(7)?.map(|s| Self::parse_datetime(s)),
+                    first_scheduled_at: Self::parse_datetime(row.get::<_, String>(7)?),
                     created_at: Self::parse_datetime(row.get::<_, String>(8)?),
                     updated_at: Self::parse_datetime(row.get::<_, String>(9)?),
                     status: row.get(10)?,
@@ -159,14 +159,14 @@ impl TaskService {
             .collect())
     }
 
-    /// Get all active tasks (not completed or paused)
+    /// Get all active tasks (not completed)
     pub fn get_active_tasks(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
         let task_ids: Vec<i64> = {
             let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
             let conn = db_guard.as_ref().ok_or("Database connection not available")?;
 
             let mut stmt = conn
-                .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') ORDER BY priority DESC, created_at ASC")
+                .prepare("SELECT id FROM tasks WHERE status = 'pending' ORDER BY priority DESC, created_at ASC")
                 .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
             let task_ids: Vec<i64> = stmt
@@ -218,16 +218,14 @@ impl TaskService {
         db_state: &DbState,
         task_id: i64,
         step_id: Option<i64>,
-        confidence: f64,
-        evidence: Option<&str>,
         reasoning: Option<&str>,
     ) -> Result<(), String> {
         let mut db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
         let conn = db_guard.as_mut().ok_or("Database connection not available")?;
 
         conn.execute(
-            "INSERT INTO task_progress (task_id, step_id, llm_confidence, evidence, reasoning) VALUES (?, ?, ?, ?, ?)",
-            params![task_id, step_id, confidence, evidence, reasoning],
+            "INSERT INTO task_progress (task_id, step_id, reasoning) VALUES (?, ?, ?)",
+            params![task_id, step_id, reasoning],
         )
         .map_err(|e| format!("Failed to record progress: {}", e))?;
 
@@ -264,43 +262,22 @@ impl TaskService {
         // Process completed steps
         let mut step_updates = Vec::new();
         for completed_step in &detection_result.completed_steps {
-            if completed_step.confidence >= 0.8 {
-                // Update step status
-                Self::update_step_status(db_state, completed_step.step_id, StepStatus::Completed)?;
+            // Update step status
+            Self::update_step_status(db_state, completed_step.step_id, StepStatus::Completed)?;
 
-                // Record progress
-                Self::record_progress(
-                    db_state,
-                    task_id,
-                    Some(completed_step.step_id),
-                    completed_step.confidence,
-                    Some(&completed_step.evidence),
-                    Some(&completed_step.reasoning),
-                )?;
+            // Record progress
+            Self::record_progress(
+                db_state,
+                task_id,
+                Some(completed_step.step_id),
+                Some(&completed_step.reasoning),
+            )?;
 
-                step_updates.push(StepUpdate {
-                    step_id: completed_step.step_id,
-                    status: StepStatus::Completed,
-                    confidence: completed_step.confidence,
-                    evidence: completed_step.evidence.clone(),
-                    reasoning: Some(completed_step.reasoning.clone()),
-                });
-            }
-        }
-
-        // Process in-progress steps
-        for in_progress_step in &detection_result.in_progress_steps {
-            if in_progress_step.confidence >= 0.6 {
-                Self::update_step_status(db_state, in_progress_step.step_id, StepStatus::InProgress)?;
-
-                step_updates.push(StepUpdate {
-                    step_id: in_progress_step.step_id,
-                    status: StepStatus::InProgress,
-                    confidence: in_progress_step.confidence,
-                    evidence: in_progress_step.evidence.clone(),
-                    reasoning: None,
-                });
-            }
+            step_updates.push(StepUpdate {
+                step_id: completed_step.step_id,
+                status: StepStatus::Completed,
+                reasoning: Some(completed_step.reasoning.clone()),
+            });
         }
 
         // Check if task is complete
@@ -308,13 +285,9 @@ impl TaskService {
         let overall_status = if remaining_active_steps.is_empty() {
             Self::update_task_status(db_state, task_id, TaskStatus::Completed)?;
             TaskStatus::Completed
-        } else if !step_updates.is_empty() {
-            Self::update_task_status(db_state, task_id, TaskStatus::InProgress)?;
-            TaskStatus::InProgress
         } else {
-            TaskStatus::InProgress
+            TaskStatus::Pending
         };
-
         Ok(TaskProgressUpdate {
             task_id,
             step_updates,
@@ -401,10 +374,11 @@ impl TaskService {
 
             // If it's a recurring task, create a new instance
             let new_task_id = if frequency != TaskFrequency::OneTime {
-                let next_due = frequency.next_due_date(Some(completion_time));
+                let new_first_scheduled = frequency.next_due_date(task.first_scheduled_at, Some(completion_time))
+                    .unwrap_or_else(|| completion_time + chrono::Duration::days(1)); // Fallback
                 
                 // Create new task for the next occurrence
-                let new_task_id = tx.prepare("INSERT INTO tasks (name, description, category, priority, frequency, next_due_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
+                let new_task_id = tx.prepare("INSERT INTO tasks (name, description, category, priority, frequency, first_scheduled_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
                     .and_then(|mut stmt| {
                         stmt.insert(params![
                             task.name,
@@ -412,7 +386,7 @@ impl TaskService {
                             task.category,
                             task.priority,
                             task.frequency,
-                            next_due.map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string()),
+                            new_first_scheduled.format("%Y-%m-%d %H:%M:%S").to_string(),
                         ])
                     })
                     .map_err(|e| format!("Failed to create recurring task: {}", e))?;
@@ -444,71 +418,41 @@ impl TaskService {
         }
     }
 
-    /// Get overdue tasks based on their frequency and next due date
+    /// Get overdue tasks based on their frequency and first scheduled date
     pub fn get_overdue_tasks(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
-        let task_ids: Vec<i64> = {
-            let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-            let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+        // Get all active tasks and filter overdue ones
+        let all_tasks = Self::get_active_tasks(db_state)?;
+        let overdue_tasks: Vec<TaskWithSteps> = all_tasks
+            .into_iter()
+            .filter(|task_with_steps| {
+                let frequency = TaskFrequency::from_str(&task_with_steps.task.frequency);
+                frequency.is_overdue(task_with_steps.task.first_scheduled_at, task_with_steps.task.last_completed_at)
+            })
+            .collect();
 
-            let now = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-            let mut stmt = conn
-                .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at < ? ORDER BY next_due_at ASC")
-                .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-            let task_ids: Vec<i64> = stmt
-                .query_map([&now], |row| Ok(row.get(0)?))
-                .map_err(|e| format!("Failed to query overdue tasks: {}", e))?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(|e| format!("Failed to collect overdue task IDs: {}", e))?;
-
-            task_ids
-        }; // db_guard is dropped here
-
-        let mut tasks = Vec::new();
-        for task_id in task_ids {
-            match Self::get_task_with_steps(db_state, task_id) {
-                Ok(task_with_steps) => tasks.push(task_with_steps),
-                Err(e) => eprintln!("Failed to get overdue task {}: {}", task_id, e),
-            }
-        }
-
-        Ok(tasks)
+        Ok(overdue_tasks)
     }
 
     /// Get tasks due today
     pub fn get_tasks_due_today(db_state: &DbState) -> Result<Vec<TaskWithSteps>, String> {
-        let task_ids: Vec<i64> = {
-            let db_guard = db_state.0.lock().map_err(|e| format!("Database lock error: {}", e))?;
-            let conn = db_guard.as_ref().ok_or("Database connection not available")?;
+        // Get all active tasks and filter those due today
+        let all_tasks = Self::get_active_tasks(db_state)?;
+        let today_start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
+        let today_end = Utc::now().date_naive().and_hms_opt(23, 59, 59).unwrap().and_local_timezone(Utc).unwrap();
 
-            let today_start = Utc::now().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
-            let today_end = Utc::now().date_naive().and_hms_opt(23, 59, 59).unwrap().and_local_timezone(Utc).unwrap();
+        let due_today_tasks: Vec<TaskWithSteps> = all_tasks
+            .into_iter()
+            .filter(|task_with_steps| {
+                let frequency = TaskFrequency::from_str(&task_with_steps.task.frequency);
+                if let Some(due_date) = frequency.next_due_date(task_with_steps.task.first_scheduled_at, task_with_steps.task.last_completed_at) {
+                    due_date >= today_start && due_date <= today_end
+                } else {
+                    false
+                }
+            })
+            .collect();
 
-            let mut stmt = conn
-                .prepare("SELECT id FROM tasks WHERE status IN ('pending', 'in_progress') AND next_due_at IS NOT NULL AND next_due_at >= ? AND next_due_at <= ? ORDER BY next_due_at ASC")
-                .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-            let task_ids: Vec<i64> = stmt
-                .query_map([
-                    today_start.format("%Y-%m-%d %H:%M:%S").to_string(),
-                    today_end.format("%Y-%m-%d %H:%M:%S").to_string()
-                ], |row| Ok(row.get(0)?))
-                .map_err(|e| format!("Failed to query tasks due today: {}", e))?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .map_err(|e| format!("Failed to collect task IDs: {}", e))?;
-
-            task_ids
-        }; // db_guard is dropped here
-
-        let mut tasks = Vec::new();
-        for task_id in task_ids {
-            match Self::get_task_with_steps(db_state, task_id) {
-                Ok(task_with_steps) => tasks.push(task_with_steps),
-                Err(e) => eprintln!("Failed to get task due today {}: {}", task_id, e),
-            }
-        }
-
-        Ok(tasks)
+        Ok(due_today_tasks)
     }
 
     /// Get tasks by frequency type
@@ -554,7 +498,7 @@ mod tests {
                 task_id: 1,
                 step_number: 1,
                 title: "Step 1".to_string(),
-                description: None,
+                description: "asdf".to_string(),
                 status: "completed".to_string(),
                 completed_at: None,
             },
@@ -563,7 +507,7 @@ mod tests {
                 task_id: 1,
                 step_number: 2,
                 title: "Step 2".to_string(),
-                description: None,
+                description: "asdf".to_string(),
                 status: "pending".to_string(),
                 completed_at: None,
             },

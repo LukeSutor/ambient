@@ -20,11 +20,112 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use types::AppState;
 extern crate dotenv;
 
+// Global cleanup handler to ensure llama server is stopped
+struct CleanupHandler;
+
+impl Drop for CleanupHandler {
+    fn drop(&mut self) {
+        // This will be called when the app is shutting down
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            if let Err(e) = models::llm::server::stop_llama_server().await {
+                eprintln!("[cleanup] Failed to stop llama server during cleanup: {}", e);
+            } else {
+                println!("[cleanup] Llama server stopped during cleanup");
+            }
+        });
+    }
+}
+
+static _CLEANUP_HANDLER: std::sync::LazyLock<CleanupHandler> = std::sync::LazyLock::new(|| CleanupHandler);
+
+// Setup signal handlers for graceful shutdown
+#[cfg(windows)]
+fn setup_signal_handlers() {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    
+    let _shutdown_flag = Arc::new(AtomicBool::new(false));
+    
+    // Register Windows console control handler
+    #[cfg(windows)]
+    {
+        extern "system" fn console_handler(ctrl_type: u32) -> i32 {
+            match ctrl_type {
+                0 => { // CTRL_C_EVENT
+                    println!("[signal] Received CTRL+C, shutting down llama server...");
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if let Err(e) = models::llm::server::stop_llama_server().await {
+                            eprintln!("[signal] Failed to stop llama server: {}", e);
+                        }
+                    });
+                    1 // TRUE - we handled it
+                }
+                2 => { // CTRL_BREAK_EVENT  
+                    println!("[signal] Received CTRL+BREAK, shutting down llama server...");
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if let Err(e) = models::llm::server::stop_llama_server().await {
+                            eprintln!("[signal] Failed to stop llama server: {}", e);
+                        }
+                    });
+                    1 // TRUE - we handled it
+                }
+                5 => { // CTRL_LOGOFF_EVENT
+                    println!("[signal] Received LOGOFF event, shutting down llama server...");
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if let Err(e) = models::llm::server::stop_llama_server().await {
+                            eprintln!("[signal] Failed to stop llama server: {}", e);
+                        }
+                    });
+                    1 // TRUE - we handled it
+                }
+                6 => { // CTRL_SHUTDOWN_EVENT
+                    println!("[signal] Received SHUTDOWN event, shutting down llama server...");
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if let Err(e) = models::llm::server::stop_llama_server().await {
+                            eprintln!("[signal] Failed to stop llama server: {}", e);
+                        }
+                    });
+                    1 // TRUE - we handled it
+                }
+                _ => 0 // FALSE - we didn't handle it
+            }
+        }
+        
+        unsafe {
+            type BOOL = i32;
+            type DWORD = u32;
+            
+            #[link(name = "kernel32")]
+            extern "system" {
+                fn SetConsoleCtrlHandler(
+                    handler: Option<unsafe extern "system" fn(DWORD) -> BOOL>,
+                    add: BOOL,
+                ) -> BOOL;
+            }
+            
+            SetConsoleCtrlHandler(Some(console_handler), 1);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn setup_signal_handlers() {
+    // For non-Windows platforms, you could implement Unix signal handlers here
+    println!("[signal] Signal handlers not implemented for this platform");
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   // Load environment variables from .env file
   dotenv::dotenv().ok();
+  
+  // Setup signal handlers for graceful shutdown
+  setup_signal_handlers();
 
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
@@ -136,7 +237,29 @@ pub fn run() {
         }
       });
 
+      // Initialize the cleanup handler to ensure it's ready
+      std::sync::LazyLock::force(&_CLEANUP_HANDLER);
+
+      // Setup signal handlers for graceful shutdown
+      setup_signal_handlers();
+
       Ok(())
+    })
+    .on_window_event(|window, event| {
+      match event {
+        tauri::WindowEvent::CloseRequested { .. } => {
+          // Stop the llama server when the main window is being closed
+          let _app_handle = window.app_handle().clone();
+          tauri::async_runtime::spawn(async move {
+            if let Err(e) = models::llm::server::stop_llama_server().await {
+              eprintln!("[shutdown] Failed to stop llama server: {}", e);
+            } else {
+              println!("[shutdown] Llama server stopped successfully");
+            }
+          });
+        }
+        _ => {}
+      }
     })
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_shell::init())
@@ -154,6 +277,8 @@ pub fn run() {
       db::get_workflows,
       db::insert_workflow,
       db::delete_workflow,
+      db::insert_activity_summary,
+      db::get_activity_summaries,
       setup::setup,
       setup::get_vlm_text_model_path,
       setup::get_vlm_mmproj_model_path,

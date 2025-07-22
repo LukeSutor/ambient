@@ -25,7 +25,16 @@ import { toast } from "sonner";
 const taskSchema = z.object({
   name: z.string().min(1, "Task name is required"),
   description: z.string().optional(),
-  frequency: z.nativeEnum(TaskFrequency),
+  frequency: z.union([
+    z.literal("OneTime"),
+    z.literal("Daily"),
+    z.literal("Weekly"),
+    z.literal("BiWeekly"),
+    z.literal("Monthly"),
+    z.literal("Quarterly"),
+    z.literal("Yearly"),
+    z.object({ Custom: z.number() })
+  ]),
   steps: z.array(z.object({
     title: z.string().min(1, "Step title is required"),
     description: z.string().optional()
@@ -50,7 +59,7 @@ export default function NewTaskPage() {
     defaultValues: {
       name: "",
       description: "",
-      frequency: TaskFrequency.ONCE,
+      frequency: "OneTime" as TaskFrequency,
       steps: [{ title: "", description: "" }]
     }
   });
@@ -68,13 +77,13 @@ export default function NewTaskPage() {
       
       const createRequest = {
         name: data.name,
-        description: data.description || undefined,
-        category: undefined,
+        description: data.description || "",
+        category: null,
         priority: 1,
         frequency: data.frequency,
         steps: data.steps.map(step => ({
           title: step.title,
-          description: step.description
+          description: step.description || ""
         }))
       };
 
@@ -150,18 +159,20 @@ export default function NewTaskPage() {
             <div className="space-y-2">
               <Label htmlFor="frequency">Frequency</Label>
               <Select
-                value={frequency}
+                value={typeof frequency === 'string' ? frequency : 'OneTime'}
                 onValueChange={(value) => setValue("frequency", value as TaskFrequency)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select frequency" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={TaskFrequency.ONCE}>One-time</SelectItem>
-                  <SelectItem value={TaskFrequency.DAILY}>Daily</SelectItem>
-                  <SelectItem value={TaskFrequency.WEEKLY}>Weekly</SelectItem>
-                  <SelectItem value={TaskFrequency.MONTHLY}>Monthly</SelectItem>
-                  <SelectItem value={TaskFrequency.YEARLY}>Yearly</SelectItem>
+                  <SelectItem value="OneTime">One-time</SelectItem>
+                  <SelectItem value="Daily">Daily</SelectItem>
+                  <SelectItem value="Weekly">Weekly</SelectItem>
+                  <SelectItem value="BiWeekly">Bi-weekly</SelectItem>
+                  <SelectItem value="Monthly">Monthly</SelectItem>
+                  <SelectItem value="Quarterly">Quarterly</SelectItem>
+                  <SelectItem value="Yearly">Yearly</SelectItem>
                 </SelectContent>
               </Select>
             </div>

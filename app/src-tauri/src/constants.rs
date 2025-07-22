@@ -10,7 +10,7 @@ pub const TEXT_FILE: &str = "text-model.gguf";
 pub const MMPROJ_FILE: &str = "mmproj-model.gguf";
 
 // LLM model filename
-pub const LLM_FILE: &str = "SmolLM3-3B-Q6_K.gguf";
+pub const LLM_FILE: &str = "Qwen3-1.7B-Q4_K_M.gguf";
 
 // LLM model download link (example - update with actual model)
 pub const LLM_LINK: &str = "https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q6_K.gguf";

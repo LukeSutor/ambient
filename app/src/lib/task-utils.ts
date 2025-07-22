@@ -1,13 +1,59 @@
 import { TaskWithSteps, TaskFrequency } from "@/types/tasks";
 
+// Calculate next due date based on frequency and scheduling
+export function calculateNextDueDate(firstScheduledAt: string, frequency: string, lastCompletedAt: string | null): Date | null {
+  const firstScheduled = new Date(firstScheduledAt);
+  const lastCompleted = lastCompletedAt ? new Date(lastCompletedAt) : null;
+  
+  switch (frequency) {
+    case "one_time":
+      // One-time tasks are due on their first scheduled date if not completed
+      return lastCompleted ? null : firstScheduled;
+    
+    case "daily":
+      return new Date((lastCompleted || firstScheduled).getTime() + 24 * 60 * 60 * 1000);
+    
+    case "weekly":
+      return new Date((lastCompleted || firstScheduled).getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    case "bi_weekly":
+      return new Date((lastCompleted || firstScheduled).getTime() + 14 * 24 * 60 * 60 * 1000);
+    
+    case "monthly":
+      const baseDate = lastCompleted || firstScheduled;
+      const nextMonth = new Date(baseDate);
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      return nextMonth;
+    
+    case "quarterly":
+      return new Date((lastCompleted || firstScheduled).getTime() + 90 * 24 * 60 * 60 * 1000);
+    
+    case "yearly":
+      const baseYear = lastCompleted || firstScheduled;
+      const nextYear = new Date(baseYear);
+      nextYear.setFullYear(nextYear.getFullYear() + 1);
+      return nextYear;
+    
+    default:
+      // Handle custom frequencies if needed
+      return null;
+  }
+}
+
 export function getTaskStatus(taskWithSteps: TaskWithSteps): "due-today" | "overdue" | "upcoming" | "completed" {
   const task = taskWithSteps.task;
   
-  if (!task.next_due_at) {
+  // If task is already completed, return completed
+  if (task.status === "completed") {
     return "completed";
   }
 
-  const dueDate = new Date(task.next_due_at);
+  const dueDate = calculateNextDueDate(task.first_scheduled_at, task.frequency, task.last_completed_at);
+  
+  if (!dueDate) {
+    return "completed"; // One-time completed tasks
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
@@ -132,8 +178,11 @@ export function sortTasksByPriority(tasks: TaskWithSteps[]): TaskWithSteps[] {
     }
     
     // If same status, sort by due date
-    if (a.task.next_due_at && b.task.next_due_at) {
-      return new Date(a.task.next_due_at).getTime() - new Date(b.task.next_due_at).getTime();
+    const dueDateA = calculateNextDueDate(a.task.first_scheduled_at, a.task.frequency, a.task.last_completed_at);
+    const dueDateB = calculateNextDueDate(b.task.first_scheduled_at, b.task.frequency, b.task.last_completed_at);
+    
+    if (dueDateA && dueDateB) {
+      return dueDateA.getTime() - dueDateB.getTime();
     }
     
     // If no due dates, sort by creation date (newest first)

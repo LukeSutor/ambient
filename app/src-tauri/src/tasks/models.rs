@@ -1,60 +1,68 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use std::str::FromStr;
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct Task {
     pub id: i64,
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub category: Option<String>,
     pub priority: i32,
     pub frequency: String, // Will be converted to/from TaskFrequency
+    #[ts(type = "string | null")]
     pub last_completed_at: Option<DateTime<Utc>>,
-    pub next_due_at: Option<DateTime<Utc>>,
+    #[ts(type = "string")]
+    pub first_scheduled_at: DateTime<Utc>,
+    #[ts(type = "string")]
     pub created_at: DateTime<Utc>,
+    #[ts(type = "string")]
     pub updated_at: DateTime<Utc>,
     pub status: String, // Will be converted to/from TaskStatus
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskStep {
     pub id: i64,
     pub task_id: i64,
     pub step_number: i32,
     pub title: String,
-    pub description: Option<String>,
+    pub description: String,
     pub status: String, // Will be converted to/from StepStatus
+    #[ts(type = "string | null")]
     pub completed_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskProgress {
     pub id: i64,
     pub task_id: i64,
     pub step_id: Option<i64>,
-    pub llm_confidence: f64, // How confident the LLM is about completion
-    pub evidence: Option<String>, // What the LLM found as evidence
     pub reasoning: Option<String>, // LLM's reasoning for the decision
+    #[ts(type = "string")]
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub enum TaskStatus {
     Pending,
-    InProgress,
     Completed,
-    Paused,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub enum StepStatus {
     Pending,
-    InProgress,
     Completed,
-    Skipped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub enum TaskFrequency {
     OneTime,     // Task only needs to be completed once
     Daily,       // Every day
@@ -70,18 +78,14 @@ impl TaskStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             TaskStatus::Pending => "pending",
-            TaskStatus::InProgress => "in_progress",
             TaskStatus::Completed => "completed",
-            TaskStatus::Paused => "paused",
         }
     }
 
     pub fn from_str(s: &str) -> Self {
         match s {
             "pending" => TaskStatus::Pending,
-            "in_progress" => TaskStatus::InProgress,
             "completed" => TaskStatus::Completed,
-            "paused" => TaskStatus::Paused,
             _ => TaskStatus::Pending,
         }
     }
@@ -91,19 +95,27 @@ impl StepStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             StepStatus::Pending => "pending",
-            StepStatus::InProgress => "in_progress",
             StepStatus::Completed => "completed",
-            StepStatus::Skipped => "skipped",
         }
     }
 
     pub fn from_str(s: &str) -> Self {
         match s {
             "pending" => StepStatus::Pending,
-            "in_progress" => StepStatus::InProgress,
             "completed" => StepStatus::Completed,
-            "skipped" => StepStatus::Skipped,
             _ => StepStatus::Pending,
+        }
+    }
+}
+
+impl FromStr for StepStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pending" => Ok(StepStatus::Pending),
+            "completed" => Ok(StepStatus::Completed),
+            _ => Err(format!("Invalid status: {}", s)),
         }
     }
 }
@@ -142,42 +154,55 @@ impl TaskFrequency {
         }
     }
 
-    /// Calculate the next due date based on the frequency and last completion
-    pub fn next_due_date(&self, last_completed: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
+    /// Calculate the next due date based on the frequency, first scheduled date, and last completion
+    pub fn next_due_date(&self, first_scheduled: DateTime<Utc>, last_completed: Option<DateTime<Utc>>) -> Option<DateTime<Utc>> {
         use chrono::{Duration, Datelike};
         
-        let base_date = last_completed.unwrap_or(Utc::now());
-        
         match self {
-            TaskFrequency::OneTime => None, // One-time tasks don't have a next due date
-            TaskFrequency::Daily => Some(base_date + Duration::days(1)),
-            TaskFrequency::Weekly => Some(base_date + Duration::weeks(1)),
-            TaskFrequency::BiWeekly => Some(base_date + Duration::weeks(2)),
-            TaskFrequency::Monthly => {
-                // Add one month (approximately 30 days, but try to maintain the same day of month)
-                let mut next_month = base_date.month() + 1;
-                let mut next_year = base_date.year();
-                if next_month > 12 {
-                    next_month = 1;
-                    next_year += 1;
+            TaskFrequency::OneTime => {
+                // One-time tasks are due on their first scheduled date if not completed
+                if last_completed.is_some() {
+                    None // Completed one-time tasks have no next due date
+                } else {
+                    Some(first_scheduled)
                 }
-                base_date.with_year(next_year).and_then(|d| d.with_month(next_month))
-                    .or_else(|| Some(base_date + Duration::days(30))) // Fallback to 30 days
             },
-            TaskFrequency::Quarterly => Some(base_date + Duration::days(90)),
-            TaskFrequency::Yearly => {
-                base_date.with_year(base_date.year() + 1)
-                    .or_else(|| Some(base_date + Duration::days(365))) // Fallback to 365 days
-            },
-            TaskFrequency::Custom(days) => Some(base_date + Duration::days(*days as i64)),
+            _ => {
+                // For recurring tasks, calculate next due date from last completion or first scheduled date
+                let base_date = last_completed.unwrap_or(first_scheduled);
+                
+                match self {
+                    TaskFrequency::Daily => Some(base_date + Duration::days(1)),
+                    TaskFrequency::Weekly => Some(base_date + Duration::weeks(1)),
+                    TaskFrequency::BiWeekly => Some(base_date + Duration::weeks(2)),
+                    TaskFrequency::Monthly => {
+                        // Add one month (try to maintain the same day of month)
+                        let mut next_month = base_date.month() + 1;
+                        let mut next_year = base_date.year();
+                        if next_month > 12 {
+                            next_month = 1;
+                            next_year += 1;
+                        }
+                        base_date.with_year(next_year).and_then(|d| d.with_month(next_month))
+                            .or_else(|| Some(base_date + Duration::days(30))) // Fallback to 30 days
+                    },
+                    TaskFrequency::Quarterly => Some(base_date + Duration::days(90)),
+                    TaskFrequency::Yearly => {
+                        base_date.with_year(base_date.year() + 1)
+                            .or_else(|| Some(base_date + Duration::days(365))) // Fallback to 365 days
+                    },
+                    TaskFrequency::Custom(days) => Some(base_date + Duration::days(*days as i64)),
+                    TaskFrequency::OneTime => unreachable!(), // Already handled above
+                }
+            }
         }
     }
 
-    /// Check if a task is overdue based on its frequency and last completion
-    pub fn is_overdue(&self, last_completed: Option<DateTime<Utc>>) -> bool {
-        match self.next_due_date(last_completed) {
+    /// Check if a task is overdue based on its frequency, first scheduled date, and last completion
+    pub fn is_overdue(&self, first_scheduled: DateTime<Utc>, last_completed: Option<DateTime<Utc>>) -> bool {
+        match self.next_due_date(first_scheduled, last_completed) {
             Some(due_date) => Utc::now() > due_date,
-            None => false, // One-time tasks can't be overdue
+            None => false, // Completed one-time tasks can't be overdue
         }
     }
 
@@ -197,72 +222,91 @@ impl TaskFrequency {
 }
 
 // Task creation structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct CreateTaskRequest {
     pub name: String,
-    pub description: Option<String>,
+    pub description: String,
     pub category: Option<String>,
     pub priority: i32,
     pub frequency: TaskFrequency,
     pub steps: Vec<CreateTaskStepRequest>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct CreateTaskStepRequest {
     pub title: String,
-    pub description: Option<String>,
+    pub description: String,
 }
 
 // Task update structures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
+pub struct UpdateTaskRequest {
+    pub id: i64,
+    pub name: String,
+    pub description: String,
+    pub category: Option<String>,
+    pub priority: i32,
+    pub frequency: TaskFrequency,
+    pub steps: Vec<CreateTaskStepRequest>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskProgressUpdate {
     pub task_id: i64,
     pub step_updates: Vec<StepUpdate>,
     pub overall_status: TaskStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct StepUpdate {
     pub step_id: i64,
     pub status: StepStatus,
-    pub confidence: f64,
-    pub evidence: String,
     pub reasoning: Option<String>,
 }
 
-// LLM Detection Result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskDetectionResult {
-    pub completed_steps: Vec<CompletedStepDetection>,
-    pub in_progress_steps: Vec<InProgressStepDetection>,
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
+pub struct TaskStatusCounts {
+    pub total: i32,
+    pub pending: i32,
+    pub completed: i32,
+    pub overdue: i32,
+    pub due_today: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// LLM Detection Result
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
+pub struct TaskDetectionResult {
+    pub completed_steps: Vec<CompletedStepDetection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct CompletedStepDetection {
     pub step_id: i64,
-    pub confidence: f64,
-    pub evidence: String,
     pub reasoning: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InProgressStepDetection {
-    pub step_id: i64,
-    pub confidence: f64,
-    pub evidence: String,
-}
-
 // Screen context for LLM analysis
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct ScreenContext {
     pub text: String,
     pub application: String,
     pub window_title: Option<String>,
+    #[ts(type = "string")]
     pub timestamp: DateTime<Utc>,
 }
 
 // Task with complete step information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to="tasks.ts")]
 pub struct TaskWithSteps {
     pub task: Task,
     pub steps: Vec<TaskStep>,
