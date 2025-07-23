@@ -1,7 +1,7 @@
 # Evaluation Configuration
 server:
   # Server executable and connection
-  executable: "../backend/models/llama-mtmd-cli.exe"
+  executable: "../app/sec/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
   host: "localhost"
   port: 8080
   timeout: 120
@@ -14,8 +14,8 @@ server:
 
 # Model configuration
 model:
-  path: "../backend/models/smol.gguf"
-  context_size: 8192
+  path: "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/llm/Qwen3-1.7B-Q4_K_M.gguf"
+  context_size: 4096
   gpu_layers: 0
 
 # Generation parameters (defaults for entire session)
@@ -25,10 +25,35 @@ generation:
   top_p: 0.9
   top_k: 40
 
+# Evaluation settings
+evaluation:
+  # Task detection evaluation
+  task_detection:
+    enabled: true
+    data_dir: "./task-detection/data"
+    output_file: "./results/task_detection_results.json"
+    generate_ground_truth: false
+    batch_size: 10
+    
+  # Visualization settings
+  visualization:
+    enabled: true
+    output_dir: "./plots"
+    auto_generate: true
+    
+  # General settings
+  log_level: "INFO"
+  results_dir: "./results"
+
+# JSON Schema configuration
+schemas:
+  # Path to store schema files
+  schema_dir: "./schemas"
+
 # Parallel processing
 parallel:
   max_concurrent_requests: 4
-  request_timeout: 30
+  request_timeout: 60
 
 # Logging
 logging:

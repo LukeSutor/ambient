@@ -7,6 +7,7 @@ import time
 import requests
 import psutil
 import yaml
+import json
 from typing import Dict, Any, Optional, List
 import logging
 
@@ -108,8 +109,8 @@ class LLMClient:
                 except:
                     logger.error("Failed to stop server")
     
-    def generate(self, prompt: str, **kwargs) -> str:
-        """Generate text using the LLM."""
+    def generate(self, prompt: str, schema: Optional[Dict[str, Any]] = None, **kwargs) -> str:
+        """Generate text using the LLM with optional JSON schema constraint."""
         if not self._is_server_running():
             if not self._start_server():
                 raise RuntimeError("Failed to start LLM server")
@@ -122,6 +123,13 @@ class LLMClient:
             "stream": False,
             **params
         }
+        
+        # Add JSON schema if provided
+        if schema:
+            payload["response_format"] = {
+                "type": "json_object",
+                "schema": schema
+            }
         
         try:
             response = requests.post(
@@ -137,6 +145,18 @@ class LLMClient:
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise
+    
+    def generate_structured(self, prompt: str, schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Generate structured JSON response using schema constraint."""
+        response_text = self.generate(prompt, schema=schema, **kwargs)
+        
+        try:
+            # Parse JSON response
+            return json.loads(response_text)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse structured response: {e}")
+            logger.error(f"Response text: {response_text}")
+            raise ValueError(f"Invalid JSON response: {e}")
     
     def set_session_params(self, **params):
         """Set parameters that persist for this session."""

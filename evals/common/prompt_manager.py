@@ -20,7 +20,9 @@ class PromptManager:
         if not os.path.exists(self.prompts_dir):
             logger.warning(f"Prompts directory not found: {self.prompts_dir}")
             return
-            
+        
+        # Load prompt files directly in the prompts directory
+        # Each YAML file represents one evaluation type
         for filename in os.listdir(self.prompts_dir):
             if filename.endswith('.yaml') or filename.endswith('.yml'):
                 filepath = os.path.join(self.prompts_dir, filename)
