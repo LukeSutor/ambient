@@ -3,9 +3,18 @@ Task detection evaluation implementation.
 """
 import json
 import logging
+import sys
+import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
-from ..common import LLMClient, PromptManager, EvalDataPoint, SchemaManager
+
+# Add parent directory to path to import common modules
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'common'))
+
+from llm_client import LLMClient
+from prompt_manager import PromptManager
+from data_loader import EvalDataPoint
+from schema_manager import SchemaManager
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +40,28 @@ class TaskDetectionEvaluator:
         
         # Prepare context for task detection
         previous_summary = data_point.summary or "No previous summary available"
-        text = data_point.screen_text or "No screen text available"
-        active_url = data_point.active_url or "No URL available"
+        
+        # Extract screen text from current_state
+        screen_text = ""
+        if data_point.current_state and 'data' in data_point.current_state:
+            text_parts = []
+            for item in data_point.current_state['data']:
+                if 'text_content' in item:
+                    text_parts.extend(item['text_content'])
+            screen_text = "\n".join(text_parts) if text_parts else "No screen text available"
+        else:
+            screen_text = "No screen text available"
+        
+        # Extract active URL from current_state (if available)
+        active_url = "No URL available"
+        if data_point.current_state and 'data' in data_point.current_state:
+            for item in data_point.current_state['data']:
+                if item.get('application_name') == 'Brave Browser' and 'text_content' in item:
+                    # First text content in browser is often the URL/title
+                    if item['text_content']:
+                        active_url = item['text_content'][0]
+                        break
+        
         tasks = json.dumps(data_point.detected_tasks, indent=2) if hasattr(data_point, 'detected_tasks') else "[]"
         
         # Get task detection prompt
@@ -40,7 +69,7 @@ class TaskDetectionEvaluator:
             'task-detection', 
             'detect_tasks',
             previous_summary=previous_summary,
-            text=text,
+            text=screen_text,
             active_url=active_url,
             tasks=tasks
         )

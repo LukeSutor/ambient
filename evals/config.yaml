@@ -1,7 +1,7 @@
 # Evaluation Configuration
 server:
   # Server executable and connection
-  executable: "../app/sec/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
+  executable: "C:/Users/Luke/Desktop/coding/local-computer-use/app/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
   host: "localhost"
   port: 8080
   timeout: 120

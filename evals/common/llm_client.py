@@ -31,8 +31,15 @@ class LLMClient:
         """Find existing llama.cpp server process."""
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
-                if 'llama-server' in proc.info['name'] or any('llama-server' in arg for arg in proc.info['cmdline']):
+                # Check if process name contains llama-server
+                if proc.info['name'] and 'llama-server' in proc.info['name']:
                     return proc
+                
+                # Check command line args if they exist
+                cmdline = proc.info['cmdline']
+                if cmdline and any('llama-server' in str(arg) for arg in cmdline):
+                    return proc
+                    
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
         return None

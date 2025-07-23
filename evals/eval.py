@@ -14,17 +14,25 @@ from datetime import datetime
 
 def setup_logging(level: str = "INFO"):
     """Setup logging configuration."""
+    script_dir = Path(__file__).parent
+    log_file = script_dir / 'eval_main.log'
+    
     logging.basicConfig(
         level=getattr(logging, level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler('eval_main.log')
+            logging.FileHandler(log_file)
         ]
     )
 
 def load_config(config_path: str = "config.yaml") -> dict:
     """Load configuration from YAML file."""
+    # Make config path relative to this script's directory
+    script_dir = Path(__file__).parent
+    if not os.path.isabs(config_path):
+        config_path = script_dir / config_path
+    
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
@@ -34,11 +42,19 @@ def load_config(config_path: str = "config.yaml") -> dict:
 def run_task_detection_evaluation(config: dict):
     """Run task detection evaluation based on configuration."""
     logger = logging.getLogger(__name__)
-    task_detection_dir = Path(__file__).parent / 'task-detection'
+    script_dir = Path(__file__).parent
+    task_detection_dir = script_dir / 'task-detection'
+    common_dir = script_dir / 'common'
+    
+    # Add paths to Python path
     sys.path.insert(0, str(task_detection_dir))
+    sys.path.insert(0, str(common_dir))
     
     try:
-        from common import LLMClient, PromptManager, DataLoader, SchemaManager
+        from llm_client import LLMClient
+        from prompt_manager import PromptManager
+        from data_loader import DataLoader
+        from schema_manager import SchemaManager
         from evaluate import TaskDetectionEvaluator
         
         eval_config = config['evaluation']['task_detection']
@@ -49,11 +65,18 @@ def run_task_detection_evaluation(config: dict):
         
         logger.info("Initializing evaluation components...")
         
-        # Initialize components
-        llm_client = LLMClient()
-        prompt_manager = PromptManager('./prompts')
-        data_loader = DataLoader(eval_config['data_dir'])
-        schema_manager = SchemaManager()
+        # Initialize components with script-relative paths
+        config_path = str(script_dir / 'config.yaml')
+        llm_client = LLMClient(config_path)
+        prompt_manager = PromptManager(str(script_dir / 'prompts'))
+        
+        # Make data directory relative to script if not absolute
+        data_dir = eval_config['data_dir']
+        if not os.path.isabs(data_dir):
+            data_dir = str(script_dir / data_dir)
+        
+        data_loader = DataLoader(data_dir)
+        schema_manager = SchemaManager(config_path)
         evaluator = TaskDetectionEvaluator(llm_client, prompt_manager, schema_manager)
         
         # Load data
@@ -88,6 +111,9 @@ def run_task_detection_evaluation(config: dict):
         
         # Save results
         output_file = eval_config['output_file']
+        # Make output file relative to script if not absolute
+        if not os.path.isabs(output_file):
+            output_file = str(script_dir / output_file)
         save_results(results, output_file, aggregate_metrics)
         
         # Generate visualizations if enabled
@@ -106,6 +132,8 @@ def run_task_detection_evaluation(config: dict):
         # Remove from path
         if str(task_detection_dir) in sys.path:
             sys.path.remove(str(task_detection_dir))
+        if str(common_dir) in sys.path:
+            sys.path.remove(str(common_dir))
 
 def save_results(results, output_path: str, aggregate_metrics: dict):
     """Save evaluation results to JSON file."""
@@ -149,11 +177,16 @@ def save_results(results, output_path: str, aggregate_metrics: dict):
 def generate_visualizations(results_file: str, output_dir: str):
     """Generate visualization plots."""
     logger = logging.getLogger(__name__)
-    task_detection_dir = Path(__file__).parent / 'task-detection'
+    script_dir = Path(__file__).parent
+    task_detection_dir = script_dir / 'task-detection'
     sys.path.insert(0, str(task_detection_dir))
     
     try:
         from visualize import EvalVisualizer
+        
+        # Make output dir relative to script if not absolute
+        if not os.path.isabs(output_dir):
+            output_dir = str(script_dir / output_dir)
         
         visualizer = EvalVisualizer()
         visualizer.generate_all_plots(results_file, output_dir)
@@ -161,28 +194,13 @@ def generate_visualizations(results_file: str, output_dir: str):
         logger.info(f"Visualizations generated in: {output_dir}")
         
     except ImportError as e:
-        logger.error(f"Failed to import visualization module: {e}")
+        logger.warning(f"Visualization module not available: {e}")
     except Exception as e:
         logger.error(f"Visualization failed: {e}")
     finally:
         # Remove from path
         if str(task_detection_dir) in sys.path:
             sys.path.remove(str(task_detection_dir))
-
-def export_schemas_to_rust(config: dict):
-    """Export schemas to Rust format for integration."""
-    logger = logging.getLogger(__name__)
-    try:
-        from common import SchemaManager
-        
-        schema_manager = SchemaManager()
-        output_path = "eval_schemas_export.rs"
-        schema_manager.export_schemas_to_rust(output_path)
-        
-        logger.info(f"Schemas exported to Rust format: {output_path}")
-        
-    except Exception as e:
-        logger.error(f"Schema export failed: {e}")
 
 def main():
     """Main function."""
@@ -199,13 +217,12 @@ def main():
         logger.info("Starting evaluation system")
         logger.info(f"Configuration loaded from: config.yaml")
         
-        # Create results directory
+        # Create results directory relative to script
+        script_dir = Path(__file__).parent
         results_dir = config.get('evaluation', {}).get('results_dir', './results')
+        if not os.path.isabs(results_dir):
+            results_dir = script_dir / results_dir
         os.makedirs(results_dir, exist_ok=True)
-        
-        # Export schemas to Rust format
-        logger.info("Exporting schemas to Rust format...")
-        export_schemas_to_rust(config)
         
         # Run evaluations based on configuration
         evaluation_config = config.get('evaluation', {})
