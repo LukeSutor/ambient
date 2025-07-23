@@ -1,0 +1,113 @@
+# Task Detection Evaluation Prompts
+
+# System prompt for task detection
+system_prompt:
+  template: |
+    You are an expert at analyzing computer screen states and detecting tasks that a user might want to perform.
+    
+    Given the current screen state and context, identify concrete, actionable tasks that the user could perform.
+    Focus on:
+    - Interactive elements (buttons, links, forms)
+    - Available actions based on the current application/website
+    - Natural next steps in the user's workflow
+    
+    Return tasks as a JSON array where each task has:
+    - "description": Clear, specific description of what to do
+    - "type": Category like "click", "input", "navigation", "action"
+    - "confidence": Score from 0.0 to 1.0 indicating how confident you are this is a valid task
+    - "element": Description of the UI element involved (if applicable)
+  description: "System prompt for task detection evaluation"
+
+# Prompt for evaluating task detection accuracy
+evaluate_detection:
+  template: |
+    You are evaluating the accuracy of an AI system that detects tasks from screen states.
+    
+    SCREEN CONTEXT:
+    {screen_summary}
+    
+    DETECTED TASKS:
+    {detected_tasks}
+    
+    GROUND TRUTH TASKS (if available):
+    {ground_truth_tasks}
+    
+    Please evaluate the detected tasks on these criteria:
+    
+    1. RELEVANCE: Are the tasks relevant to the current screen state? (0-10)
+    2. SPECIFICITY: Are the tasks specific and actionable? (0-10)
+    3. COMPLETENESS: Does the detection cover the main actionable elements? (0-10)
+    4. ACCURACY: If ground truth is available, how accurate are the detections? (0-10)
+    
+    Provide scores and detailed reasoning for each criterion.
+    Also identify any missed opportunities or false positives.
+    
+    Format your response as JSON:
+    {{
+      "relevance": {{"score": X, "reasoning": "..."}},
+      "specificity": {{"score": X, "reasoning": "..."}},
+      "completeness": {{"score": X, "reasoning": "..."}},
+      "accuracy": {{"score": X, "reasoning": "..."}},
+      "overall_score": X,
+      "missed_tasks": ["task1", "task2"],
+      "false_positives": ["task1", "task2"],
+      "feedback": "Overall assessment and suggestions for improvement"
+    }}
+  description: "Evaluate task detection accuracy against criteria"
+  
+# Prompt for generating ground truth tasks
+generate_ground_truth:
+  template: |
+    You are an expert UI/UX analyst. Analyze this screen state and generate a comprehensive list of ALL possible tasks a user could perform.
+    
+    SCREEN SUMMARY:
+    {screen_summary}
+    
+    CURRENT STATE DETAILS:
+    {current_state}
+    
+    Consider:
+    - All clickable elements (buttons, links, icons)
+    - All input fields and their purpose
+    - Navigation options
+    - Content interaction possibilities
+    - Workflow progression steps
+    
+    For each task, provide:
+    - "description": What the user would do
+    - "type": Task category (click, input, navigation, etc.)
+    - "priority": How important/common this task would be (high/medium/low)
+    - "element": The UI element involved
+    - "context": When this task would be relevant
+    
+    Be comprehensive but practical - focus on tasks a real user would actually want to perform.
+    
+    Return as JSON array of task objects.
+  description: "Generate comprehensive ground truth task list"
+
+# Prompt for task similarity comparison
+compare_tasks:
+  template: |
+    Compare these two task descriptions and determine if they refer to the same action:
+    
+    TASK 1: {task1_description}
+    TASK 2: {task2_description}
+    
+    Consider:
+    - Are they targeting the same UI element?
+    - Do they achieve the same goal?
+    - Are they just different phrasings of the same action?
+    
+    Return a similarity score from 0.0 to 1.0 where:
+    - 1.0 = Identical tasks
+    - 0.8-0.9 = Same task, different wording
+    - 0.5-0.7 = Related but different tasks
+    - 0.0-0.4 = Completely different tasks
+    
+    Format as JSON:
+    {{
+      "similarity_score": X.X,
+      "reasoning": "Explanation of the comparison",
+      "are_same": true/false
+    }}
+  description: "Compare similarity between two task descriptions"

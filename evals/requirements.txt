@@ -1,0 +1,9 @@
+requests==2.31.0
+pyyaml==6.0.1
+matplotlib==3.8.2
+seaborn==0.13.0
+pandas==2.1.4
+numpy==1.24.3
+psutil==5.9.6
+tqdm==4.66.1
+scikit-learn==1.3.2

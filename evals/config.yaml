@@ -1,0 +1,44 @@
+# Evaluation Configuration
+server:
+  # Server executable and connection
+  executable: "../backend/models/llama-mtmd-cli.exe"
+  host: "localhost"
+  port: 8080
+  timeout: 120
+  auto_start: true
+  auto_stop: true
+  
+  # Health check settings
+  health_check_timeout: 30
+  startup_timeout: 60
+
+# Model configuration
+model:
+  path: "../backend/models/smol.gguf"
+  context_size: 8192
+  gpu_layers: 0
+
+# Generation parameters (defaults for entire session)
+generation:
+  temperature: 0.1
+  max_tokens: 1000
+  top_p: 0.9
+  top_k: 40
+
+# Parallel processing
+parallel:
+  max_concurrent_requests: 4
+  request_timeout: 30
+
+# Logging
+logging:
+  level: "INFO"
+  file: "evals.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Results
+results:
+  output_dir: "results"
+  save_individual_predictions: true
+  save_aggregated_metrics: true
+  generate_visualizations: true
