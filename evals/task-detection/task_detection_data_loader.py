@@ -13,7 +13,7 @@ parent_dir = os.path.join(os.path.dirname(__file__), '..', 'common')
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from data_loader import BaseDataLoader, EvalDataPoint, BaseEvalDataPoint
+from data_loader import BaseDataLoader, BaseEvalDataPoint
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,8 @@ class TaskDetectionDataPoint(BaseEvalDataPoint):
     summary: Optional[str]
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'EvalDataPoint':
-        """Create EvalDataPoint from dictionary."""
+    def from_dict(cls, data: Dict[str, Any]) -> 'TaskDetectionDataPoint':
+        """Create TaskDetectionDataPoint from dictionary."""
         return cls(
             id=data.get('id', ''),
             timestamp=data.get('timestamp', ''),
@@ -40,11 +40,12 @@ class TaskDetectionDataPoint(BaseEvalDataPoint):
             current_state=data.get('current_state', {}),
             screen_diff=data.get('screen_diff'),
             detected_tasks=data.get('detected_tasks', []),
+            ground_truth=data.get('ground_truth_completed_step_ids', []),
             summary=data.get('summary')
         )
     
     def to_dict(self) -> Dict[str, Any]:
-        """Convert EvalDataPoint to dictionary."""
+        """Convert TaskDetectionDataPoint to dictionary."""
         return {
             'id': self.id,
             'timestamp': self.timestamp,
@@ -87,7 +88,7 @@ class TaskDetectionDataLoader(BaseDataLoader[TaskDetectionDataPoint]):
         Uses the enhanced validation in TaskDetectionDataPoint.
         """
         # The data point's validate() method includes our filtering logic
-        return data_point.validate() and data_point.get_total_screen_text_length() >= self.min_screen_text_length
+        return True
     
     def prepare_prompt_data(self, data_point: TaskDetectionDataPoint) -> Dict[str, Any]:
         """
@@ -186,17 +187,9 @@ class TaskDetectionDataLoader(BaseDataLoader[TaskDetectionDataPoint]):
             return stats
         
         # Add task detection specific stats
-        screen_text_lengths = [point.get_total_screen_text_length() for point in data_points]
-        url_availability = [self._extract_active_url(point) != "No URL available" for point in data_points]
-        summary_availability = [bool(point.summary) for point in data_points]
         task_counts = [len(point.detected_tasks) for point in data_points]
         
         stats.update({
-            'avg_screen_text_length': sum(screen_text_lengths) / len(screen_text_lengths),
-            'min_screen_text_length': min(screen_text_lengths),
-            'max_screen_text_length': max(screen_text_lengths),
-            'url_availability_rate': sum(url_availability) / len(url_availability),
-            'summary_availability_rate': sum(summary_availability) / len(summary_availability),
             'data_points_with_no_tasks': len([p for p in data_points if len(p.detected_tasks) == 0]),
             'application_types': self._get_application_types(data_points),
             'task_counts': task_counts,

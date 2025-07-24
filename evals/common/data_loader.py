@@ -16,6 +16,7 @@ class BaseEvalDataPoint(ABC):
     """Base class for evaluation data points."""
     id: str
     timestamp: str
+    ground_truth: list | str
     metadata: Dict[str, Any]
     
     @classmethod
@@ -51,11 +52,6 @@ class BaseDataLoader(ABC, Generic[DataPointType]):
                 data = json.load(f)
             data_point_class = self.get_data_point_class()
             data_point = data_point_class.from_dict(data)
-            
-            # Validate the data point
-            if not data_point.validate():
-                logger.warning(f"Data point validation failed for {filepath}")
-                raise ValueError(f"Invalid data point structure in {filepath}")
                 
             return data_point
         except Exception as e:

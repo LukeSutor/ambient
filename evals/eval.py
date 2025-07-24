@@ -27,16 +27,12 @@ from pathlib import Path
 from datetime import datetime
 
 def setup_logging(level: str = "INFO"):
-    """Setup logging configuration."""
-    script_dir = Path(__file__).parent
-    log_file = script_dir / 'eval_main.log'
-    
+    """Setup logging configuration."""    
     logging.basicConfig(
         level=getattr(logging, level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(log_file)
+            logging.StreamHandler(sys.stdout)
         ]
     )
 
@@ -67,7 +63,6 @@ def run_task_detection_evaluation(config: dict):
     try:
         from llm_client import LLMClient
         from prompt_manager import PromptManager
-        from data_loader import DataLoader
         from schema_manager import SchemaManager
         from evaluate import TaskDetectionEvaluator
         from task_detection_data_loader import TaskDetectionDataLoader
@@ -126,7 +121,7 @@ def run_task_detection_evaluation(config: dict):
         logger.info(f"Success rate: {aggregate_metrics.get('success_rate', 0):.2f}")
         logger.info(f"Total data points: {aggregate_metrics.get('total_data_points', 0)}")
         logger.info(f"Successful detections: {aggregate_metrics.get('successful_detections', 0)}")
-        logger.info(f"Average completed steps: {aggregate_metrics.get('avg_completed_steps', 0):.2f}")
+        logger.info(f"Average tokens per second: {aggregate_metrics.get('average_tokens_per_second', 0):.2f}")
         
         # Save results
         output_file = eval_config['output_file']
@@ -165,10 +160,10 @@ def save_results(results, output_path: str, aggregate_metrics: dict):
     results_data = []
     for result in results:
         result_dict = {
-            'data_point_id': result.data_point_id,
+            'correct': result.correct,
             'analysis': result.analysis,
             'completed_steps': result.completed_steps,
-            'completed_steps_count': len(result.completed_steps),
+            'ground_truth': result.ground_truth,
             'raw_response': result.raw_response
         }
         results_data.append(result_dict)

@@ -1,22 +1,32 @@
 {
   "evaluation_info": {
-    "timestamp": "2025-07-23T21:55:51.727644",
-    "total_data_points": 1,
+    "timestamp": "2025-07-24T18:36:22.836707",
+    "total_data_points": 2,
     "evaluation_type": "task_detection"
   },
   "aggregate_metrics": {
-    "total_data_points": 1,
-    "successful_detections": 0,
-    "success_rate": 0.0,
-    "avg_completed_steps": 0.0
+    "total_data_points": 2,
+    "successful_detections": 1,
+    "success_rate": 0.5,
+    "average_tokens_per_second": 10.65033982207053
   },
   "individual_results": [
     {
       "data_point_id": "",
-      "analysis": "The step completed because the new text indicates the task was finished, showing a confirmation message or a completed state.",
+      "analysis": "The step completed because the new text indicates the user reached the target screen after interacting with the 'Done' button. The interaction with the 'Done' button directly led to the completion of the task.",
       "completed_steps": [],
       "completed_steps_count": 0,
-      "raw_response": "{\"analysis\":\"The step completed because the new text indicates the task was finished, showing a confirmation message or a completed state.\",\"completed\":[]}\n"
+      "raw_response": "{\"analysis\":\"The step completed because the new text indicates the user reached the target screen after interacting with the 'Done' button. The interaction with the 'Done' button directly led to the completion of the task.\",\"completed\":[]}\n"
+    },
+    {
+      "data_point_id": "",
+      "analysis": "The step completed because the new screen text indicated the task was finished. The change in the screen text from 'Processing...' to 'Task completed!' confirms the task was successfully completed.",
+      "completed_steps": [
+        1,
+        2
+      ],
+      "completed_steps_count": 2,
+      "raw_response": "{\"analysis\":\"The step completed because the new screen text indicated the task was finished. The change in the screen text from 'Processing...' to 'Task completed!' confirms the task was successfully completed.\",\"completed\":[1,2]}\n"
     }
   ]
 }

@@ -20,7 +20,6 @@ if current_dir not in sys.path:
 
 from llm_client import LLMClient
 from prompt_manager import PromptManager
-from data_loader import EvalDataPoint
 from schema_manager import SchemaManager
 from task_detection_data_loader import TaskDetectionDataLoader, TaskDetectionDataPoint
 
@@ -33,6 +32,8 @@ class TaskDetectionResult:
     analysis: str
     completed_steps: List[int]
     raw_response: str
+    correct: bool
+    ground_truth: List[int]
     tokens_per_second: float
 
 class TaskDetectionEvaluator:
@@ -74,12 +75,19 @@ class TaskDetectionEvaluator:
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse task detection response: {response.content}")
                 parsed_response = {"analysis": "Failed to parse response", "completed": []}
+
+            # Check correctness
+            completed_steps = parsed_response.get('completed', [])
+            ground_truth = data_point.ground_truth
+            correct = set(completed_steps) == set(ground_truth)
             
             return TaskDetectionResult(
                 data_point_id=data_point.id,
                 analysis=parsed_response.get('analysis', 'No analysis provided'),
                 completed_steps=parsed_response.get('completed', []),
                 raw_response=response.content,
+                correct=correct,
+                ground_truth=ground_truth,
                 tokens_per_second=response.tokens_second
             )
             
@@ -110,11 +118,11 @@ class TaskDetectionEvaluator:
             return {}
         
         total_data_points = len(results)
-        successful_detections = len([r for r in results if r.completed_steps])
+        successful_detections = sum(1 for r in results if r.correct)
         
         return {
             'total_data_points': total_data_points,
             'successful_detections': successful_detections,
             'success_rate': successful_detections / total_data_points if total_data_points > 0 else 0,
-            'avg_completed_steps': sum(len(r.completed_steps) for r in results) / total_data_points if total_data_points > 0 else 0
+            'average_tokens_per_second': sum(r.tokens_per_second for r in results) / total_data_points if total_data_points > 0 else 0,
         }
