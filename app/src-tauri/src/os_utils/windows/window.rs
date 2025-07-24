@@ -285,23 +285,28 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         // Get the text content
         let text = if let Ok(name_bstr) = element.CachedName() {
           let text = name_bstr.to_string();
-          if text.trim().is_empty() || text.len() <= 1 {
-            continue; // Skip empty or single-character text
+          if is_junk_text(&text) {
+            continue; // Skip junk text using comprehensive filter
           }
-          text
+          text.trim().to_string()
         } else {
           continue; // Skip elements without text
         };
 
         // Add text to the appropriate process group
-        app_map.entry(process_id).or_insert_with(|| {
+        let app_entry = app_map.entry(process_id).or_insert_with(|| {
           ApplicationTextData {
             process_id,
             process_name: None,
             application_name: None,
             text_content: Vec::new(),
           }
-        }).text_content.push(text);
+        });
+        
+        // Only add if not already present (deduplication)
+        if !app_entry.text_content.contains(&text) {
+          app_entry.text_content.push(text);
+        }
       }
 
       // Convert HashMap to Vec
@@ -358,95 +363,6 @@ fn create_visible_text_condition(
       .map_err(|e| format!("Failed to create final condition: {:?}", e))?;
 
     Ok(final_condition)
-  }
-}
-
-
-#[tauri::command]
-pub fn get_all_visible_windows() -> Result<Vec<WindowInfo>, String> {
-  println!("get_all_visible_windows called");
-  unsafe {
-    let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-    if hr.is_err() {
-      return Err(format!("CoInitializeEx failed: {:?}", hr));
-    }
-
-    let result = (|| {
-      let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
-        .map_err(|e| format!("Failed to create UIAutomation: {:?}", e))?;
-
-      let root = automation
-        .GetRootElement()
-        .map_err(|e| format!("Failed to get root element: {:?}", e))?;
-      
-      println!("Root element obtained");
-
-      // Create condition for window control type
-      let window_type_variant = VARIANT::from(UIA_WindowControlTypeId.0 as i32);
-      let window_condition = automation
-        .CreatePropertyCondition(UIA_ControlTypePropertyId, &window_type_variant)
-        .map_err(|e| format!("Failed to create window condition: {:?}", e))?;
-      
-      println!("Window condition created");
-
-      // Find all top-level windows (just metadata, not content)
-      let windows = root
-        .FindAll(TreeScope_Children, &window_condition)
-        .map_err(|e| format!("Failed to find windows: {:?}", e))?;
-      
-      println!("Found windows");
-
-      let window_count = windows
-        .Length()
-        .map_err(|e| format!("Failed to get window count: {:?}", e))?;
-
-      println!("Found {} windows", window_count);
-
-      let mut window_list = Vec::new();
-
-      for i in 0..window_count {
-        let window = windows
-          .GetElement(i)
-          .map_err(|e| format!("Failed to get window {}: {:?}", i, e))?;
-
-        // Skip if window is not visible
-        if let Ok(is_offscreen) = window.CurrentIsOffscreen() {
-          if is_offscreen.as_bool() {
-            continue;
-          }
-        }
-
-        // Get window title
-        let window_title = match window.CurrentName() {
-          Ok(name_bstr) => {
-            let title = name_bstr.to_string();
-            if title.trim().is_empty() {
-              continue; // Skip windows without titles
-            }
-            title
-          }
-          Err(_) => continue, // Skip windows we can't get names for
-        };
-
-        // Get process ID and application name
-        let (process_id, application_name) = match window.CurrentProcessId() {
-          Ok(pid) => (pid, format!("PID_{}", pid)),
-          Err(_) => (0, "Unknown".to_string()),
-        };
-
-        window_list.push(WindowInfo {
-          window_title,
-          process_id: process_id.try_into().unwrap(),
-          application_name,
-        });
-      }
-
-      println!("Collected {} visible windows", window_list.len());
-      Ok(window_list)
-    })();
-
-    CoUninitialize();
-    result
   }
 }
 
@@ -527,30 +443,14 @@ fn is_junk_text(text: &str) -> bool {
   false
 }
 
-// Helper function to clean and format text content
-fn clean_text_content(text_content: &[String]) -> Vec<String> {
-  let mut cleaned: Vec<String> = text_content
-    .iter()
-    .filter(|text| !is_junk_text(text))
-    .map(|text| text.trim().to_string())
-    .collect();
-  
-  // Remove duplicates while preserving order
-  cleaned.dedup();
-  
-  cleaned
-}
-
 // Function to format application data as markdown
 pub fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
   let mut markdown = String::new();
   markdown.push_str("# Screen Text by Application\n\n");
   
   for app in applications {
-    let cleaned_content = clean_text_content(&app.text_content);
-    
     // Skip apps with no meaningful content
-    if cleaned_content.is_empty() {
+    if app.text_content.is_empty() {
       continue;
     }
 
@@ -564,8 +464,8 @@ pub fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
     };
     markdown.push_str(&format!("## {} (PID: {})\n\n", app_name, app.process_id));
     
-    // Group similar content together
-    for text in cleaned_content {
+    // Text is already cleaned and deduplicated in get_screen_text_by_application
+    for text in &app.text_content {
       markdown.push_str(&format!("{}\n", text));
     }
     
