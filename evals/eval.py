@@ -1,6 +1,20 @@
 #!/usr/bin/env python3
 """
-Config-driven evaluation runner for the local-computer-use project.
+Config-driven evaluation runner for the local-computer        # Load data
+        logger.info(f"Loading data from: {eval_config['data_dir']}")
+        data_points = task_data_loader.load_all_data()
+        
+        if not data_points:
+            logger.error("No data points loaded")
+            return 1
+        
+        logger.info(f"Loaded {len(data_points)} data points")
+        
+        # Apply task detection specific filtering
+        data_points = task_data_loader.filter_for_task_detection(data_points)
+        
+        # Print data statistics
+        stats = task_data_loader.get_task_detection_stats(data_points).
 
 This script reads all configuration from config.yaml and runs evaluations accordingly.
 """
@@ -56,6 +70,7 @@ def run_task_detection_evaluation(config: dict):
         from data_loader import DataLoader
         from schema_manager import SchemaManager
         from evaluate import TaskDetectionEvaluator
+        from task_detection_data_loader import TaskDetectionDataLoader
         
         eval_config = config['evaluation']['task_detection']
         
@@ -75,13 +90,14 @@ def run_task_detection_evaluation(config: dict):
         if not os.path.isabs(data_dir):
             data_dir = str(script_dir / data_dir)
         
-        data_loader = DataLoader(data_dir)
+        # Use the task detection specific data loader
+        task_data_loader = TaskDetectionDataLoader(data_dir)
         schema_manager = SchemaManager(config_path)
-        evaluator = TaskDetectionEvaluator(llm_client, prompt_manager, schema_manager)
+        evaluator = TaskDetectionEvaluator(llm_client, prompt_manager, schema_manager, task_data_loader)
         
         # Load data
         logger.info(f"Loading data from: {eval_config['data_dir']}")
-        data_points = data_loader.load_all_data()
+        data_points = task_data_loader.load_all_data()
         
         if not data_points:
             logger.warning("No data points found!")
@@ -89,8 +105,11 @@ def run_task_detection_evaluation(config: dict):
         
         logger.info(f"Loaded {len(data_points)} data points")
         
+        # Apply task detection specific filtering
+        data_points = task_data_loader.filter_for_task_detection(data_points)
+        
         # Print data statistics
-        stats = data_loader.get_data_stats(data_points)
+        stats = task_data_loader.get_task_detection_stats(data_points)
         logger.info(f"Data stats: {stats}")
         
         # Run evaluation
