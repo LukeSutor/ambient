@@ -2,11 +2,45 @@
 server:
   # Server executable and connection
   executable: "C:/Users/Luke/Desktop/coding/local-computer-use/app/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
-  host: "localhost"
-  port: 8080
   timeout: 120
   auto_start: true
   auto_stop: true
+
+            "-m",
+            &config.model_path,
+            "--port",
+            &config.port.to_string(),
+            "--api-key",
+            &config.api_key,
+            "--reasoning-format",
+            "none",
+            "-np",                      // Decode up to 3 sequences in parallel
+            "3",
+            "--ctx-size",               // Use smaller context size for faster responses
+            "4096",
+            "-ctk",                     // Use q8 quant for kv cache
+            "q8_0",
+            "-ctv",
+            "q8_0",
+            "--mlock",                  // Keep model in RAM
+            "-fa",                      // Use fast attention
+            "--no-webui",
+            "--log-disable",
+            "--jinja"
+  
+  # Startup parameters for the server
+  startup_config:
+    host: "localhost"
+    port: 8080
+    reasoning-format: "none"
+    np: 4
+    ctx-size: 4096
+    ctk: "q8_0"
+    ctv: "q8_0"
+    mlock: true
+    fa: true
+    jinja: true
+  
   
   # Health check settings
   health_check_timeout: 30
@@ -15,8 +49,6 @@ server:
 # Model configuration
 model:
   path: "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/llm/Qwen3-1.7B-Q4_K_M.gguf"
-  context_size: 4096
-  gpu_layers: 0
 
 # Generation parameters (defaults for entire session)
 generation:
@@ -48,7 +80,7 @@ evaluation:
 # JSON Schema configuration
 schemas:
   # Path to store schema files
-  schema_dir: "./schemas"
+  schema_dir: "../schemas"
 
 # Parallel processing
 parallel:

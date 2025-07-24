@@ -13,6 +13,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class LLMResponse:
+    """Response from LLM generation."""
+    def __init__(self, content: str, tokens_generated: int, time_taken: float, tokens_second: float):
+        self.content = content
+        self.tokens_generated = tokens_generated
+        self.time_taken = time_taken
+        self.tokens_second = tokens_second
+
 class LLMClient:
     def __init__(self, config_path: str = "config.yaml"):
         """Initialize LLM client with configuration."""
@@ -20,10 +28,11 @@ class LLMClient:
             self.config = yaml.safe_load(f)
         
         self.server_config = self.config['server']
+        self.startup_config = self.server_config.get('startup_config', {})
         self.model_config = self.config['model']
         self.generation_config = self.config['generation']
         
-        self.base_url = f"http://{self.server_config['host']}:{self.server_config['port']}"
+        self.base_url = f"http://{self.startup_config['host']}:{self.startup_config['port']}"
         self.server_process = None
         self._session_params = {}
         
@@ -65,10 +74,15 @@ class LLMClient:
         cmd = [
             server_exe,
             "-m", model_path,
-            "--host", self.server_config['host'],
-            "--port", str(self.server_config['port']),
-            "--ctx-size", str(self.model_config['context_size']),
-            "--n-gpu-layers", str(self.model_config['gpu_layers'])
+            "--port", str(self.startup_config['port']),
+            "--ctx-size", str(self.startup_config['ctx-size']),
+            "--reasoning-format", self.startup_config.get('reasoning-format', 'none'),
+            "-np", str(self.startup_config.get('np', 4)),
+            "-ctk", self.startup_config.get('ctk', 'q8_0'),
+            "-ctv", self.startup_config.get('ctv', 'q8_0'),
+            ("--mlock" if self.startup_config.get('mlock', False) else ""),
+            ("-fa" if self.startup_config.get('fa', True) else ""),
+            ("--jinja" if self.startup_config.get('jinja', True) else "")
         ]
         
         try:
@@ -116,7 +130,7 @@ class LLMClient:
                 except:
                     logger.error("Failed to stop server")
     
-    def generate(self, prompt: str, schema: Optional[Dict[str, Any]] = None, **kwargs) -> str:
+    def generate(self, prompt: str, schema: Optional[str] = None, **kwargs) -> LLMResponse:
         """Generate text using the LLM with optional JSON schema constraint."""
         if not self._is_server_running():
             if not self._start_server():
@@ -124,10 +138,15 @@ class LLMClient:
         
         # Merge session params with generation config and kwargs
         params = {**self.generation_config, **self._session_params, **kwargs}
+
+        messages = [{
+            "role": "user",
+            "content": prompt
+        }]
         
         payload = {
-            "prompt": prompt,
-            "stream": False,
+            "model": "gpt-6",
+            "messages": messages,
             **params
         }
         
@@ -135,35 +154,40 @@ class LLMClient:
         if schema:
             payload["response_format"] = {
                 "type": "json_object",
-                "schema": schema
+                "schema": json.loads(schema)
             }
         
         try:
+            start_time = time.time()
             response = requests.post(
-                f"{self.base_url}/completion",
+                f"{self.base_url}/v1/chat/completions",
                 json=payload,
-                timeout=self.server_config['timeout']
             )
             response.raise_for_status()
             
-            result = response.json()
-            return result.get('content', '').strip()
+            try:
+                result = response.json()
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.error(f"Response content: {response.text}")
+                raise
+
+            end_time = time.time()
+
+            text = result["choices"][0]["message"]["content"]
+            tokens_generated = result.get("usage", {}).get("completion_tokens", 0)
+            time_taken = end_time - start_time
+            tokens_second = tokens_generated / time_taken if time_taken > 0 else 0
+            return LLMResponse(
+                content=text,
+                tokens_generated=tokens_generated,
+                time_taken=time_taken,
+                tokens_second=tokens_second
+            )
             
         except Exception as e:
             logger.error(f"Generation failed: {e}")
             raise
-    
-    def generate_structured(self, prompt: str, schema: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Generate structured JSON response using schema constraint."""
-        response_text = self.generate(prompt, schema=schema, **kwargs)
-        
-        try:
-            # Parse JSON response
-            return json.loads(response_text)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse structured response: {e}")
-            logger.error(f"Response text: {response_text}")
-            raise ValueError(f"Invalid JSON response: {e}")
     
     def set_session_params(self, **params):
         """Set parameters that persist for this session."""

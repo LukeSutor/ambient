@@ -5,6 +5,7 @@ Handles loading, saving, and validating JSON schemas for LLM inference.
 import json
 import os
 import yaml
+from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
 
@@ -25,37 +26,19 @@ class SchemaManager:
         # Create schema directory if it doesn't exist
         os.makedirs(self.schema_dir, exist_ok=True)
         
-        # Load schema files first (prioritize over config)
+        # Load schema files first
         self._load_schema_files()
-        
-        # Load schemas from config as fallback
-        self._load_schemas_from_config()
-    
-    def _load_schemas_from_config(self):
-        """Load schema definitions from configuration."""
-        for eval_type, schemas in self.schema_config.items():
-            if eval_type == 'schema_dir':
-                continue
-                
-            if not isinstance(schemas, dict):
-                continue
-                
-            for schema_name, schema_content in schemas.items():
-                if isinstance(schema_content, str):
-                    try:
-                        # Parse YAML/JSON schema content
-                        schema_obj = yaml.safe_load(schema_content)
-                        schema_key = f"{eval_type}.{schema_name}"
-                        self.schemas[schema_key] = schema_obj
-                        logger.info(f"Loaded schema: {schema_key}")
-                    except Exception as e:
-                        logger.error(f"Failed to parse schema {eval_type}.{schema_name}: {e}")
     
     def _load_schema_files(self):
         """Load schema files from the schema directory."""
+        script_dir = Path(__file__).parent
+        if not os.path.isabs(self.schema_dir):
+            self.schema_dir = script_dir / self.schema_dir
+
         if not os.path.exists(self.schema_dir):
+            logger.warning(f"Schema directory not found: {self.schema_dir}")
             return
-            
+                    
         for filename in os.listdir(self.schema_dir):
             if filename.endswith('.json'):
                 filepath = os.path.join(self.schema_dir, filename)
@@ -63,13 +46,13 @@ class SchemaManager:
                 
                 try:
                     with open(filepath, 'r') as f:
-                        schema_obj = json.load(f)
+                        schema_obj = f.read()
                     self.schemas[schema_key] = schema_obj
                     logger.info(f"Loaded schema file: {schema_key}")
                 except Exception as e:
                     logger.error(f"Failed to load schema file {filepath}: {e}")
     
-    def get_schema(self, schema_key: str) -> Optional[Dict[str, Any]]:
+    def get_schema(self, schema_key: str) -> Optional[str]:
         """Get a schema by its key."""
         return self.schemas.get(schema_key)
     

@@ -150,9 +150,6 @@ class DataLoader:
         
         stats = {
             'total_count': len(data_points),
-            'with_summary': sum(1 for p in data_points if p.summary),
-            'with_prev_state': sum(1 for p in data_points if p.prev_state),
-            'with_screen_diff': sum(1 for p in data_points if p.screen_diff),
             'task_counts': [len(p.detected_tasks) for p in data_points],
             'metadata_keys': set()
         }

@@ -25,6 +25,7 @@ class TaskDetectionResult:
     analysis: str
     completed_steps: List[int]
     raw_response: str
+    tokens_per_second: float
 
 class TaskDetectionEvaluator:
     """Evaluates task detection performance."""
@@ -76,29 +77,26 @@ class TaskDetectionEvaluator:
         
         # Get the schema for structured response
         schema = self.schema_manager.get_schema('task_detection.detect_tasks')
+        if not schema:
+            logger.warning("No schema found for task detection. Using default response format.")
+            schema = None
         
         # Generate task detection with schema constraint
         try:
-            if schema:
-                response = self.llm_client.generate_structured(detect_prompt, schema)
-            else:
-                response = self.llm_client.generate(detect_prompt)
+            response = self.llm_client.generate(detect_prompt, schema)
             
-            # Parse the response
-            if isinstance(response, str):
-                try:
-                    parsed_response = json.loads(response)
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse task detection response: {response}")
-                    parsed_response = {"analysis": "Failed to parse response", "completed": []}
-            else:
-                parsed_response = response
+            try:
+                parsed_response = json.loads(response.content)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse task detection response: {response.content}")
+                parsed_response = {"analysis": "Failed to parse response", "completed": []}
             
             return TaskDetectionResult(
                 data_point_id=data_point.id,
                 analysis=parsed_response.get('analysis', 'No analysis provided'),
                 completed_steps=parsed_response.get('completed', []),
-                raw_response=json.dumps(response) if not isinstance(response, str) else response
+                raw_response=response.content,
+                tokens_per_second=response.tokens_second
             )
             
         except Exception as e:
