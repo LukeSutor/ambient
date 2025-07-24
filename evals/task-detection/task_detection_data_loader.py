@@ -4,7 +4,7 @@ Task detection specific data loader.
 import json
 import sys
 import os
-from typing import List, Dict, Any, Type
+from typing import List, Dict, Any, Optional, Iterator, TypeVar, Generic, Type
 from dataclasses import dataclass
 import logging
 
@@ -19,43 +19,43 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class TaskDetectionDataPoint(EvalDataPoint):
-    """Task detection specific data point with additional validation and methods."""
+class TaskDetectionDataPoint(BaseEvalDataPoint):
+    """Task detection specific data point with additional methods."""
+    prev_prev_state: Optional[Dict[str, Any]]
+    prev_state: Optional[Dict[str, Any]]
+    current_state: Dict[str, Any]
+    screen_diff: Optional[Dict[str, Any]]
+    detected_tasks: List[Dict[str, Any]]
+    summary: Optional[str]
     
-    def validate(self) -> bool:
-        """Enhanced validation for task detection data points."""
-        # Call parent validation first
-        if not super().validate():
-            return False
-        
-        # Task detection specific validation
-        if not self.current_state or 'data' not in self.current_state:
-            return False
-        
-        # Ensure data is a list
-        if not isinstance(self.current_state['data'], list):
-            return False
-        
-        # Check for minimum viable screen content
-        if not self._has_meaningful_content():
-            return False
-        
-        return True
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'EvalDataPoint':
+        """Create EvalDataPoint from dictionary."""
+        return cls(
+            id=data.get('id', ''),
+            timestamp=data.get('timestamp', ''),
+            metadata=data.get('metadata', {}),
+            prev_prev_state=data.get('prev_prev_state'),
+            prev_state=data.get('prev_state'),
+            current_state=data.get('current_state', {}),
+            screen_diff=data.get('screen_diff'),
+            detected_tasks=data.get('detected_tasks', []),
+            summary=data.get('summary')
+        )
     
-    def _has_meaningful_content(self) -> bool:
-        """Check if the data point has meaningful screen content."""
-        if not self.current_state or 'data' not in self.current_state:
-            return False
-        
-        total_text_length = 0
-        for item in self.current_state['data']:
-            if 'text_content' in item and isinstance(item['text_content'], list):
-                for text in item['text_content']:
-                    if isinstance(text, str):
-                        total_text_length += len(text.strip())
-        
-        # Require at least 10 characters of meaningful text
-        return total_text_length >= 10
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert EvalDataPoint to dictionary."""
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp,
+            'metadata': self.metadata,
+            'prev_prev_state': self.prev_prev_state,
+            'prev_state': self.prev_state,
+            'current_state': self.current_state,
+            'screen_diff': self.screen_diff,
+            'detected_tasks': self.detected_tasks,
+            'summary': self.summary
+        }
     
     def get_screen_applications(self) -> List[str]:
         """Get list of applications present in the current state."""
@@ -66,17 +66,6 @@ class TaskDetectionDataPoint(EvalDataPoint):
                 if app_name and app_name not in apps:
                     apps.append(app_name)
         return apps
-    
-    def get_total_screen_text_length(self) -> int:
-        """Get total length of screen text."""
-        total_length = 0
-        if self.current_state and 'data' in self.current_state:
-            for item in self.current_state['data']:
-                if 'text_content' in item and isinstance(item['text_content'], list):
-                    for text in item['text_content']:
-                        if isinstance(text, str):
-                            total_length += len(text.strip())
-        return total_length
 
 
 class TaskDetectionDataLoader(BaseDataLoader[TaskDetectionDataPoint]):
