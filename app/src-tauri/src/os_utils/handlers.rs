@@ -187,7 +187,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
 #[tauri::command]
 pub async fn capture_eval_data(app_handle: AppHandle) -> Result<String, String> {
     use crate::tasks::TaskService;
-    use crate::db::{get_latest_activity_summary, DbState};
+    use crate::db::DbState;
     use crate::models::llm::handlers::format_tasks;
 
     // Get the current buffer states
