@@ -24,6 +24,7 @@ pub struct EvalData {
     pub prev_prev_screen_state: ScreenStateWithSummary,
     pub prev_screen_state: ScreenStateWithSummary,
     pub screen_diff_markdown: String,
+    pub formatted_screen_state: String,
     pub prev_prev_summary: String,
     pub active_tasks: Vec<crate::tasks::TaskWithSteps>,
     pub formatted_tasks: String,
@@ -197,6 +198,13 @@ pub async fn capture_eval_data(app_handle: AppHandle) -> Result<String, String> 
         (prev_prev, prev)
     };
 
+    // Get previous state formatted as markdown
+    let formatted_screen_state = if let Some(prev_state) = &prev_state {
+        format_as_markdown(prev_state.data.clone())
+    } else {
+        return Err("No previous screen state available to capture eval data".to_string());
+    };
+
     // Ensure we have the required states
     let prev_prev_state = prev_prev_state.ok_or("Need at least 2 screen states to capture eval data")?;
     let prev_state = prev_state.ok_or("Need current screen state to capture eval data")?;
@@ -243,7 +251,7 @@ pub async fn capture_eval_data(app_handle: AppHandle) -> Result<String, String> 
 
     let screen_diff_markdown = format_as_markdown(changes);
 
-    // Get prev-prev summary from the prev_prev_state, or fetch from database if not available
+    // Get prev-prev summary from the prev_prev_state
     let prev_prev_summary = if let Some(summary) = &prev_prev_state.summary {
         summary.clone()
     } else {
@@ -256,6 +264,7 @@ pub async fn capture_eval_data(app_handle: AppHandle) -> Result<String, String> 
         prev_prev_screen_state: prev_prev_state,
         prev_screen_state: prev_state,
         screen_diff_markdown,
+        formatted_screen_state,
         prev_prev_summary,
         active_tasks,
         formatted_tasks,
