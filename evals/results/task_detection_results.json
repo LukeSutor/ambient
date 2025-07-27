@@ -1,36 +1,67 @@
 {
   "evaluation_info": {
-    "timestamp": "2025-07-27T16:26:22.152535",
-    "total_data_points": 2,
+    "timestamp": "2025-07-27T17:43:24.315962",
+    "total_data_points": 6,
     "evaluation_type": "task_detection"
   },
   "aggregate_metrics": {
-    "total_data_points": 2,
-    "successful_detections": 0,
-    "success_rate": 0.0,
-    "averate_tokens_generated": 72.5,
-    "average_response_time": 9.082491040229797,
-    "average_tokens_per_second": 8.011256585666658
+    "total_data_points": 6,
+    "successful_detections": 2,
+    "success_rate": 0.3333333333333333,
+    "averate_tokens_generated": 49.833333333333336,
+    "average_response_time": 22.121445218722027,
+    "average_tokens_per_second": 2.322947979475399
   },
   "individual_results": [
     {
+      "correct": true,
+      "analysis": "The user was working on internships and closed the issue related to Fast-VLM. The new screen text shows the issue was closed due to inactivity, indicating the task was completed.",
+      "completed_steps": [],
+      "ground_truth": [],
+      "raw_response": "{\"analysis\":\"The user was working on internships and closed the issue related to Fast-VLM. The new screen text shows the issue was closed due to inactivity, indicating the task was completed.\",\"completed\":[]}\n"
+    },
+    {
       "correct": false,
-      "analysis": "The user completed Step 1 by navigating to the Summer 2026 internships page and checking the readme. The new screen text shows the URL https://github.com/vanshb03/Summer2026-Internships in the constants.rs file, confirming the step was completed.",
+      "analysis": "Navigated to the correct repository for summer internships and checked the readme for new postings, indicating the step completed.",
       "completed_steps": [
         1
       ],
       "ground_truth": [],
-      "raw_response": "{\"analysis\":\"The user completed Step 1 by navigating to the Summer 2026 internships page and checking the readme. The new screen text shows the URL https://github.com/vanshb03/Summer2026-Internships in the constants.rs file, confirming the step was completed.\",\"completed\":[1]}\n"
+      "raw_response": "{\"analysis\":\"Navigated to the correct repository for summer internships and checked the readme for new postings, indicating the step completed.\",\"completed\":[1]}\n"
     },
     {
       "correct": false,
-      "analysis": "The user was working on a task related to the FastVLM-0.5B-Stage2 model and the related artifacts, but the new screen text shows that the issue was closed due to inactivity. The step related to checking for internships was completed as the user's activity shifted to the GitHub issue closure notification.",
+      "analysis": "The step for checking summer 2026 internships was completed as evidenced by the 'Check summer 2026' status being pending and the subsequent step for spring 2026 being pending. The user likely completed the summer 2026 check first, then moved to spring 2026.",
       "completed_steps": [
-        1,
+        1
+      ],
+      "ground_truth": [],
+      "raw_response": "{\"analysis\":\"The step for checking summer 2026 internships was completed as evidenced by the 'Check summer 2026' status being pending and the subsequent step for spring 2026 being pending. The user likely completed the summer 2026 check first, then moved to spring 2026.\",\"completed\":[1]}\n"
+    },
+    {
+      "correct": false,
+      "analysis": "The user completed the 'Check spring 2026' step by navigating to the specified URL and checking for new internships, which was evidenced by the screen text indicating the action was taken.",
+      "completed_steps": [
         2
       ],
       "ground_truth": [],
-      "raw_response": "{\"analysis\":\"The user was working on a task related to the FastVLM-0.5B-Stage2 model and the related artifacts, but the new screen text shows that the issue was closed due to inactivity. The step related to checking for internships was completed as the user's activity shifted to the GitHub issue closure notification.\",\"completed\":[1,2]}\n"
+      "raw_response": "{\"analysis\":\"The user completed the 'Check spring 2026' step by navigating to the specified URL and checking for new internships, which was evidenced by the screen text indicating the action was taken.\",\"completed\":[2]}"
+    },
+    {
+      "correct": true,
+      "analysis": "The user accessed the arXiv paper details page for the Hierarchical Reasoning Model, indicating the completion of the task to view the paper's information.",
+      "completed_steps": [],
+      "ground_truth": [],
+      "raw_response": "{\"analysis\":\"The user accessed the arXiv paper details page for the Hierarchical Reasoning Model, indicating the completion of the task to view the paper's information.\",\"completed\":[]}\n"
+    },
+    {
+      "correct": false,
+      "analysis": "Navigated to the YouTube screen which is part of the task to check for internships, indicating that the step to check summer 2026 internships was completed. The user moved to the YouTube page, which was the target of the task.",
+      "completed_steps": [
+        1
+      ],
+      "ground_truth": [],
+      "raw_response": "{\"analysis\":\"Navigated to the YouTube screen which is part of the task to check for internships, indicating that the step to check summer 2026 internships was completed. The user moved to the YouTube page, which was the target of the task.\",\"completed\":[1]}\n"
     }
   ]
 }

@@ -8,6 +8,8 @@ import os
 from tqdm import tqdm
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 # Add parent directory to path to import common modules
 parent_dir = os.path.join(os.path.dirname(__file__), '..', 'common')
@@ -42,12 +44,24 @@ class TaskDetectionResult:
 class TaskDetectionEvaluator:
     """Evaluates task detection performance."""
     
-    def __init__(self, llm_client: LLMClient, prompt_manager: PromptManager, schema_manager: SchemaManager, data_loader: Optional[TaskDetectionDataLoader] = None):
+    def __init__(self, llm_client: LLMClient, prompt_manager: PromptManager, schema_manager: SchemaManager, config: dict, data_loader: Optional[TaskDetectionDataLoader] = None):
         """Initialize evaluator with LLM client, prompt manager, schema manager, and optional data loader."""
         self.llm_client = llm_client
         self.prompt_manager = prompt_manager
         self.schema_manager = schema_manager
         self.data_loader = data_loader or TaskDetectionDataLoader()
+        self.config = config
+    
+    def get_parallel_config(self) -> Dict[str, Any]:
+        """Get parallel processing configuration from config."""
+        parallel_config = self.config.get('parallel', {})
+        server_config = self.config.get('server', {}).get('startup_config', {})
+        
+        return {
+            'max_workers': server_config.get('np', parallel_config.get('max_concurrent_requests', 1)),
+            'request_timeout': parallel_config.get('request_timeout', 60),
+            'batch_size': self.config.get('evaluation', {}).get('task_detection', {}).get('batch_size', 10)
+        }
     
     def detect_tasks(self, data_point: TaskDetectionDataPoint) -> TaskDetectionResult:
         """Run task detection on a single data point."""
@@ -99,21 +113,111 @@ class TaskDetectionEvaluator:
         except Exception as e:
             logger.error(f"Task detection failed for data point {data_point.filename}: {e}")
             return TaskDetectionResult(
+                filename=data_point.filename,
                 analysis=f"Error: {str(e)}",
                 completed_steps=[],
                 raw_response="",
+                correct=False,
+                ground_truth=data_point.ground_truth,
+                tokens_generated=0,
+                response_time=0.0,
                 tokens_per_second=0.0
             )
     
     def evaluate_batch(self, data_points: List[TaskDetectionDataPoint]) -> List[TaskDetectionResult]:
-        """Evaluate a batch of data points."""
+        """Evaluate a batch of data points with parallel processing."""
         results = []
         
-        for data_point in tqdm(data_points, desc="Evaluating task detection", unit="data point", total=len(data_points)):
-            result = self.detect_tasks(data_point)
-            results.append(result)
+        # Get the parallelism configuration
+        parallel_config = self.get_parallel_config()
+        max_workers = parallel_config['max_workers']
+        
+        # If only one worker or small batch, use sequential processing
+        if max_workers <= 1 or len(data_points) <= max_workers:
+            for data_point in tqdm(data_points, desc="Evaluating task detection", unit="data point"):
+                result = self.detect_tasks(data_point)
+                results.append(result)
+            return results
+        
+        # Use parallel processing for larger batches
+        results = [None] * len(data_points)  # Pre-allocate to maintain order
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_index = {
+                executor.submit(self.detect_tasks, data_point): i 
+                for i, data_point in enumerate(data_points)
+            }
+            
+            # Process completed tasks with progress bar
+            with tqdm(total=len(data_points), desc="Evaluating task detection", unit="data point") as pbar:
+                for future in as_completed(future_to_index):
+                    index = future_to_index[future]
+                    try:
+                        result = future.result(timeout=parallel_config['request_timeout'])
+                        results[index] = result
+                    except Exception as exc:
+                        logger.error(f"Data point {index} generated an exception: {exc}")
+                        # Create error result
+                        data_point = data_points[index]
+                        results[index] = TaskDetectionResult(
+                            filename=data_point.filename,
+                            analysis=f"Error: {str(exc)}",
+                            completed_steps=[],
+                            raw_response="",
+                            correct=False,
+                            ground_truth=data_point.ground_truth,
+                            tokens_generated=0,
+                            response_time=0.0,
+                            tokens_per_second=0.0
+                        )
+                    finally:
+                        pbar.update(1)
         
         return results
+    
+    def evaluate_batch_chunked(self, data_points: List[TaskDetectionDataPoint], chunk_size: Optional[int] = None) -> List[TaskDetectionResult]:
+        """Evaluate data points in smaller chunks to manage memory and server load."""
+        if chunk_size is None:
+            # Use batch_size from parallel config
+            parallel_config = self.get_parallel_config()
+            chunk_size = parallel_config['batch_size']
+        
+        all_results = []
+        total_chunks = (len(data_points) + chunk_size - 1) // chunk_size
+        
+        logger.info(f"Processing {len(data_points)} data points in {total_chunks} chunks of size {chunk_size}")
+        
+        for i in tqdm(range(0, len(data_points), chunk_size), 
+                     desc="Processing chunks", unit="chunk", total=total_chunks):
+            chunk = data_points[i:i + chunk_size]
+            chunk_results = self.evaluate_batch(chunk)
+            all_results.extend(chunk_results)
+            
+            # Optional: Add a small delay between chunks to prevent overwhelming the server
+            if i + chunk_size < len(data_points):
+                time.sleep(0.1)
+        
+        return all_results
+    
+    def get_performance_metrics(self, results: List[TaskDetectionResult]) -> Dict[str, Any]:
+        """Get performance metrics specific to parallel processing."""
+        if not results:
+            return {}
+        
+        parallel_config = self.get_parallel_config()
+        total_time = sum(r.response_time for r in results)
+        sequential_time_estimate = total_time  # If run sequentially
+        parallel_time_estimate = max(r.response_time for r in results) if results else 0
+        
+        return {
+            'parallel_config': parallel_config,
+            'total_response_time': total_time,
+            'estimated_sequential_time': sequential_time_estimate,
+            'estimated_parallel_time': parallel_time_estimate,
+            'estimated_speedup': sequential_time_estimate / parallel_time_estimate if parallel_time_estimate > 0 else 1,
+            'average_concurrent_efficiency': len(results) / parallel_config['max_workers'] if parallel_config['max_workers'] > 0 else 1
+        }
     
     def compute_aggregate_metrics(self, results: List[TaskDetectionResult]) -> Dict[str, Any]:
         """Compute aggregate metrics for evaluation results."""

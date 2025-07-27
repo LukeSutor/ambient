@@ -68,7 +68,7 @@ def run_task_detection_evaluation(config: dict):
         # Use the task detection specific data loader
         task_data_loader = TaskDetectionDataLoader(data_dir)
         schema_manager = SchemaManager(config_path)
-        evaluator = TaskDetectionEvaluator(llm_client, prompt_manager, schema_manager, task_data_loader)
+        evaluator = TaskDetectionEvaluator(llm_client, prompt_manager, schema_manager, config, task_data_loader)
         
         # Load data
         logger.info(f"Loading data from: {eval_config['data_dir']}")
