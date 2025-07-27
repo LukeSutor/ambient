@@ -14,20 +14,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BaseEvalDataPoint(ABC):
     """Base class for evaluation data points."""
-    id: str
+    filename: str
     timestamp: str
     ground_truth: list | str
-    metadata: Dict[str, Any]
     
     @classmethod
     @abstractmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'BaseEvalDataPoint':
         """Create data point from dictionary. Must be implemented by subclasses."""
-        pass
-    
-    @abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert data point to dictionary. Must be implemented by subclasses."""
         pass
 
 # Type variable for generic data point types
@@ -52,6 +46,7 @@ class BaseDataLoader(ABC, Generic[DataPointType]):
                 data = json.load(f)
             data_point_class = self.get_data_point_class()
             data_point = data_point_class.from_dict(data)
+            data_point.filename = os.path.basename(filepath)
                 
             return data_point
         except Exception as e:
@@ -132,32 +127,6 @@ class BaseDataLoader(ABC, Generic[DataPointType]):
         
         stats = {
             'total_count': len(data_points),
-            'metadata_keys': set()
         }
         
-        # Collect all metadata keys
-        for point in data_points:
-            stats['metadata_keys'].update(point.metadata.keys())
-        
-        stats['metadata_keys'] = list(stats['metadata_keys'])
-        
         return stats
-    
-    def save_data(self, data_point: DataPointType, filename: Optional[str] = None) -> str:
-        """Save a data point to JSON file."""
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
-        
-        if filename is None:
-            filename = f"eval_data_{data_point.id}.json"
-        
-        filepath = os.path.join(self.data_dir, filename)
-        
-        # Use the data point's to_dict method
-        data_dict = data_point.to_dict()
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data_dict, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f"Saved data to: {filepath}")
-        return filepath

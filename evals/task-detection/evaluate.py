@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 import os
+from tqdm import tqdm
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 
@@ -28,12 +29,14 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TaskDetectionResult:
     """Result of task detection."""
-    data_point_id: str
+    filename: str
     analysis: str
     completed_steps: List[int]
     raw_response: str
     correct: bool
     ground_truth: List[int]
+    tokens_generated: int
+    response_time: float
     tokens_per_second: float
 
 class TaskDetectionEvaluator:
@@ -79,22 +82,23 @@ class TaskDetectionEvaluator:
             # Check correctness
             completed_steps = parsed_response.get('completed', [])
             ground_truth = data_point.ground_truth
-            correct = set(completed_steps) == set(ground_truth)
+            correct = set(completed_steps) == set(ground_truth) and len(completed_steps) == len(ground_truth)
             
             return TaskDetectionResult(
-                data_point_id=data_point.id,
+                filename=data_point.filename,
                 analysis=parsed_response.get('analysis', 'No analysis provided'),
                 completed_steps=parsed_response.get('completed', []),
                 raw_response=response.content,
                 correct=correct,
                 ground_truth=ground_truth,
+                tokens_generated=response.tokens_generated,
+                response_time=response.time_taken,
                 tokens_per_second=response.tokens_second
             )
             
         except Exception as e:
-            logger.error(f"Task detection failed for data point {data_point.id}: {e}")
+            logger.error(f"Task detection failed for data point {data_point.filename}: {e}")
             return TaskDetectionResult(
-                data_point_id=data_point.id,
                 analysis=f"Error: {str(e)}",
                 completed_steps=[],
                 raw_response="",
@@ -105,8 +109,7 @@ class TaskDetectionEvaluator:
         """Evaluate a batch of data points."""
         results = []
         
-        for data_point in data_points:
-            logger.info(f"Processing data point: {data_point.id}")
+        for data_point in tqdm(data_points, desc="Evaluating task detection", unit="data point", total=len(data_points)):
             result = self.detect_tasks(data_point)
             results.append(result)
         
@@ -124,5 +127,7 @@ class TaskDetectionEvaluator:
             'total_data_points': total_data_points,
             'successful_detections': successful_detections,
             'success_rate': successful_detections / total_data_points if total_data_points > 0 else 0,
+            'averate_tokens_generated': sum(r.tokens_generated for r in results) / total_data_points if total_data_points > 0 else 0,
+            'average_response_time': sum(r.response_time for r in results) / total_data_points if total_data_points > 0 else 0,
             'average_tokens_per_second': sum(r.tokens_per_second for r in results) / total_data_points if total_data_points > 0 else 0,
         }

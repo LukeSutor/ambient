@@ -1,24 +1,4 @@
 #!/usr/bin/env python3
-"""
-Config-driven evaluation runner for the local-computer        # Load data
-        logger.info(f"Loading data from: {eval_config['data_dir']}")
-        data_points = task_data_loader.load_all_data()
-        
-        if not data_points:
-            logger.error("No data points loaded")
-            return 1
-        
-        logger.info(f"Loaded {len(data_points)} data points")
-        
-        # Apply task detection specific filtering
-        data_points = task_data_loader.filter_for_task_detection(data_points)
-        
-        # Print data statistics
-        stats = task_data_loader.get_task_detection_stats(data_points).
-
-This script reads all configuration from config.yaml and runs evaluations accordingly.
-"""
-
 import logging
 import sys
 import os
@@ -100,9 +80,6 @@ def run_task_detection_evaluation(config: dict):
         
         logger.info(f"Loaded {len(data_points)} data points")
         
-        # Apply task detection specific filtering
-        data_points = task_data_loader.filter_for_task_detection(data_points)
-        
         # Print data statistics
         stats = task_data_loader.get_task_detection_stats(data_points)
         logger.info(f"Data stats: {stats}")
@@ -121,6 +98,8 @@ def run_task_detection_evaluation(config: dict):
         logger.info(f"Success rate: {aggregate_metrics.get('success_rate', 0):.2f}")
         logger.info(f"Total data points: {aggregate_metrics.get('total_data_points', 0)}")
         logger.info(f"Successful detections: {aggregate_metrics.get('successful_detections', 0)}")
+        logger.info(f"Average tokens generated: {aggregate_metrics.get('averate_tokens_generated', 0):.2f}")
+        logger.info(f"Average response time: {aggregate_metrics.get('average_response_time', 0):.2f} seconds")
         logger.info(f"Average tokens per second: {aggregate_metrics.get('average_tokens_per_second', 0):.2f}")
         
         # Save results

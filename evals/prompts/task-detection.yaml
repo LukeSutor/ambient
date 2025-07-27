@@ -16,6 +16,7 @@ detect_tasks:
 
     URL: {active_url}
 
+    Here are the tasks to analyze for step completion (do not focus on any other tasks):
     <tasks>
     {tasks}
     </tasks>
