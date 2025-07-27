@@ -247,16 +247,7 @@ pub async fn capture_eval_data(app_handle: AppHandle) -> Result<String, String> 
     let prev_prev_summary = if let Some(summary) = &prev_prev_state.summary {
         summary.clone()
     } else {
-        // Fall back to fetching from database (should be the summary before the prev state)
-        match get_latest_activity_summary(&db_state) {
-            Ok(Some(summary)) => {
-                summary.get("summary")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("No previous summary available")
-                    .to_string()
-            }
-            _ => "No previous summary available".to_string()
-        }
+        return Err("Previous screen state summary is missing".to_string());
     };
 
     // Create eval data structure
