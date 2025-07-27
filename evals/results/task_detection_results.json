@@ -1,67 +1,51 @@
 {
   "evaluation_info": {
-    "timestamp": "2025-07-27T17:43:24.315962",
-    "total_data_points": 6,
+    "timestamp": "2025-07-27T19:52:55.923763",
+    "total_data_points": 4,
     "evaluation_type": "task_detection"
   },
   "aggregate_metrics": {
-    "total_data_points": 6,
+    "total_data_points": 4,
     "successful_detections": 2,
-    "success_rate": 0.3333333333333333,
-    "averate_tokens_generated": 49.833333333333336,
-    "average_response_time": 22.121445218722027,
-    "average_tokens_per_second": 2.322947979475399
+    "success_rate": 0.5,
+    "averate_tokens_generated": 88.75,
+    "average_response_time": 11.76663202047348,
+    "average_tokens_per_second": 7.275305755236295
   },
   "individual_results": [
     {
       "correct": true,
-      "analysis": "The user was working on internships and closed the issue related to Fast-VLM. The new screen text shows the issue was closed due to inactivity, indicating the task was completed.",
+      "analysis": "The task detection is based on the content on the person's screen using accessibility APIs. It is your job to return which steps have been completed based on the content on the person's screen. - Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most. - Ensure to only include step IDs that are present in the list of tasks provided. Do not include a step in the completed array if it is already marked complete. If there are no completed steps, return an empty array.",
       "completed_steps": [],
       "ground_truth": [],
-      "raw_response": "{\"analysis\":\"The user was working on internships and closed the issue related to Fast-VLM. The new screen text shows the issue was closed due to inactivity, indicating the task was completed.\",\"completed\":[]}\n"
-    },
-    {
-      "correct": false,
-      "analysis": "Navigated to the correct repository for summer internships and checked the readme for new postings, indicating the step completed.",
-      "completed_steps": [
-        1
-      ],
-      "ground_truth": [],
-      "raw_response": "{\"analysis\":\"Navigated to the correct repository for summer internships and checked the readme for new postings, indicating the step completed.\",\"completed\":[1]}\n"
-    },
-    {
-      "correct": false,
-      "analysis": "The step for checking summer 2026 internships was completed as evidenced by the 'Check summer 2026' status being pending and the subsequent step for spring 2026 being pending. The user likely completed the summer 2026 check first, then moved to spring 2026.",
-      "completed_steps": [
-        1
-      ],
-      "ground_truth": [],
-      "raw_response": "{\"analysis\":\"The step for checking summer 2026 internships was completed as evidenced by the 'Check summer 2026' status being pending and the subsequent step for spring 2026 being pending. The user likely completed the summer 2026 check first, then moved to spring 2026.\",\"completed\":[1]}\n"
-    },
-    {
-      "correct": false,
-      "analysis": "The user completed the 'Check spring 2026' step by navigating to the specified URL and checking for new internships, which was evidenced by the screen text indicating the action was taken.",
-      "completed_steps": [
-        2
-      ],
-      "ground_truth": [],
-      "raw_response": "{\"analysis\":\"The user completed the 'Check spring 2026' step by navigating to the specified URL and checking for new internships, which was evidenced by the screen text indicating the action was taken.\",\"completed\":[2]}"
+      "raw_response": "{\n\n\"analysis\": \"The task detection is based on the content on the person's screen using accessibility APIs. It is your job to return which steps have been completed based on the content on the person's screen. - Make sure your reasoning is clear and concise. It shouldn't be too long, two sentences at most. - Ensure to only include step IDs that are present in the list of tasks provided. Do not include a step in the completed array if it is already marked complete. If there are no completed steps, return an empty array.\"\n\n,\n                    \"completed\": []\n                    } "
     },
     {
       "correct": true,
-      "analysis": "The user accessed the arXiv paper details page for the Hierarchical Reasoning Model, indicating the completion of the task to view the paper's information.",
+      "analysis": "The task detection process involves analyzing the screen content to identify completed steps based on the provided task list. The analysis focuses on the text captured from the screen, ensuring that only steps present in the task list are considered. Completed steps are determined by their presence in the screen text, and the results are returned in an array of step IDs that are present in the task list.",
       "completed_steps": [],
       "ground_truth": [],
-      "raw_response": "{\"analysis\":\"The user accessed the arXiv paper details page for the Hierarchical Reasoning Model, indicating the completion of the task to view the paper's information.\",\"completed\":[]}\n"
+      "raw_response": "{\"analysis\": \"The task detection process involves analyzing the screen content to identify completed steps based on the provided task list. The analysis focuses on the text captured from the screen, ensuring that only steps present in the task list are considered. Completed steps are determined by their presence in the screen text, and the results are returned in an array of step IDs that are present in the task list.\" , \"completed\": []}\n"
     },
     {
       "correct": false,
-      "analysis": "Navigated to the YouTube screen which is part of the task to check for internships, indicating that the step to check summer 2026 internships was completed. The user moved to the YouTube page, which was the target of the task.",
+      "analysis": "The completed steps are: 1, 2, 3.",
+      "completed_steps": [
+        1,
+        2,
+        3
+      ],
+      "ground_truth": [],
+      "raw_response": "{\"analysis\": \"The completed steps are: 1, 2, 3.\" , \"completed\": [1, 2, 3]}\n"
+    },
+    {
+      "correct": false,
+      "analysis": "The task list includes steps 1, 2, 3, and 4. Step 1 is completed as the person has marked the first task as complete. Step 2 is not completed as the person has not marked it as complete. Step 3 is not completed as the person has not marked it as complete. Step 4 is not completed as the person has not marked it as complete.",
       "completed_steps": [
         1
       ],
       "ground_truth": [],
-      "raw_response": "{\"analysis\":\"Navigated to the YouTube screen which is part of the task to check for internships, indicating that the step to check summer 2026 internships was completed. The user moved to the YouTube page, which was the target of the task.\",\"completed\":[1]}\n"
+      "raw_response": "{\"analysis\": \"The task list includes steps 1, 2, 3, and 4. Step 1 is completed as the person has marked the first task as complete. Step 2 is not completed as the person has not marked it as complete. Step 3 is not completed as the person has not marked it as complete. Step 4 is not completed as the person has not marked it as complete.\" , \"completed\": [1]}\n"
     }
   ]
 }

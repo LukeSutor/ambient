@@ -27,6 +27,7 @@ class TaskDetectionDataPoint(BaseEvalDataPoint):
     screen_diff: Dict[str, Any]
     active_tasks: List[Dict[str, Any]]
     formatted_tasks: List[Dict[str, Any]]
+    formatted_screen_state: str
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TaskDetectionDataPoint':
@@ -42,6 +43,7 @@ class TaskDetectionDataPoint(BaseEvalDataPoint):
             screen_diff=data['screen_diff_markdown'],
             active_tasks=data['active_tasks'],
             formatted_tasks=data['formatted_tasks'],
+            formatted_screen_state=data['formatted_screen_state']
             )
         except KeyError as e:
             logger.error(f"Missing required field in data point: {e}")
@@ -89,6 +91,19 @@ class TaskDetectionDataLoader(BaseDataLoader[TaskDetectionDataPoint]):
         return {
             'previous_summary': data_point.prev_prev_summary or "No previous summary available",
             'text': data_point.screen_diff,
+            'active_url': data_point.prev_state.get('active_url', ''),
+            'tasks': data_point.formatted_tasks
+        }
+    
+    def prepare_prompt_data_no_summary(self, data_point: TaskDetectionDataPoint) -> Dict[str, Any]:
+        """
+        Prepare data point for task detection prompt generation without previous summary.
+        
+        Returns:
+            Dictionary with keys: text, active_url, tasks
+        """
+        return {
+            'text': data_point.formatted_screen_state,
             'active_url': data_point.prev_state.get('active_url', ''),
             'tasks': data_point.formatted_tasks
         }

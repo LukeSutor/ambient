@@ -123,6 +123,66 @@ class TaskDetectionEvaluator:
                 response_time=0.0,
                 tokens_per_second=0.0
             )
+        
+    def detect_tasks_no_summary(self, data_point: TaskDetectionDataPoint) -> TaskDetectionResult:
+
+        # Prepare prompt
+        prompt_data = self.data_loader.prepare_prompt_data_no_summary(data_point)
+
+        # Get task detection prompt
+        detect_prompt = self.prompt_manager.get_prompt(
+            'task-detection', 
+            'detect_tasks_no_summary',
+            **prompt_data
+        )
+
+        # Get the schema for structured response
+        schema_key = self.data_loader.get_evaluation_schema_key()
+        schema = self.schema_manager.get_schema(schema_key)
+        if not schema:
+            logger.warning(f"No schema found for {schema_key}. Using default response format.")
+            schema = None
+        
+        # Generate task detection with schema constraint
+        try:
+            response = self.llm_client.generate(detect_prompt, schema)
+            
+            try:
+                parsed_response = json.loads(response.content)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse task detection response: {response.content}")
+                parsed_response = {"analysis": "Failed to parse response", "completed": []}
+
+            # Check correctness
+            completed_steps = parsed_response.get('completed', [])
+            ground_truth = data_point.ground_truth
+            correct = set(completed_steps) == set(ground_truth) and len(completed_steps) == len(ground_truth)
+            
+            return TaskDetectionResult(
+                filename=data_point.filename,
+                analysis=parsed_response.get('analysis', 'No analysis provided'),
+                completed_steps=parsed_response.get('completed', []),
+                raw_response=response.content,
+                correct=correct,
+                ground_truth=ground_truth,
+                tokens_generated=response.tokens_generated,
+                response_time=response.time_taken,
+                tokens_per_second=response.tokens_second
+            )
+            
+        except Exception as e:
+            logger.error(f"Task detection failed for data point {data_point.filename}: {e}")
+            return TaskDetectionResult(
+                filename=data_point.filename,
+                analysis=f"Error: {str(e)}",
+                completed_steps=[],
+                raw_response="",
+                correct=False,
+                ground_truth=data_point.ground_truth,
+                tokens_generated=0,
+                response_time=0.0,
+                tokens_per_second=0.0
+            )
     
     def evaluate_batch(self, data_points: List[TaskDetectionDataPoint]) -> List[TaskDetectionResult]:
         """Evaluate a batch of data points with parallel processing."""
@@ -131,11 +191,18 @@ class TaskDetectionEvaluator:
         # Get the parallelism configuration
         parallel_config = self.get_parallel_config()
         max_workers = parallel_config['max_workers']
+
+        task_fn = self.detect_tasks
+        use_summary = self.config.get('evaluation', {}).get('task_detection', {}).get('use_summary', True)
+        if not use_summary:
+            # Use the no summary version of task detection
+            logger.info("Using task detection without summary")
+            task_fn = self.detect_tasks_no_summary
         
         # If only one worker or small batch, use sequential processing
         if max_workers <= 1 or len(data_points) <= max_workers:
             for data_point in tqdm(data_points, desc="Evaluating task detection", unit="data point"):
-                result = self.detect_tasks(data_point)
+                result = task_fn(data_point)
                 results.append(result)
             return results
         
@@ -145,7 +212,7 @@ class TaskDetectionEvaluator:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
             future_to_index = {
-                executor.submit(self.detect_tasks, data_point): i 
+                executor.submit(task_fn, data_point): i 
                 for i, data_point in enumerate(data_points)
             }
             

@@ -66,6 +66,7 @@ evaluation:
     output_file: "./results/task_detection_results.json"
     generate_ground_truth: false
     batch_size: 10
+    use_summary: false
     
   # Visualization settings
   visualization:
