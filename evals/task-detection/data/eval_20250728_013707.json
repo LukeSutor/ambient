@@ -1,0 +1,157 @@
+{
+  "timestamp": "2025-07-28T01:37:07.778880800+00:00",
+  "prev_prev_screen_state": {
+    "data": [
+      {
+        "process_id": 29176,
+        "process_name": "brave.exe",
+        "application_name": "Brave Browser",
+        "text_content": [
+          "Feature Request: Apple just release Fast-VLM, a very promising set of multimodal language models · Issue #13512 · ggml-org/llama.cpp",
+          "Type",
+          "to search",
+          "Issues",
+          "Pull requests",
+          "Projects",
+          "Security",
+          "Feature Request: Apple just release Fast-VLM, a very promising set of multimodal language models",
+          "#13512",
+          "Closed",
+          "opened",
+          "on May 13",
+          "Contributor",
+          "I am running the latest code. Mention the version if possible as well.",
+          "I carefully followed the",
+          "I searched using keywords relevant to my issue to make sure that I am creating a new issue that is not already open (or closed).",
+          "I reviewed the",
+          ", and have a new and useful enhancement to share.",
+          "Apple just release Fast-VLM, a very promising set of multimodal language models:",
+          "Please support these models and their quants in llama.cpp",
+          "These models pack a lot of bang for their rather modest size.",
+          "No response",
+          "👍",
+          "👀",
+          "added",
+          "enhancement",
+          "changed the title",
+          "Feature Request:",
+          "on Jun 12",
+          "bot",
+          "on Jun 26",
+          "This issue was closed because it has been inactive for 14 days since being marked as stale.",
+          "closed this",
+          "as",
+          "No one assigned",
+          "No type",
+          "No projects",
+          "No milestone",
+          "None yet",
+          "No branches or pull requests",
+          "You're not receiving notifications from this thread.",
+          "Address and search bar"
+        ]
+      },
+      {
+        "process_id": 20268,
+        "process_name": "notepad.exe",
+        "application_name": "Notepad",
+        "text_content": [
+          "Text Editor",
+          "Ln 4, Col 1",
+          "100%",
+          "Windows (CRLF)",
+          "UTF-8"
+        ]
+      }
+    ],
+    "active_url": "github.com/ggml-org/llama.cpp/issues/13512",
+    "timestamp": "2025-07-28T01:35:48.761513300+00:00",
+    "summary": "The user is working on a feature request in the ggml-org/llama.cpp repository, discussing Apple's Fast-VLM multimodal language models and seeking support for them in llama.cpp."
+  },
+  "prev_screen_state": {
+    "data": [
+      {
+        "process_id": 20268,
+        "process_name": "notepad.exe",
+        "application_name": "Notepad",
+        "text_content": [
+          "Text Editor",
+          "Ln 4, Col 1",
+          "100%",
+          "Windows (CRLF)",
+          "UTF-8"
+        ]
+      },
+      {
+        "process_id": 29176,
+        "process_name": "brave.exe",
+        "application_name": "Brave Browser",
+        "text_content": [
+          "vanshb03/Summer2026-Internships: Collection of Summer 2026 tech internships!",
+          "Legend",
+          "•",
+          "🛂 - Does NOT offer Sponsorship",
+          "🇺🇸 - Requires U.S. Citizenship",
+          "🔒 - Internship application is closed",
+          "For off-season internships, please see the",
+          "For new-grad tech jobs, check out",
+          "Austin, TX",
+          "Chicago, IL",
+          "New York, NY",
+          "Stamford, CT",
+          "Houston, TX",
+          "5 locations",
+          "Santa Clara, CA",
+          "Toronto, ON",
+          "Address and search bar"
+        ]
+      }
+    ],
+    "active_url": "github.com/vanshb03/Summer2026-Internships",
+    "timestamp": "2025-07-28T01:36:46.698561800+00:00",
+    "summary": "vanshb03 is exploring Summer 2026 tech internships via Brave Browser, viewing the provided URL for details."
+  },
+  "screen_diff_markdown": "# Screen Text by Application\n\n## Brave Browser (PID: 29176)\n\nvanshb03/Summer2026-Internships: Collection of Summer 2026 tech internships!\nLegend\n•\n🛂 - Does NOT offer Sponsorship\n🇺🇸 - Requires U.S. Citizenship\n🔒 - Internship application is closed\nFor off-season internships, please see the\nFor new-grad tech jobs, check out\nAustin, TX\nChicago, IL\nNew York, NY\nStamford, CT\nHouston, TX\n5 locations\nSanta Clara, CA\nToronto, ON\n\n",
+  "formatted_screen_state": "# Screen Text by Application\n\n## Notepad (PID: 20268)\n\nText Editor\nLn 4, Col 1\n100%\nWindows (CRLF)\nUTF-8\n\n## Brave Browser (PID: 29176)\n\nvanshb03/Summer2026-Internships: Collection of Summer 2026 tech internships!\nLegend\n•\n🛂 - Does NOT offer Sponsorship\n🇺🇸 - Requires U.S. Citizenship\n🔒 - Internship application is closed\nFor off-season internships, please see the\nFor new-grad tech jobs, check out\nAustin, TX\nChicago, IL\nNew York, NY\nStamford, CT\nHouston, TX\n5 locations\nSanta Clara, CA\nToronto, ON\nAddress and search bar\n\n",
+  "prev_prev_summary": "The user is working on a feature request in the ggml-org/llama.cpp repository, discussing Apple's Fast-VLM multimodal language models and seeking support for them in llama.cpp.",
+  "active_tasks": [
+    {
+      "task": {
+        "id": 1,
+        "name": "Check for internships",
+        "description": "Browse job postings to check for summer internships",
+        "category": null,
+        "priority": 1,
+        "frequency": "daily",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T01:37:07.778379900Z",
+        "created_at": "2025-07-28T01:37:07.778386400Z",
+        "updated_at": "2025-07-28T01:37:07.778390500Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 1,
+          "task_id": 1,
+          "step_number": 1,
+          "title": "Check summer 2026",
+          "description": "Navigate to https://github.com/vanshb03/Summer2026-Internships and check the readme for new postings",
+          "status": "pending",
+          "completed_at": null
+        },
+        {
+          "id": 2,
+          "task_id": 1,
+          "step_number": 2,
+          "title": "Check spring 2026",
+          "description": "Navigate to https://github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md and check for new internships",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    }
+  ],
+  "formatted_tasks": "Task Check for internships,  Description: Browse job postings to check for summer internships, Steps: [\n\tStep: Check summer 2026, ID: 1, Description: Navigate to https://github.com/vanshb03/Summer2026-Internships and check the readme for new postings, Status: pending\n\tStep: Check spring 2026, ID: 2, Description: Navigate to https://github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md and check for new internships, Status: pending\n]",
+  "ground_truth_completed_step_ids": [1]
+}
