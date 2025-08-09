@@ -12,7 +12,6 @@ pub mod tasks;
 pub mod types;
 use db::DbState;
 use std::sync::Mutex;
-use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::{Target, TargetKind};
@@ -39,89 +38,7 @@ impl Drop for CleanupHandler {
 static _CLEANUP_HANDLER: std::sync::LazyLock<CleanupHandler> =
   std::sync::LazyLock::new(|| CleanupHandler);
 
-// Setup signal handlers for graceful shutdown
-#[cfg(windows)]
-fn setup_signal_handlers() {
-  use std::sync::atomic::AtomicBool;
-  use std::sync::Arc;
-
-  let _shutdown_flag = Arc::new(AtomicBool::new(false));
-
-  // Register Windows console control handler
-  #[cfg(windows)]
-  {
-    extern "system" fn console_handler(ctrl_type: u32) -> i32 {
-      match ctrl_type {
-        0 => {
-          // CTRL_C_EVENT
-          log::info!("[signal] Received CTRL+C, shutting down llama server...");
-          let rt = tokio::runtime::Runtime::new().unwrap();
-          rt.block_on(async {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-              log::error!("[signal] Failed to stop llama server: {}", e);
-            }
-          });
-          1 // TRUE - we handled it
-        }
-        2 => {
-          // CTRL_BREAK_EVENT
-          log::info!("[signal] Received CTRL+BREAK, shutting down llama server...");
-          let rt = tokio::runtime::Runtime::new().unwrap();
-          rt.block_on(async {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-              log::error!("[signal] Failed to stop llama server: {}", e);
-            }
-          });
-          1 // TRUE - we handled it
-        }
-        5 => {
-          // CTRL_LOGOFF_EVENT
-          log::info!("[signal] Received LOGOFF event, shutting down llama server...");
-          let rt = tokio::runtime::Runtime::new().unwrap();
-          rt.block_on(async {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-              log::error!("[signal] Failed to stop llama server: {}", e);
-            }
-          });
-          1 // TRUE - we handled it
-        }
-        6 => {
-          // CTRL_SHUTDOWN_EVENT
-          log::info!("[signal] Received SHUTDOWN event, shutting down llama server...");
-          let rt = tokio::runtime::Runtime::new().unwrap();
-          rt.block_on(async {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-              log::error!("[signal] Failed to stop llama server: {}", e);
-            }
-          });
-          1 // TRUE - we handled it
-        }
-        _ => 0, // FALSE - we didn't handle it
-      }
-    }
-
-    unsafe {
-      type BOOL = i32;
-      type DWORD = u32;
-
-      #[link(name = "kernel32")]
-      extern "system" {
-        fn SetConsoleCtrlHandler(
-          handler: Option<unsafe extern "system" fn(DWORD) -> BOOL>,
-          add: BOOL,
-        ) -> BOOL;
-      }
-
-      SetConsoleCtrlHandler(Some(console_handler), 1);
-    }
-  }
-}
-
-#[cfg(not(windows))]
-fn setup_signal_handlers() {
-  // For non-Windows platforms, you could implement Unix signal handlers here
-  log::info!("[signal] Signal handlers not implemented for this platform");
-}
+use crate::os_utils::signals::setup_signal_handlers;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -169,62 +86,9 @@ pub fn run() {
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
-  log::info!("[deep_link] Received URLs: {:?}", urls);
-
+        log::info!("[deep_link] Received URLs: {:?}", urls);
         for url in &urls {
-          let url_str = url.as_str();
-          if url_str.starts_with("cortical://auth/callback") {
-            log::info!("[deep_link] Processing OAuth2 callback: {}", url_str);
-
-            // Parse URL to extract code
-            if let Ok(parsed_url) = url::Url::parse(url_str) {
-              let query_pairs: std::collections::HashMap<String, String> = parsed_url
-                .query_pairs()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect();
-
-              if let Some(code) = query_pairs.get("code") {
-                let code = code.clone();
-                let app_handle_clone = app_handle_for_deep_link.clone();
-
-                // Handle the callback asynchronously
-                tauri::async_runtime::spawn(async move {
-                  match auth::google_handle_callback(code).await {
-                    Ok(result) => {
-                      log::info!("[deep_link] OAuth2 callback handled successfully");
-                      // Emit event to frontend
-                      if let Err(e) = app_handle_clone.emit("oauth2-success", &result) {
-                        log::error!("[deep_link] Failed to emit oauth2-success event: {}", e);
-                      }
-                    }
-                    Err(e) => {
-                      log::error!("[deep_link] Failed to handle OAuth2 callback: {}", e);
-                      // Emit error event to frontend
-                      if let Err(emit_err) = app_handle_clone.emit("oauth2-error", &e) {
-                        log::error!(
-                          "[deep_link] Failed to emit oauth2-error event: {}",
-                          emit_err
-                        );
-                      }
-                    }
-                  }
-                });
-              } else if let Some(error) = query_pairs.get("error") {
-                let error_description = query_pairs.get("error_description").cloned();
-                let error_msg = format!(
-                  "OAuth2 error: {} - {}",
-                  error,
-                  error_description.unwrap_or_default()
-                );
-                log::error!("[deep_link] {}", error_msg);
-
-                // Emit error event to frontend
-                if let Err(e) = app_handle_for_deep_link.emit("oauth2-error", &error_msg) {
-                  log::error!("[deep_link] Failed to emit oauth2-error event: {}", e);
-                }
-              }
-            }
-          }
+          crate::auth::deep_link::handle_open_url(&app_handle_for_deep_link, url.as_str());
         }
       });
 
