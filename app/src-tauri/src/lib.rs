@@ -3,9 +3,7 @@ pub mod auth;
 pub mod constants;
 pub mod data;
 pub mod db;
-pub mod embedding;
 pub mod events;
-pub mod integrations;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;
@@ -248,7 +246,7 @@ pub fn run() {
       // Start llama.cpp server on startup
       let app_handle_for_llama = app.handle().clone();
       tauri::async_runtime::spawn(async move {
-        // Wait a bit to ensure the app is fully initialized
+        // Wait to ensure the app is fully initialized
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         match models::llm::server::spawn_llama_server(app_handle_for_llama).await {
@@ -290,7 +288,6 @@ pub fn run() {
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
       scheduler::is_scheduler_running,
-      embedding::get_embedding,
       db::execute_sql,
       db::reset_database,
       db::get_events,
@@ -309,8 +306,6 @@ pub fn run() {
       setup::check_setup_complete,
       setup::get_llm_model_path,
       setup::check_llm_model_download,
-      integrations::chromium::server::run_workflow_by_id,
-      integrations::chromium::server::ping_chromium_extension,
       os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_formatted,
