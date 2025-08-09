@@ -1,11 +1,11 @@
 use crate::events::{emitter, types::*};
+use chrono;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
-use chrono;
 
 struct SchedulerState {
   capture_handle: Option<JoinHandle<()>>,
@@ -27,22 +27,22 @@ static SCHEDULER_STATE: Lazy<Arc<Mutex<SchedulerState>>> = Lazy::new(|| {
 // Function to emit CAPTURE_SCREEN event every 10 seconds
 async fn run_capture_screen_task(cancel_token: CancellationToken) {
   let mut interval = interval(Duration::from_secs(30));
-  
+
   loop {
     tokio::select! {
       _ = interval.tick() => {
         let timestamp = chrono::Utc::now().to_rfc3339();
         let capture_event = CaptureScreenEvent { timestamp };
-        println!("[scheduler] Emitting CAPTURE_SCREEN event");
-        
+  log::debug!("[scheduler] Emitting CAPTURE_SCREEN event");
+
         if let Err(e) = emitter::emit(CAPTURE_SCREEN, capture_event) {
-          eprintln!("[scheduler] Failed to emit CAPTURE_SCREEN event: {}", e);
+          log::error!("[scheduler] Failed to emit CAPTURE_SCREEN event: {}", e);
         } else {
-          println!("[scheduler] Emitted CAPTURE_SCREEN event");
+          log::debug!("[scheduler] Emitted CAPTURE_SCREEN event");
         }
       }
       _ = cancel_token.cancelled() => {
-        println!("[scheduler] Capture task cancelled gracefully");
+  log::info!("[scheduler] Capture task cancelled gracefully");
         break;
       }
     }
@@ -61,18 +61,20 @@ pub async fn start_capture_scheduler() -> Result<(), String> {
 
   // Stop existing capture task if running
   if let Some(cancel_token) = state.capture_cancel_token.take() {
-    println!("[scheduler] Cancelling previous capture task...");
+  log::info!("[scheduler] Cancelling previous capture task...");
     cancel_token.cancel();
   }
-  
+
   if let Some(handle) = state.capture_handle.take() {
     // Wait a moment for graceful shutdown, then abort if needed
     tokio::time::timeout(Duration::from_millis(100), async {
       let _ = handle.await;
-    }).await.ok();
+    })
+    .await
+    .ok();
   }
 
-  println!("[scheduler] Starting capture screen scheduler (10 second interval)");
+  log::info!("[scheduler] Starting capture screen scheduler (10 second interval)");
 
   // Create new cancellation token
   let cancel_token = CancellationToken::new();
@@ -86,7 +88,7 @@ pub async fn start_capture_scheduler() -> Result<(), String> {
   state.capture_handle = Some(handle);
   state.capture_cancel_token = Some(cancel_token);
   state.capture_enabled = true;
-  println!("[scheduler] Capture scheduler started successfully.");
+  log::info!("[scheduler] Capture scheduler started successfully.");
   Ok(())
 }
 
@@ -95,25 +97,25 @@ pub async fn stop_capture_scheduler() -> Result<(), String> {
   let mut state = SCHEDULER_STATE.lock().await;
 
   if let Some(cancel_token) = state.capture_cancel_token.take() {
-    println!("[scheduler] Stopping capture scheduler...");
-    
+  log::info!("[scheduler] Stopping capture scheduler...");
+
     // Request graceful cancellation
     cancel_token.cancel();
-    
+
     // Wait for the task to finish gracefully
     if let Some(handle) = state.capture_handle.take() {
       match tokio::time::timeout(Duration::from_secs(1), handle).await {
-        Ok(_) => println!("[scheduler] Capture scheduler stopped gracefully."),
+  Ok(_) => log::info!("[scheduler] Capture scheduler stopped gracefully."),
         Err(_) => {
-          println!("[scheduler] Capture scheduler timed out, but should stop soon.");
+          log::warn!("[scheduler] Capture scheduler timed out, but should stop soon.");
         }
       }
     }
-    
+
     state.capture_enabled = false;
     Ok(())
   } else {
-    println!("[scheduler] Capture scheduler is not running.");
+  log::info!("[scheduler] Capture scheduler is not running.");
     Err("Capture scheduler is not running.".to_string())
   }
 }

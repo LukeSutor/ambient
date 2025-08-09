@@ -36,7 +36,7 @@ Generate a concise summary that captures the user's current primary activity in 
 );
   map.insert(
     "detect_tasks",
-r#"TASK: Detect which steps completed based on screen changes.
+    r#"TASK: Detect which steps completed based on screen changes.
 
 OUTPUT: {"analysis":"<why step completed>","completed":[<step IDs>]}
 
@@ -69,8 +69,8 @@ CRITICAL RULES:
 - Max 2 sentences reasoning
 
 REMEMBER: {"analysis":"<why step completed>","completed":[<step IDs>]}
-Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis."#
-      );
+Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis."#,
+  );
   map
 });
 

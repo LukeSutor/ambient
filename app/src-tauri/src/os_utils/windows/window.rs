@@ -1,32 +1,31 @@
-use std::result::Result;
 use crate::types::AppState;
-use tauri::{AppHandle, Manager};
-use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::result::Result;
+use tauri::{AppHandle, Manager};
 use tokio::task;
 use windows::{
   core::*,
   Win32::{
+    Foundation::CloseHandle,
     System::{
       Com::{
         CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
         COINIT_APARTMENTTHREADED,
       },
-      Variant::{VARIANT},
-      ProcessStatus::{GetModuleBaseNameW},
-      Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
       Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, 
-        PROCESSENTRY32W, TH32CS_SNAPPROCESS
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
       },
+      ProcessStatus::GetModuleBaseNameW,
+      Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+      Variant::VARIANT,
     },
-    Foundation::CloseHandle,
     UI::Accessibility::{
       CUIAutomation, IUIAutomation, IUIAutomationValuePattern,
-      TreeScope_Descendants, TreeScope_Children, TreeScope_Subtree, UIA_NamePropertyId, 
-      UIA_ValuePatternId, UIA_WindowControlTypeId, UIA_ControlTypePropertyId,
-      UIA_TextControlTypeId, UIA_EditControlTypeId, UIA_DocumentControlTypeId,
-      UIA_IsOffscreenPropertyId, UIA_ProcessIdPropertyId
+      TreeScope_Descendants, TreeScope_Subtree, UIA_ControlTypePropertyId,
+      UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_IsOffscreenPropertyId,
+      UIA_NamePropertyId, UIA_ProcessIdPropertyId, UIA_TextControlTypeId, UIA_ValuePatternId,
     },
   },
 };
@@ -64,7 +63,7 @@ fn get_child_processes(parent_pid: u32) -> Result<HashSet<u32>, String> {
       loop {
         if process_entry.th32ParentProcessID == parent_pid {
           child_pids.insert(process_entry.th32ProcessID);
-          
+
           // Recursively get children of children
           if let Ok(grandchildren) = get_child_processes(process_entry.th32ProcessID) {
             child_pids.extend(grandchildren);
@@ -209,12 +208,11 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
 
     let result = (|| {
       // Get all child processes to filter out
-      let processes_to_filter = get_child_processes(app_pid)
-        .unwrap_or_else(|_| {
-          let mut set = HashSet::new();
-          set.insert(app_pid); // Fallback to just parent
-          set
-        });
+      let processes_to_filter = get_child_processes(app_pid).unwrap_or_else(|_| {
+        let mut set = HashSet::new();
+        set.insert(app_pid); // Fallback to just parent
+        set
+      });
 
       let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
         .map_err(|e| format!("Failed to create UIAutomation: {:?}", e))?;
@@ -222,21 +220,21 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
       let root = automation
         .GetRootElement()
         .map_err(|e| format!("Failed to get root element: {:?}", e))?;
-      
+
       // Create cache request for efficient property access
       let cache_request = automation
         .CreateCacheRequest()
         .map_err(|e| format!("Failed to create cache request: {:?}", e))?;
-      
+
       // Cache the properties we need
       cache_request
         .AddProperty(UIA_NamePropertyId)
         .map_err(|e| format!("Failed to add Name property to cache: {:?}", e))?;
-      
+
       cache_request
         .AddProperty(UIA_ControlTypePropertyId)
         .map_err(|e| format!("Failed to add ControlType property to cache: {:?}", e))?;
-      
+
       cache_request
         .AddProperty(UIA_IsOffscreenPropertyId)
         .map_err(|e| format!("Failed to add IsOffscreen property to cache: {:?}", e))?;
@@ -252,7 +250,7 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
 
       // Create condition for visible text elements only
       let visible_condition = create_visible_text_condition(&automation)?;
-      
+
       // Find ALL visible text elements directly from root
       let text_elements = root
         .FindAllBuildCache(TreeScope_Subtree, &visible_condition, &cache_request)
@@ -294,15 +292,15 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         };
 
         // Add text to the appropriate process group
-        let app_entry = app_map.entry(process_id).or_insert_with(|| {
-          ApplicationTextData {
+        let app_entry = app_map
+          .entry(process_id)
+          .or_insert_with(|| ApplicationTextData {
             process_id,
             process_name: None,
             application_name: None,
             text_content: Vec::new(),
-          }
-        });
-        
+          });
+
         // Only add if not already present (deduplication)
         if !app_entry.text_content.contains(&text) {
           app_entry.text_content.push(text);
@@ -369,22 +367,28 @@ fn create_visible_text_condition(
 // Helper function to filter out junk text
 fn is_junk_text(text: &str) -> bool {
   let text = text.trim();
-  
+
   // Filter out empty strings and single characters
   if text.is_empty() || text.len() <= 1 {
     return true;
   }
-  
+
   // Filter out strings that are just whitespace or special characters
-  if text.chars().all(|c| c.is_whitespace() || c.is_ascii_punctuation()) {
+  if text
+    .chars()
+    .all(|c| c.is_whitespace() || c.is_ascii_punctuation())
+  {
     return true;
   }
-  
+
   // Filter out strings that contain only non-printable characters or replacement characters
-  if text.chars().all(|c| c.is_control() || c == '\u{FFFD}' || c == '�') {
+  if text
+    .chars()
+    .all(|c| c.is_control() || c == '\u{FFFD}' || c == '�')
+  {
     return true;
   }
-  
+
   // Filter out strings containing Unicode Private Use Area characters (icon fonts, custom symbols)
   if text.chars().any(|c| {
     let code = c as u32;
@@ -395,28 +399,41 @@ fn is_junk_text(text: &str) -> bool {
   }) {
     return true;
   }
-  
+
   // Filter out strings that are mostly Unicode replacement characters (emoji fallbacks)
-  let replacement_count = text.chars().filter(|&c| c == '\u{FFFD}' || c == '�').count();
+  let replacement_count = text
+    .chars()
+    .filter(|&c| c == '\u{FFFD}' || c == '�')
+    .count();
   if replacement_count > 0 && replacement_count >= text.chars().count() / 2 {
     return true;
   }
-  
+
   // Filter out strings that are just whitespace mixed with replacement characters
-  if text.chars().all(|c| c.is_whitespace() || c == '\u{FFFD}' || c == '�' || c.is_control()) {
+  if text
+    .chars()
+    .all(|c| c.is_whitespace() || c == '\u{FFFD}' || c == '�' || c.is_control())
+  {
     return true;
   }
-  
+
   // Filter out very short strings that are likely UI artifacts
-  if text.len() <= 3 && text.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ',' || c == '$') {
+  if text.len() <= 3
+    && text
+      .chars()
+      .all(|c| c.is_ascii_digit() || c == '.' || c == ',' || c == '$')
+  {
     return true;
   }
-  
+
   // Filter out strings that are just numbers or basic UI text
-  if text.chars().all(|c| c.is_ascii_digit() || c.is_whitespace()) {
+  if text
+    .chars()
+    .all(|c| c.is_ascii_digit() || c.is_whitespace())
+  {
     return true;
   }
-  
+
   // Filter out strings that are only special Unicode characters (box drawing, etc.)
   if text.chars().all(|c| {
     let code = c as u32;
@@ -430,16 +447,25 @@ fn is_junk_text(text: &str) -> bool {
   }) {
     return true;
   }
-  
+
   // Filter out common UI elements that aren't useful
   let lower_text = text.to_lowercase();
-  if lower_text == "ok" || lower_text == "cancel" || lower_text == "close" || 
-     lower_text == "minimize" || lower_text == "maximize" || lower_text == "restore" ||
-     lower_text == "help" || lower_text == "file" || lower_text == "edit" || 
-     lower_text == "view" || lower_text == "new" || lower_text == "save" {
+  if lower_text == "ok"
+    || lower_text == "cancel"
+    || lower_text == "close"
+    || lower_text == "minimize"
+    || lower_text == "maximize"
+    || lower_text == "restore"
+    || lower_text == "help"
+    || lower_text == "file"
+    || lower_text == "edit"
+    || lower_text == "view"
+    || lower_text == "new"
+    || lower_text == "save"
+  {
     return true;
   }
-  
+
   false
 }
 
@@ -447,7 +473,7 @@ fn is_junk_text(text: &str) -> bool {
 pub fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
   let mut markdown = String::new();
   markdown.push_str("# Screen Text by Application\n\n");
-  
+
   for app in applications {
     // Skip apps with no meaningful content
     if app.text_content.is_empty() {
@@ -455,27 +481,31 @@ pub fn format_as_markdown(applications: Vec<ApplicationTextData>) -> String {
     }
 
     // Get the app name from the pid and map it to a common name
-    let (_process_name, app_name) = if app.process_name.is_some() && app.application_name.is_some() {
-      (app.process_name.clone().unwrap(), app.application_name.clone().unwrap())
+    let (_process_name, app_name) = if app.process_name.is_some() && app.application_name.is_some()
+    {
+      (
+        app.process_name.clone().unwrap(),
+        app.application_name.clone().unwrap(),
+      )
     } else {
       let process_name = get_process_name(app.process_id as u32);
       let app_name = map_process_name_to_app_name(&process_name);
       (process_name, app_name)
     };
     markdown.push_str(&format!("## {} (PID: {})\n\n", app_name, app.process_id));
-    
+
     // Text is already cleaned and deduplicated in get_screen_text_by_application
     for text in &app.text_content {
       markdown.push_str(&format!("{}\n", text));
     }
-    
+
     markdown.push_str("\n");
   }
-  
+
   if markdown == "# Screen Text by Application\n\n" {
     markdown.push_str("*No meaningful text content found.*\n");
   }
-  
+
   markdown
 }
 
@@ -485,20 +515,20 @@ pub async fn get_screen_text(app_handle: AppHandle) -> Result<Vec<ApplicationTex
   let app_pid = state.pid;
 
   // Get the screen text in another thread
-  let result = task::spawn_blocking(move || {
-    get_screen_text_by_application(app_pid)
-  }).await;
-  
+  let result = task::spawn_blocking(move || get_screen_text_by_application(app_pid)).await;
+
   match result {
     Ok(applications) => {
       // Get the app name from the PID for each application
       let mut applications_data = applications?;
       for app in &mut applications_data {
         app.process_name = Some(get_process_name(app.process_id as u32));
-        app.application_name = Some(map_process_name_to_app_name(&app.process_name.as_ref().unwrap()));
+        app.application_name = Some(map_process_name_to_app_name(
+          &app.process_name.as_ref().unwrap(),
+        ));
       }
       Ok(applications_data)
-    },
+    }
     Err(e) => Err(format!("Task execution failed: {:?}", e)),
   }
 }
@@ -511,10 +541,8 @@ pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, 
   let app_pid = state.pid;
 
   // Get the screen text in another thread
-  let result = task::spawn_blocking(move || {
-    get_screen_text_by_application(app_pid)
-  }).await;
-  
+  let result = task::spawn_blocking(move || get_screen_text_by_application(app_pid)).await;
+
   match result {
     Ok(Ok(applications)) => {
       let markdown = format_as_markdown(applications);
@@ -528,29 +556,21 @@ pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, 
 // Helper function to get process name from PID
 fn get_process_name(pid: u32) -> String {
   unsafe {
-    let process_handle = OpenProcess(
-      PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 
-      false, 
-      pid
-    );
-    
+    let process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid);
+
     if let Ok(handle) = process_handle {
       let mut module_name = [0u16; 260]; // MAX_PATH
-      let result = GetModuleBaseNameW(
-        handle, 
-        None, 
-        &mut module_name
-      );
-      
+      let result = GetModuleBaseNameW(handle, None, &mut module_name);
+
       let _ = CloseHandle(handle);
-      
+
       if result > 0 {
         // Convert wide string to String
         let name = String::from_utf16_lossy(&module_name[..result as usize]);
         return name;
       }
     }
-    
+
     format!("Unknown app name") // Fallback to PID if we can't get the name
   }
 }
@@ -573,7 +593,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "vim.exe" | "gvim.exe" => "Vim".to_string(),
     "emacs.exe" => "Emacs".to_string(),
     "notepad.exe" => "Notepad".to_string(),
-    
+
     // Web browsers
     "chrome.exe" => "Google Chrome".to_string(),
     "firefox.exe" => "Mozilla Firefox".to_string(),
@@ -583,7 +603,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "safari.exe" => "Safari".to_string(),
     "vivaldi.exe" => "Vivaldi".to_string(),
     "iexplore.exe" => "Internet Explorer".to_string(),
-    
+
     // Communication apps
     "discord.exe" => "Discord".to_string(),
     "slack.exe" => "Slack".to_string(),
@@ -593,7 +613,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "whatsapp.exe" => "WhatsApp".to_string(),
     "telegram.exe" => "Telegram".to_string(),
     "signal.exe" => "Signal".to_string(),
-    
+
     // Office applications
     "winword.exe" => "Microsoft Word".to_string(),
     "excel.exe" => "Microsoft Excel".to_string(),
@@ -603,7 +623,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "visio.exe" => "Microsoft Visio".to_string(),
     "project.exe" => "Microsoft Project".to_string(),
     "access.exe" => "Microsoft Access".to_string(),
-    
+
     // Media and entertainment
     "spotify.exe" => "Spotify".to_string(),
     "vlc.exe" => "VLC Media Player".to_string(),
@@ -613,7 +633,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "youtube.exe" => "YouTube".to_string(),
     "itunes.exe" => "iTunes".to_string(),
     "audacity.exe" => "Audacity".to_string(),
-    
+
     // System and utilities
     "explorer.exe" => "Windows Explorer".to_string(),
     "cmd.exe" => "Command Prompt".to_string(),
@@ -627,7 +647,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "calc.exe" => "Calculator".to_string(),
     "mspaint.exe" => "Paint".to_string(),
     "snip.exe" | "snippingtool.exe" => "Snipping Tool".to_string(),
-    
+
     // Development tools
     "git.exe" => "Git".to_string(),
     "node.exe" => "Node.js".to_string(),
@@ -637,7 +657,7 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "postman.exe" => "Postman".to_string(),
     "fiddler.exe" => "Fiddler".to_string(),
     "wireshark.exe" => "Wireshark".to_string(),
-    
+
     // Graphics and design
     "photoshop.exe" => "Adobe Photoshop".to_string(),
     "illustrator.exe" => "Adobe Illustrator".to_string(),
@@ -647,24 +667,24 @@ fn map_process_name_to_app_name(process_name: &str) -> String {
     "figma.exe" => "Figma".to_string(),
     "blender.exe" => "Blender".to_string(),
     "gimp.exe" => "GIMP".to_string(),
-    
+
     // Security
     "windefend.exe" => "Windows Defender".to_string(),
     "mbam.exe" => "Malwarebytes".to_string(),
     "avast.exe" => "Avast Antivirus".to_string(),
     "avg.exe" => "AVG Antivirus".to_string(),
     "norton.exe" => "Norton Antivirus".to_string(),
-    
+
     // Database tools
     "ssms.exe" => "SQL Server Management Studio".to_string(),
     "mysql.exe" => "MySQL".to_string(),
     "postgres.exe" => "PostgreSQL".to_string(),
     "mongodb.exe" => "MongoDB".to_string(),
-    
+
     // Virtual machines
     "vmware.exe" => "VMware".to_string(),
     "virtualbox.exe" => "VirtualBox".to_string(),
-    
+
     // If no mapping found, return the original process name
     _ => {
       // Remove .exe extension if present for cleaner display

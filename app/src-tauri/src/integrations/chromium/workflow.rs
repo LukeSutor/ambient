@@ -31,26 +31,33 @@ pub fn start_workflow(url: &str, open_event: WorkflowStep) {
     recording_end: None,
   };
   WORKFLOWS.insert(url.to_string(), wf);
+  log::info!("[chromium/workflow] Started workflow for {}", url);
 }
 
 // Append a step to the workflow for a URL
 pub fn append_step(url: &str, step: WorkflowStep) {
   if let Some(mut wf) = WORKFLOWS.get_mut(url) {
-    println!(
+    log::debug!(
       "[chromium/workflow] Appending step to workflow for {}: {:?}",
       url, step
     );
     wf.steps.push(step);
+  } else {
+    log::warn!(
+      "[chromium/workflow] Tried to append step for {}, but no workflow exists",
+      url
+    );
   }
 }
 
 // Save workflow to DB and remove from memory
 pub fn save_workflow(url: &str, db_state: tauri::State<DbState>) -> Result<(), String> {
   if let Some((_key, mut wf)) = WORKFLOWS.remove(url) {
-    println!("[chromium/workflow] Saving workflow for {}: {:?}", url, wf);
+    log::info!("[chromium/workflow] Saving workflow for {}", url);
     wf.recording_end = wf.steps.last().map(|s| s.timestamp);
     let steps_json = serde_json::to_string(&wf.steps).map_err(|e| e.to_string())?;
     let now = wf.recording_end.unwrap_or(wf.recording_start);
+
     crate::db::insert_workflow(
       db_state,
       format!("Workflow for {}", url),
@@ -61,11 +68,20 @@ pub fn save_workflow(url: &str, db_state: tauri::State<DbState>) -> Result<(), S
       now,
       now,
     )?;
+
+    Ok(())
+  } else {
+    log::warn!(
+      "[chromium/workflow] No workflow found to save for {} (already removed?)",
+      url
+    );
+    Ok(())
   }
-  Ok(())
 }
 
 // Remove workflow from memory (on page_closed)
 pub fn remove_workflow(url: &str) {
-  WORKFLOWS.remove(url);
+  if WORKFLOWS.remove(url).is_some() {
+    log::debug!("[chromium/workflow] Removed workflow for {}", url);
+  }
 }

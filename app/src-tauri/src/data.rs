@@ -20,7 +20,7 @@ pub fn take_screenshot(app_handle: tauri::AppHandle) -> String {
   let screenshot_path = screenshots_dir.join("screenshot.png");
   image.save(screenshot_path.clone()).unwrap();
   resize_image(screenshot_path.clone());
-  println!("Screenshot saved to: {:?}", screenshots_dir);
+  log::info!("Screenshot saved to: {:?}", screenshots_dir);
   screenshot_path.to_str().unwrap().to_string()
 }
 

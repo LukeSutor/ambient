@@ -4,19 +4,20 @@ pub mod constants;
 pub mod data;
 pub mod db;
 pub mod embedding;
+pub mod events;
 pub mod integrations;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;
 pub mod setup;
-pub mod events;
 pub mod tasks;
 pub mod types;
 use db::DbState;
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri::Manager;
-use tauri::{Emitter};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_log::{Target, TargetKind};
 use types::AppState;
 extern crate dotenv;
 
@@ -24,110 +25,122 @@ extern crate dotenv;
 struct CleanupHandler;
 
 impl Drop for CleanupHandler {
-    fn drop(&mut self) {
-        // This will be called when the app is shutting down
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-                eprintln!("[cleanup] Failed to stop llama server during cleanup: {}", e);
-            } else {
-                println!("[cleanup] Llama server stopped during cleanup");
-            }
-        });
-    }
+  fn drop(&mut self) {
+    // This will be called when the app is shutting down
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+      if let Err(e) = models::llm::server::stop_llama_server().await {
+        log::error!("[cleanup] Failed to stop llama server during cleanup: {}", e);
+      } else {
+        log::info!("[cleanup] Llama server stopped during cleanup");
+      }
+    });
+  }
 }
 
-static _CLEANUP_HANDLER: std::sync::LazyLock<CleanupHandler> = std::sync::LazyLock::new(|| CleanupHandler);
+static _CLEANUP_HANDLER: std::sync::LazyLock<CleanupHandler> =
+  std::sync::LazyLock::new(|| CleanupHandler);
 
 // Setup signal handlers for graceful shutdown
 #[cfg(windows)]
 fn setup_signal_handlers() {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::Arc;
-    
-    let _shutdown_flag = Arc::new(AtomicBool::new(false));
-    
-    // Register Windows console control handler
-    #[cfg(windows)]
-    {
-        extern "system" fn console_handler(ctrl_type: u32) -> i32 {
-            match ctrl_type {
-                0 => { // CTRL_C_EVENT
-                    println!("[signal] Received CTRL+C, shutting down llama server...");
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        if let Err(e) = models::llm::server::stop_llama_server().await {
-                            eprintln!("[signal] Failed to stop llama server: {}", e);
-                        }
-                    });
-                    1 // TRUE - we handled it
-                }
-                2 => { // CTRL_BREAK_EVENT  
-                    println!("[signal] Received CTRL+BREAK, shutting down llama server...");
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        if let Err(e) = models::llm::server::stop_llama_server().await {
-                            eprintln!("[signal] Failed to stop llama server: {}", e);
-                        }
-                    });
-                    1 // TRUE - we handled it
-                }
-                5 => { // CTRL_LOGOFF_EVENT
-                    println!("[signal] Received LOGOFF event, shutting down llama server...");
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        if let Err(e) = models::llm::server::stop_llama_server().await {
-                            eprintln!("[signal] Failed to stop llama server: {}", e);
-                        }
-                    });
-                    1 // TRUE - we handled it
-                }
-                6 => { // CTRL_SHUTDOWN_EVENT
-                    println!("[signal] Received SHUTDOWN event, shutting down llama server...");
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(async {
-                        if let Err(e) = models::llm::server::stop_llama_server().await {
-                            eprintln!("[signal] Failed to stop llama server: {}", e);
-                        }
-                    });
-                    1 // TRUE - we handled it
-                }
-                _ => 0 // FALSE - we didn't handle it
+  use std::sync::atomic::AtomicBool;
+  use std::sync::Arc;
+
+  let _shutdown_flag = Arc::new(AtomicBool::new(false));
+
+  // Register Windows console control handler
+  #[cfg(windows)]
+  {
+    extern "system" fn console_handler(ctrl_type: u32) -> i32 {
+      match ctrl_type {
+        0 => {
+          // CTRL_C_EVENT
+          log::info!("[signal] Received CTRL+C, shutting down llama server...");
+          let rt = tokio::runtime::Runtime::new().unwrap();
+          rt.block_on(async {
+            if let Err(e) = models::llm::server::stop_llama_server().await {
+              log::error!("[signal] Failed to stop llama server: {}", e);
             }
+          });
+          1 // TRUE - we handled it
         }
-        
-        unsafe {
-            type BOOL = i32;
-            type DWORD = u32;
-            
-            #[link(name = "kernel32")]
-            extern "system" {
-                fn SetConsoleCtrlHandler(
-                    handler: Option<unsafe extern "system" fn(DWORD) -> BOOL>,
-                    add: BOOL,
-                ) -> BOOL;
+        2 => {
+          // CTRL_BREAK_EVENT
+          log::info!("[signal] Received CTRL+BREAK, shutting down llama server...");
+          let rt = tokio::runtime::Runtime::new().unwrap();
+          rt.block_on(async {
+            if let Err(e) = models::llm::server::stop_llama_server().await {
+              log::error!("[signal] Failed to stop llama server: {}", e);
             }
-            
-            SetConsoleCtrlHandler(Some(console_handler), 1);
+          });
+          1 // TRUE - we handled it
         }
+        5 => {
+          // CTRL_LOGOFF_EVENT
+          log::info!("[signal] Received LOGOFF event, shutting down llama server...");
+          let rt = tokio::runtime::Runtime::new().unwrap();
+          rt.block_on(async {
+            if let Err(e) = models::llm::server::stop_llama_server().await {
+              log::error!("[signal] Failed to stop llama server: {}", e);
+            }
+          });
+          1 // TRUE - we handled it
+        }
+        6 => {
+          // CTRL_SHUTDOWN_EVENT
+          log::info!("[signal] Received SHUTDOWN event, shutting down llama server...");
+          let rt = tokio::runtime::Runtime::new().unwrap();
+          rt.block_on(async {
+            if let Err(e) = models::llm::server::stop_llama_server().await {
+              log::error!("[signal] Failed to stop llama server: {}", e);
+            }
+          });
+          1 // TRUE - we handled it
+        }
+        _ => 0, // FALSE - we didn't handle it
+      }
     }
+
+    unsafe {
+      type BOOL = i32;
+      type DWORD = u32;
+
+      #[link(name = "kernel32")]
+      extern "system" {
+        fn SetConsoleCtrlHandler(
+          handler: Option<unsafe extern "system" fn(DWORD) -> BOOL>,
+          add: BOOL,
+        ) -> BOOL;
+      }
+
+      SetConsoleCtrlHandler(Some(console_handler), 1);
+    }
+  }
 }
 
 #[cfg(not(windows))]
 fn setup_signal_handlers() {
-    // For non-Windows platforms, you could implement Unix signal handlers here
-    println!("[signal] Signal handlers not implemented for this platform");
+  // For non-Windows platforms, you could implement Unix signal handlers here
+  log::info!("[signal] Signal handlers not implemented for this platform");
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   // Load environment variables from .env file
   dotenv::dotenv().ok();
-  
+
   // Setup signal handlers for graceful shutdown
   setup_signal_handlers();
 
   tauri::Builder::default()
+    .plugin(
+      tauri_plugin_log::Builder::new()
+        .clear_targets()
+        .target(Target::new(TargetKind::Stdout))
+        .filter(|metadata| !metadata.target().contains("hyper"))
+        .build(),
+    )
     .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
       // Do nothing for now...
     }))
@@ -139,16 +152,16 @@ pub fn run() {
       {
         use tauri_plugin_deep_link::DeepLinkExt;
         if let Err(e) = app.deep_link().register_all() {
-          eprintln!("[deep_link] Failed to register deep link schemes: {}", e);
+          log::error!("[deep_link] Failed to register deep link schemes: {}", e);
         } else {
-          println!("[deep_link] Deep link schemes registered successfully");
+          log::info!("[deep_link] Deep link schemes registered successfully");
         }
       }
 
       // Get the PID and save it in the app state
       let pid = std::process::id();
       app.manage(AppState { pid });
-      println!("[setup] Application PID: {}", pid);
+  log::info!("[setup] Application PID: {}", pid);
 
       // Initialize the event emitter and listeners
       events::get_emitter().set_app_handle(app.handle().clone());
@@ -158,51 +171,58 @@ pub fn run() {
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
-        println!("[deep_link] Received URLs: {:?}", urls);
-        
+  log::info!("[deep_link] Received URLs: {:?}", urls);
+
         for url in &urls {
           let url_str = url.as_str();
           if url_str.starts_with("cortical://auth/callback") {
-            println!("[deep_link] Processing OAuth2 callback: {}", url_str);
-            
+            log::info!("[deep_link] Processing OAuth2 callback: {}", url_str);
+
             // Parse URL to extract code
             if let Ok(parsed_url) = url::Url::parse(url_str) {
               let query_pairs: std::collections::HashMap<String, String> = parsed_url
                 .query_pairs()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .collect();
-              
+
               if let Some(code) = query_pairs.get("code") {
                 let code = code.clone();
                 let app_handle_clone = app_handle_for_deep_link.clone();
-                
+
                 // Handle the callback asynchronously
                 tauri::async_runtime::spawn(async move {
                   match auth::google_handle_callback(code).await {
                     Ok(result) => {
-                      println!("[deep_link] OAuth2 callback handled successfully");
+                      log::info!("[deep_link] OAuth2 callback handled successfully");
                       // Emit event to frontend
                       if let Err(e) = app_handle_clone.emit("oauth2-success", &result) {
-                        eprintln!("[deep_link] Failed to emit oauth2-success event: {}", e);
+                        log::error!("[deep_link] Failed to emit oauth2-success event: {}", e);
                       }
-                    },
+                    }
                     Err(e) => {
-                      eprintln!("[deep_link] Failed to handle OAuth2 callback: {}", e);
+                      log::error!("[deep_link] Failed to handle OAuth2 callback: {}", e);
                       // Emit error event to frontend
                       if let Err(emit_err) = app_handle_clone.emit("oauth2-error", &e) {
-                        eprintln!("[deep_link] Failed to emit oauth2-error event: {}", emit_err);
+                        log::error!(
+                          "[deep_link] Failed to emit oauth2-error event: {}",
+                          emit_err
+                        );
                       }
                     }
                   }
                 });
               } else if let Some(error) = query_pairs.get("error") {
                 let error_description = query_pairs.get("error_description").cloned();
-                let error_msg = format!("OAuth2 error: {} - {}", error, error_description.unwrap_or_default());
-                eprintln!("[deep_link] {}", error_msg);
-                
+                let error_msg = format!(
+                  "OAuth2 error: {} - {}",
+                  error,
+                  error_description.unwrap_or_default()
+                );
+                log::error!("[deep_link] {}", error_msg);
+
                 // Emit error event to frontend
                 if let Err(e) = app_handle_for_deep_link.emit("oauth2-error", &error_msg) {
-                  eprintln!("[deep_link] Failed to emit oauth2-error event: {}", e);
+                  log::error!("[deep_link] Failed to emit oauth2-error event: {}", e);
                 }
               }
             }
@@ -214,13 +234,13 @@ pub fn run() {
       let app_handle = app.handle().clone();
       match db::initialize_database(&app_handle) {
         Ok(conn) => {
-          println!("[setup] Database initialized successfully.");
+          log::info!("[setup] Database initialized successfully.");
           // Store the connection in the managed state using the app_handle
           let state = app_handle.state::<DbState>();
           *state.0.lock().unwrap() = Some(conn);
         }
         Err(e) => {
-          eprintln!("[setup] Failed to initialize database: {}", e);
+          log::error!("[setup] Failed to initialize database: {}", e);
           panic!("Database initialization failed: {}", e);
         }
       }
@@ -230,10 +250,10 @@ pub fn run() {
       tauri::async_runtime::spawn(async move {
         // Wait a bit to ensure the app is fully initialized
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-        
+
         match models::llm::server::spawn_llama_server(app_handle_for_llama).await {
-          Ok(message) => println!("[setup] {}", message),
-          Err(e) => eprintln!("[setup] Failed to start llama.cpp server: {}", e),
+          Ok(message) => log::info!("[setup] {}", message),
+          Err(e) => log::error!("[setup] Failed to start llama.cpp server: {}", e),
         }
       });
 
@@ -252,9 +272,9 @@ pub fn run() {
           let _app_handle = window.app_handle().clone();
           tauri::async_runtime::spawn(async move {
             if let Err(e) = models::llm::server::stop_llama_server().await {
-              eprintln!("[shutdown] Failed to stop llama server: {}", e);
+              log::error!("[shutdown] Failed to stop llama server: {}", e);
             } else {
-              println!("[shutdown] Llama server stopped successfully");
+              log::info!("[shutdown] Llama server stopped successfully");
             }
           });
         }

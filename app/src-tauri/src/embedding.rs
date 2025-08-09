@@ -5,7 +5,7 @@ use serde_json::Value;
 /// Tauri command to generate an embedding for a given prompt using the managed model.
 #[tauri::command]
 pub async fn get_embedding(app_handle: tauri::AppHandle, prompt: String) -> Result<Value, String> {
-  println!(
+  log::info!(
     "[embedding] Generating embedding for prompt: \"{}\"",
     prompt
   );
@@ -20,7 +20,7 @@ pub async fn get_embedding(app_handle: tauri::AppHandle, prompt: String) -> Resu
   // Use the get_fastembed_model_path function to get the model path
   let model_path = get_fastembed_model_path(app_handle)
     .map_err(|e| format!("Failed to get FastEmbed model path: {}", e))?;
-  println!("[embedding] Embedding model path: {:?}", model_path);
+  log::info!("[embedding] Embedding model path: {:?}", model_path);
 
   let model = TextEmbedding::try_new(
     InitOptions::new(EmbeddingModel::AllMiniLML6V2)

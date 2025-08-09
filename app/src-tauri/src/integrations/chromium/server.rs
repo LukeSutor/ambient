@@ -47,7 +47,7 @@ pub async fn start_server_on_available_port(app_handle: tauri::AppHandle) -> Res
         let std_listener = match listener.into_std() {
           Ok(l) => l,
           Err(e) => {
-            eprintln!("[chromium/server] Failed to convert listener: {}", e);
+            log::error!("[chromium/server] Failed to convert listener: {}", e);
             continue;
           }
         };
@@ -57,10 +57,10 @@ pub async fn start_server_on_available_port(app_handle: tauri::AppHandle) -> Res
             .serve(app.into_make_service())
             .await
           {
-            eprintln!("[chromium/server] Server error: {}", e);
+            log::error!("[chromium/server] Server error: {}", e);
           }
         });
-        println!("[chromium/server] Started on port {}", port);
+  log::info!("[chromium/server] Started on port {}", port);
         return Ok(port);
       }
       Err(_) => continue,
@@ -100,7 +100,7 @@ async fn handle_socket(
   let recv_task = tokio::spawn(async move {
     while let Some(Ok(msg)) = recv_socket.next().await {
       if let Message::Text(text) = msg {
-        println!("[chromium/server] Received message: {}", text);
+  log::debug!("[chromium/server] Received message: {}", text);
         // Parse event JSON
         if let Ok(event) = serde_json::from_str::<Value>(&text) {
           let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
