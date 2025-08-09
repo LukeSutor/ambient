@@ -98,22 +98,29 @@ def run_task_detection_evaluation(config: dict):
         logger.info(f"Success rate: {aggregate_metrics.get('success_rate', 0):.2f}")
         logger.info(f"Total data points: {aggregate_metrics.get('total_data_points', 0)}")
         logger.info(f"Successful detections: {aggregate_metrics.get('successful_detections', 0)}")
-        logger.info(f"Average tokens generated: {aggregate_metrics.get('averate_tokens_generated', 0):.2f}")
+        logger.info(f"Average tokens generated: {aggregate_metrics.get('average_tokens_generated', 0):.2f}")
         logger.info(f"Average response time: {aggregate_metrics.get('average_response_time', 0):.2f} seconds")
         logger.info(f"Average tokens per second: {aggregate_metrics.get('average_tokens_per_second', 0):.2f}")
         
-        # Save results
+        # Save results with timestamp
         output_file = eval_config['output_file']
         # Make output file relative to script if not absolute
         if not os.path.isabs(output_file):
             output_file = str(script_dir / output_file)
-        save_results(results, output_file, aggregate_metrics)
+        
+        # Add timestamp to filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path(output_file)
+        timestamped_filename = f"{output_path.stem}_{timestamp}{output_path.suffix}"
+        timestamped_output_file = str(output_path.parent / timestamped_filename)
+        
+        save_results(results, timestamped_output_file, aggregate_metrics, config)
         
         # Generate visualizations if enabled
         viz_config = config['evaluation']['visualization']
         if viz_config.get('enabled', True) and viz_config.get('auto_generate', True):
             logger.info("Generating visualizations...")
-            generate_visualizations(output_file, viz_config['output_dir'])
+            generate_visualizations(timestamped_output_file, viz_config['output_dir'])
         
         logger.info("Task detection evaluation finished successfully!")
         return 0
@@ -128,7 +135,7 @@ def run_task_detection_evaluation(config: dict):
         if str(common_dir) in sys.path:
             sys.path.remove(str(common_dir))
 
-def save_results(results, output_path: str, aggregate_metrics: dict):
+def save_results(results, output_path: str, aggregate_metrics: dict, config: dict):
     """Save evaluation results to JSON file."""
     from datetime import datetime
     import json
@@ -152,7 +159,8 @@ def save_results(results, output_path: str, aggregate_metrics: dict):
         'evaluation_info': {
             'timestamp': datetime.now().isoformat(),
             'total_data_points': len(results),
-            'evaluation_type': 'task_detection'
+            'evaluation_type': 'task_detection',
+            'config': config
         },
         'aggregate_metrics': aggregate_metrics,
         'individual_results': results_data

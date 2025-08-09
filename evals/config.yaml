@@ -48,7 +48,7 @@ server:
 
 # Model configuration
 model:
-  path: "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/llm/Qwen3-1.7B-Q4_K_M.gguf"
+  path: "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/llm/LFM2-1.2B-Q4_K_M.gguf"
 
 # Generation parameters (defaults for entire session)
 generation:
@@ -66,11 +66,11 @@ evaluation:
     output_file: "./results/task_detection_results.json"
     generate_ground_truth: false
     batch_size: 10
-    use_summary: false
+    use_summary: true
     
   # Visualization settings
   visualization:
-    enabled: true
+    enabled: false
     output_dir: "./plots"
     auto_generate: true
     

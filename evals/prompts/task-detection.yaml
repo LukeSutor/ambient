@@ -2,41 +2,35 @@
 
 detect_tasks:
   template: |
-    TASK: Detect which steps completed based on screen changes.
+    TASK: Find steps completed from screen changes.
 
-    OUTPUT: {{"analysis":"<why step completed>","completed":[<step IDs>]}}
+    REQUIRED OUTPUT: {{"analysis":"Brief reason","completed":[step_numbers]}}
 
-    <previous_summary>
+    PREVIOUS STATE:
     {previous_summary}
-    </previous_summary>
 
-    <new_screen_text>
+    NEW SCREEN CONTENT:
     {text}
-    </new_screen_text>
 
-    URL: {active_url}
+    ACTIVE URL: {active_url}
 
-    Here are the tasks to analyze for step completion (do not focus on any other tasks):
-    <tasks>
+    VALID STEPS TO CHECK:
     {tasks}
-    </tasks>
 
-    KEY RULE: Analysis must explain WHY a step is done, NOT summarize screen.
+    DETECTION RULES:
+    1. Only use step IDs from the task list above
+    2. Compare previous state vs new screen content
+    3. Mark complete only if NEW content proves step was finished
+    4. Skip steps already marked "completed"
+    5. Return [] if no new completions detected
 
-    ANALYZE THE CHANGES:
-    1. Previous summary = what user WAS doing
-    2. New text = what CHANGED on screen
-    3. Your job = identify COMPLETED steps from changes
+    WHAT COUNTS AS COMPLETION:
+    - New file/page appears matching step description
+    - Success message for the specific action
+    - URL change matching navigation step
+    - Form submission confirmation
 
-    CRITICAL RULES:
-    - Only mark step complete if NEW text proves completion
-    - Analysis = reasoning about task completion (not screen summary!)
-    - Skip already-complete steps
-    - Empty array if nothing new completed
-    - Max 2 sentences reasoning
-
-    REMEMBER: {{"analysis":"<why step completed>","completed":[<step IDs>]}}
-    Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis.
+    FORMAT: {{"analysis":"One sentence why","completed":[valid_ids_only]}}
   description: "Main task detection prompt for identifying completed steps from screen changes"
 detect_tasks_no_summary:
   template: |
