@@ -1,0 +1,133 @@
+{
+  "timestamp": "2025-07-28T01:37:52.038876400+00:00",
+  "prev_prev_screen_state": {
+    "data": [
+      {
+        "process_id": 20268,
+        "process_name": "notepad.exe",
+        "application_name": "Notepad",
+        "text_content": [
+          "Text Editor",
+          "Ln 4, Col 1",
+          "100%",
+          "Windows (CRLF)",
+          "UTF-8"
+        ]
+      },
+      {
+        "process_id": 29176,
+        "process_name": "brave.exe",
+        "application_name": "Brave Browser",
+        "text_content": [
+          "vanshb03/Summer2026-Internships: Collection of Summer 2026 tech internships!",
+          "Legend",
+          "•",
+          "🛂 - Does NOT offer Sponsorship",
+          "🇺🇸 - Requires U.S. Citizenship",
+          "🔒 - Internship application is closed",
+          "For off-season internships, please see the",
+          "For new-grad tech jobs, check out",
+          "Austin, TX",
+          "Chicago, IL",
+          "New York, NY",
+          "Stamford, CT",
+          "Houston, TX",
+          "5 locations",
+          "Santa Clara, CA",
+          "Toronto, ON",
+          "Address and search bar"
+        ]
+      }
+    ],
+    "active_url": "github.com/vanshb03/Summer2026-Internships",
+    "timestamp": "2025-07-28T01:36:46.698561800+00:00",
+    "summary": "vanshb03 is exploring Summer 2026 tech internships via Brave Browser, viewing the provided URL for details."
+  },
+  "prev_screen_state": {
+    "data": [
+      {
+        "process_id": 20268,
+        "process_name": "notepad.exe",
+        "application_name": "Notepad",
+        "text_content": [
+          "Text Editor",
+          "Ln 4, Col 1",
+          "100%",
+          "Windows (CRLF)",
+          "UTF-8"
+        ]
+      },
+      {
+        "process_id": 29176,
+        "process_name": "brave.exe",
+        "application_name": "Brave Browser",
+        "text_content": [
+          "Summer2026-Internships/OFFSEASON_README.md at dev · vanshb03/Summer2026-Internships",
+          "dev",
+          ".github",
+          "archived",
+          ".gitignore",
+          "CONTRIBUTING.md",
+          "OFFSEASON_README.md",
+          "README.md",
+          "232 lines (215 loc) · 32.3 KB",
+          "The List 🚴🏔",
+          "Legend",
+          "•",
+          "🛂 - Does NOT offer Sponsorship",
+          "🇺🇸 - Requires U.S. Citizenship",
+          "🔒 - Internship application is closed",
+          "Austin, TX",
+          "New York City, NY",
+          "Address and search bar"
+        ]
+      }
+    ],
+    "active_url": "github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md",
+    "timestamp": "2025-07-28T01:37:36.862988800+00:00",
+    "summary": "The user is working on the OFFSEASON_README.md file in the Summer2026-Internships repository on GitHub, contributing to the project."
+  },
+  "screen_diff_markdown": "# Screen Text by Application\n\n## Brave Browser (PID: 29176)\n\nSummer2026-Internships/OFFSEASON_README.md at dev · vanshb03/Summer2026-Internships\ndev\n.github\narchived\n.gitignore\nCONTRIBUTING.md\nOFFSEASON_README.md\nREADME.md\n232 lines (215 loc) · 32.3 KB\nThe List 🚴🏔\nNew York City, NY\n\n",
+  "formatted_screen_state": "# Screen Text by Application\n\n## Notepad (PID: 20268)\n\nText Editor\nLn 4, Col 1\n100%\nWindows (CRLF)\nUTF-8\n\n## Brave Browser (PID: 29176)\n\nSummer2026-Internships/OFFSEASON_README.md at dev · vanshb03/Summer2026-Internships\ndev\n.github\narchived\n.gitignore\nCONTRIBUTING.md\nOFFSEASON_README.md\nREADME.md\n232 lines (215 loc) · 32.3 KB\nThe List 🚴🏔\nLegend\n•\n🛂 - Does NOT offer Sponsorship\n🇺🇸 - Requires U.S. Citizenship\n🔒 - Internship application is closed\nAustin, TX\nNew York City, NY\nAddress and search bar\n\n",
+  "prev_prev_summary": "vanshb03 is exploring Summer 2026 tech internships via Brave Browser, viewing the provided URL for details.",
+  "active_tasks": [
+    {
+      "task": {
+        "id": 1,
+        "name": "Check for internships",
+        "description": "Browse job postings to check for summer internships",
+        "category": null,
+        "priority": 1,
+        "frequency": "daily",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T01:37:52.038578800Z",
+        "created_at": "2025-07-28T01:37:52.038586500Z",
+        "updated_at": "2025-07-28T01:37:52.038591600Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 1,
+          "task_id": 1,
+          "step_number": 1,
+          "title": "Check summer 2026",
+          "description": "Navigate to https://github.com/vanshb03/Summer2026-Internships and check the readme for new postings",
+          "status": "pending",
+          "completed_at": null
+        },
+        {
+          "id": 2,
+          "task_id": 1,
+          "step_number": 2,
+          "title": "Check spring 2026",
+          "description": "Navigate to https://github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md and check for new internships",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    }
+  ],
+  "formatted_tasks": "Task Check for internships,  Description: Browse job postings to check for summer internships, Steps: [\n\tStep: Check summer 2026, ID: 1, Description: Navigate to https://github.com/vanshb03/Summer2026-Internships and check the readme for new postings, Status: pending\n\tStep: Check spring 2026, ID: 2, Description: Navigate to https://github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md and check for new internships, Status: pending\n]",
+  "ground_truth_completed_step_ids": [2]
+}

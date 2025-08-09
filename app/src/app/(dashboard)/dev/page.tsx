@@ -82,6 +82,11 @@ export default function Dev() {
   const [screenTextError, setScreenTextError] = useState<string | null>(null);
   const [screenTextLoading, setScreenTextLoading] = useState<boolean>(false);
 
+  // --- Evaluation Data Capture ---
+  const [evalCaptureLoading, setEvalCaptureLoading] = useState<boolean>(false);
+  const [evalCaptureResult, setEvalCaptureResult] = useState<string | null>(null);
+  const [evalCaptureError, setEvalCaptureError] = useState<string | null>(null);
+
   const fetchScreenText = async () => {
     setScreenTextLoading(true);
     setScreenTextError(null);
@@ -93,6 +98,22 @@ export default function Dev() {
       setScreenTextData(null);
     } finally {
       setScreenTextLoading(false);
+    }
+  };
+
+  const captureEvalData = async () => {
+    setEvalCaptureLoading(true);
+    setEvalCaptureError(null);
+    setEvalCaptureResult(null);
+    try {
+      const result = await invoke<string>("capture_eval_data");
+      setEvalCaptureResult(result);
+      console.log("Evaluation data captured:", result);
+    } catch (err: any) {
+      setEvalCaptureError(typeof err === "string" ? err : JSON.stringify(err));
+      console.error("Error capturing eval data:", err);
+    } finally {
+      setEvalCaptureLoading(false);
     }
   };
 
@@ -128,6 +149,32 @@ export default function Dev() {
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
           {screenTextLoading ? "Loading..." : "Get Screen Text (Formatted)"}
         </Button>
+      </div>
+
+      {/* Evaluation Data Capture Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-orange-50">
+        <h2 className="text-lg font-semibold">Evaluation Data Capture</h2>
+        <p className="text-sm text-gray-600">
+          Click this button when you see incorrect task detection to save the current state for evaluation. 
+          Requires at least 2 screen captures and active tasks.
+        </p>
+        <Button 
+          onClick={captureEvalData} 
+          disabled={evalCaptureLoading}
+          variant="outline"
+        >
+          {evalCaptureLoading ? "Capturing..." : "Capture Eval Data"}
+        </Button>
+        {evalCaptureResult && (
+          <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm">
+            <strong>Success:</strong> {evalCaptureResult}
+          </div>
+        )}
+        {evalCaptureError && (
+          <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
+            <strong>Error:</strong> {evalCaptureError}
+          </div>
+        )}
       </div>
 
       {/* SQL Execution Section */}

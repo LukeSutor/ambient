@@ -1,0 +1,102 @@
+# Evaluation Configuration
+server:
+  # Server executable and connection
+  executable: "C:/Users/Luke/Desktop/coding/local-computer-use/app/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
+  timeout: 120
+  auto_start: true
+  auto_stop: true
+
+            "-m",
+            &config.model_path,
+            "--port",
+            &config.port.to_string(),
+            "--api-key",
+            &config.api_key,
+            "--reasoning-format",
+            "none",
+            "-np",                      // Decode up to 3 sequences in parallel
+            "3",
+            "--ctx-size",               // Use smaller context size for faster responses
+            "4096",
+            "-ctk",                     // Use q8 quant for kv cache
+            "q8_0",
+            "-ctv",
+            "q8_0",
+            "--mlock",                  // Keep model in RAM
+            "-fa",                      // Use fast attention
+            "--no-webui",
+            "--log-disable",
+            "--jinja"
+  
+  # Startup parameters for the server
+  startup_config:
+    host: "localhost"
+    port: 8080
+    reasoning-format: "none"
+    np: 4
+    ctx-size: 4096
+    ctk: "q8_0"
+    ctv: "q8_0"
+    mlock: true
+    fa: true
+    jinja: true
+  
+  
+  # Health check settings
+  health_check_timeout: 30
+  startup_timeout: 60
+
+# Model configuration
+model:
+  path: "C:/Users/Luke/AppData/Roaming/com.tauri.dev/models/llm/LFM2-1.2B-Q4_K_M.gguf"
+
+# Generation parameters (defaults for entire session)
+generation:
+  temperature: 0.1
+  max_tokens: 1000
+  top_p: 0.9
+  top_k: 40
+
+# Evaluation settings
+evaluation:
+  # Task detection evaluation
+  task_detection:
+    enabled: true
+    data_dir: "./task-detection/data"
+    output_file: "./results/task_detection_results.json"
+    generate_ground_truth: false
+    batch_size: 10
+    use_summary: true
+    
+  # Visualization settings
+  visualization:
+    enabled: false
+    output_dir: "./plots"
+    auto_generate: true
+    
+  # General settings
+  log_level: "INFO"
+  results_dir: "./results"
+
+# JSON Schema configuration
+schemas:
+  # Path to store schema files
+  schema_dir: "../schemas"
+
+# Parallel processing
+parallel:
+  max_concurrent_requests: 4
+  request_timeout: 60
+
+# Logging
+logging:
+  level: "INFO"
+  file: "evals.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Results
+results:
+  output_dir: "results"
+  save_individual_predictions: true
+  save_aggregated_metrics: true
+  generate_visualizations: true

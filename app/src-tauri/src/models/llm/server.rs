@@ -236,7 +236,7 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
             "-np",                      // Decode up to 3 sequences in parallel
             "3",
             "--ctx-size",               // Use smaller context size for faster responses
-            "2048",
+            "4096",
             "-ctk",                     // Use q8 quant for kv cache
             "q8_0",
             "-ctv",

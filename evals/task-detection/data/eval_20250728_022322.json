@@ -1,0 +1,247 @@
+{
+  "timestamp": "2025-07-28T02:23:22.447232300+00:00",
+  "prev_prev_screen_state": {
+    "data": [
+      {
+        "process_id": 31240,
+        "process_name": "EXCEL.EXE",
+        "application_name": "Microsoft Excel",
+        "text_content": [
+          "Cell Mode Ready",
+          "Zoom 100%",
+          "Microsoft search",
+          "Font",
+          "Font Size",
+          "Number Format",
+          "Name Box",
+          "Formula Bar"
+        ]
+      },
+      {
+        "process_id": 20268,
+        "process_name": "notepad.exe",
+        "application_name": "Notepad",
+        "text_content": [
+          "Text Editor",
+          "Ln 4, Col 1",
+          "100%",
+          "Windows (CRLF)",
+          "UTF-8"
+        ]
+      }
+    ],
+    "active_url": "mail.google.com/mail/u/0/#inbox?compose=CllgCHrdlGWsHTvgmJVJzsZRxbSmcLFRbPgZfZMSBZPWZqmbJLdStCSkGpfcxtRgQPhhsZpMMLB",
+    "timestamp": "2025-07-28T02:19:17.356799300+00:00",
+    "summary": "The user is actively using Microsoft Excel to edit a spreadsheet, with a zoom level of 100% and various formatting options enabled."
+  },
+  "prev_screen_state": {
+    "data": [
+      {
+        "process_id": 29176,
+        "process_name": "brave.exe",
+        "application_name": "Brave Browser",
+        "text_content": [
+          "martins_adam_hours_07_27_25",
+          "Page number",
+          "Zoom level",
+          "PDF document containing 1 page",
+          "This week I worked 34 hours.",
+          "Address and search bar"
+        ]
+      },
+      {
+        "process_id": 20268,
+        "process_name": "notepad.exe",
+        "application_name": "Notepad",
+        "text_content": [
+          "Text Editor",
+          "Ln 4, Col 1",
+          "100%",
+          "Windows (CRLF)",
+          "UTF-8"
+        ]
+      }
+    ],
+    "active_url": "C:/Users/Luke/Downloads/martins_adam_hours_07_27_25.pdf",
+    "timestamp": "2025-07-28T02:22:54.211565+00:00",
+    "summary": "Martins Adam Hours 07 27 25 PDF Document Created and Opened in Brave Browser"
+  },
+  "screen_diff_markdown": "# Screen Text by Application\n\n## Brave Browser (PID: 29176)\n\nmartins_adam_hours_07_27_25\nPage number\nZoom level\nPDF document containing 1 page\nThis week I worked 34 hours.\nAddress and search bar\n\n",
+  "formatted_screen_state": "# Screen Text by Application\n\n## Brave Browser (PID: 29176)\n\nmartins_adam_hours_07_27_25\nPage number\nZoom level\nPDF document containing 1 page\nThis week I worked 34 hours.\nAddress and search bar\n\n## Notepad (PID: 20268)\n\nText Editor\nLn 4, Col 1\n100%\nWindows (CRLF)\nUTF-8\n\n",
+  "prev_prev_summary": "The user is actively using Microsoft Excel to edit a spreadsheet, with a zoom level of 100% and various formatting options enabled.",
+  "active_tasks": [
+    {
+      "task": {
+        "id": 1,
+        "name": "Check for internships",
+        "description": "Browse job postings to check for summer internships",
+        "category": null,
+        "priority": 1,
+        "frequency": "daily",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T02:23:22.444908800Z",
+        "created_at": "2025-07-28T02:23:22.444914800Z",
+        "updated_at": "2025-07-28T02:23:22.444918900Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 1,
+          "task_id": 1,
+          "step_number": 1,
+          "title": "Check summer 2026",
+          "description": "Navigate to https://github.com/vanshb03/Summer2026-Internships and check the readme for new postings",
+          "status": "pending",
+          "completed_at": null
+        },
+        {
+          "id": 2,
+          "task_id": 1,
+          "step_number": 2,
+          "title": "Check spring 2026",
+          "description": "Navigate to https://github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md and check for new internships",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    },
+    {
+      "task": {
+        "id": 2,
+        "name": "Calculate earnings for the past quarter",
+        "description": "Open the spreadsheet and calculate the past quarter earnings",
+        "category": null,
+        "priority": 1,
+        "frequency": "quarterly",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T02:23:22.445281Z",
+        "created_at": "2025-07-28T02:23:22.445287500Z",
+        "updated_at": "2025-07-28T02:23:22.445293Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 3,
+          "task_id": 2,
+          "step_number": 1,
+          "title": "Open Earnings Q2 2025 Spreadsheet",
+          "description": "Open the excel spreadsheet titled earnings_q2_2025",
+          "status": "pending",
+          "completed_at": null
+        },
+        {
+          "id": 4,
+          "task_id": 2,
+          "step_number": 2,
+          "title": "Calculate the gross income",
+          "description": "Subtract the cost and earnings from the revenue to get the gross income",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    },
+    {
+      "task": {
+        "id": 3,
+        "name": "Send weekly check in email to Steve",
+        "description": "Send your weekly check in email for what you accomplished to Steve.",
+        "category": null,
+        "priority": 1,
+        "frequency": "weekly",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T02:23:22.445671800Z",
+        "created_at": "2025-07-28T02:23:22.445677500Z",
+        "updated_at": "2025-07-28T02:23:22.445681300Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 5,
+          "task_id": 3,
+          "step_number": 1,
+          "title": "Send the email",
+          "description": "Write the weekly check in email and send it to steve@company.com",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    },
+    {
+      "task": {
+        "id": 7,
+        "name": "Submit hours to Luke",
+        "description": "Submit weekly hours to Luke Sutor via Slack workspace",
+        "category": null,
+        "priority": 1,
+        "frequency": "bi_weekly",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T02:23:22.446294300Z",
+        "created_at": "2025-07-28T02:23:22.446304200Z",
+        "updated_at": "2025-07-28T02:23:22.446309300Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 12,
+          "task_id": 7,
+          "step_number": 1,
+          "title": "Create PDF",
+          "description": "Create a PDF document titled \"lastname_firstname_hours_dd_mm_yy\" with your weekly hours",
+          "status": "pending",
+          "completed_at": null
+        },
+        {
+          "id": 13,
+          "task_id": 7,
+          "step_number": 2,
+          "title": "Send PDF to Luke",
+          "description": "Send the PDF document you just created to Luke Sutor on Slack by attaching it to a message",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    },
+    {
+      "task": {
+        "id": 8,
+        "name": "Update the end of day reports",
+        "description": "Use the end of day report information to update the master spreadsheet.",
+        "category": null,
+        "priority": 1,
+        "frequency": "daily",
+        "last_completed_at": null,
+        "first_scheduled_at": "2025-07-28T02:23:22.446805Z",
+        "created_at": "2025-07-28T02:23:22.446812Z",
+        "updated_at": "2025-07-28T02:23:22.446817600Z",
+        "status": "pending"
+      },
+      "steps": [
+        {
+          "id": 14,
+          "task_id": 8,
+          "step_number": 1,
+          "title": "Download the report",
+          "description": "Download the end of day report from Google Drive",
+          "status": "pending",
+          "completed_at": null
+        },
+        {
+          "id": 15,
+          "task_id": 8,
+          "step_number": 2,
+          "title": "Copy data",
+          "description": "Copy the report data into the master excel file titled \"daily_reports_master\"",
+          "status": "pending",
+          "completed_at": null
+        }
+      ],
+      "progress_percentage": 0.0
+    }
+  ],
+  "formatted_tasks": "Task Check for internships,  Description: Browse job postings to check for summer internships, Steps: [\n\tStep: Check summer 2026, ID: 1, Description: Navigate to https://github.com/vanshb03/Summer2026-Internships and check the readme for new postings, Status: pending\n\tStep: Check spring 2026, ID: 2, Description: Navigate to https://github.com/vanshb03/Summer2026-Internships/blob/dev/OFFSEASON_README.md and check for new internships, Status: pending\n]\n\nTask Calculate earnings for the past quarter,  Description: Open the spreadsheet and calculate the past quarter earnings, Steps: [\n\tStep: Open Earnings Q2 2025 Spreadsheet, ID: 3, Description: Open the excel spreadsheet titled earnings_q2_2025, Status: pending\n\tStep: Calculate the gross income, ID: 4, Description: Subtract the cost and earnings from the revenue to get the gross income, Status: pending\n]\n\nTask Send weekly check in email to Steve,  Description: Send your weekly check in email for what you accomplished to Steve., Steps: [\n\tStep: Send the email, ID: 5, Description: Write the weekly check in email and send it to steve@company.com, Status: pending\n]\n\nTask Submit hours to Luke,  Description: Submit weekly hours to Luke Sutor via Slack workspace, Steps: [\n\tStep: Create PDF, ID: 12, Description: Create a PDF document titled \"lastname_firstname_hours_dd_mm_yy\" with your weekly hours, Status: pending\n\tStep: Send PDF to Luke, ID: 13, Description: Send the PDF document you just created to Luke Sutor on Slack by attaching it to a message, Status: pending\n]\n\nTask Update the end of day reports,  Description: Use the end of day report information to update the master spreadsheet., Steps: [\n\tStep: Download the report, ID: 14, Description: Download the end of day report from Google Drive, Status: pending\n\tStep: Copy data, ID: 15, Description: Copy the report data into the master excel file titled \"daily_reports_master\", Status: pending\n]",
+  "ground_truth_completed_step_ids": [12]
+}

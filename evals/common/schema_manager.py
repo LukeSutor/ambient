@@ -1,0 +1,110 @@
+"""
+JSON Schema management for evaluation system.
+Handles loading, saving, and validating JSON schemas for LLM inference.
+"""
+import json
+import os
+import yaml
+from pathlib import Path
+from typing import Dict, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SchemaManager:
+    """Manages JSON schemas for evaluation prompts and responses."""
+    
+    def __init__(self, config_path: str = "config.yaml"):
+        """Initialize schema manager with configuration."""
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+        
+        self.schema_config = self.config.get('schemas', {})
+        self.schema_dir = self.schema_config.get('schema_dir', './schemas')
+        self.schemas = {}
+        
+        # Create schema directory if it doesn't exist
+        os.makedirs(self.schema_dir, exist_ok=True)
+        
+        # Load schema files first
+        self._load_schema_files()
+    
+    def _load_schema_files(self):
+        """Load schema files from the schema directory."""
+        script_dir = Path(__file__).parent
+        if not os.path.isabs(self.schema_dir):
+            self.schema_dir = script_dir / self.schema_dir
+
+        if not os.path.exists(self.schema_dir):
+            logger.warning(f"Schema directory not found: {self.schema_dir}")
+            return
+                    
+        for filename in os.listdir(self.schema_dir):
+            if filename.endswith('.json'):
+                filepath = os.path.join(self.schema_dir, filename)
+                schema_key = filename.replace('.json', '')
+                
+                try:
+                    with open(filepath, 'r') as f:
+                        schema_obj = f.read()
+                    self.schemas[schema_key] = schema_obj
+                    logger.info(f"Loaded schema file: {schema_key}")
+                except Exception as e:
+                    logger.error(f"Failed to load schema file {filepath}: {e}")
+    
+    def get_schema(self, schema_key: str) -> Optional[str]:
+        """Get a schema by its key."""
+        return self.schemas.get(schema_key)
+    
+    def save_schema(self, schema_key: str, schema_obj: Dict[str, Any]) -> str:
+        """Save a schema to a JSON file."""
+        filepath = os.path.join(self.schema_dir, f"{schema_key}.json")
+        
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(schema_obj, f, indent=2)
+            
+            # Also update in-memory cache
+            self.schemas[schema_key] = schema_obj
+            
+            logger.info(f"Saved schema: {schema_key} to {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"Failed to save schema {schema_key}: {e}")
+            raise
+    
+    def validate_response(self, response_data: Any, schema_key: str) -> bool:
+        """Validate a response against a schema."""
+        schema = self.get_schema(schema_key)
+        if not schema:
+            logger.warning(f"Schema not found: {schema_key}")
+            return False
+        
+        try:
+            # Basic validation - could use jsonschema library for full validation
+            if isinstance(response_data, str):
+                response_data = json.loads(response_data)
+            
+            # Simple validation for required fields
+            required_fields = schema.get('properties', {}).get('required', [])
+            if isinstance(response_data, dict):
+                for field in required_fields:
+                    if field not in response_data:
+                        logger.error(f"Missing required field: {field}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Validation failed for {schema_key}: {e}")
+            return False
+    
+    def get_schema_for_prompt(self, eval_type: str, prompt_name: str) -> Optional[Dict[str, Any]]:
+        """Get the appropriate schema for a given evaluation type and prompt."""
+        schema_key = f"{eval_type}.{prompt_name}"
+        return self.get_schema(schema_key)
+    
+    def list_schemas(self) -> Dict[str, Dict[str, Any]]:
+        """List all available schemas."""
+        return self.schemas.copy()
