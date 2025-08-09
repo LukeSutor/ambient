@@ -53,7 +53,10 @@ pub fn run() {
       tauri_plugin_log::Builder::new()
         .clear_targets()
         .target(Target::new(TargetKind::Stdout))
-        .filter(|metadata| !metadata.target().contains("hyper"))
+        .filter(|metadata| {
+          let t = metadata.target();
+          !(t.starts_with("hyper") || t.starts_with("reqwest"))
+        })
         .build(),
     )
     .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {
@@ -165,8 +168,6 @@ pub fn run() {
       setup::get_vlm_mmproj_model_path,
       setup::check_vlm_text_model_download,
       setup::check_vlm_mmproj_model_download,
-      setup::get_fastembed_model_path,
-      setup::check_fastembed_model_download,
       setup::check_setup_complete,
       setup::get_llm_model_path,
       setup::check_llm_model_download,

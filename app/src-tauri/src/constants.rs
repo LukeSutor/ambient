@@ -1,7 +1,6 @@
 //! Shared constants used across the application.
 
 // Directory names
-pub const EMBEDDING_DIR: &str = "models/embedding";
 pub const VLM_DIR: &str = "models/vlm";
 pub const LLM_DIR: &str = "models/llm";
 

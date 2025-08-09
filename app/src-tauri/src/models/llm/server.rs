@@ -609,7 +609,7 @@ pub async fn generate(
     let mut full_response = String::new();
     let mut stream = response.bytes_stream();
 
-    use futures::StreamExt;
+  use tokio_stream::StreamExt;
 
     while let Some(chunk_result) = stream.next().await {
       match chunk_result {

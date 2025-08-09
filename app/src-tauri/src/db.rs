@@ -19,114 +19,113 @@ pub struct DbState(pub Mutex<Option<Connection>>);
 
 pub static GLOBAL_DB_STATE: Lazy<DbState> = Lazy::new(|| DbState(Mutex::new(None)));
 
-lazy_static::lazy_static! {
-    static ref MIGRATIONS: Migrations<'static> =
-        Migrations::new(vec![
-            M::up(r#"
-                -- Conversation tables
-                CREATE TABLE IF NOT EXISTS conversations (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    message_count INTEGER NOT NULL DEFAULT 0
-                );
+static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
+  Migrations::new(vec![
+    M::up(r#"
+        -- Conversation tables
+        CREATE TABLE IF NOT EXISTS conversations (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          message_count INTEGER NOT NULL DEFAULT 0
+        );
 
-                CREATE TABLE IF NOT EXISTS conversation_messages (
-                    id TEXT PRIMARY KEY,
-                    conversation_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
-                );
+        CREATE TABLE IF NOT EXISTS conversation_messages (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
+        );
 
-                CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
-                CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
 
-                -- Task tracking
-                CREATE TABLE IF NOT EXISTS tasks (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    category TEXT,
-                    priority INTEGER DEFAULT 1,
-                    frequency TEXT DEFAULT 'one_time',
-                    last_completed_at TEXT,
-                    first_scheduled_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed'))
-                );
+        -- Task tracking
+        CREATE TABLE IF NOT EXISTS tasks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT,
+          category TEXT,
+          priority INTEGER DEFAULT 1,
+          frequency TEXT DEFAULT 'one_time',
+          last_completed_at TEXT,
+          first_scheduled_at TEXT NOT NULL DEFAULT (datetime('now')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed'))
+        );
 
-                CREATE TABLE IF NOT EXISTS task_steps (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    task_id INTEGER NOT NULL,
-                    step_number INTEGER NOT NULL,
-                    title TEXT NOT NULL,
-                    description TEXT,
-                    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
-                    completed_at TEXT,
-                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                    UNIQUE(task_id, step_number)
-                );
+        CREATE TABLE IF NOT EXISTS task_steps (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id INTEGER NOT NULL,
+          step_number INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
+          completed_at TEXT,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+          UNIQUE(task_id, step_number)
+        );
 
-                CREATE TABLE IF NOT EXISTS task_progress (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    task_id INTEGER NOT NULL,
-                    step_id INTEGER,
-                    reasoning TEXT,
-                    timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                    FOREIGN KEY (step_id) REFERENCES task_steps(id) ON DELETE CASCADE
-                );
+        CREATE TABLE IF NOT EXISTS task_progress (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id INTEGER NOT NULL,
+          step_id INTEGER,
+          reasoning TEXT,
+          timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (step_id) REFERENCES task_steps(id) ON DELETE CASCADE
+        );
 
-                CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-                CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
-                CREATE INDEX IF NOT EXISTS idx_tasks_frequency ON tasks(frequency);
-                CREATE INDEX IF NOT EXISTS idx_tasks_first_scheduled_at ON tasks(first_scheduled_at);
-                CREATE INDEX IF NOT EXISTS idx_tasks_last_completed_at ON tasks(last_completed_at);
-                CREATE INDEX IF NOT EXISTS idx_task_steps_task_id ON task_steps(task_id);
-                CREATE INDEX IF NOT EXISTS idx_task_steps_status ON task_steps(status);
-                CREATE INDEX IF NOT EXISTS idx_task_progress_task_id ON task_progress(task_id);
-                CREATE INDEX IF NOT EXISTS idx_task_progress_timestamp ON task_progress(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+        CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category);
+        CREATE INDEX IF NOT EXISTS idx_tasks_frequency ON tasks(frequency);
+        CREATE INDEX IF NOT EXISTS idx_tasks_first_scheduled_at ON tasks(first_scheduled_at);
+        CREATE INDEX IF NOT EXISTS idx_tasks_last_completed_at ON tasks(last_completed_at);
+        CREATE INDEX IF NOT EXISTS idx_task_steps_task_id ON task_steps(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_steps_status ON task_steps(status);
+        CREATE INDEX IF NOT EXISTS idx_task_progress_task_id ON task_progress(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_progress_timestamp ON task_progress(timestamp);
 
-                -- User activity summaries
-                CREATE TABLE IF NOT EXISTS activity_summaries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    summary TEXT NOT NULL,
-                    active_url TEXT,
-                    active_applications TEXT,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-                );
-                CREATE INDEX IF NOT EXISTS idx_activity_summaries_created_at ON activity_summaries(created_at DESC);
+        -- User activity summaries
+        CREATE TABLE IF NOT EXISTS activity_summaries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          summary TEXT NOT NULL,
+          active_url TEXT,
+          active_applications TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_activity_summaries_created_at ON activity_summaries(created_at DESC);
 
-                -- Events (with embedding)
-                CREATE TABLE IF NOT EXISTS events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp INTEGER NOT NULL,
-                    application TEXT NOT NULL,
-                    description TEXT,
-                    description_embedding BLOB
-                );
-                CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
-                CREATE INDEX IF NOT EXISTS idx_events_application ON events(application);
+        -- Events (with embedding)
+        CREATE TABLE IF NOT EXISTS events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp INTEGER NOT NULL,
+          application TEXT NOT NULL,
+          description TEXT,
+          description_embedding BLOB
+        );
+        CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_events_application ON events(application);
 
-                -- Workflows
-                CREATE TABLE IF NOT EXISTS workflows (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    url TEXT,
-                    steps_json TEXT NOT NULL,
-                    recording_start INTEGER NOT NULL,
-                    recording_end INTEGER,
-                    last_updated INTEGER NOT NULL
-                );
-                CREATE INDEX IF NOT EXISTS idx_workflows_last_updated ON workflows(last_updated DESC);
-            "#)
-        ]);
-}
+        -- Workflows
+        CREATE TABLE IF NOT EXISTS workflows (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT,
+          url TEXT,
+          steps_json TEXT NOT NULL,
+          recording_start INTEGER NOT NULL,
+          recording_end INTEGER,
+          last_updated INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_workflows_last_updated ON workflows(last_updated DESC);
+      "#)
+  ])
+});
 
 fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
