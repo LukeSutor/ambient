@@ -377,15 +377,14 @@ export default function Home() {
       }
       
       // Use a fixed label for the floating window
-      const windowLabel = 'simple-floating';
+      const windowLabel = 'floating-hud';
       
       const window = new WebviewWindow(windowLabel, {
-        url: '/simple-floating.html',
+        url: '/hud',
         title: 'TaskAware Assistant',
         width: 400,
-        height: 60,
+        height: 80,
         resizable: false,
-        shadow: false,
         alwaysOnTop: true,
         decorations: false,
         transparent: true,

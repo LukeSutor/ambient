@@ -4,7 +4,8 @@
   "description": "enables the default permissions",
   "windows": [
     "main",
-    "simple-floating"
+    "simple-floating",
+    "floating-hud"
   ],
   "permissions": [
     "core:default",
