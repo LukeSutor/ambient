@@ -381,10 +381,11 @@ export default function Home() {
       
       const window = new WebviewWindow(windowLabel, {
         url: '/simple-floating.html',
-        title: 'Simple Floating Window',
-        width: 300,
-        height: 200,
+        title: 'TaskAware Assistant',
+        width: 400,
+        height: 60,
         resizable: false,
+        shadow: false,
         alwaysOnTop: true,
         decorations: false,
         transparent: true,
@@ -412,7 +413,7 @@ export default function Home() {
   async function closeFloatingWindow() {
     try {
       if (floatingWindow) {
-        await floatingWindow.destroy();
+        await floatingWindow.close();
         setFloatingWindow(null);
       }
     } catch (error) {

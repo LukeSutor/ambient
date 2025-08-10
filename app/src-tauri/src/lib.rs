@@ -24,7 +24,7 @@ async fn close_floating_window(app_handle: tauri::AppHandle, label: String) -> R
   
   if let Some(window) = app_handle.get_webview_window(&label) {
     log::info!("[close_floating_window] Window found, attempting to close");
-    match window.destroy() {
+    match window.close() {
       Ok(_) => {
         log::info!("[close_floating_window] Window close command successful");
         Ok(())
@@ -168,6 +168,15 @@ pub fn run() {
             });
           } else {
             log::info!("[shutdown] Non-main window '{}' closing", window.label());
+            let app_handle = window.app_handle().clone();
+            if let Some(floating) = app_handle.get_webview_window("simple-floating") {
+              match floating.destroy() {
+                Ok(_) => log::info!("[shutdown] 'simple-floating' window closed"),
+                Err(e) => log::error!("[shutdown] Failed to close 'simple-floating' window: {}", e),
+              }
+            } else {
+              log::info!("[shutdown] 'simple-floating' window not found");
+            }
           }
         }
         _ => {}
