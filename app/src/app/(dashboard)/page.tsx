@@ -383,12 +383,12 @@ export default function Home() {
         url: '/hud',
         title: 'TaskAware Assistant',
         width: 400,
-        height: 80,
+        height: 60,
         resizable: false,
+        shadow: false,
         alwaysOnTop: true,
         decorations: false,
         transparent: true,
-        center: true,
       });
 
       setFloatingWindow(window);

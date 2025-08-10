@@ -141,7 +141,7 @@ export default function HudPage() {
     <NoSSR fallback={<div className="w-full h-full bg-transparent" />}>
       <div className="w-full h-full bg-transparent">
         {/* Glass Container */}
-        <div className="relative w-full h-full bg-gradient-to-br from-white/25 via-white/10 to-white/5 backdrop-blur-xl backdrop-saturate-150 border-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),inset_0_-1px_0_rgba(255,255,255,0.1)] flex flex-col">
+        <div className="relative w-full h-full rounded-xl bg-gradient-to-br from-white/25 via-white/10 to-white/5 backdrop-blur-xl backdrop-saturate-150 border-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.4),inset_0_-1px_0_rgba(255,255,255,0.1)] flex flex-col">
         
         {/* Close Button */}
         <Button
