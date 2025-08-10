@@ -25,9 +25,22 @@ export default function HudPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
 
-  // Initialize conversation on mount
+  // Initialize conversation on mount and enable transparent background
   useEffect(() => {
     createNewConversation();
+
+    // Add class to force transparent bg for this window
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.add('hud-transparent');
+      document.body.classList.add('hud-transparent');
+    }
+
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.remove('hud-transparent');
+        document.body.classList.remove('hud-transparent');
+      }
+    };
   }, []);
 
   async function createNewConversation() {

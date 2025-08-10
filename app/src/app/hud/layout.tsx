@@ -5,8 +5,18 @@ export default function HudLayout({
 }) {
   // Nested layouts must not render <html> or <body>; keep this a server component.
   return (
-    <div className="w-screen h-screen overflow-hidden bg-transparent antialiased font-sans">
-      {children}
-    </div>
+    <>
+      {/* Force transparent background for this window on first paint */}
+      <style
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html:
+            "html,body{background:transparent!important;background-color:transparent!important;}",
+        }}
+      />
+      <div className="w-screen h-screen overflow-hidden bg-transparent antialiased font-sans">
+        {children}
+      </div>
+    </>
   );
 }

@@ -123,3 +123,10 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* HUD window: force transparent background when the route applies this class */
+html.hud-transparent,
+body.hud-transparent {
+  background: transparent !important;
+  background-color: transparent !important;
+}
