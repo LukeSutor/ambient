@@ -23,11 +23,64 @@
         text-align: center;
         font-size: 14px;
       }
+      .close-btn {
+        position: absolute;
+        top: 5px;
+        right: 10px;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 12px;
+        line-height: 18px;
+      }
+      .close-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
     </style>
   </head>
   <body>
+    <button class="close-btn" id="close-btn">×</button>
     <h1>Floating Window Test</h1>
     <p>This is a simple test window.</p>
     <p>If you can see this, the window creation is working!</p>
+    
+    <script type="module">
+      import { invoke } from 'https://unpkg.com/@tauri-apps/api@2/core';
+      import { getCurrentWebviewWindow } from 'https://unpkg.com/@tauri-apps/api@2/webviewWindow';
+
+      async function closeWindow() {
+        try {
+          console.log('Close button clicked');
+          console.log('Tauri API available:', typeof invoke !== 'undefined');
+          
+          // Use the custom Tauri command to close the window
+          await invoke('close_floating_window', { label: 'simple-floating' });
+          console.log('Window close command sent');
+        } catch (error) {
+          console.error('Failed to close window with custom command:', error);
+          // Try the direct method as fallback
+          try {
+            const currentWindow = getCurrentWebviewWindow();
+            console.log('Trying direct close method');
+            await currentWindow.close();
+            console.log('Direct close called');
+          } catch (altError) {
+            console.error('Direct close method also failed:', altError);
+          }
+        }
+      }
+
+      // Add event listener when DOM is loaded
+      document.addEventListener('DOMContentLoaded', () => {
+        const closeBtn = document.getElementById('close-btn');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', closeWindow);
+        }
+      });
+    </script>
   </body>
 </html>

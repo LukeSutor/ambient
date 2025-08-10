@@ -18,6 +18,28 @@ use tauri_plugin_log::{Target, TargetKind};
 use types::AppState;
 extern crate dotenv;
 
+#[tauri::command]
+async fn close_floating_window(app_handle: tauri::AppHandle, label: String) -> Result<(), String> {
+  log::info!("[close_floating_window] Attempting to close window with label: {}", label);
+  
+  if let Some(window) = app_handle.get_webview_window(&label) {
+    log::info!("[close_floating_window] Window found, attempting to close");
+    match window.destroy() {
+      Ok(_) => {
+        log::info!("[close_floating_window] Window close command successful");
+        Ok(())
+      },
+      Err(e) => {
+        log::error!("[close_floating_window] Failed to close window: {}", e);
+        Err(e.to_string())
+      }
+    }
+  } else {
+    log::error!("[close_floating_window] Window not found with label: {}", label);
+    Err("Window not found".to_string())
+  }
+}
+
 // Global cleanup handler to ensure llama server is stopped
 struct CleanupHandler;
 
@@ -121,7 +143,7 @@ pub fn run() {
           Err(e) => log::error!("[setup] Failed to start llama.cpp server: {}", e),
         }
       });
-
+      
       // Initialize the cleanup handler to ensure it's ready
       std::sync::LazyLock::force(&_CLEANUP_HANDLER);
 
@@ -133,15 +155,20 @@ pub fn run() {
     .on_window_event(|window, event| {
       match event {
         tauri::WindowEvent::CloseRequested { .. } => {
-          // Stop the llama server when the main window is being closed
-          let _app_handle = window.app_handle().clone();
-          tauri::async_runtime::spawn(async move {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-              log::error!("[shutdown] Failed to stop llama server: {}", e);
-            } else {
-              log::info!("[shutdown] Llama server stopped successfully");
-            }
-          });
+          // Only stop the llama server when the main window is being closed
+          if window.label() == "main" {
+            log::info!("[shutdown] Main window closing, stopping llama server...");
+            let _app_handle = window.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+              if let Err(e) = models::llm::server::stop_llama_server().await {
+                log::error!("[shutdown] Failed to stop llama server: {}", e);
+              } else {
+                log::info!("[shutdown] Llama server stopped successfully");
+              }
+            });
+          } else {
+            log::info!("[shutdown] Non-main window '{}' closing", window.label());
+          }
         }
         _ => {}
       }
@@ -150,6 +177,7 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
+      close_floating_window,
       data::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
@@ -219,6 +247,14 @@ pub fn run() {
       tasks::commands::analyze_current_screen_for_tasks,
       tasks::commands::get_task_progress_history
     ])
+    .on_window_event(|window, event| match event {
+      tauri::WindowEvent::Destroyed => {
+        if window.label() == "main" {
+          window.app_handle().exit(0);
+        }
+      }
+      _ => {}
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

@@ -370,9 +370,14 @@ export default function Home() {
 
   async function openFloatingWindow() {
     try {
-      // For now, always create a new window
-      // Generate a unique label to avoid conflicts
-      const windowLabel = `floating-${Date.now()}`;
+      // Check if window already exists
+      if (floatingWindow) {
+        console.log('Floating window already exists');
+        return;
+      }
+      
+      // Use a fixed label for the floating window
+      const windowLabel = 'simple-floating';
       
       const window = new WebviewWindow(windowLabel, {
         url: '/simple-floating.html',
@@ -390,6 +395,13 @@ export default function Home() {
       
       // Listen for window close
       await window.listen('tauri://close-requested', () => {
+        console.log('Floating window close requested from event listener');
+        setFloatingWindow(null);
+      });
+      
+      // Also listen for destroyed event
+      await window.listen('tauri://destroyed', () => {
+        console.log('Floating window destroyed');
         setFloatingWindow(null);
       });
     } catch (error) {
@@ -400,7 +412,7 @@ export default function Home() {
   async function closeFloatingWindow() {
     try {
       if (floatingWindow) {
-        await floatingWindow.close();
+        await floatingWindow.destroy();
         setFloatingWindow(null);
       }
     } catch (error) {
