@@ -233,6 +233,7 @@
     <script type="module">
       import { invoke } from 'https://unpkg.com/@tauri-apps/api@2/core';
       import { getCurrentWebviewWindow } from 'https://unpkg.com/@tauri-apps/api@2/webviewWindow';
+      import { LogicalSize } from 'https://unpkg.com/@tauri-apps/api@2/dpi';
 
       let isLoading = false;
       let currentConversationId = null;
@@ -273,7 +274,7 @@
         // Resize window to show response area
         try {
           const currentWindow = getCurrentWebviewWindow();
-          let newSize = LogicalSize(400, 300);
+          const newSize = new LogicalSize(400, 350);
           await currentWindow.setSize(newSize);
         } catch (error) {
           console.error('Failed to resize window:', error);
@@ -287,7 +288,8 @@
         // Resize window back to compact size
         try {
           const currentWindow = getCurrentWebviewWindow();
-          await currentWindow.setSize({ width: 400, height: 80 });
+          const newSize = new LogicalSize(400, 80);
+          await currentWindow.setSize(newSize);
         } catch (error) {
           console.error('Failed to resize window:', error);
         }
