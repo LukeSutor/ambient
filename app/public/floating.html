@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TaskAware Assistant</title>
+    <script src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@19/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@tauri-apps/api@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        background: transparent;
+      }
+      #floating-root {
+        width: 100vw;
+        height: 100vh;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="floating-root"></div>
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+      
+      function FloatingWindow() {
+        const [input, setInput] = useState("");
+        const [response, setResponse] = useState("");
+        const [isStreaming, setIsStreaming] = useState(false);
+        const [isLoading, setIsLoading] = useState(false);
+        const [isExpanded, setIsExpanded] = useState(false);
+        const [currentConversationId, setCurrentConversationId] = useState(null);
+        const responseRef = useRef(null);
+        const streamContentRef = useRef("");
+
+        // Initialize conversation on mount
+        useEffect(() => {
+          createNewConversation();
+          
+          // Set up streaming listener
+          let unlistenStream;
+          
+          async function setupStreamListener() {
+            try {
+              unlistenStream = await window.__TAURI__.event.listen('chat-stream', (event) => {
+                const { delta, full_response, is_finished } = event.payload;
+                
+                if (is_finished) {
+                  setResponse(full_response);
+                  setIsStreaming(false);
+                  streamContentRef.current = "";
+                } else {
+                  // Use full_response if available, otherwise accumulate delta
+                  const contentToUse = full_response && full_response.length > 0 
+                    ? full_response 
+                    : (streamContentRef.current += delta);
+                  
+                  setResponse(contentToUse);
+                  streamContentRef.current = contentToUse;
+                }
+              });
+            } catch (error) {
+              console.error("Failed to set up stream listener:", error);
+            }
+          }
+
+          setupStreamListener();
+          
+          return () => {
+            if (unlistenStream) {
+              unlistenStream();
+            }
+          };
+        }, []);
+
+        // Auto-scroll to bottom when response updates
+        useEffect(() => {
+          if (responseRef.current && isExpanded) {
+            responseRef.current.scrollTop = responseRef.current.scrollHeight;
+          }
+        }, [response, isExpanded]);
+
+        async function createNewConversation() {
+          try {
+            const newConv = await window.__TAURI__.core.invoke("create_conversation", { name: null });
+            setCurrentConversationId(newConv.id);
+          } catch (err) {
+            console.error("Error creating conversation:", err);
+          }
+        }
+
+        async function handleSubmit(e) {
+          e.preventDefault();
+          const prompt = input.trim();
+          if (!prompt || isStreaming || isLoading) return;
+
+          setInput("");
+          setResponse("");
+          setIsLoading(true);
+          setIsExpanded(true); // Expand when starting to show response
+          
+          // Create conversation if none exists
+          let convId = currentConversationId;
+          if (!convId) {
+            try {
+              const newConv = await window.__TAURI__.core.invoke("create_conversation", { name: null });
+              convId = newConv.id;
+              setCurrentConversationId(convId);
+            } catch (err) {
+              console.error("Error creating conversation:", err);
+              setIsLoading(false);
+              return;
+            }
+          }
+          
+          // Handle streaming
+          setIsStreaming(true);
+          streamContentRef.current = "";
+          
+          try {
+            await window.__TAURI__.core.invoke("generate", { 
+              prompt,
+              jsonSchema: null,
+              convId,
+              useThinking: false, // No thinking by default as requested
+              stream: true
+            });
+          } catch (err) {
+            console.error("Error generating response:", err);
+            setResponse("[Error generating response]");
+            setIsStreaming(false);
+          }
+          
+          setIsLoading(false);
+        }
+
+        return React.createElement('div', {
+          className: "w-full h-full bg-black/20 backdrop-blur-sm border border-white/20 rounded-lg overflow-hidden"
+        }, React.createElement('div', {
+          className: "p-4"
+        }, [
+          // Input Form
+          React.createElement('form', {
+            key: 'form',
+            onSubmit: handleSubmit,
+            className: "flex gap-2"
+          }, [
+            React.createElement('input', {
+              key: 'input',
+              className: "flex-1 bg-white/90 backdrop-blur-sm border border-white/30 rounded-lg px-4 py-2 text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
+              type: "text",
+              value: input,
+              onChange: e => setInput(e.target.value),
+              placeholder: "Ask me anything...",
+              autoFocus: true
+            }),
+            React.createElement('button', {
+              key: 'submit',
+              type: "submit",
+              disabled: !input.trim() || isStreaming || isLoading,
+              className: "bg-blue-600/90 hover:bg-blue-700/90 text-white px-4 py-2 rounded-lg disabled:bg-gray-400/50 transition-all duration-200"
+            }, isStreaming ? '...' : isLoading ? '...' : '→')
+          ]),
+          
+          // Response Area with Animation
+          React.createElement('div', {
+            key: 'response-container',
+            className: `transition-all duration-300 ease-in-out overflow-hidden ${
+              isExpanded && (response || isStreaming) 
+                ? 'max-h-96 opacity-100 mt-4' 
+                : 'max-h-0 opacity-0 mt-0'
+            }`
+          }, React.createElement('div', {
+            ref: responseRef,
+            className: "bg-white/90 backdrop-blur-sm border border-white/30 rounded-lg p-4 max-h-80 overflow-y-auto"
+          }, React.createElement('div', {
+            className: "text-sm text-gray-800 whitespace-pre-wrap"
+          }, [
+            response,
+            isStreaming && React.createElement('span', {
+              key: 'cursor',
+              className: "animate-pulse"
+            }, '▊')
+          ])))
+        ]));
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('floating-root'));
+      root.render(React.createElement(FloatingWindow));
+    </script>
+  </body>
+</html>
