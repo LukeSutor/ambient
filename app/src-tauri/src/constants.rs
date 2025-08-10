@@ -1,7 +1,6 @@
 //! Shared constants used across the application.
 
 // Directory names
-pub const EMBEDDING_DIR: &str = "models/embedding";
 pub const VLM_DIR: &str = "models/vlm";
 pub const LLM_DIR: &str = "models/llm";
 
@@ -13,7 +12,8 @@ pub const MMPROJ_FILE: &str = "mmproj-model.gguf";
 pub const LLM_FILE: &str = "Qwen3-1.7B-Q4_K_M.gguf";
 
 // LLM model download link (example - update with actual model)
-pub const LLM_LINK: &str = "https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q6_K.gguf";
+pub const LLM_LINK: &str =
+  "https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q6_K.gguf";
 
 // VLM model download links
 // pub const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/resolve/main/SmolVLM2-500M-Video-Instruct-Q8_0.gguf";

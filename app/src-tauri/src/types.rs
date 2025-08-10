@@ -1,9 +1,6 @@
-
-
-
 // Used to store global types
 
 // Global application state
 pub struct AppState {
-    pub pid: u32,
+  pub pid: u32,
 }

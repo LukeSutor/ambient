@@ -11,7 +11,7 @@ use tauri_plugin_opener::OpenerExt;
 pub async fn logout() -> Result<String, String> {
   // Clear OAuth tokens
   if let Err(e) = clear_stored_token() {
-    eprintln!("Warning: Failed to clear OAuth token: {}", e);
+  log::warn!("Warning: Failed to clear OAuth token: {}", e);
   }
 
   // Clear Cognito authentication
@@ -150,17 +150,19 @@ pub async fn google_initiate_auth() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn google_sign_in(app_handle: tauri::AppHandle) -> Result<(), String> {
-  println!("[auth] Starting Google sign-in process");
-  
+  log::info!("[auth] Starting Google sign-in process");
+
   // Generate the OAuth URL
   let auth_url = google::initiate_google_auth().await?;
-  println!("[auth] Generated OAuth URL: {}", auth_url);
-  
+  log::info!("[auth] Generated OAuth URL: {}", auth_url);
+
   // Open the URL in the default browser
-  app_handle.opener().open_url(&auth_url, None::<&str>)
+  app_handle
+    .opener()
+    .open_url(&auth_url, None::<&str>)
     .map_err(|e| format!("Failed to open OAuth URL: {}", e))?;
-  
-  println!("[auth] Successfully opened OAuth URL in browser");
+
+  log::info!("[auth] Successfully opened OAuth URL in browser");
   Ok(())
 }
 
