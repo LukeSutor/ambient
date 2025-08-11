@@ -5,9 +5,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { LogicalSize } from '@tauri-apps/api/dpi';
+import { remark } from 'remark';
+import html from 'remark-html';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Move, X } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
 const logo = '/logo.png';
 
@@ -28,25 +35,30 @@ export default function HudPage() {
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const streamContentRef = useRef<string>('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; htmlContent?: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Force Tauri window drag from the handle and prevent default browser drag/selection
-  const onHandlePointerDown = async (e: React.PointerEvent | React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingWindow(true);
-    try {
-      const win = getCurrentWebviewWindow();
-      await win.startDragging();
-    } catch (err) {
-      console.error('startDragging failed:', err);
-    }
+  // Convert markdown to HTML for assistant messages
+  const convertMarkdownToHtml = async (markdownContent: string): Promise<string> => {
+    const processedContent = await remark()
+      .use(html)
+      .process(markdownContent);
+    return processedContent.toString();
   };
 
-  const onHandlePointerUp = async (e: React.PointerEvent | React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingWindow(false);
+  // Process message content to add HTML version for assistant messages
+  const processMessageForMarkdown = async (message: { role: 'user' | 'assistant'; content: string; htmlContent?: string }) => {
+    if (message.role === 'assistant' && message.content && !message.htmlContent) {
+      const htmlContent = await convertMarkdownToHtml(message.content);
+      return { ...message, htmlContent };
+    }
+    return message;
+  };
+
+  // Force Tauri window drag from the handle and prevent default browser drag/selection
+  const onHandlePointerDown = async (e: React.PointerEvent | React.MouseEvent) => {
+    setIsDraggingWindow(true);
   };
 
   // Ensure drag visibility resets when pointer is released anywhere
@@ -91,8 +103,23 @@ export default function HudPage() {
       if (convId) {
         try {
           const existing = await invoke<any[]>('get_messages', { conversationId: convId });
-          const mapped = existing.map((m) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: extractThinkingContent(m.content) }));
-          setMessages(mapped);
+          const mapped = existing.map((m) => ({ 
+            role: m.role === 'user' ? 'user' as const : 'assistant' as const, 
+            content: extractThinkingContent(m.content) 
+          }));
+          
+          // Process assistant messages to add HTML content
+          const processedMessages = await Promise.all(
+            mapped.map(async (msg) => {
+              if (msg.role === 'assistant') {
+                const htmlContent = await convertMarkdownToHtml(msg.content);
+                return { ...msg, htmlContent };
+              }
+              return msg;
+            })
+          );
+          
+          setMessages(processedMessages);
         } catch (err) {
           console.error('Failed to load existing messages for HUD:', err);
         }
@@ -111,16 +138,33 @@ export default function HudPage() {
 
           if (isFinished) {
             const finalText = extractThinkingContent(full ?? streamContentRef.current);
-            // Patch last assistant message
-            setMessages((prev) => {
-              const next = [...prev];
-              const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
-              const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
-              if (lastIdx >= 0) {
-                next[lastIdx] = { ...next[lastIdx], content: finalText };
-              }
-              return next;
+            
+            // Convert markdown to HTML for final assistant message
+            convertMarkdownToHtml(finalText).then((htmlContent) => {
+              // Patch last assistant message with both content and htmlContent
+              setMessages((prev) => {
+                const next = [...prev];
+                const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
+                const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
+                if (lastIdx >= 0) {
+                  next[lastIdx] = { ...next[lastIdx], content: finalText, htmlContent };
+                }
+                return next;
+              });
+            }).catch((err) => {
+              console.error('Failed to convert markdown to HTML:', err);
+              // Fallback: just update with plain text
+              setMessages((prev) => {
+                const next = [...prev];
+                const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
+                const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
+                if (lastIdx >= 0) {
+                  next[lastIdx] = { ...next[lastIdx], content: finalText };
+                }
+                return next;
+              });
             });
+            
             setIsLoading(false);
             setIsStreaming(false);
             streamContentRef.current = '';
@@ -259,6 +303,11 @@ export default function HudPage() {
 
       // Safety: if no stream events arrive, stop loading when invoke resolves
       setIsLoading(false);
+      
+      // Process the final text for markdown if needed
+      const processedFinalText = extractThinkingContent(finalText);
+      const finalHtmlContent = await convertMarkdownToHtml(processedFinalText);
+      
       setMessages((prev) => {
         // If stream produced content, leave it. Otherwise set finalText.
         const next = [...prev];
@@ -266,10 +315,13 @@ export default function HudPage() {
         const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
         if (lastIdx >= 0) {
           const existing = next[lastIdx]?.content ?? '';
-          next[lastIdx] = {
-            role: 'assistant',
-            content: existing && existing.length > 0 ? existing : extractThinkingContent(finalText),
-          };
+          if (!existing || existing.length === 0) {
+            next[lastIdx] = {
+              role: 'assistant',
+              content: processedFinalText,
+              htmlContent: finalHtmlContent,
+            };
+          }
         }
         return next;
       });
@@ -305,46 +357,50 @@ export default function HudPage() {
       {/* Glass Container */}
       <div className="relative w-full h-full backdrop-blur-2xl backdrop-saturate-150 flex flex-col overflow-hidden">
 
-        {/* Chat Area + Input pinned to bottom */}
+        {/* Chat Area - takes remaining space after input bar */}
         <div className="relative flex-1 flex flex-col min-h-0">
           {/* Messages Scroll Area */}
           {isExpanded && (
             <div
               ref={messagesContainerRef}
-              className="hud-scroll flex-1 min-h-0 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/30 transition-all"
+              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 rounded-xl mx-[5px] transition-all"
             >
-              {messages.map((m, i) => (
-                <div
-                  key={`m-${i}`}
-                  className={
-                    m.role === 'user'
-                      ? 'max-w-[85%] ml-auto bg-white/60 border border-black/10 rounded-xl px-3 py-2'
-                      : 'max-w-[95%] mx-auto px-3 py-2'
-                  }
-                >
-                  <div className="whitespace-pre-wrap">{m.content}</div>
-                </div>
-              ))}
+              <div className="flex flex-col space-y-2">
+                {messages.map((m, i) => (
+                  <div
+                    key={`m-${i}`}
+                    className={
+                      m.role === 'user'
+                        ? 'max-w-[85%] ml-auto bg-white/60 border border-black/10 rounded-xl px-3 py-2'
+                        : 'max-w-[95%] w-full text-left mx-auto px-3 py-2'
+                    }
+                  >
+                    {m.role === 'assistant' && m.htmlContent ? (
+                      <div 
+                        className="prose prose-sm max-w-none prose-headings:text-black prose-p:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-black/10 prose-pre:text-black"
+                        dangerouslySetInnerHTML={{ __html: m.htmlContent }}
+                      />
+                    ) : (
+                      <div className="whitespace-pre-wrap">{m.content}</div>
+                    )}
+                  </div>
+                ))}
 
-              {isStreaming && (
-                <div className="mr-auto h-4 w-3 animate-pulse rounded-sm bg-black/30" />
-              )}
-              <div ref={messagesEndRef} />
-
+                {isStreaming && (
+                  <div className="inline mr-auto h-4 w-3 animate-pulse rounded-sm bg-black/30" />
+                )}
+                <div ref={messagesEndRef} />
+              </div>
             </div>
           )}
 
-          {/* Input Container pinned bottom; animates placement via margin */}
-          <div 
-            className='group relative h-[55px] w-[500px] flex flex-col justify-center items-center'
+          {/* Input Container - fixed height at bottom */}
+          <div className='flex-shrink-0 h-[55px] w-[500px] flex flex-col justify-center items-center relative group'
             onMouseEnter={() => setIsHoveringGroup(true)}
             onMouseLeave={() => setIsHoveringGroup(false)}
           >
             <div
-              className={
-                'flex items-center gap-3 h-[45px] w-[490px] rounded-lg bg-white/40 border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20' +
-                (isExpanded ? 'mt-auto' : '')
-              }
+              className='flex items-center gap-3 h-[45px] w-[490px] rounded-lg bg-white/60 border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
             >
               <Image
                 src={logo}
@@ -368,11 +424,31 @@ export default function HudPage() {
                   autoFocus
                 />
               </div>
+
+              {/* New chat icon */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className={`transform h-9 w-9 mr-5 rounded-full flex items-center justify-center hover:bg-white/60 transition-all duration-500 ${isExpanded ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}
+                    onClick={async () => {
+                      await clearAndCollapse();
+                      await createNewConversation();
+                    }}
+                    title="New Chat"
+                  >
+                    <MessageSquarePlus className="w-full h-full text-black pointer-events-none" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Start a new chat</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
             
             {/* Close icon */}
             <button
-              className="hidden group-hover:flex absolute top-0 right-0 w-6 h-6 rounded-full bg-white/40 hover:bg-white/60 transition-colors select-none"
+              className="transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 absolute top-0 right-0 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 transition-all duration-100 select-none"
               onClick={closeWindow}
               title="Close Window"
             >
@@ -383,13 +459,11 @@ export default function HudPage() {
             <div
               data-tauri-drag-region
               className={
-                (isDraggingWindow || isHoveringGroup ? 'flex' : 'hidden') + 
-                ' hover:cursor-grab select-none absolute bottom-0 right-0 w-6 h-6 bg-white/40 hover:bg-white/60 rounded-full transition-all'
+                (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') + 
+                ' hover:cursor-grab select-none absolute bottom-0 right-0 w-6 h-6 bg-white/60 hover:bg-white/80 rounded-full transition-all duration-100'
               }
               onPointerDown={onHandlePointerDown}
-              onPointerUp={onHandlePointerUp}
               draggable={false}
-              onDragStart={(e) => e.preventDefault()}
               title="Drag Window"
             >
                 <Move className="w-full h-full p-1 text-black pointer-events-none" />
