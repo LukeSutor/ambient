@@ -370,40 +370,24 @@ export default function Home() {
 
   async function openFloatingWindow() {
     try {
-      // Check if window already exists
-      if (floatingWindow) {
-        console.log('Floating window already exists');
-        return;
-      }
-      
-      // Use a fixed label for the floating window
       const windowLabel = 'floating-hud';
-      
-      const window = new WebviewWindow(windowLabel, {
-        url: '/hud',
-        title: 'TaskAware Assistant',
-        width: 400,
-        height: 60,
-        resizable: false,
-        shadow: false,
-        alwaysOnTop: true,
-        decorations: false,
-        transparent: true,
-      });
-
-      setFloatingWindow(window);
-      
-      // Listen for window close
-      await window.listen('tauri://close-requested', () => {
-        console.log('Floating window close requested from event listener');
-        setFloatingWindow(null);
-      });
-      
-      // Also listen for destroyed event
-      await window.listen('tauri://destroyed', () => {
-        console.log('Floating window destroyed');
-        setFloatingWindow(null);
-      });
+      // Use backend command to open or focus the HUD window
+      await invoke('open_floating_window', { label: windowLabel });
+      // Optionally get a handle to attach listeners
+      let win = await WebviewWindow.getByLabel(windowLabel);
+      if (!win) {
+        await new Promise((r) => setTimeout(r, 100));
+        win = await WebviewWindow.getByLabel(windowLabel);
+      }
+      if (win) {
+        setFloatingWindow(win);
+        await win.listen('tauri://close-requested', () => {
+          setFloatingWindow(null);
+        });
+        await win.listen('tauri://destroyed', () => {
+          setFloatingWindow(null);
+        });
+      }
     } catch (error) {
       console.error('Failed to create floating window:', error);
     }
@@ -411,10 +395,8 @@ export default function Home() {
 
   async function closeFloatingWindow() {
     try {
-      if (floatingWindow) {
-        await floatingWindow.close();
-        setFloatingWindow(null);
-      }
+      await invoke('close_floating_window', { label: 'floating-hud' });
+      setFloatingWindow(null);
     } catch (error) {
       console.error('Failed to close floating window:', error);
     }

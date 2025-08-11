@@ -130,3 +130,27 @@ body.hud-transparent {
   background: transparent !important;
   background-color: transparent !important;
 }
+
+/* Semi-transparent glassy scrollbars for HUD */
+.hud-scroll {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.25) rgba(255,255,255,0.25);
+}
+.hud-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.hud-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.25);
+  border-radius: 9999px;
+  backdrop-filter: blur(8px) saturate(140%);
+}
+.hud-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0.2));
+  border-radius: 9999px;
+  border: 2px solid rgba(255,255,255,0.35);
+}
+.hud-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.3));
+}

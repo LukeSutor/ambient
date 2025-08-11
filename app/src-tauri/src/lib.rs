@@ -10,6 +10,7 @@ pub mod scheduler;
 pub mod setup;
 pub mod tasks;
 pub mod types;
+pub mod windows;
 use db::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -17,28 +18,6 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::{Target, TargetKind};
 use types::AppState;
 extern crate dotenv;
-
-#[tauri::command]
-async fn close_floating_window(app_handle: tauri::AppHandle, label: String) -> Result<(), String> {
-  log::info!("[close_floating_window] Attempting to close window with label: {}", label);
-  
-  if let Some(window) = app_handle.get_webview_window(&label) {
-    log::info!("[close_floating_window] Window found, attempting to close");
-    match window.close() {
-      Ok(_) => {
-        log::info!("[close_floating_window] Window close command successful");
-        Ok(())
-      },
-      Err(e) => {
-        log::error!("[close_floating_window] Failed to close window: {}", e);
-        Err(e.to_string())
-      }
-    }
-  } else {
-    log::error!("[close_floating_window] Window not found with label: {}", label);
-    Err("Window not found".to_string())
-  }
-}
 
 // Global cleanup handler to ensure llama server is stopped
 struct CleanupHandler;
@@ -186,7 +165,8 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
-      close_floating_window,
+  windows::open_floating_window,
+  windows::close_floating_window,
       data::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
