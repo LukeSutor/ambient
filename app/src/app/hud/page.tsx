@@ -7,7 +7,7 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Move, GripVertical } from 'lucide-react';
+import { Move, X } from 'lucide-react';
 import Image from "next/image";
 const logo = '/logo.png';
 
@@ -25,10 +25,40 @@ export default function HudPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isDraggingWindow, setIsDraggingWindow] = useState(false);
+  const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Force Tauri window drag from the handle and prevent default browser drag/selection
+  const onHandlePointerDown = async (e: React.PointerEvent | React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingWindow(true);
+    try {
+      const win = getCurrentWebviewWindow();
+      await win.startDragging();
+    } catch (err) {
+      console.error('startDragging failed:', err);
+    }
+  };
+
+  const onHandlePointerUp = async (e: React.PointerEvent | React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingWindow(false);
+  };
+
+  // Ensure drag visibility resets when pointer is released anywhere
+  useEffect(() => {
+    const onUp = () => setIsDraggingWindow(false);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
 
   // Helper to strip <think> blocks similar to landing page
   function extractThinkingContent(text: string) {
@@ -171,7 +201,7 @@ export default function HudPage() {
     setIsExpanded(true);
     try {
       const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(400, 350);
+      const newSize = new LogicalSize(500, 350);
       await currentWindow.setSize(newSize);
     } catch (error) {
       console.error('Failed to resize window:', error);
@@ -182,7 +212,7 @@ export default function HudPage() {
     setIsExpanded(false);
     try {
       const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(400, 80);
+      const newSize = new LogicalSize(500, 80);
       await currentWindow.setSize(newSize);
     } catch (error) {
       console.error('Failed to resize window:', error);
@@ -273,10 +303,7 @@ export default function HudPage() {
   return (
     <div className="w-full h-full bg-transparent">
       {/* Glass Container */}
-      <div className="relative w-full h-full rounded-2xl backdrop-blur-2xl backdrop-saturate-150 ring-1 ring-black/10 shadow-[0_8px_30px_rgba(0,0,0,0.08)] flex flex-col overflow-hidden">
-        {/* Subtle sheen and vignette overlays for depth (light glass) */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/50 via-transparent to-transparent" />
-        <div className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(80%_80%_at_50%_30%,black,transparent)] shadow-[inset_0_-40px_80px_rgba(0,0,0,0.10)]" />
+      <div className="relative w-full h-full backdrop-blur-2xl backdrop-saturate-150 flex flex-col overflow-hidden">
 
         {/* Chat Area + Input pinned to bottom */}
         <div className="relative flex-1 flex flex-col min-h-0">
@@ -298,43 +325,74 @@ export default function HudPage() {
                   <div className="whitespace-pre-wrap">{m.content}</div>
                 </div>
               ))}
-              {/* streaming cursor */}
+
               {isStreaming && (
                 <div className="mr-auto h-4 w-3 animate-pulse rounded-sm bg-black/30" />
               )}
               <div ref={messagesEndRef} />
+
             </div>
           )}
 
           {/* Input Container pinned bottom; animates placement via margin */}
-          <div
-            className={
-              'flex items-center gap-3 h-[55px] p-2 flex-shrink-0 border-t border-black/10 transition-all ' +
-              (isExpanded ? 'mt-auto' : '')
-            }
+          <div 
+            className='group relative h-[55px] w-[500px] flex flex-col justify-center items-center'
+            onMouseEnter={() => setIsHoveringGroup(true)}
+            onMouseLeave={() => setIsHoveringGroup(false)}
           >
-            <Image src={logo} width={32} height={32} alt="Logo" className="w-8 h-8 rounded-full bg-white/80 p-1" />
-
-            <div className="flex-1">
-              <Input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask me anything..."
-                className="bg-white/50 border-black/15 rounded-xl text-black placeholder:text-black/50 focus:bg-white/40 focus:border-black/30 focus:shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_0_20px_rgba(0,0,0,0.08)] backdrop-blur-sm transition-all"
-                autoComplete="off"
-                autoFocus
+            <div
+              className={
+                'flex items-center gap-3 h-[45px] w-[490px] rounded-lg bg-white/40 border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20' +
+                (isExpanded ? 'mt-auto' : '')
+              }
+            >
+              <Image
+                src={logo}
+                width={32}
+                height={32}
+                alt="Logo"
+                className="w-7 h-7 ml-2 select-none pointer-events-none"
+                draggable={false}
+                onDragStart={(e) => e.preventDefault()}
               />
-            </div>
 
-            {/* Drag Handle */}
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask anything"
+                  className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  autoComplete="off"
+                  autoFocus
+                />
+              </div>
+            </div>
+            
+            {/* Close icon */}
+            <button
+              className="hidden group-hover:flex absolute top-0 right-0 w-6 h-6 rounded-full bg-white/40 hover:bg-white/60 transition-colors select-none"
+              onClick={closeWindow}
+              title="Close Window"
+            >
+              <X className="w-full h-full p-1 text-black pointer-events-none" />
+            </button>
+
+            {/* Move handle */}
             <div
               data-tauri-drag-region
-              className="w-9 h-9 border rounded-full border-black/20 flex items-center justify-center cursor-grab bg-white/20 hover:bg-white/40 hover:border-black/20 backdrop-blur-sm transition-all"
+              className={
+                (isDraggingWindow || isHoveringGroup ? 'flex' : 'hidden') + 
+                ' hover:cursor-grab select-none absolute bottom-0 right-0 w-6 h-6 bg-white/40 hover:bg-white/60 rounded-full transition-all'
+              }
+              onPointerDown={onHandlePointerDown}
+              onPointerUp={onHandlePointerUp}
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
               title="Drag Window"
             >
-              <Move data-tauri-drag-region className="w-6 h-6 text-black" />
+                <Move className="w-full h-full p-1 text-black pointer-events-none" />
             </div>
           </div>
         </div>
