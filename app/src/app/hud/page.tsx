@@ -16,6 +16,7 @@ import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
+import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
 interface Conversation {
@@ -39,14 +40,35 @@ export default function HudPage() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Force Tauri window drag from the handle and prevent default browser drag/selection
-  const onHandlePointerDown = async (e: React.PointerEvent | React.MouseEvent) => {
-    setIsDraggingWindow(true);
+  const handleMouseLeave = async (e: React.MouseEvent) => {
+    setIsHoveringGroup(false);
+    // Get the bounding box of drag area
+    const dragArea = document.getElementById('drag-area');
+    if (!dragArea) return;
+
+    const rect = dragArea.getBoundingClientRect();
+
+    // Get the mouse coordinates in 100ms
+    let mouseCoords = { x: e.clientX, y: e.clientY };
+    console.log('Mouse coordinates now:', mouseCoords);
+    // setTimeout(() => {
+    //   mouseCoords = { x: e.clientX, y: e.clientY };
+    //   console.log('Mouse coordinates after 300ms:', mouseCoords);
+    // }, 300);
+
+    // Print whether mouse is within bounding box
+    const isWithinBox = rect && mouseCoords.x >= rect.left && mouseCoords.x <= rect.right && mouseCoords.y >= rect.top && mouseCoords.y <= rect.bottom;
+    console.log('Mouse is within box:', isWithinBox);
+
+    // set dragging off if not within bounding box
+    if (!isWithinBox) {
+      setIsDraggingWindow(false);
+    }
   };
 
   // Ensure drag visibility resets when pointer is released anywhere
   useEffect(() => {
-    const onUp = () => setIsDraggingWindow(false);
+    const onUp = () => {setIsDraggingWindow(false); console.log('Pointer released');};
     window.addEventListener('pointerup', onUp);
     window.addEventListener('mouseup', onUp);
     return () => {
@@ -207,7 +229,7 @@ export default function HudPage() {
     setIsExpanded(false);
     try {
       const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(500, 80);
+      const newSize = new LogicalSize(500, 60);
       await currentWindow.setSize(newSize);
     } catch (error) {
       console.error('Failed to resize window:', error);
@@ -336,12 +358,13 @@ export default function HudPage() {
           )}
 
           {/* Input Container - fixed height at bottom */}
-          <div className='flex-shrink-0 h-[55px] w-[500px] flex flex-col justify-center items-center relative group'
+          <div className='flex-shrink-0 h-[60px] w-[500px] flex flex-col justify-center items-center relative group'
+            id="input-container"
             onMouseEnter={() => setIsHoveringGroup(true)}
-            onMouseLeave={() => setIsHoveringGroup(false)}
+            onMouseLeave={handleMouseLeave}
           >
             <div
-              className='flex items-center gap-3 h-[45px] w-[490px] rounded-lg bg-white/60 border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
+              className='flex items-center gap-3 h-[45px] w-[485px] rounded-lg bg-white/60 border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
             >
               <Image
                 src={logo}
@@ -389,7 +412,10 @@ export default function HudPage() {
             
             {/* Close icon */}
             <button
-              className="transform scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 absolute top-0 right-0 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 transition-all duration-100 select-none"
+              className={
+              (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
+              ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 transition-all duration-100 select-none'
+              }
               onClick={closeWindow}
               title="Close Window"
             >
@@ -399,11 +425,12 @@ export default function HudPage() {
             {/* Move handle */}
             <div
               data-tauri-drag-region
+              id="drag-area"
               className={
                 (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') + 
-                ' hover:cursor-grab select-none absolute bottom-0 right-0 w-6 h-6 bg-white/60 hover:bg-white/80 rounded-full transition-all duration-100'
+                ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 rounded-full transition-all duration-100'
               }
-              onPointerDown={onHandlePointerDown}
+              onPointerDown={() => setIsDraggingWindow(true)}
               draggable={false}
               title="Drag Window"
             >

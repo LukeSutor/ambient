@@ -20,7 +20,7 @@ pub async fn open_floating_window(app_handle: AppHandle, label: Option<String>) 
 		tauri::WebviewUrl::App("/hud".into()),
 	)
 	.title("TaskAware Assistant")
-	.inner_size(500.0, 55.0)
+	.inner_size(500.0, 60.0)
 	.resizable(false)
 	.transparent(true)
 	.decorations(false)
