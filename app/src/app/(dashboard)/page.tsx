@@ -1,6 +1,7 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import Image from "next/image";
 import { useCallback, useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button"
@@ -364,6 +365,43 @@ export default function Home() {
     };
   }, []); // Empty dependency array ensures this runs only once on mount
 
+  // Floating window management
+  const [floatingWindow, setFloatingWindow] = useState<WebviewWindow | null>(null);
+
+  async function openFloatingWindow() {
+    try {
+      const windowLabel = 'floating-hud';
+      // Use backend command to open or focus the HUD window
+      await invoke('open_floating_window', { label: windowLabel });
+      // Optionally get a handle to attach listeners
+      let win = await WebviewWindow.getByLabel(windowLabel);
+      if (!win) {
+        await new Promise((r) => setTimeout(r, 100));
+        win = await WebviewWindow.getByLabel(windowLabel);
+      }
+      if (win) {
+        setFloatingWindow(win);
+        await win.listen('tauri://close-requested', () => {
+          setFloatingWindow(null);
+        });
+        await win.listen('tauri://destroyed', () => {
+          setFloatingWindow(null);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to create floating window:', error);
+    }
+  }
+
+  async function closeFloatingWindow() {
+    try {
+      await invoke('close_floating_window', { label: 'floating-hud' });
+      setFloatingWindow(null);
+    } catch (error) {
+      console.error('Failed to close floating window:', error);
+    }
+  }
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Conversations Sidebar */}
@@ -444,6 +482,18 @@ export default function Home() {
                     {!isLoading ? 'Ready' : 'Loading...'}
                   </span>
                 </div>
+                <button
+                  onClick={openFloatingWindow}
+                  className="text-sm bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                >
+                  Open Assistant
+                </button>
+                <button
+                  onClick={closeFloatingWindow}
+                  className="text-sm bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600"
+                >
+                  Close Assistant
+                </button>
                 <button
                   onClick={resetConversation}
                   className="text-sm bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"

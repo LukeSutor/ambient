@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "local-computer-use",
-        "width": 800,
-        "height": 600,
+        "label": "main",
+        "title": "TaskAware",
+        "width": 1200,
+        "height": 800,
         "resizable": true,
         "fullscreen": false
       }

@@ -10,6 +10,7 @@ pub mod scheduler;
 pub mod setup;
 pub mod tasks;
 pub mod types;
+pub mod windows;
 use db::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -121,7 +122,7 @@ pub fn run() {
           Err(e) => log::error!("[setup] Failed to start llama.cpp server: {}", e),
         }
       });
-
+      
       // Initialize the cleanup handler to ensure it's ready
       std::sync::LazyLock::force(&_CLEANUP_HANDLER);
 
@@ -133,15 +134,29 @@ pub fn run() {
     .on_window_event(|window, event| {
       match event {
         tauri::WindowEvent::CloseRequested { .. } => {
-          // Stop the llama server when the main window is being closed
-          let _app_handle = window.app_handle().clone();
-          tauri::async_runtime::spawn(async move {
-            if let Err(e) = models::llm::server::stop_llama_server().await {
-              log::error!("[shutdown] Failed to stop llama server: {}", e);
+          // Only stop the llama server when the main window is being closed
+          if window.label() == "main" {
+            log::info!("[shutdown] Main window closing, stopping llama server...");
+            let _app_handle = window.app_handle().clone();
+            tauri::async_runtime::spawn(async move {
+              if let Err(e) = models::llm::server::stop_llama_server().await {
+                log::error!("[shutdown] Failed to stop llama server: {}", e);
+              } else {
+                log::info!("[shutdown] Llama server stopped successfully");
+              }
+            });
+          } else {
+            log::info!("[shutdown] Non-main window '{}' closing", window.label());
+            let app_handle = window.app_handle().clone();
+            if let Some(floating) = app_handle.get_webview_window("floating-hud") {
+              match floating.destroy() {
+                Ok(_) => log::info!("[shutdown] 'floating-hud' window closed"),
+                Err(e) => log::error!("[shutdown] Failed to close 'floating-hud' window: {}", e),
+              }
             } else {
-              log::info!("[shutdown] Llama server stopped successfully");
+              log::info!("[shutdown] 'floating-hud' window not found");
             }
-          });
+          }
         }
         _ => {}
       }
@@ -150,6 +165,8 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
+  windows::open_floating_window,
+  windows::close_floating_window,
       data::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
@@ -219,6 +236,14 @@ pub fn run() {
       tasks::commands::analyze_current_screen_for_tasks,
       tasks::commands::get_task_progress_history
     ])
+    .on_window_event(|window, event| match event {
+      tauri::WindowEvent::Destroyed => {
+        if window.label() == "main" {
+          window.app_handle().exit(0);
+        }
+      }
+      _ => {}
+    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

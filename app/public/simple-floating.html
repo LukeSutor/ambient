@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Floating Window</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        background: transparent;
+        overflow: hidden;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      /* Liquid Glass Container - Fill entire window */
+      .glass-container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        border-radius: 20px;
+        background: linear-gradient(145deg, 
+          rgba(255, 255, 255, 0.25) 0%,
+          rgba(255, 255, 255, 0.1) 50%,
+          rgba(255, 255, 255, 0.05) 100%);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: none;
+        box-shadow: 
+          inset 0 1px 0 rgba(255, 255, 255, 0.4),
+          inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Input Container */
+      .input-container {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        gap: 12px;
+        flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.05);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      /* Text Input */
+      .input-field {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 10px 16px;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        outline: none;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        transition: all 0.2s ease;
+      }
+
+      .input-field::placeholder {
+        color: rgba(255, 255, 255, 0.6);
+        font-weight: 400;
+      }
+
+      .input-field:focus {
+        background: rgba(255, 255, 255, 0.2);
+        border-color: rgba(255, 255, 255, 0.4);
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+      }
+
+      /* Circular Drag Handle */
+      .drag-handle {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+
+      .drag-handle:hover {
+        background: rgba(255, 255, 255, 0.25);
+        border-color: rgba(255, 255, 255, 0.4);
+        transform: scale(1.05);
+      }
+
+      .drag-handle:active {
+        cursor: grabbing;
+        transform: scale(0.95);
+      }
+
+      .drag-handle svg {
+        width: 16px;
+        height: 16px;
+        color: rgba(255, 255, 255, 0.8);
+      }
+
+      /* Response Area */
+      .response-container {
+        flex: 1;
+        display: none;
+        overflow-y: auto;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .response-container.expanded {
+        display: block;
+      }
+
+      .response-content {
+        padding: 16px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 13px;
+        line-height: 1.6;
+        background: rgba(0, 0, 0, 0.1);
+      }
+
+      .user-query {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        font-weight: 500;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .ai-response {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+
+      /* Close Button */
+      .close-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        line-height: 1;
+        z-index: 10;
+        transition: all 0.2s ease;
+      }
+
+      .close-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+        border-color: rgba(255, 255, 255, 0.4);
+        transform: scale(1.1);
+      }
+
+      /* Loading Animation */
+      .typing-indicator {
+        display: inline-flex;
+        gap: 2px;
+        align-items: center;
+      }
+
+      .typing-dot {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.6);
+        animation: typing 1.4s infinite ease-in-out;
+      }
+
+      .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+      .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+      .typing-dot:nth-child(3) { animation-delay: 0s; }
+
+      @keyframes typing {
+        0%, 80%, 100% {
+          transform: scale(0.8);
+          opacity: 0.6;
+        }
+        40% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glass-container">
+      <button class="close-btn" id="close-btn">×</button>
+      
+      <div class="input-container">
+        <input 
+          type="text" 
+          class="input-field" 
+          id="query-input"
+          placeholder="Ask me anything..."
+          autocomplete="off"
+        />
+        <div class="drag-handle" data-tauri-drag-region id="drag-handle">
+          <i data-lucide="move"></i>
+        </div>
+      </div>
+
+      <div class="response-container" id="response-container">
+        <div class="response-content">
+          <div class="user-query" id="user-query" style="display: none;"></div>
+          <div class="ai-response" id="ai-response"></div>
+        </div>
+      </div>
+    </div>
+    
+    <script type="module">
+      import { invoke } from 'https://unpkg.com/@tauri-apps/api@2/core';
+      import { getCurrentWebviewWindow } from 'https://unpkg.com/@tauri-apps/api@2/webviewWindow';
+      import { LogicalSize } from 'https://unpkg.com/@tauri-apps/api@2/dpi';
+
+      let isLoading = false;
+      let currentConversationId = null;
+      
+      async function closeWindow() {
+        try {
+          await invoke('close_floating_window', { label: 'simple-floating' });
+        } catch (error) {
+          console.error('Failed to close window:', error);
+          try {
+            const currentWindow = getCurrentWebviewWindow();
+            await currentWindow.close();
+          } catch (altError) {
+            console.error('Direct close method also failed:', altError);
+          }
+        }
+      }
+
+      async function createNewConversation() {
+        try {
+          const newConv = await invoke("create_conversation", { name: null });
+          currentConversationId = newConv.id;
+          console.log('Created conversation:', currentConversationId);
+        } catch (err) {
+          console.error("Error creating conversation:", err);
+        }
+      }
+
+      function showTypingIndicator() {
+        const aiResponse = document.getElementById('ai-response');
+        aiResponse.innerHTML = '<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+      }
+
+      async function expandResponseArea() {
+        const responseContainer = document.getElementById('response-container');
+        responseContainer.classList.add('expanded');
+        
+        // Resize window to show response area
+        try {
+          const currentWindow = getCurrentWebviewWindow();
+          const newSize = new LogicalSize(400, 350);
+          await currentWindow.setSize(newSize);
+        } catch (error) {
+          console.error('Failed to resize window:', error);
+        }
+      }
+
+      async function collapseResponseArea() {
+        const responseContainer = document.getElementById('response-container');
+        responseContainer.classList.remove('expanded');
+        
+        // Resize window back to compact size
+        try {
+          const currentWindow = getCurrentWebviewWindow();
+          const newSize = new LogicalSize(400, 80);
+          await currentWindow.setSize(newSize);
+        } catch (error) {
+          console.error('Failed to resize window:', error);
+        }
+      }
+
+      async function handleQuery() {
+        const input = document.getElementById('query-input');
+        const query = input.value.trim();
+        
+        if (!query || isLoading) return;
+        
+        isLoading = true;
+        
+        // Show user query
+        const userQueryEl = document.getElementById('user-query');
+        userQueryEl.textContent = query;
+        userQueryEl.style.display = 'block';
+        
+        // Clear input and expand response area
+        input.value = '';
+        expandResponseArea();
+        showTypingIndicator();
+        
+        // Create conversation if needed
+        if (!currentConversationId) {
+          await createNewConversation();
+        }
+        
+        try {
+          // For now, simulate a response - we'll connect to real LLM later
+          setTimeout(() => {
+            const aiResponse = document.getElementById('ai-response');
+            aiResponse.textContent = `This is a simulated response to: "${query}"\n\nIn the next step, we'll connect this to the real LLM for actual responses.`;
+            isLoading = false;
+          }, 1500);
+          
+          /* Real LLM integration will go here:
+          await invoke("generate", { 
+            prompt: query,
+            jsonSchema: null,
+            convId: currentConversationId,
+            useThinking: false,
+            stream: true
+          });
+          */
+          
+        } catch (error) {
+          console.error('Error generating response:', error);
+          const aiResponse = document.getElementById('ai-response');
+          aiResponse.textContent = 'Sorry, there was an error processing your request.';
+          isLoading = false;
+        }
+      }
+
+      // Initialize when DOM is loaded
+      document.addEventListener('DOMContentLoaded', () => {
+        // Initialize Lucide icons
+        lucide.createIcons();
+        
+        const closeBtn = document.getElementById('close-btn');
+        const queryInput = document.getElementById('query-input');
+        
+        if (closeBtn) {
+          closeBtn.addEventListener('click', closeWindow);
+        }
+        
+        if (queryInput) {
+          queryInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleQuery();
+            }
+            if (e.key === 'Escape') {
+              // Clear and collapse on Escape
+              clearAndCollapse();
+            }
+          });
+        }
+      });
+
+      // Clear responses and collapse window
+      async function clearAndCollapse() {
+        const userQueryEl = document.getElementById('user-query');
+        const aiResponse = document.getElementById('ai-response');
+        
+        userQueryEl.style.display = 'none';
+        userQueryEl.textContent = '';
+        aiResponse.textContent = '';
+        
+        await collapseResponseArea();
+      }
+    </script>
+  </body>
+</html>

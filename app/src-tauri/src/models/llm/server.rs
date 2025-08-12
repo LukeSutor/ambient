@@ -543,17 +543,10 @@ pub async fn generate(
     }
   }
 
-  // Add thinking prefix/suffix to user message if specified
-  let formatted_prompt = if !enable_thinking {
-    format!("{} /no_think", prompt)
-  } else {
-    format!("{} /think", prompt)
-  };
-
   // Add the new user message
   messages.push(json!({
       "role": "user",
-      "content": formatted_prompt
+  "content": prompt
   }));
 
   // Build request body
