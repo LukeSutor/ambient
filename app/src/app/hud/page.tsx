@@ -5,8 +5,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { LogicalSize } from '@tauri-apps/api/dpi';
-import { remark } from 'remark';
-import html from 'remark-html';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +14,9 @@ import {
 } from "@/components/ui/tooltip";
 import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { markdownComponents } from '@/components/ui/markdown-components';
 const logo = '/logo.png';
 
 interface Conversation {
@@ -35,26 +36,9 @@ export default function HudPage() {
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const streamContentRef = useRef<string>('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; htmlContent?: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Convert markdown to HTML for assistant messages
-  const convertMarkdownToHtml = async (markdownContent: string): Promise<string> => {
-    const processedContent = await remark()
-      .use(html)
-      .process(markdownContent);
-    return processedContent.toString();
-  };
-
-  // Process message content to add HTML version for assistant messages
-  const processMessageForMarkdown = async (message: { role: 'user' | 'assistant'; content: string; htmlContent?: string }) => {
-    if (message.role === 'assistant' && message.content && !message.htmlContent) {
-      const htmlContent = await convertMarkdownToHtml(message.content);
-      return { ...message, htmlContent };
-    }
-    return message;
-  };
 
   // Force Tauri window drag from the handle and prevent default browser drag/selection
   const onHandlePointerDown = async (e: React.PointerEvent | React.MouseEvent) => {
@@ -103,23 +87,8 @@ export default function HudPage() {
       if (convId) {
         try {
           const existing = await invoke<any[]>('get_messages', { conversationId: convId });
-          const mapped = existing.map((m) => ({ 
-            role: m.role === 'user' ? 'user' as const : 'assistant' as const, 
-            content: extractThinkingContent(m.content) 
-          }));
-          
-          // Process assistant messages to add HTML content
-          const processedMessages = await Promise.all(
-            mapped.map(async (msg) => {
-              if (msg.role === 'assistant') {
-                const htmlContent = await convertMarkdownToHtml(msg.content);
-                return { ...msg, htmlContent };
-              }
-              return msg;
-            })
-          );
-          
-          setMessages(processedMessages);
+          const mapped = existing.map((m) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: extractThinkingContent(m.content) }));
+          setMessages(mapped);
         } catch (err) {
           console.error('Failed to load existing messages for HUD:', err);
         }
@@ -138,33 +107,16 @@ export default function HudPage() {
 
           if (isFinished) {
             const finalText = extractThinkingContent(full ?? streamContentRef.current);
-            
-            // Convert markdown to HTML for final assistant message
-            convertMarkdownToHtml(finalText).then((htmlContent) => {
-              // Patch last assistant message with both content and htmlContent
-              setMessages((prev) => {
-                const next = [...prev];
-                const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
-                const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
-                if (lastIdx >= 0) {
-                  next[lastIdx] = { ...next[lastIdx], content: finalText, htmlContent };
-                }
-                return next;
-              });
-            }).catch((err) => {
-              console.error('Failed to convert markdown to HTML:', err);
-              // Fallback: just update with plain text
-              setMessages((prev) => {
-                const next = [...prev];
-                const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
-                const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
-                if (lastIdx >= 0) {
-                  next[lastIdx] = { ...next[lastIdx], content: finalText };
-                }
-                return next;
-              });
+            // Patch last assistant message
+            setMessages((prev) => {
+              const next = [...prev];
+              const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
+              const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
+              if (lastIdx >= 0) {
+                next[lastIdx] = { ...next[lastIdx], content: finalText };
+              }
+              return next;
             });
-            
             setIsLoading(false);
             setIsStreaming(false);
             streamContentRef.current = '';
@@ -303,11 +255,6 @@ export default function HudPage() {
 
       // Safety: if no stream events arrive, stop loading when invoke resolves
       setIsLoading(false);
-      
-      // Process the final text for markdown if needed
-      const processedFinalText = extractThinkingContent(finalText);
-      const finalHtmlContent = await convertMarkdownToHtml(processedFinalText);
-      
       setMessages((prev) => {
         // If stream produced content, leave it. Otherwise set finalText.
         const next = [...prev];
@@ -315,13 +262,10 @@ export default function HudPage() {
         const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
         if (lastIdx >= 0) {
           const existing = next[lastIdx]?.content ?? '';
-          if (!existing || existing.length === 0) {
-            next[lastIdx] = {
-              role: 'assistant',
-              content: processedFinalText,
-              htmlContent: finalHtmlContent,
-            };
-          }
+          next[lastIdx] = {
+            role: 'assistant',
+            content: existing && existing.length > 0 ? existing : extractThinkingContent(finalText),
+          };
         }
         return next;
       });
@@ -375,14 +319,15 @@ export default function HudPage() {
                         : 'max-w-[95%] w-full text-left mx-auto px-3 py-2'
                     }
                   >
-                    {m.role === 'assistant' && m.htmlContent ? (
-                      <div 
-                        className="prose prose-sm max-w-none prose-headings:text-black prose-p:text-black prose-strong:text-black prose-code:text-black prose-pre:bg-black/10 prose-pre:text-black"
-                        dangerouslySetInnerHTML={{ __html: m.htmlContent }}
-                      />
-                    ) : (
-                      <div className="whitespace-pre-wrap">{m.content}</div>
-                    )}
+                    {m.role === 'user' ?
+                    <div className="whitespace-pre-wrap">{m.content}</div>
+                    :
+                    <Markdown 
+                      remarkPlugins={[[remarkGfm, {singleTilde: false}]]}
+                      components={markdownComponents}
+                    >
+                      {m.content}
+                    </Markdown>}
                   </div>
                 ))}
 
