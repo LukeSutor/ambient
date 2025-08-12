@@ -328,7 +328,7 @@ export default function HudPage() {
           {isExpanded && (
             <div
               ref={messagesContainerRef}
-              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 rounded-xl mx-[5px] transition-all"
+              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-[5px] transition-all"
             >
               <div className="flex flex-col space-y-2">
                 {messages.map((m, i) => (
@@ -336,8 +336,8 @@ export default function HudPage() {
                     key={`m-${i}`}
                     className={
                       m.role === 'user'
-                        ? 'max-w-[85%] ml-auto bg-white/60 border border-black/10 rounded-xl px-3 py-2'
-                        : 'max-w-[95%] w-full text-left mx-auto px-3 py-2'
+                        ? 'max-w-[85%] ml-auto bg-white/60 border border-black/20 rounded-xl px-3 py-2'
+                        : 'max-w-[95%] w-full text-left mx-auto'
                     }
                   >
                     {m.role === 'user' ?
@@ -364,7 +364,7 @@ export default function HudPage() {
             onMouseLeave={handleMouseLeave}
           >
             <div
-              className='flex items-center gap-3 h-[45px] w-[485px] rounded-lg bg-white/60 border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
+              className='flex items-center gap-3 h-[45px] w-[485px] rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
             >
               <Image
                 src={logo}
@@ -394,14 +394,15 @@ export default function HudPage() {
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    className={`transform h-9 w-9 mr-5 rounded-full flex items-center justify-center hover:bg-white/60 transition-all duration-500 ${isExpanded ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}
+                    size="icon"
+                    className={`transform h-9 w-9 mr-5 rounded-full flex items-center justify-center hover:bg-white/60 transition-all duration-500 p-0 ${isExpanded ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}
                     onClick={async () => {
                       await clearAndCollapse();
                       await createNewConversation();
                     }}
                     title="New Chat"
                   >
-                    <MessageSquarePlus className="w-6 h-6 text-black pointer-events-none" />
+                    <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -414,7 +415,7 @@ export default function HudPage() {
             <button
               className={
               (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-              ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 transition-all duration-100 select-none'
+              ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'
               }
               onClick={closeWindow}
               title="Close Window"
@@ -428,7 +429,7 @@ export default function HudPage() {
               id="drag-area"
               className={
                 (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') + 
-                ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 rounded-full transition-all duration-100'
+                ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'
               }
               onPointerDown={() => setIsDraggingWindow(true)}
               draggable={false}
