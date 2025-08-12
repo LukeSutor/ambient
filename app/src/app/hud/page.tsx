@@ -15,8 +15,7 @@ import {
 import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { markdownComponents } from '@/components/ui/markdown-components';
+import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 const logo = '/logo.png';
 
 interface Conversation {
@@ -322,10 +321,7 @@ export default function HudPage() {
                     {m.role === 'user' ?
                     <div className="whitespace-pre-wrap">{m.content}</div>
                     :
-                    <Markdown 
-                      remarkPlugins={[[remarkGfm, {singleTilde: false}]]}
-                      components={markdownComponents}
-                    >
+                    <Markdown {...llmMarkdownConfig}>
                       {m.content}
                     </Markdown>}
                   </div>
@@ -382,7 +378,7 @@ export default function HudPage() {
                     }}
                     title="New Chat"
                   >
-                    <MessageSquarePlus className="w-full h-full text-black pointer-events-none" />
+                    <MessageSquarePlus className="w-6 h-6 text-black pointer-events-none" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>

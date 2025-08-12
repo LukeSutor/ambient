@@ -1,6 +1,30 @@
 import React from 'react';
-import { Components } from 'react-markdown';
+import { Components, defaultUrlTransform } from 'react-markdown';
 import { cn } from '@/lib/utils';
+
+// Custom URL transformer for enhanced security and functionality
+export const customUrlTransform = (url: string, key: string, node: any) => {
+  // Use default security but add custom logic for internal links
+  const safeUrl = defaultUrlTransform(url);
+  
+  // Handle relative URLs for your app
+  if (url.startsWith('/')) {
+    return url; // Keep internal app links as-is
+  }
+  
+  // Add utm parameters for external links if needed
+  if (safeUrl.startsWith('http') && !url.includes('utm_source')) {
+    try {
+      const urlObj = new URL(safeUrl);
+      urlObj.searchParams.set('utm_source', 'your-app');
+      return urlObj.toString();
+    } catch {
+      return safeUrl;
+    }
+  }
+  
+  return safeUrl;
+};
 
 export const markdownComponents: Components = {
   // Headings
@@ -141,40 +165,55 @@ export const markdownComponents: Components = {
     />
   ),
   
-  // Code
-  code: ({ className, ...props }: any) => {
+  // Code with enhanced language detection
+  code: ({ className, children, ...props }: any) => {
     const inline = props.inline;
+    const match = /language-(\w+)/.exec(className || '');
+    const language = match ? match[1] : '';
+    
     if (inline) {
       return (
         <code
           className={cn(
-            "relative rounded bg-gray-100/20 px-[0.3rem] py-[0.2rem] font-mono text-sm font-medium text-gray-900",
+            "relative rounded bg-gray-100/20 px-[0.3rem] py-[0.2rem] font-mono text-sm font-medium text-black border border-gray-200/50",
             className
           )}
           {...props}
-        />
+        >
+          {children}
+        </code>
       );
     }
     
+    // Block code with language indicator
     return (
-      <code
-        className={cn(
-          "relative rounded font-mono text-sm font-medium",
-          className
-        )}
-        {...props}
-      />
+      <div className="flex flex-col">
+        <div className="w-min whitespace-nowrap text-xs text-black/80 rounded font-mono mb-4">
+          {language || 'text'}
+        </div>
+        <code
+          className={cn(
+            "block text-sm font-mono text-black/80 p-0",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </code>
+      </div>
     );
   },
   
-  pre: ({ className, ...props }) => (
+  pre: ({ className, children, ...props }) => (
     <pre
       className={cn(
-        "mt-4 mb-4 overflow-x-auto rounded-lg bg-gray-900 p-4",
+        "mt-4 mb-4 overflow-x-auto rounded-lg bg-white/60 p-2 border relative",
         className
       )}
       {...props}
-    />
+    >
+      {children}
+    </pre>
   ),
   
   // Images
@@ -353,39 +392,55 @@ export const darkMarkdownComponents: Components = {
     />
   ),
   
-  code: ({ className, ...props }: any) => {
+  code: ({ className, children, ...props }: any) => {
     const inline = props.inline;
+    const match = /language-(\w+)/.exec(className || '');
+    const language = match ? match[1] : '';
+    
     if (inline) {
       return (
         <code
           className={cn(
-            "relative rounded bg-gray-800/20 px-[0.3rem] py-[0.2rem] font-mono text-sm font-medium text-gray-100",
+            "relative rounded bg-gray-800/20 px-[0.3rem] py-[0.2rem] font-mono text-sm font-medium text-gray-100 border border-gray-600/30",
             className
           )}
           {...props}
-        />
+        >
+          {children}
+        </code>
       );
     }
     
     return (
-      <code
-        className={cn(
-          "relative rounded font-mono text-sm font-medium text-gray-100",
-          className
+      <div className="relative">
+        {language && (
+          <div className="absolute top-2 right-2 text-xs text-gray-400 bg-gray-700/80 px-2 py-1 rounded uppercase font-mono">
+            {language}
+          </div>
         )}
-        {...props}
-      />
+        <code
+          className={cn(
+            "block text-sm font-mono text-gray-100 p-0",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </code>
+      </div>
     );
   },
   
-  pre: ({ className, ...props }) => (
+  pre: ({ className, children, ...props }) => (
     <pre
       className={cn(
-        "mt-4 mb-4 overflow-x-auto rounded-lg bg-gray-900 p-4 text-gray-100",
+        "mt-4 mb-4 overflow-x-auto rounded-lg bg-gray-900 p-4 text-gray-100 border border-gray-700/50 relative",
         className
       )}
       {...props}
-    />
+    >
+      {children}
+    </pre>
   ),
   
   td: ({ className, ...props }) => (
