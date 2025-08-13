@@ -2,6 +2,11 @@
 
 export type HudDimensions = { width: number, collapsed_height: number, expanded_height: number, };
 
+/**
+ * HUD size options for the user interface
+ */
 export type HudSizeOption = "Small" | "Normal" | "Large";
 
-export type UserSettings = { hud_size: HudSizeOption, };
+export type ModelSelection = "Local" | "GptOss";
+
+export type UserSettings = { hud_size: HudSizeOption, model_selection: ModelSelection, };

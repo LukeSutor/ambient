@@ -2,11 +2,11 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
-import { HudDimensions, HudSizeOption, UserSettings } from "@/types/settings";
+import { HudDimensions, HudSizeOption, ModelSelection, UserSettings } from "@/types/settings";
 
 export class SettingsService {
   /**
-   * Load user settings (always fetch from backend)
+   * Load user settings
    */
   static async loadSettings(): Promise<UserSettings> {
     try {
@@ -17,6 +17,7 @@ export class SettingsService {
       // Return defaults on error
       return {
         hud_size: "Normal",
+        model_selection: "Local",
       };
     }
   }
@@ -125,6 +126,38 @@ export class SettingsService {
           collapsed_height: 60,
           expanded_height: 350,
         };
+    }
+  }
+
+  /**
+   * Get current model selection setting
+   */
+  static async getModelSelection(): Promise<ModelSelection> {
+    try {
+      const settings = await this.loadSettings();
+      return settings.model_selection;
+    } catch (error) {
+      console.error("Failed to get model selection setting:", error);
+      return "Local";
+    }
+  }
+
+  /**
+   * Set model selection setting
+   */
+  static async setModelSelection(selection: ModelSelection): Promise<void> {
+    try {
+      // Get current settings
+      const settings = await this.loadSettings();
+
+      // Update the model selection
+      settings.model_selection = selection;
+
+      // Save the updated settings
+      this.saveSettings(settings);
+    } catch (error) {
+      console.error("Failed to set model selection setting:", error);
+      throw error;
     }
   }
 

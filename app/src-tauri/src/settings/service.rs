@@ -1,87 +1,12 @@
-use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri_plugin_store::{Store, StoreExt};
 use once_cell::sync::Lazy;
-use ts_rs::TS;
 use crate::constants::{SETTINGS_STORE_PATH, SETTINGS_KEY};
+use super::types::UserSettings;
 
 // Cache for frequently accessed settings
 static SETTINGS_CACHE: Lazy<Mutex<Option<UserSettings>>> = Lazy::new(|| Mutex::new(None));
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
-pub enum HudSizeOption {
-    Small,
-    Normal, 
-    Large,
-}
-
-impl Default for HudSizeOption {
-    fn default() -> Self {
-        Self::Normal
-    }
-}
-
-impl HudSizeOption {
-    pub fn to_dimensions(&self) -> HudDimensions {
-        match self {
-            Self::Small => HudDimensions {
-                width: 400.0,
-                collapsed_height: 50.0,
-                expanded_height: 250.0,
-            },
-            Self::Normal => HudDimensions {
-                width: 500.0,
-                collapsed_height: 60.0,
-                expanded_height: 350.0,
-            },
-            Self::Large => HudDimensions {
-                width: 600.0,
-                collapsed_height: 70.0,
-                expanded_height: 450.0,
-            },
-        }
-    }
-    
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Small => "small",
-            Self::Normal => "normal",
-            Self::Large => "large",
-        }
-    }
-    
-    pub fn from_str(s: &str) -> Self {
-        match s {
-            "small" => Self::Small,
-            "large" => Self::Large,
-            _ => Self::Normal, // Default fallback
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
-pub struct HudDimensions {
-    pub width: f64,
-    pub collapsed_height: f64,
-    pub expanded_height: f64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "settings.ts")]
-pub struct UserSettings {
-    pub hud_size: HudSizeOption,
-}
-
-impl Default for UserSettings {
-    fn default() -> Self {
-        Self {
-            hud_size: HudSizeOption::default(),
-        }
-    }
-}
 
 /// Get the store instance for settings
 async fn get_settings_store(app_handle: &AppHandle) -> Result<std::sync::Arc<Store<tauri::Wry>>, String> {
