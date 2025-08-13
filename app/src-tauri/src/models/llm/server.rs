@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
+use crate::constants::{MIN_PORT, MAX_PORT, MAX_PORT_ATTEMPTS, HEALTH_CHECK_ENDPOINT, MAX_HEALTH_CHECK_RETRIES, HEALTH_CHECK_INTERVAL};
 
 /// Global state to track the running server process and port
 #[derive(Debug)]
@@ -21,14 +22,6 @@ static SERVER_STATE: Mutex<ServerState> = Mutex::new(ServerState {
   port: None,
   api_key: None,
 });
-
-/// Server configuration
-const MIN_PORT: u16 = 8000;
-const MAX_PORT: u16 = 9999;
-const MAX_PORT_ATTEMPTS: u8 = 20;
-const HEALTH_CHECK_ENDPOINT: &str = "/health";
-const MAX_HEALTH_CHECK_RETRIES: u8 = 30;
-const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(120);
 
 /// Error types for server operations
 #[derive(Debug)]

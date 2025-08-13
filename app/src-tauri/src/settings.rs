@@ -4,6 +4,7 @@ use tauri::AppHandle;
 use tauri_plugin_store::{Store, StoreExt};
 use once_cell::sync::Lazy;
 use ts_rs::TS;
+use crate::constants::{SETTINGS_STORE_PATH, SETTINGS_KEY};
 
 // Cache for frequently accessed settings
 static SETTINGS_CACHE: Lazy<Mutex<Option<UserSettings>>> = Lazy::new(|| Mutex::new(None));
@@ -72,9 +73,6 @@ pub struct HudDimensions {
 #[ts(export, export_to = "settings.ts")]
 pub struct UserSettings {
     pub hud_size: HudSizeOption,
-    // Future extensible settings can be added here
-    // pub theme: String,
-    // pub auto_start: bool,
 }
 
 impl Default for UserSettings {
@@ -84,9 +82,6 @@ impl Default for UserSettings {
         }
     }
 }
-
-const SETTINGS_STORE_PATH: &str = "user-settings.json";
-const SETTINGS_KEY: &str = "settings";
 
 /// Get the store instance for settings
 async fn get_settings_store(app_handle: &AppHandle) -> Result<std::sync::Arc<Store<tauri::Wry>>, String> {
@@ -145,19 +140,16 @@ async fn save_settings_internal(app_handle: &AppHandle, settings: &UserSettings)
     Ok(())
 }
 
-/// Load user settings (cached for performance)
 #[tauri::command]
 pub async fn load_user_settings(app_handle: AppHandle) -> Result<UserSettings, String> {
     load_settings_internal(&app_handle).await
 }
 
-/// Save user settings
 #[tauri::command] 
 pub async fn save_user_settings(app_handle: AppHandle, settings: UserSettings) -> Result<(), String> {
     save_settings_internal(&app_handle, &settings).await
 }
 
-/// Clear settings cache
 #[tauri::command]
 pub async fn refresh_settings_cache() -> Result<(), String> {
     let mut cache = SETTINGS_CACHE.lock().unwrap();

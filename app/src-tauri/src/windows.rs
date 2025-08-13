@@ -1,4 +1,4 @@
-use tauri::{AppHandle, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{AppHandle, LogicalSize, Manager};
 use crate::settings::{HudDimensions, load_user_settings};
 
 /// Get current HUD dimensions from user settings
