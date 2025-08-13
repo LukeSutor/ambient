@@ -20,10 +20,11 @@ import {
 import { toast } from "sonner"
 import { invoke } from "@tauri-apps/api/core";
 import { useState, useEffect } from "react";
-import { SettingsService, HudSizeOption } from "@/lib/settings-service";
+import { SettingsService } from "@/lib/settings-service";
+import { HudSizeOption } from "@/types/settings";
 
 export default function Settings() {
-    const [hudSize, setHudSize] = useState<HudSizeOption>(HudSizeOption.Normal);
+    const [hudSize, setHudSize] = useState<HudSizeOption>("Normal");
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
 
     // Load current HUD size setting on component mount
@@ -93,9 +94,9 @@ export default function Settings() {
                             <SelectValue placeholder="Select size" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value={HudSizeOption.Small}>Small</SelectItem>
-                            <SelectItem value={HudSizeOption.Normal}>Normal</SelectItem>
-                            <SelectItem value={HudSizeOption.Large}>Large</SelectItem>
+                            <SelectItem value="Small">Small</SelectItem>
+                            <SelectItem value="Normal">Normal</SelectItem>
+                            <SelectItem value="Large">Large</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

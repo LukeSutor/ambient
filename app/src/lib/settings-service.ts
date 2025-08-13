@@ -2,25 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
-
-export interface UserSettings {
-  hud_size: HudSizeOption;
-  // Future extensible settings can be added here
-  // theme: string;
-  // auto_start: boolean;
-}
-
-export interface HudDimensions {
-  width: number;
-  collapsed_height: number;
-  expanded_height: number;
-}
-
-export enum HudSizeOption {
-  Small = "Small",
-  Normal = "Normal", 
-  Large = "Large",
-}
+import { HudDimensions, HudSizeOption, UserSettings } from "@/types/settings";
 
 export class SettingsService {
   /**
@@ -34,7 +16,7 @@ export class SettingsService {
       console.error("Failed to load user settings:", error);
       // Return defaults on error
       return {
-        hud_size: HudSizeOption.Normal,
+        hud_size: "Normal",
       };
     }
   }
@@ -63,7 +45,7 @@ export class SettingsService {
       return settings.hud_size;
     } catch (error) {
       console.error("Failed to get HUD size setting:", error);
-      return HudSizeOption.Normal;
+      return "Normal";
     }
   }
 
@@ -125,13 +107,13 @@ export class SettingsService {
    */
   private static hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
     switch (option) {
-      case HudSizeOption.Small:
+      case "Small":
         return {
           width: 400,
           collapsed_height: 50,
           expanded_height: 250,
         };
-      case HudSizeOption.Large:
+      case "Large":
         return {
           width: 600,
           collapsed_height: 70,

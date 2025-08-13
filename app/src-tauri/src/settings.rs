@@ -3,11 +3,13 @@ use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri_plugin_store::{Store, StoreExt};
 use once_cell::sync::Lazy;
+use ts_rs::TS;
 
 // Cache for frequently accessed settings
 static SETTINGS_CACHE: Lazy<Mutex<Option<UserSettings>>> = Lazy::new(|| Mutex::new(None));
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "settings.ts")]
 pub enum HudSizeOption {
     Small,
     Normal, 
@@ -58,14 +60,16 @@ impl HudSizeOption {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "settings.ts")]
 pub struct HudDimensions {
     pub width: f64,
     pub collapsed_height: f64,
     pub expanded_height: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "settings.ts")]
 pub struct UserSettings {
     pub hud_size: HudSizeOption,
     // Future extensible settings can be added here

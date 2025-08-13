@@ -15,7 +15,8 @@ import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
-import { SettingsService, HudDimensions } from '@/lib/settings-service';
+import { SettingsService } from '@/lib/settings-service';
+import { HudDimensions } from '@/types/settings';
 import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
