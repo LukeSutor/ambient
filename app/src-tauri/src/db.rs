@@ -1,10 +1,7 @@
 use once_cell::sync::Lazy;
 use rusqlite::types::{Value as RusqliteValue, ValueRef};
 use rusqlite::{
-  ffi::sqlite3_auto_extension,
-  params_from_iter,
-  Connection,
-  Result as RusqliteResult,
+  ffi::sqlite3_auto_extension, params_from_iter, Connection, Result as RusqliteResult,
 };
 use rusqlite_migration::{Migrations, M};
 use serde_json::Value as JsonValue;
@@ -20,8 +17,8 @@ pub struct DbState(pub Mutex<Option<Connection>>);
 pub static GLOBAL_DB_STATE: Lazy<DbState> = Lazy::new(|| DbState(Mutex::new(None)));
 
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
-  Migrations::new(vec![
-    M::up(r#"
+  Migrations::new(vec![M::up(
+    r#"
         -- Conversation tables
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY,
@@ -123,8 +120,8 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           last_updated INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_workflows_last_updated ON workflows(last_updated DESC);
-      "#)
-  ])
+      "#,
+  )])
 });
 
 fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -146,9 +143,7 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
 
   // Register sqlite_vec extension globally for future connections
   unsafe {
-    let rc = sqlite3_auto_extension(Some(std::mem::transmute(
-      sqlite3_vec_init as *const (),
-    )));
+    let rc = sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
     if rc != 0 {
       return Err(format!(
         "Failed to register sqlite_vec extension. SQLite error code: {}",
@@ -159,22 +154,20 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
   log::info!("[db] Registered sqlite_vec extension");
 
   // Open connection
-  let mut conn = Connection::open(&db_path)
-    .map_err(|e| format!("Failed to open database connection: {}", e))?;
+  let mut conn =
+    Connection::open(&db_path).map_err(|e| format!("Failed to open database connection: {}", e))?;
 
   // Apply migrations
   log::info!("[db] Applying database migrations...");
-  MIGRATIONS
-    .to_latest(&mut conn)
-    .map_err(|e| match e {
-      rusqlite_migration::Error::RusqliteError { query: _, err } => {
-        format!("SQLite error during migration: {}", err)
-      }
-      rusqlite_migration::Error::MigrationDefinition(def_err) => {
-        format!("Migration definition error: {}", def_err)
-      }
-      other => format!("Unknown migration error: {}", other),
-    })?;
+  MIGRATIONS.to_latest(&mut conn).map_err(|e| match e {
+    rusqlite_migration::Error::RusqliteError { query: _, err } => {
+      format!("SQLite error during migration: {}", err)
+    }
+    rusqlite_migration::Error::MigrationDefinition(def_err) => {
+      format!("Migration definition error: {}", def_err)
+    }
+    other => format!("Unknown migration error: {}", other),
+  })?;
   log::info!("[db] Migrations applied successfully.");
 
   Ok(conn)
@@ -614,7 +607,10 @@ pub fn insert_activity_summary(
     "#;
 
   conn
-    .execute(sql, rusqlite::params![summary, active_url, active_applications])
+    .execute(
+      sql,
+      rusqlite::params![summary, active_url, active_applications],
+    )
     .map_err(|e| format!("Failed to insert activity summary: {}", e))?;
 
   Ok(conn.last_insert_rowid())

@@ -13,7 +13,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
     let payload_str = event.payload();
     match serde_json::from_str::<CaptureScreenEvent>(payload_str) {
       Ok(event_data) => {
-  log::info!("[events] Capture screen event received");
+        log::info!("[events] Capture screen event received");
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone1.clone();
         tauri::async_runtime::spawn(async move {
@@ -21,7 +21,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         });
       }
       Err(e) => {
-  log::error!("[events] Failed to parse capture screen event: {}", e);
+        log::error!("[events] Failed to parse capture screen event: {}", e);
       }
     }
   });
@@ -31,7 +31,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
     let payload_str = event.payload();
     match serde_json::from_str::<GetScreenDiffEvent>(payload_str) {
       Ok(event_data) => {
-  log::info!("[events] Get screen diff event received");
+        log::info!("[events] Get screen diff event received");
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone2.clone();
         tauri::async_runtime::spawn(async move {
@@ -39,7 +39,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         });
       }
       Err(e) => {
-  log::error!("[events] Failed to parse get screen diff event: {}", e);
+        log::error!("[events] Failed to parse get screen diff event: {}", e);
       }
     }
   });
@@ -49,7 +49,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
     let payload_str = event.payload();
     match serde_json::from_str::<DetectTasksEvent>(payload_str) {
       Ok(event_data) => {
-  log::info!("[events] Detect tasks event received");
+        log::info!("[events] Detect tasks event received");
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone3.clone();
         tauri::async_runtime::spawn(async move {
@@ -57,7 +57,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         });
       }
       Err(e) => {
-  log::error!("[events] Failed to parse detect tasks event: {}", e);
+        log::error!("[events] Failed to parse detect tasks event: {}", e);
       }
     }
   });
@@ -67,7 +67,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
     let payload_str = event.payload();
     match serde_json::from_str::<SummarizeScreenEvent>(payload_str) {
       Ok(event_data) => {
-  log::info!("[events] Summarize screen event received");
+        log::info!("[events] Summarize screen event received");
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone4.clone();
         tauri::async_runtime::spawn(async move {
@@ -75,7 +75,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         });
       }
       Err(e) => {
-  log::error!("[events] Failed to parse summarize screen event: {}", e);
+        log::error!("[events] Failed to parse summarize screen event: {}", e);
       }
     }
   });

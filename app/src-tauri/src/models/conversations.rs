@@ -130,7 +130,8 @@ pub async fn create_conversation(
 
   log::info!(
     "[conversations] Created conversation: {} ({})",
-    conversation_name, conversation_id
+    conversation_name,
+    conversation_id
   );
   Ok(conversation)
 }

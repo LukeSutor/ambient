@@ -80,8 +80,8 @@ impl ServerConfig {
     };
 
     let api_key = api_key.unwrap_or_else(|| {
-  let new_key = format!("session-{}", Uuid::new_v4().to_string());
-  log::info!("[llama_server] Generated API key: {}", new_key);
+      let new_key = format!("session-{}", Uuid::new_v4().to_string());
+      log::info!("[llama_server] Generated API key: {}", new_key);
       new_key
     });
 
@@ -138,13 +138,15 @@ async fn is_port_available(port: u16) -> bool {
 async fn find_available_port() -> Result<u16, ServerError> {
   for attempt in 1..=MAX_PORT_ATTEMPTS {
     let port = generate_random_port();
-  log::debug!(
+    log::debug!(
       "[llama_server] Trying port {} (attempt {}/{})",
-      port, attempt, MAX_PORT_ATTEMPTS
+      port,
+      attempt,
+      MAX_PORT_ATTEMPTS
     );
 
     if is_port_available(port).await {
-  log::info!("[llama_server] Found available port: {}", port);
+      log::info!("[llama_server] Found available port: {}", port);
       return Ok(port);
     }
   }
@@ -288,7 +290,7 @@ pub async fn stop_llama_server() -> Result<String, String> {
       server_state.port = None;
       server_state.api_key = None;
 
-  log::info!("[llama_server] Server stopped successfully");
+      log::info!("[llama_server] Server stopped successfully");
       Ok("Server stopped successfully".to_string())
     }
     None => Err(ServerError::ServerNotRunning.into()),
@@ -382,9 +384,10 @@ async fn perform_health_check(config: &ServerConfig) -> Result<Value, ServerErro
 /// Wait for server to be ready (health check returns 200)
 async fn wait_for_server_ready(config: &ServerConfig) -> Result<(), ServerError> {
   for attempt in 1..=MAX_HEALTH_CHECK_RETRIES {
-  log::debug!(
+    log::debug!(
       "[llama_server] Health check attempt {}/{}",
-      attempt, MAX_HEALTH_CHECK_RETRIES
+      attempt,
+      MAX_HEALTH_CHECK_RETRIES
     );
 
     match perform_health_check(config).await {
@@ -399,7 +402,7 @@ async fn wait_for_server_ready(config: &ServerConfig) -> Result<(), ServerError>
         }
       }
       Err(e) => {
-  log::warn!("[llama_server] Health check failed: {}", e);
+        log::warn!("[llama_server] Health check failed: {}", e);
       }
     }
 
@@ -535,7 +538,7 @@ pub async fn generate(
         }
       }
       Err(e) => {
-  log::warn!(
+        log::warn!(
           "[llama_server] Warning: Failed to load conversation messages: {}",
           e
         );
@@ -602,7 +605,7 @@ pub async fn generate(
     let mut full_response = String::new();
     let mut stream = response.bytes_stream();
 
-  use tokio_stream::StreamExt;
+    use tokio_stream::StreamExt;
 
     while let Some(chunk_result) = stream.next().await {
       match chunk_result {
@@ -774,7 +777,7 @@ pub async fn generate(
       0.0
     };
 
-  log::info!(
+    log::info!(
       "[llama_server] Generated {} characters, {} tokens in {:.2}s ({:.2} tokens/sec)",
       generated_text.len(),
       tokens_generated,

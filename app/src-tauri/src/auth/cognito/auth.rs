@@ -14,7 +14,7 @@ pub async fn sign_up(
 ) -> Result<SignUpResult, String> {
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   let client_id = std::env::var("COGNITO_CLIENT_ID")
@@ -68,7 +68,7 @@ pub async fn sign_up(
       .text()
       .await
       .unwrap_or_else(|_| "Unknown error".to_string());
-  log::warn!("SignUp failed: {}", error_text);
+    log::warn!("SignUp failed: {}", error_text);
     return Err(format!("SignUp failed: {}", error_text));
   }
 
@@ -100,7 +100,7 @@ pub async fn confirm_sign_up(
 ) -> Result<String, String> {
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   let client_id = std::env::var("COGNITO_CLIENT_ID")
@@ -146,7 +146,7 @@ pub async fn confirm_sign_up(
 pub async fn resend_confirmation_code(username: String) -> Result<SignUpResult, String> {
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   let client_id = std::env::var("COGNITO_CLIENT_ID")
@@ -207,7 +207,7 @@ pub async fn resend_confirmation_code(username: String) -> Result<SignUpResult, 
 pub async fn sign_in(username: String, password: String) -> Result<SignInResult, String> {
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   let client_id = std::env::var("COGNITO_CLIENT_ID")
@@ -248,7 +248,7 @@ pub async fn sign_in(username: String, password: String) -> Result<SignInResult,
       .text()
       .await
       .unwrap_or_else(|_| "Unknown error".to_string());
-  log::warn!("SignIn failed: {}", error_text);
+    log::warn!("SignIn failed: {}", error_text);
     return Err(format!("SignIn failed: {}", error_text));
   }
 
@@ -281,11 +281,11 @@ pub async fn sign_in(username: String, password: String) -> Result<SignInResult,
     // Store the authentication result securely
     match store_cognito_auth(&sign_in_result) {
       Ok(()) => {
-  log::info!("Authentication stored successfully");
+        log::info!("Authentication stored successfully");
         Ok(sign_in_result)
       }
       Err(e) => {
-  log::warn!("Warning: Failed to store authentication: {}", e);
+        log::warn!("Warning: Failed to store authentication: {}", e);
         // Return success anyway since the authentication itself succeeded
         Ok(sign_in_result)
       }

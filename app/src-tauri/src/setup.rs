@@ -35,7 +35,7 @@ pub async fn setup(app_handle: tauri::AppHandle) -> Result<String, String> {
 
   // Download the vlm files
   if let Err(e) = initialize_vlm(app_handle.clone()).await {
-  log::error!("[setup] VLM initialization failed: {}", e);
+    log::error!("[setup] VLM initialization failed: {}", e);
     return Err(format!("Failed to initialize VLM: {}", e));
   }
   log::info!("[setup] VLM initialization successful.");
@@ -59,10 +59,10 @@ async fn initialize_vlm(app_handle: tauri::AppHandle) -> Result<String, String> 
 
   for (id, url, out_path) in [(1, TEXT_LINK, TEXT_FILE), (2, MMPROJ_LINK, MMPROJ_FILE)] {
     let full_out_path = model_path.join(out_path);
-  log::info!("[setup] Downloading model {} to {:?}", id, full_out_path);
+    log::info!("[setup] Downloading model {} to {:?}", id, full_out_path);
 
     if full_out_path.exists() {
-  log::info!("[setup] Model {} already exists. Skipping download.", id);
+      log::info!("[setup] Model {} already exists. Skipping download.", id);
       // Optionally emit finished event here if needed by frontend logic
       if let Err(e) = app_handle.emit("download-finished", DownloadFinished { id }) {
         log::error!("[setup] Failed to emit skip event for model {}: {}", id, e);

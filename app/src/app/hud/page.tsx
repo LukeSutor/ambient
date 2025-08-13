@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { LogicalSize } from '@tauri-apps/api/dpi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +26,12 @@ interface Conversation {
   message_count: number;
 }
 
+interface HudSizes {
+  width: number;
+  collapsed_height: number;
+  expanded_height: number;
+}
+
 export default function HudPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +40,7 @@ export default function HudPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
+  const [hudSizes, setHudSizes] = useState<HudSizes | null>(null);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +100,16 @@ export default function HudPage() {
 
   // Initialize conversation, server, listener, and enable transparent background
   useEffect(() => {
+    // Load HUD sizes first
+    (async () => {
+      try {
+        const sizes = await invoke<HudSizes>('get_hud_sizes');
+        setHudSizes(sizes);
+      } catch (error) {
+        console.error('Failed to load HUD sizes:', error);
+      }
+    })();
+
     // Ensure LLM server is running and create a conversation
     (async () => {
       try {
@@ -217,9 +233,7 @@ export default function HudPage() {
   async function expandResponseArea() {
     setIsExpanded(true);
     try {
-      const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(500, 350);
-      await currentWindow.setSize(newSize);
+      await invoke('resize_hud_expanded', { label: 'floating-hud' });
     } catch (error) {
       console.error('Failed to resize window:', error);
     }
@@ -228,9 +242,7 @@ export default function HudPage() {
   async function collapseResponseArea() {
     setIsExpanded(false);
     try {
-      const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(500, 60);
-      await currentWindow.setSize(newSize);
+      await invoke('resize_hud_collapsed', { label: 'floating-hud' });
     } catch (error) {
       console.error('Failed to resize window:', error);
     }
@@ -328,7 +340,7 @@ export default function HudPage() {
           {isExpanded && (
             <div
               ref={messagesContainerRef}
-              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-[5px] transition-all"
+              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
             >
               <div className="flex flex-col space-y-2">
                 {messages.map((m, i) => (
@@ -358,13 +370,18 @@ export default function HudPage() {
           )}
 
           {/* Input Container - fixed height at bottom */}
-          <div className='flex-shrink-0 h-[60px] w-[500px] flex flex-col justify-center items-center relative group'
+          <div 
+            className='flex-shrink-0 flex flex-col justify-center items-center relative group p-2'
             id="input-container"
             onMouseEnter={() => setIsHoveringGroup(true)}
             onMouseLeave={handleMouseLeave}
+            style={{
+              height: hudSizes ? `${hudSizes.collapsed_height}px` : '60px',
+              width: hudSizes ? `${hudSizes.width}px` : '500px'
+            }}
           >
             <div
-              className='flex items-center gap-3 h-[45px] w-[485px] rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
+              className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
             >
               <Image
                 src={logo}

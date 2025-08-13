@@ -213,7 +213,7 @@ impl TaskService {
     for task_id in task_ids {
       match Self::get_task_with_steps(db_state, task_id) {
         Ok(task_with_steps) => tasks.push(task_with_steps),
-  Err(e) => log::error!("Failed to get task {}: {}", task_id, e),
+        Err(e) => log::error!("Failed to get task {}: {}", task_id, e),
       }
     }
 
@@ -570,7 +570,7 @@ impl TaskService {
     for task_id in task_ids {
       match Self::get_task_with_steps(db_state, task_id) {
         Ok(task_with_steps) => tasks.push(task_with_steps),
-  Err(e) => log::error!("Failed to get task by frequency {}: {}", task_id, e),
+        Err(e) => log::error!("Failed to get task by frequency {}: {}", task_id, e),
       }
     }
 

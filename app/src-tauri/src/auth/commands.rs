@@ -11,7 +11,7 @@ use tauri_plugin_opener::OpenerExt;
 pub async fn logout() -> Result<String, String> {
   // Clear OAuth tokens
   if let Err(e) = clear_stored_token() {
-  log::warn!("Warning: Failed to clear OAuth token: {}", e);
+    log::warn!("Warning: Failed to clear OAuth token: {}", e);
   }
 
   // Clear Cognito authentication

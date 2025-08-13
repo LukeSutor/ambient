@@ -66,6 +66,7 @@ base64 = "0.22"
 tauri-plugin-deep-link = "2"
 urlencoding = "2.1"
 url = "2.4"
+tauri-plugin-store = "2"
 
 # ts-rs exports types to ../src/types directory
 # Configure this via environment variable or per-type export_to attribute

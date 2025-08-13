@@ -9,7 +9,7 @@ extern crate dotenv;
 pub async fn initiate_google_auth() -> Result<String, String> {
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   let client_id = std::env::var("COGNITO_CLIENT_ID")
@@ -52,7 +52,7 @@ pub async fn initiate_google_auth() -> Result<String, String> {
 pub async fn handle_google_callback(code: String) -> Result<SignInResult, String> {
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   log::info!("Handling Google OAuth2 callback with code: {}", code);
@@ -133,7 +133,7 @@ pub async fn google_sign_out() -> Result<String, String> {
 
   // Load environment variables
   if let Err(e) = dotenv::dotenv() {
-  log::warn!("Warning: Could not load .env file: {}", e);
+    log::warn!("Warning: Could not load .env file: {}", e);
   }
 
   let client_id = std::env::var("COGNITO_CLIENT_ID")
@@ -171,7 +171,7 @@ pub async fn google_sign_out() -> Result<String, String> {
 
   if !response.status().is_success() {
     let error_text = response.text().await.unwrap_or_default();
-  log::warn!("Warning: Failed to revoke token: {}", error_text);
+    log::warn!("Warning: Failed to revoke token: {}", error_text);
     // Continue with clearing local auth even if revoke fails
   }
 

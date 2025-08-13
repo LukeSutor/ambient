@@ -150,6 +150,7 @@
     "fs:default",
     "core:event:default",
     "deep-link:default",
-    "log:default"
+    "log:default",
+    "store:default"
   ]
 }

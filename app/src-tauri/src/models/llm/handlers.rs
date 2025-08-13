@@ -185,7 +185,8 @@ fn get_recent_summary_text(db_state: &tauri::State<DbState>, log_prefix: &str) -
     Err(e) => {
       log::error!(
         "{} Failed to fetch latest activity summary: {}",
-        log_prefix, e
+        log_prefix,
+        e
       );
       return "No previous summary available".to_string();
     }
@@ -219,7 +220,7 @@ fn get_recent_summary_text(db_state: &tauri::State<DbState>, log_prefix: &str) -
       "No recent summary available".to_string()
     }
     None => {
-  log::debug!("{} No previous summary found in database", log_prefix);
+      log::debug!("{} No previous summary found in database", log_prefix);
       "No previous summary available".to_string()
     }
   }

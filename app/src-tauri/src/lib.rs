@@ -31,6 +31,7 @@ pub fn run() {
   setup_signal_handlers();
 
   tauri::Builder::default()
+    .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(
       tauri_plugin_log::Builder::new()
         .clear_targets()
@@ -61,7 +62,7 @@ pub fn run() {
       // Get the PID and save it in the app state
       let pid = std::process::id();
       app.manage(AppState { pid });
-  log::info!("[setup] Application PID: {}", pid);
+      log::info!("[setup] Application PID: {}", pid);
 
       // Initialize the event emitter and listeners
       events::get_emitter().set_app_handle(app.handle().clone());
@@ -103,7 +104,7 @@ pub fn run() {
           Err(e) => log::error!("[setup] Failed to start llama.cpp server: {}", e),
         }
       });
-      
+
       // Setup signal handlers for graceful shutdown
       setup_signal_handlers();
 
@@ -121,12 +122,15 @@ pub fn run() {
         tauri::WindowEvent::CloseRequested { api, .. } => {
           // Prevent the window from closing and hide it instead
           // Only the tray quit option should actually exit the app
-          log::info!("[window] Window '{}' close requested - hiding instead of closing", window.label());
-          
+          log::info!(
+            "[window] Window '{}' close requested - hiding instead of closing",
+            window.label()
+          );
+
           if let Err(e) = window.hide() {
             log::error!("[window] Failed to hide window '{}': {}", window.label(), e);
           }
-          
+
           // Prevent the default close behavior
           api.prevent_close();
         }
@@ -139,6 +143,9 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       windows::open_floating_window,
       windows::close_floating_window,
+      windows::resize_hud_collapsed,
+      windows::resize_hud_expanded,
+      windows::get_hud_sizes,
       data::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
