@@ -15,6 +15,7 @@ import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
+import { SettingsService, HudDimensions } from '@/lib/settings-service';
 import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
@@ -26,21 +27,21 @@ interface Conversation {
   message_count: number;
 }
 
-interface HudSizes {
-  width: number;
-  collapsed_height: number;
-  expanded_height: number;
-}
-
 export default function HudPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const isExpandedRef = useRef(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isExpandedRef.current = isExpanded;
+  }, [isExpanded]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
-  const [hudSizes, setHudSizes] = useState<HudSizes | null>(null);
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -56,15 +57,9 @@ export default function HudPage() {
 
     // Get the mouse coordinates in 100ms
     let mouseCoords = { x: e.clientX, y: e.clientY };
-    console.log('Mouse coordinates now:', mouseCoords);
-    // setTimeout(() => {
-    //   mouseCoords = { x: e.clientX, y: e.clientY };
-    //   console.log('Mouse coordinates after 300ms:', mouseCoords);
-    // }, 300);
 
     // Print whether mouse is within bounding box
     const isWithinBox = rect && mouseCoords.x >= rect.left && mouseCoords.x <= rect.right && mouseCoords.y >= rect.top && mouseCoords.y <= rect.bottom;
-    console.log('Mouse is within box:', isWithinBox);
 
     // set dragging off if not within bounding box
     if (!isWithinBox) {
@@ -98,15 +93,52 @@ export default function HudPage() {
     return cleanText;
   }
 
+    // print hud dimensions every time they change
+  useEffect(() => {
+      console.log('HUD dimensions changed:', hudDimensions);
+    }, [hudDimensions]);
+
   // Initialize conversation, server, listener, and enable transparent background
   useEffect(() => {
-    // Load HUD sizes first
+    // Load HUD dimensions from settings
+    const loadHudDimensions = async () => {
+      try {
+        const dimensions = await SettingsService.getHudDimensions();
+        setHudDimensions(dimensions);
+      } catch (error) {
+        console.error('Failed to load HUD dimensions:', error);
+        // Fallback to defaults
+        const defaultDimensions: HudDimensions = {
+          width: 500,
+          collapsed_height: 60,
+          expanded_height: 350,
+        };
+        setHudDimensions(defaultDimensions);
+      }
+    };
+
+    loadHudDimensions();
+
+    // Set up a listener for settings changes (we'll use a custom event)
+    let unlistenSettings: UnlistenFn | null = null;
     (async () => {
       try {
-        const sizes = await invoke<HudSizes>('get_hud_sizes');
-        setHudSizes(sizes);
-      } catch (error) {
-        console.error('Failed to load HUD sizes:', error);
+        unlistenSettings = await listen('settings-changed', async () => {
+          // Reload HUD dimensions when settings change
+          await loadHudDimensions();
+          
+          // Also refresh the actual window size to match current state
+          try {
+            await invoke('refresh_hud_window_size', { 
+              label: 'floating-hud', 
+              isExpanded: isExpandedRef.current 
+            });
+          } catch (error) {
+            console.error('Failed to refresh HUD window size:', error);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to set up settings listener:', err);
       }
     })();
 
@@ -200,6 +232,9 @@ export default function HudPage() {
       }
       if (unlistenStream) {
         try { unlistenStream(); } catch { }
+      }
+      if (unlistenSettings) {
+        try { unlistenSettings(); } catch { }
       }
     };
   }, []);
@@ -371,13 +406,13 @@ export default function HudPage() {
 
           {/* Input Container - fixed height at bottom */}
           <div 
-            className='flex-shrink-0 flex flex-col justify-center items-center relative group p-2'
+            className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
             id="input-container"
             onMouseEnter={() => setIsHoveringGroup(true)}
             onMouseLeave={handleMouseLeave}
             style={{
-              height: hudSizes ? `${hudSizes.collapsed_height}px` : '60px',
-              width: hudSizes ? `${hudSizes.width}px` : '500px'
+              height: hudDimensions ? `${hudDimensions.collapsed_height}px` : '60px',
+              width: hudDimensions ? `${hudDimensions.width}px` : '500px'
             }}
           >
             <div

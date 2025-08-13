@@ -7,6 +7,7 @@ pub mod events;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;
+pub mod settings;
 pub mod setup;
 pub mod tasks;
 pub mod tray;
@@ -145,7 +146,10 @@ pub fn run() {
       windows::close_floating_window,
       windows::resize_hud_collapsed,
       windows::resize_hud_expanded,
-      windows::get_hud_sizes,
+      windows::refresh_hud_window_size,
+      settings::load_user_settings,
+      settings::save_user_settings,
+      settings::refresh_settings_cache,
       data::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
