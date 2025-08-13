@@ -7,6 +7,6 @@ export type HudDimensions = { width: number, collapsed_height: number, expanded_
  */
 export type HudSizeOption = "Small" | "Normal" | "Large";
 
-export type ModelSelection = "Local" | "GptOss";
+export type ModelSelection = "Local" | "GptOss" | "Gpt5";
 
 export type UserSettings = { hud_size: HudSizeOption, model_selection: ModelSelection, };

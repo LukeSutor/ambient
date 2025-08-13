@@ -69,6 +69,7 @@ pub struct HudDimensions {
 pub enum ModelSelection {
     Local,
     GptOss,
+    Gpt5,
 }
 
 impl Default for ModelSelection {
@@ -82,6 +83,7 @@ impl ModelSelection {
         match self {
             Self::Local => "local",
             Self::GptOss => "gpt_oss",
+            Self::Gpt5 => "gpt_5",
         }
     }
 
@@ -89,6 +91,7 @@ impl ModelSelection {
         match s {
             "local" => Self::Local,
             "gpt_oss" => Self::GptOss,
+            "gpt_5" => Self::Gpt5,
             _ => Self::Local, // Default fallback
         }
     }
