@@ -1,10 +1,10 @@
 pub mod cognito;
 pub mod commands;
+pub mod deep_link;
 pub mod jwt;
 pub mod oauth2;
 pub mod storage;
 pub mod types;
-pub mod deep_link;
 
 // Re-export commonly used types for convenience
 pub use jwt::*;

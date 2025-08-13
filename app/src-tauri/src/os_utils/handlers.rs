@@ -80,7 +80,7 @@ pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppH
   let data = match get_screen_text(app_handle.clone()).await {
     Ok(data) => data,
     Err(e) => {
-            log::error!("[capture_screen] Failed to capture text: {}", e);
+      log::error!("[capture_screen] Failed to capture text: {}", e);
       return;
     }
   };
@@ -88,7 +88,7 @@ pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppH
   let url = match get_brave_url() {
     Ok(url) => url,
     Err(e) => {
-            log::error!("[capture_screen] Failed to get browser URL: {}", e);
+      log::error!("[capture_screen] Failed to get browser URL: {}", e);
       return;
     }
   };
@@ -99,12 +99,12 @@ pub async fn handle_capture_screen(_event: CaptureScreenEvent, app_handle: &AppH
   if let Err(e) = emit(
     GET_SCREEN_DIFF,
     GetScreenDiffEvent {
-            data,
+      data,
       active_url: Some(url),
       timestamp,
     },
   ) {
-  log::error!(
+    log::error!(
       "[get_screen_diff] Failed to emit GET_SCREEN_DIFF event: {}",
       e
     );
@@ -177,7 +177,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
 
   // Return if there are no changes
   if changes.is_empty() {
-  log::info!("[get_screen_diff] No changes detected");
+    log::info!("[get_screen_diff] No changes detected");
     return;
   }
 
@@ -190,7 +190,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
   if let Err(e) = emit(
     DETECT_TASKS,
     DetectTasksEvent {
-            text: markdown.clone(),
+      text: markdown.clone(),
       active_url: event.active_url.clone(),
       timestamp: timestamp.clone(),
     },
@@ -209,7 +209,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
       timestamp,
     },
   ) {
-            log::error!(
+    log::error!(
       "[get_screen_diff] Failed to emit SUMMARIZE_SCREEN event: {}",
       e
     );

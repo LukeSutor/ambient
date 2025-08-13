@@ -26,7 +26,10 @@ pub fn handle_open_url(app_handle: &tauri::AppHandle, url: &str) {
             Err(e) => {
               log::error!("[deep_link] Failed to handle OAuth2 callback: {}", e);
               if let Err(emit_err) = app.emit("oauth2-error", &e) {
-                log::error!("[deep_link] Failed to emit oauth2-error event: {}", emit_err);
+                log::error!(
+                  "[deep_link] Failed to emit oauth2-error event: {}",
+                  emit_err
+                );
               }
             }
           }

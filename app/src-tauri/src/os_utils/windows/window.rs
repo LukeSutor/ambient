@@ -22,10 +22,10 @@ use windows::{
       Variant::VARIANT,
     },
     UI::Accessibility::{
-      CUIAutomation, IUIAutomation, IUIAutomationValuePattern,
-      TreeScope_Descendants, TreeScope_Subtree, UIA_ControlTypePropertyId,
-      UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_IsOffscreenPropertyId,
-      UIA_NamePropertyId, UIA_ProcessIdPropertyId, UIA_TextControlTypeId, UIA_ValuePatternId,
+      CUIAutomation, IUIAutomation, IUIAutomationValuePattern, TreeScope_Descendants,
+      TreeScope_Subtree, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
+      UIA_EditControlTypeId, UIA_IsOffscreenPropertyId, UIA_NamePropertyId,
+      UIA_ProcessIdPropertyId, UIA_TextControlTypeId, UIA_ValuePatternId,
     },
   },
 };

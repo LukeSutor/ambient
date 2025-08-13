@@ -7,8 +7,10 @@ pub mod events;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;
+pub mod settings;
 pub mod setup;
 pub mod tasks;
+pub mod tray;
 pub mod types;
 pub mod windows;
 use db::DbState;
@@ -18,26 +20,6 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::{Target, TargetKind};
 use types::AppState;
 extern crate dotenv;
-
-// Global cleanup handler to ensure llama server is stopped
-struct CleanupHandler;
-
-impl Drop for CleanupHandler {
-  fn drop(&mut self) {
-    // This will be called when the app is shutting down
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-      if let Err(e) = models::llm::server::stop_llama_server().await {
-        log::error!("[cleanup] Failed to stop llama server during cleanup: {}", e);
-      } else {
-        log::info!("[cleanup] Llama server stopped during cleanup");
-      }
-    });
-  }
-}
-
-static _CLEANUP_HANDLER: std::sync::LazyLock<CleanupHandler> =
-  std::sync::LazyLock::new(|| CleanupHandler);
 
 use crate::os_utils::signals::setup_signal_handlers;
 
@@ -50,6 +32,7 @@ pub fn run() {
   setup_signal_handlers();
 
   tauri::Builder::default()
+    .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(
       tauri_plugin_log::Builder::new()
         .clear_targets()
@@ -80,7 +63,7 @@ pub fn run() {
       // Get the PID and save it in the app state
       let pid = std::process::id();
       app.manage(AppState { pid });
-  log::info!("[setup] Application PID: {}", pid);
+      log::info!("[setup] Application PID: {}", pid);
 
       // Initialize the event emitter and listeners
       events::get_emitter().set_app_handle(app.handle().clone());
@@ -122,41 +105,35 @@ pub fn run() {
           Err(e) => log::error!("[setup] Failed to start llama.cpp server: {}", e),
         }
       });
-      
-      // Initialize the cleanup handler to ensure it's ready
-      std::sync::LazyLock::force(&_CLEANUP_HANDLER);
 
       // Setup signal handlers for graceful shutdown
       setup_signal_handlers();
+
+      // Create the system tray
+      if let Err(e) = tray::create_tray(&app.handle()) {
+        log::error!("[setup] Failed to create system tray: {}", e);
+      } else {
+        log::info!("[setup] System tray created successfully");
+      }
 
       Ok(())
     })
     .on_window_event(|window, event| {
       match event {
-        tauri::WindowEvent::CloseRequested { .. } => {
-          // Only stop the llama server when the main window is being closed
-          if window.label() == "main" {
-            log::info!("[shutdown] Main window closing, stopping llama server...");
-            let _app_handle = window.app_handle().clone();
-            tauri::async_runtime::spawn(async move {
-              if let Err(e) = models::llm::server::stop_llama_server().await {
-                log::error!("[shutdown] Failed to stop llama server: {}", e);
-              } else {
-                log::info!("[shutdown] Llama server stopped successfully");
-              }
-            });
-          } else {
-            log::info!("[shutdown] Non-main window '{}' closing", window.label());
-            let app_handle = window.app_handle().clone();
-            if let Some(floating) = app_handle.get_webview_window("floating-hud") {
-              match floating.destroy() {
-                Ok(_) => log::info!("[shutdown] 'floating-hud' window closed"),
-                Err(e) => log::error!("[shutdown] Failed to close 'floating-hud' window: {}", e),
-              }
-            } else {
-              log::info!("[shutdown] 'floating-hud' window not found");
-            }
+        tauri::WindowEvent::CloseRequested { api, .. } => {
+          // Prevent the window from closing and hide it instead
+          // Only the tray quit option should actually exit the app
+          log::info!(
+            "[window] Window '{}' close requested - hiding instead of closing",
+            window.label()
+          );
+
+          if let Err(e) = window.hide() {
+            log::error!("[window] Failed to hide window '{}': {}", window.label(), e);
           }
+
+          // Prevent the default close behavior
+          api.prevent_close();
         }
         _ => {}
       }
@@ -165,8 +142,14 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
-  windows::open_floating_window,
-  windows::close_floating_window,
+      windows::open_floating_window,
+      windows::close_floating_window,
+      windows::resize_hud_collapsed,
+      windows::resize_hud_expanded,
+      windows::refresh_hud_window_size,
+      settings::load_user_settings,
+      settings::save_user_settings,
+      settings::refresh_settings_cache,
       data::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
@@ -236,14 +219,6 @@ pub fn run() {
       tasks::commands::analyze_current_screen_for_tasks,
       tasks::commands::get_task_progress_history
     ])
-    .on_window_event(|window, event| match event {
-      tauri::WindowEvent::Destroyed => {
-        if window.label() == "main" {
-          window.app_handle().exit(0);
-        }
-      }
-      _ => {}
-    })
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { LogicalSize } from '@tauri-apps/api/dpi';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +15,8 @@ import { Move, X, MessageSquarePlus  } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
+import { SettingsService } from '@/lib/settings-service';
+import { HudDimensions } from '@/types/settings';
 import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
@@ -31,10 +32,17 @@ export default function HudPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const isExpandedRef = useRef(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isExpandedRef.current = isExpanded;
+  }, [isExpanded]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -50,15 +58,9 @@ export default function HudPage() {
 
     // Get the mouse coordinates in 100ms
     let mouseCoords = { x: e.clientX, y: e.clientY };
-    console.log('Mouse coordinates now:', mouseCoords);
-    // setTimeout(() => {
-    //   mouseCoords = { x: e.clientX, y: e.clientY };
-    //   console.log('Mouse coordinates after 300ms:', mouseCoords);
-    // }, 300);
 
     // Print whether mouse is within bounding box
     const isWithinBox = rect && mouseCoords.x >= rect.left && mouseCoords.x <= rect.right && mouseCoords.y >= rect.top && mouseCoords.y <= rect.bottom;
-    console.log('Mouse is within box:', isWithinBox);
 
     // set dragging off if not within bounding box
     if (!isWithinBox) {
@@ -92,8 +94,55 @@ export default function HudPage() {
     return cleanText;
   }
 
+    // print hud dimensions every time they change
+  useEffect(() => {
+      console.log('HUD dimensions changed:', hudDimensions);
+    }, [hudDimensions]);
+
   // Initialize conversation, server, listener, and enable transparent background
   useEffect(() => {
+    // Load HUD dimensions from settings
+    const loadHudDimensions = async () => {
+      try {
+        const dimensions = await SettingsService.getHudDimensions();
+        setHudDimensions(dimensions);
+      } catch (error) {
+        console.error('Failed to load HUD dimensions:', error);
+        // Fallback to defaults
+        const defaultDimensions: HudDimensions = {
+          width: 500,
+          collapsed_height: 60,
+          expanded_height: 350,
+        };
+        setHudDimensions(defaultDimensions);
+      }
+    };
+
+    loadHudDimensions();
+
+    // Set up a listener for settings changes (we'll use a custom event)
+    let unlistenSettings: UnlistenFn | null = null;
+    (async () => {
+      try {
+        unlistenSettings = await listen('settings-changed', async () => {
+          // Reload HUD dimensions when settings change
+          await loadHudDimensions();
+          
+          // Also refresh the actual window size to match current state
+          try {
+            await invoke('refresh_hud_window_size', { 
+              label: 'floating-hud', 
+              isExpanded: isExpandedRef.current 
+            });
+          } catch (error) {
+            console.error('Failed to refresh HUD window size:', error);
+          }
+        });
+      } catch (err) {
+        console.error('Failed to set up settings listener:', err);
+      }
+    })();
+
     // Ensure LLM server is running and create a conversation
     (async () => {
       try {
@@ -185,6 +234,9 @@ export default function HudPage() {
       if (unlistenStream) {
         try { unlistenStream(); } catch { }
       }
+      if (unlistenSettings) {
+        try { unlistenSettings(); } catch { }
+      }
     };
   }, []);
 
@@ -217,9 +269,7 @@ export default function HudPage() {
   async function expandResponseArea() {
     setIsExpanded(true);
     try {
-      const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(500, 350);
-      await currentWindow.setSize(newSize);
+      await invoke('resize_hud_expanded', { label: 'floating-hud' });
     } catch (error) {
       console.error('Failed to resize window:', error);
     }
@@ -228,9 +278,7 @@ export default function HudPage() {
   async function collapseResponseArea() {
     setIsExpanded(false);
     try {
-      const currentWindow = getCurrentWebviewWindow();
-      const newSize = new LogicalSize(500, 60);
-      await currentWindow.setSize(newSize);
+      await invoke('resize_hud_collapsed', { label: 'floating-hud' });
     } catch (error) {
       console.error('Failed to resize window:', error);
     }
@@ -328,7 +376,7 @@ export default function HudPage() {
           {isExpanded && (
             <div
               ref={messagesContainerRef}
-              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-[5px] transition-all"
+              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
             >
               <div className="flex flex-col space-y-2">
                 {messages.map((m, i) => (
@@ -358,13 +406,18 @@ export default function HudPage() {
           )}
 
           {/* Input Container - fixed height at bottom */}
-          <div className='flex-shrink-0 h-[60px] w-[500px] flex flex-col justify-center items-center relative group'
+          <div 
+            className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
             id="input-container"
             onMouseEnter={() => setIsHoveringGroup(true)}
             onMouseLeave={handleMouseLeave}
+            style={{
+              height: hudDimensions ? `${hudDimensions.collapsed_height}px` : '60px',
+              width: hudDimensions ? `${hudDimensions.width}px` : '500px'
+            }}
           >
             <div
-              className='flex items-center gap-3 h-[45px] w-[485px] rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20'
+              className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
             >
               <Image
                 src={logo}
