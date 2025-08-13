@@ -9,18 +9,19 @@ use tauri::{
 };
 
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
-  // Use embedded icon bytes instead of file path to avoid path resolution issues
-  let icon_bytes = include_bytes!("../../public/favicon.ico");
+  // Use PNG for better quality - tray icons should be 32x32 on Windows
+  let icon_bytes = include_bytes!("../icons/32x32.png");
 
-  // For ICO files, we need to decode them first
+  // PNG files can be loaded directly without quality loss
   let icon = match image::load_from_memory(icon_bytes) {
     Ok(img) => {
       let rgba = img.to_rgba8();
       let (width, height) = img.dimensions();
+      log::info!("[tray] Loaded tray icon: {}x{}", width, height);
       Image::new_owned(rgba.into_raw(), width, height)
     }
-    Err(_) => {
-      log::warn!("[tray] Failed to load favicon.ico, using default icon");
+    Err(e) => {
+      log::error!("[tray] Failed to load 32x32.png: {}", e);
       // Fall back to a simple 32x32 transparent icon
       let rgba = vec![0; 32 * 32 * 4]; // Transparent pixels
       Image::new_owned(rgba, 32, 32)
