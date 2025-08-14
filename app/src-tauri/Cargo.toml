@@ -68,9 +68,30 @@ urlencoding = "2.1"
 url = "2.4"
 tauri-plugin-store = "2"
 
+# OCR crates
+ocrs = "0.10.4"
+rten = "0.21.0"
+
 [profile.dev]
 debug = true
 opt-level = 0
+
+# Optimize rten and rten-prefixed dependencies for performance even in debug builds
+# This is critical for OCR performance as these ML dependencies are extremely slow without optimization
+[profile.dev.package.rten]
+opt-level = 3
+
+[profile.dev.package.rten-tensor]
+opt-level = 3
+
+[profile.dev.package.rten-imageproc]
+opt-level = 3
+
+[profile.dev.package.rten-vecmath]
+opt-level = 3
+
+[profile.dev.package.rten-simd]
+opt-level = 3
 
 [features]
 # by default Tauri runs in production mode

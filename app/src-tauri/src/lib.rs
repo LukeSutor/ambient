@@ -171,6 +171,10 @@ pub fn run() {
       setup::check_setup_complete,
       setup::get_llm_model_path,
       setup::check_llm_model_download,
+      setup::get_ocr_text_detection_model_path,
+      setup::get_ocr_text_recognition_model_path,
+      setup::check_ocr_text_detection_model_download,
+      setup::check_ocr_text_recognition_model_download,
       os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_formatted,
@@ -217,7 +221,9 @@ pub fn run() {
       tasks::commands::get_tasks_due_today,
       tasks::commands::get_tasks_by_frequency,
       tasks::commands::analyze_current_screen_for_tasks,
-      tasks::commands::get_task_progress_history
+      tasks::commands::get_task_progress_history,
+      models::ocr::ocr::process_image,
+      models::ocr::ocr::check_ocr_models_available
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

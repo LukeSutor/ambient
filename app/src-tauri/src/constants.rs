@@ -4,6 +4,7 @@ use tokio::time::Duration;
 // Directory names
 pub const VLM_DIR: &str = "models/vlm";
 pub const LLM_DIR: &str = "models/llm";
+pub const OCR_DIR: &str = "models/ocr";
 
 // VLM model filenames
 pub const TEXT_FILE: &str = "text-model.gguf";
@@ -11,6 +12,10 @@ pub const MMPROJ_FILE: &str = "mmproj-model.gguf";
 
 // LLM model filename
 pub const LLM_FILE: &str = "Qwen3-1.7B-Q4_K_M.gguf";
+
+// OCR model filenames
+pub const TEXT_DETECTION_FILE: &str = "text-detection.rten";
+pub const TEXT_RECOGNITION_FILE: &str = "text-recognition.rten";
 
 // LLM model download link (example - update with actual model)
 pub const LLM_LINK: &str =
