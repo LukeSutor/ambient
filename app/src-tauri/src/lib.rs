@@ -171,7 +171,6 @@ pub fn run() {
       setup::check_setup_complete,
       setup::get_llm_model_path,
       setup::check_llm_model_download,
-      os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_formatted,
       os_utils::handlers::capture_eval_data,

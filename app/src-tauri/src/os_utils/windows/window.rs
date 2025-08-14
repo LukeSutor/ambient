@@ -26,6 +26,7 @@ use windows::{
       TreeScope_Subtree, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
       UIA_EditControlTypeId, UIA_IsOffscreenPropertyId, UIA_NamePropertyId,
       UIA_ProcessIdPropertyId, UIA_TextControlTypeId, UIA_ValuePatternId,
+      UIA_BoundingRectanglePropertyId,
     },
   },
 };
@@ -43,6 +44,14 @@ pub struct WindowInfo {
   pub window_title: String,
   pub process_id: u32,
   pub application_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BoundingBox {
+  pub x: i32,
+  pub y: i32,
+  pub width: i32,
+  pub height: i32,
 }
 
 // Function to get all child processes (including nested children) of a parent PID
@@ -78,74 +87,6 @@ fn get_child_processes(parent_pid: u32) -> Result<HashSet<u32>, String> {
 
     let _ = CloseHandle(snapshot);
     Ok(child_pids)
-  }
-}
-
-#[tauri::command]
-pub fn get_all_text_from_focused_app() -> Result<String, String> {
-  unsafe {
-    let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-    if hr.is_err() {
-      return Err(format!("CoInitializeEx failed: {:?}", hr));
-    }
-
-    let result = (|| {
-      let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
-        .map_err(|e| format!("Failed to create UIAutomation: {:?}", e))?;
-
-      let mut root = automation
-        .GetFocusedElement()
-        .map_err(|e| format!("Failed to get focused element: {:?}", e))?;
-
-      // Climb to the topmost parent (window)
-      loop {
-        match root.GetCachedParent() {
-          Ok(parent) => root = parent,
-          _ => break, // no more parents
-        }
-      }
-
-      let condition = automation
-        .CreateTrueCondition()
-        .map_err(|e| format!("Failed to get TrueCondition: {:?}", e))?;
-
-      let elements = root
-        .FindAll(TreeScope_Descendants, &condition)
-        .map_err(|e| format!("Failed to find descendants: {:?}", e))?;
-
-      let count = elements
-        .Length()
-        .map_err(|e| format!("Failed to get element count: {:?}", e))?;
-      let mut visible_texts = vec![];
-
-      for i in 0..count {
-        let element = elements
-          .GetElement(i)
-          .map_err(|e| format!("Failed to get element {}: {:?}", i, e))?;
-
-        // Skip elements that are offscreen
-        if let Ok(offscreen) = element.CurrentIsOffscreen() {
-          if offscreen.as_bool() {
-            continue;
-          }
-        }
-
-        // Try to get name (static text or labels)
-        if let Ok(name_bstr) = element.CurrentName() {
-          let name = name_bstr.to_string();
-          if !name.trim().is_empty() {
-            visible_texts.push(name);
-            continue;
-          }
-        }
-      }
-
-      Ok(visible_texts.join("\n"))
-    })();
-
-    CoUninitialize();
-
-    result
   }
 }
 
@@ -200,6 +141,20 @@ pub fn get_brave_url() -> Result<String, String> {
 }
 
 pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTextData>, String> {
+  get_screen_text_by_application_internal(app_pid, None)
+}
+
+pub fn get_screen_text_by_application_with_bounds(
+  app_pid: u32, 
+  bounding_box: BoundingBox
+) -> Result<Vec<ApplicationTextData>, String> {
+  get_screen_text_by_application_internal(app_pid, Some(bounding_box))
+}
+
+fn get_screen_text_by_application_internal(
+  app_pid: u32, 
+  bounding_box: Option<BoundingBox>
+) -> Result<Vec<ApplicationTextData>, String> {
   unsafe {
     let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
     if hr.is_err() {
@@ -243,6 +198,10 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         .AddProperty(UIA_ProcessIdPropertyId)
         .map_err(|e| format!("Failed to add ProcessId property to cache: {:?}", e))?;
 
+      cache_request
+        .AddProperty(UIA_BoundingRectanglePropertyId)
+        .map_err(|e| format!("Failed to add BoundingRectangle property to cache: {:?}", e))?;
+
       // Set tree scope to subtree for efficient traversal
       cache_request
         .SetTreeScope(TreeScope_Subtree)
@@ -278,6 +237,28 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
         // Skip if this matches any process we want to filter (parent + children)
         if processes_to_filter.contains(&(process_id as u32)) {
           continue;
+        }
+
+        // If bounding box is specified, check if element is within bounds
+        if let Some(ref bbox) = bounding_box {
+          if let Ok(rect) = element.CachedBoundingRectangle() {
+            // Check if element is completely within the bounding box
+            let element_left = rect.left;
+            let element_top = rect.top;
+            let element_right = rect.right;
+            let element_bottom = rect.bottom;
+            
+            let bbox_right = bbox.x + bbox.width;
+            let bbox_bottom = bbox.y + bbox.height;
+
+            // Element must be completely within the bounding box
+            if element_left < bbox.x || element_top < bbox.y || 
+               element_right > bbox_right || element_bottom > bbox_bottom {
+              continue;
+            }
+          } else {
+            continue; // Skip elements without bounding rectangle when filtering by bounds
+          }
         }
 
         // Get the text content
@@ -533,6 +514,35 @@ pub async fn get_screen_text(app_handle: AppHandle) -> Result<Vec<ApplicationTex
   }
 }
 
+pub async fn get_screen_text_in_bounds(
+  app_handle: AppHandle, 
+  bounding_box: BoundingBox
+) -> Result<Vec<ApplicationTextData>, String> {
+  // Get app PID from app state
+  let state = app_handle.state::<AppState>();
+  let app_pid = state.pid;
+
+  // Get the screen text in another thread with bounding box constraint
+  let result = task::spawn_blocking(move || {
+    get_screen_text_by_application_with_bounds(app_pid, bounding_box)
+  }).await;
+
+  match result {
+    Ok(applications) => {
+      // Get the app name from the PID for each application
+      let mut applications_data = applications?;
+      for app in &mut applications_data {
+        app.process_name = Some(get_process_name(app.process_id as u32));
+        app.application_name = Some(map_process_name_to_app_name(
+          &app.process_name.as_ref().unwrap(),
+        ));
+      }
+      Ok(applications_data)
+    }
+    Err(e) => Err(format!("Task execution failed: {:?}", e)),
+  }
+}
+
 // Parent function that gets screen text and formats it as markdown
 #[tauri::command]
 pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, String> {
@@ -551,6 +561,32 @@ pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, 
     Ok(Err(e)) => Err(e),
     Err(e) => Err(format!("Task execution failed: {:?}", e)),
   }
+}
+
+#[tauri::command]
+pub async fn get_screen_text_in_bounds_formatted(
+  app_handle: AppHandle, 
+  x: i32, 
+  y: i32, 
+  width: i32, 
+  height: i32
+) -> Result<String, String> {
+  let bounding_box = BoundingBox { x, y, width, height };
+  let applications = get_screen_text_in_bounds(app_handle, bounding_box).await?;
+  let markdown = format_as_markdown(applications);
+  Ok(markdown)
+}
+
+#[tauri::command]
+pub async fn get_screen_text_in_bounds_raw(
+  app_handle: AppHandle, 
+  x: i32, 
+  y: i32, 
+  width: i32, 
+  height: i32
+) -> Result<Vec<ApplicationTextData>, String> {
+  let bounding_box = BoundingBox { x, y, width, height };
+  get_screen_text_in_bounds(app_handle, bounding_box).await
 }
 
 // Helper function to get process name from PID
