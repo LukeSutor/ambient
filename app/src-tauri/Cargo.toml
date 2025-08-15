@@ -74,10 +74,9 @@ rten = "0.21.0"
 
 [profile.dev]
 debug = true
-opt-level = 3
+opt-level = 0
 
 # Optimize rten and rten-prefixed dependencies for performance even in debug builds
-# This is critical for OCR performance as these ML dependencies are extremely slow without optimization
 [profile.dev.package.rten]
 opt-level = 3
 
