@@ -137,6 +137,44 @@ pub async fn process_image(
     })
 }
 
+/// Process an image file and extract text using OCR
+#[tauri::command]
+pub async fn process_image_from_file(
+    app_handle: AppHandle,
+    file_path: String,
+) -> Result<OcrResult, String> {
+    let start_time = Instant::now();
+    
+    log::info!("[OCR] Starting OCR processing for image file: {}", file_path);
+
+    // Load the image from file path
+    let image = image::open(&file_path)
+        .map_err(|e| format!("Failed to load image from file '{}': {}", file_path, e))?;
+    
+    // Create OCR engine with models
+    let engine = OcrService::create_ocr_engine(&app_handle).await?;
+    
+    // Process the image
+    let text = OcrService::extract_text_from_image(&engine, &image).await?;
+    
+    let processing_time = start_time.elapsed();
+    let word_count = text.split_whitespace().count();
+    
+    log::info!(
+        "[OCR] Processing completed in {}ms, extracted {} words from file: {}",
+        processing_time.as_millis(),
+        word_count,
+        file_path
+    );
+
+    Ok(OcrResult {
+        text,
+        processing_time_ms: processing_time.as_millis() as u64,
+        word_count,
+        confidence_score: None, // OCRs doesn't provide confidence scores directly
+    })
+}
+
 /// Check if OCR models are available
 #[tauri::command]
 pub fn check_ocr_models_available(app_handle: AppHandle) -> Result<bool, String> {
