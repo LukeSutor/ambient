@@ -7,6 +7,7 @@ pub mod events;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;
+pub mod screen_selection;
 pub mod settings;
 pub mod setup;
 pub mod tasks;
@@ -216,7 +217,12 @@ pub fn run() {
       tasks::commands::get_tasks_due_today,
       tasks::commands::get_tasks_by_frequency,
       tasks::commands::analyze_current_screen_for_tasks,
-      tasks::commands::get_task_progress_history
+      tasks::commands::get_task_progress_history,
+      screen_selection::open_screen_selector,
+      screen_selection::close_screen_selector,
+      screen_selection::process_screen_selection,
+      screen_selection::get_screen_dimensions,
+      screen_selection::client_to_screen_coords
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

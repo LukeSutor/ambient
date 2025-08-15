@@ -1,6 +1,6 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -87,6 +87,10 @@ export default function Dev() {
   const [evalCaptureResult, setEvalCaptureResult] = useState<string | null>(null);
   const [evalCaptureError, setEvalCaptureError] = useState<string | null>(null);
 
+  // --- Screen Selection ---
+  const [screenSelectionResult, setScreenSelectionResult] = useState<any>(null);
+  const [screenSelectionLoading, setScreenSelectionLoading] = useState<boolean>(false);
+
   const fetchScreenText = async () => {
     setScreenTextLoading(true);
     setScreenTextError(null);
@@ -116,6 +120,33 @@ export default function Dev() {
       setEvalCaptureLoading(false);
     }
   };
+
+  // Screen Selection Functions
+  const openScreenSelector = async () => {
+    setScreenSelectionLoading(true);
+    try {
+      await invoke('open_screen_selector');
+    } catch (error: any) {
+      console.error('Failed to open screen selector:', error);
+      setScreenSelectionLoading(false);
+    }
+  };
+
+  // Listen for screen selection results
+  useEffect(() => {
+    const handleScreenSelection = (event: CustomEvent) => {
+      const result = event.detail;
+      console.log('Screen selection result received:', result);
+      setScreenSelectionResult(result);
+      setScreenSelectionLoading(false);
+    };
+
+    window.addEventListener('screen-selection-complete', handleScreenSelection as EventListener);
+    
+    return () => {
+      window.removeEventListener('screen-selection-complete', handleScreenSelection as EventListener);
+    };
+  }, []);
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
@@ -149,6 +180,34 @@ export default function Dev() {
         <Button onClick={fetchScreenText} disabled={screenTextLoading}>
           {screenTextLoading ? "Loading..." : "Get Screen Text (Formatted)"}
         </Button>
+      </div>
+
+      {/* Screen Selection Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
+        <h2 className="text-lg font-semibold">Screen Selection Tool</h2>
+        <p className="text-sm text-gray-600">
+          Click to open a fullscreen overlay where you can select any area of your screen to extract text from that specific region.
+        </p>
+        <Button 
+          onClick={openScreenSelector} 
+          disabled={screenSelectionLoading}
+          variant="default"
+        >
+          {screenSelectionLoading ? "Select an area..." : "📱 Select Screen Area"}
+        </Button>
+        
+        {screenSelectionResult && (
+          <div className="mt-4 space-y-2">
+            <h3 className="text-md font-semibold">Selection Result:</h3>
+            <div className="p-2 bg-gray-100 rounded text-sm">
+              <strong>Bounds:</strong> {screenSelectionResult.bounds.width}x{screenSelectionResult.bounds.height} at ({screenSelectionResult.bounds.x}, {screenSelectionResult.bounds.y})
+            </div>
+            <div className="p-2 bg-white border rounded text-sm max-h-64 overflow-y-auto">
+              <strong>Extracted Text:</strong>
+              <pre className="whitespace-pre-wrap mt-2">{screenSelectionResult.text_content || "No text found in selected area"}</pre>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Evaluation Data Capture Section */}
