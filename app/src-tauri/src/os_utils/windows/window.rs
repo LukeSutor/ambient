@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::result::Result;
 use tauri::{AppHandle, Manager};
 use tokio::task;
+use ts_rs::TS;
 use windows::{
   core::*,
   Win32::{
@@ -31,7 +32,8 @@ use windows::{
   },
 };
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, TS)]
+#[ts(export, export_to = "events.ts")]
 pub struct ApplicationTextData {
   pub process_id: i32,
   pub process_name: Option<String>,

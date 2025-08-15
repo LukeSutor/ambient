@@ -1,4 +1,7 @@
-use crate::os_utils::windows::window::{get_screen_text_in_bounds_formatted, get_screen_text_in_bounds_raw, ApplicationTextData};
+use crate::models::ocr::ocr::{process_image_from_file, OcrResult};
+use crate::events::{emitter::emit, types::{OCR_RESPONSE, OcrResponseEvent}};
+use crate::images::{take_screenshot, crop_image_selection};
+use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
@@ -8,13 +11,6 @@ pub struct SelectionBounds {
     pub y: i32,
     pub width: i32,
     pub height: i32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ScreenSelectionResult {
-    pub bounds: SelectionBounds,
-    pub text_content: String,
-    pub raw_data: Vec<ApplicationTextData>,
 }
 
 /// Open the screen selection overlay window
@@ -114,40 +110,42 @@ pub async fn close_screen_selector(
 pub async fn process_screen_selection(
     app_handle: AppHandle,
     bounds: SelectionBounds,
-) -> Result<ScreenSelectionResult, String> {
+) -> Result<(), String> {
     log::info!("Processing screen selection: {:?}", bounds);
 
     // Validate bounds
     if bounds.width <= 0 || bounds.height <= 0 {
-        return Err("Invalid selection bounds: width and height must be positive".to_string());
+        // Emit failed event
+        let result = OcrResponseEvent {
+            text: String::new(),
+            success: false,
+            timestamp: chrono::Utc::now().to_string(),
+        };
+        emit(OCR_RESPONSE, result)
+            .map_err(|e| format!("Failed to emit OCR response: {}", e))?;
+        return Ok(());
     }
+    
+    // Take screenshot and crop
+    let filename = Uuid::new_v4().to_string() + ".png";
+    let screenshot_path = take_screenshot(app_handle.clone(), filename.clone());
+    let pathbuf = std::path::PathBuf::from(screenshot_path.clone());
+    crop_image_selection(pathbuf.clone(), bounds);
 
-    // Get text content using existing functions
-    let text_content = get_screen_text_in_bounds_formatted(
-        app_handle.clone(),
-        bounds.x,
-        bounds.y,
-        bounds.width,
-        bounds.height,
-    ).await?;
+    // Get ocr result
+    let result: OcrResult = process_image_from_file(app_handle.clone(), pathbuf.to_str().unwrap().to_string()).await
+        .map_err(|e| format!("Failed to process OCR: {}", e))?;
 
-    let raw_data = get_screen_text_in_bounds_raw(
-        app_handle,
-        bounds.x,
-        bounds.y,
-        bounds.width,
-        bounds.height,
-    ).await?;
-
-    let result = ScreenSelectionResult {
-        bounds: bounds.clone(),
-        text_content,
-        raw_data,
+    // Emit event
+    let result = OcrResponseEvent {
+        text: result.text,
+        success: true,
+        timestamp: chrono::Utc::now().to_string(),
     };
+    emit(OCR_RESPONSE, result.clone())
+        .map_err(|e| format!("Failed to emit OCR response: {}", e))?;
 
-    log::info!("Screen selection processed successfully. Text length: {}", result.text_content.len());
-
-    Ok(result)
+    Ok(())
 }
 
 /// Get screen dimensions for the overlay

@@ -12,8 +12,6 @@ use tauri::AppHandle;
 pub struct OcrResult {
     pub text: String,
     pub processing_time_ms: u64,
-    pub word_count: usize,
-    pub confidence_score: Option<f32>,
 }
 
 /// OCR service for text extraction from images
@@ -121,19 +119,15 @@ pub async fn process_image(
     let text = OcrService::extract_text_from_image(&engine, &image).await?;
     
     let processing_time = start_time.elapsed();
-    let word_count = text.split_whitespace().count();
     
     log::info!(
-        "[OCR] Processing completed in {}ms, extracted {} words",
+        "[OCR] Processing completed in {}ms",
         processing_time.as_millis(),
-        word_count
     );
 
     Ok(OcrResult {
         text,
         processing_time_ms: processing_time.as_millis() as u64,
-        word_count,
-        confidence_score: None, // OCRs doesn't provide confidence scores directly
     })
 }
 
@@ -158,20 +152,16 @@ pub async fn process_image_from_file(
     let text = OcrService::extract_text_from_image(&engine, &image).await?;
     
     let processing_time = start_time.elapsed();
-    let word_count = text.split_whitespace().count();
     
     log::info!(
-        "[OCR] Processing completed in {}ms, extracted {} words from file: {}",
+        "[OCR] Processing completed in {}ms from file: {}",
         processing_time.as_millis(),
-        word_count,
         file_path
     );
 
     Ok(OcrResult {
         text,
         processing_time_ms: processing_time.as_millis() as u64,
-        word_count,
-        confidence_score: None, // OCRs doesn't provide confidence scores directly
     })
 }
 

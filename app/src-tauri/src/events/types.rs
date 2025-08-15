@@ -37,15 +37,6 @@ pub struct SummarizeScreenEvent {
   pub timestamp: String,
 }
 
-pub const GET_OCR: &str = "get_ocr";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct GetOcrEvent {
-  pub image_path: String,
-  pub delete_file: bool,
-  pub timestamp: String,
-}
-
 pub const OCR_RESPONSE: &str = "ocr_response";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
