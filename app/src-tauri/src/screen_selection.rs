@@ -136,6 +136,9 @@ pub async fn process_screen_selection(
     let result: OcrResult = process_image_from_file(app_handle.clone(), pathbuf.to_str().unwrap().to_string()).await
         .map_err(|e| format!("Failed to process OCR: {}", e))?;
 
+    // Delete temporary screenshot file
+    std::fs::remove_file(pathbuf).map_err(|e| format!("Failed to delete temporary screenshot file: {}", e))?;
+
     // Emit event
     let result = OcrResponseEvent {
         text: result.text,
