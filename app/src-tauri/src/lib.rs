@@ -1,7 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod auth;
 pub mod constants;
-pub mod data;
+pub mod images;
 pub mod db;
 pub mod events;
 pub mod models;
@@ -151,7 +151,7 @@ pub fn run() {
       settings::load_user_settings,
       settings::save_user_settings,
       settings::refresh_settings_cache,
-      data::take_screenshot,
+      images::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
