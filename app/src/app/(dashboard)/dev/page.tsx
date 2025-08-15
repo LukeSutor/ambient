@@ -1,9 +1,10 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 export default function Dev() {
   // State for SQL execution
@@ -87,6 +88,27 @@ export default function Dev() {
   const [evalCaptureResult, setEvalCaptureResult] = useState<string | null>(null);
   const [evalCaptureError, setEvalCaptureError] = useState<string | null>(null);
 
+  // --- OCR Processing ---
+  const [ocrFile, setOcrFile] = useState<File | null>(null);
+  const [ocrLoading, setOcrLoading] = useState<boolean>(false);
+  const [ocrResult, setOcrResult] = useState<any | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(null);
+
+  // Check OCR models availability on component mount
+  useEffect(() => {
+    const checkOcrModels = async () => {
+      try {
+        const available = await invoke<boolean>("check_ocr_models_available");
+        setOcrModelsAvailable(available);
+      } catch (error: any) {
+        console.error("Error checking OCR models:", error);
+        setOcrModelsAvailable(false);
+      }
+    };
+    checkOcrModels();
+  }, []);
+
   const fetchScreenText = async () => {
     setScreenTextLoading(true);
     setScreenTextError(null);
@@ -114,6 +136,51 @@ export default function Dev() {
       console.error("Error capturing eval data:", err);
     } finally {
       setEvalCaptureLoading(false);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Check if file is an image
+      if (file.type.startsWith('image/')) {
+        setOcrFile(file);
+        setOcrError(null);
+        setOcrResult(null);
+      } else {
+        setOcrError("Please select a valid image file (PNG, JPG, JPEG)");
+        setOcrFile(null);
+      }
+    }
+  };
+
+  const processOcrImage = async () => {
+    if (!ocrFile) {
+      setOcrError("Please select an image file first");
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrError(null);
+    setOcrResult(null);
+
+    try {
+      // Convert file to byte array
+      const arrayBuffer = await ocrFile.arrayBuffer();
+      const imageData = Array.from(new Uint8Array(arrayBuffer));
+
+      console.log("Processing OCR for file:", ocrFile.name, "Size:", imageData.length, "bytes");
+
+      // Call the Tauri OCR command
+      const result = await invoke<any>("process_image", { imageData });
+      
+      setOcrResult(result);
+      console.log("OCR processing completed:", result);
+    } catch (err: any) {
+      setOcrError(typeof err === "string" ? err : JSON.stringify(err));
+      console.error("Error processing OCR:", err);
+    } finally {
+      setOcrLoading(false);
     }
   };
 
@@ -173,6 +240,84 @@ export default function Dev() {
         {evalCaptureError && (
           <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
             <strong>Error:</strong> {evalCaptureError}
+          </div>
+        )}
+      </div>
+
+      {/* OCR Processing Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
+        <h2 className="text-lg font-semibold">OCR Text Extraction</h2>
+        
+        {/* OCR Models Status */}
+        <div className="text-sm">
+          <span className="font-medium">OCR Models Status: </span>
+          {ocrModelsAvailable === null ? (
+            <span className="text-gray-500">Checking...</span>
+          ) : ocrModelsAvailable ? (
+            <span className="text-green-600 font-semibold">Available ✓</span>
+          ) : (
+            <span className="text-red-600 font-semibold">Not Available ✗</span>
+          )}
+        </div>
+
+        {ocrModelsAvailable === false && (
+          <div className="p-2 bg-yellow-100 border border-yellow-300 rounded text-sm">
+            <strong>Note:</strong> OCR models not found. Please ensure text-detection.rten and text-recognition.rten 
+            are placed in the app data directory under models/ocr/
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="ocr-file">Select Image File</Label>
+          <Input
+            id="ocr-file"
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            disabled={!ocrModelsAvailable}
+          />
+        </div>
+
+        {ocrFile && (
+          <div className="text-sm text-gray-600">
+            Selected: {ocrFile.name} ({(ocrFile.size / 1024).toFixed(1)} KB)
+          </div>
+        )}
+
+        <Button 
+          onClick={processOcrImage} 
+          disabled={ocrLoading || !ocrFile || !ocrModelsAvailable}
+          variant="default"
+        >
+          {ocrLoading ? "Processing..." : "Extract Text"}
+        </Button>
+
+        {ocrResult && (
+          <div className="mt-4 space-y-2">
+            <h3 className="text-md font-semibold">OCR Results:</h3>
+            <div className="p-2 bg-green-100 border border-green-300 rounded text-sm space-y-1">
+              <div><strong>Processing Time:</strong> {ocrResult.processingTimeMs}ms</div>
+              <div><strong>Word Count:</strong> {ocrResult.wordCount}</div>
+              {ocrResult.confidenceScore && (
+                <div><strong>Confidence:</strong> {(ocrResult.confidenceScore * 100).toFixed(1)}%</div>
+              )}
+            </div>
+            <div className="mt-2">
+              <Label>Extracted Text:</Label>
+              <Textarea
+                value={ocrResult.text}
+                readOnly
+                rows={6}
+                className="mt-1 font-mono text-sm"
+                placeholder="Extracted text will appear here..."
+              />
+            </div>
+          </div>
+        )}
+
+        {ocrError && (
+          <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
+            <strong>Error:</strong> {ocrError}
           </div>
         )}
       </div>

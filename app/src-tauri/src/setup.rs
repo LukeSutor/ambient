@@ -178,11 +178,58 @@ pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<b
 }
 
 /// Checks if the LLM model file is downloaded.
+
 #[tauri::command]
 pub fn check_llm_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
   match get_llm_model_path(app_handle) {
     Ok(path) => Ok(path.exists() && path.is_file()),
     Err(e) => Err(e),
+  }
+}
+
+/// Gets the path of the OCR text detection model file.
+#[tauri::command]
+pub fn get_ocr_text_detection_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+  let app_data_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
+  let ocr_models_dir = app_data_path.join(OCR_DIR);
+  Ok(ocr_models_dir.join(TEXT_DETECTION_FILE))
+}
+
+/// Gets the path of the OCR text recognition model file.
+#[tauri::command]
+pub fn get_ocr_text_recognition_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+  let app_data_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
+  let ocr_models_dir = app_data_path.join(OCR_DIR);
+  Ok(ocr_models_dir.join(TEXT_RECOGNITION_FILE))
+}
+
+/// Checks if the OCR text detection model file exists.
+#[tauri::command]
+pub fn check_ocr_text_detection_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+  match get_ocr_text_detection_model_path(app_handle) {
+    Ok(path) => Ok(path.exists()),
+    Err(e) => {
+      log::error!("[check_setup] Failed to get OCR text detection model path: {}", e);
+      Ok(false)
+    }
+  }
+}
+
+/// Checks if the OCR text recognition model file exists.
+#[tauri::command]
+pub fn check_ocr_text_recognition_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+  match get_ocr_text_recognition_model_path(app_handle) {
+    Ok(path) => Ok(path.exists()),
+    Err(e) => {
+      log::error!("[check_setup] Failed to get OCR text recognition model path: {}", e);
+      Ok(false)
+    }
   }
 }
 
