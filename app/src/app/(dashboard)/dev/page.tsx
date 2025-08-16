@@ -1,10 +1,12 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from '@tauri-apps/api/event';
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { OcrResponseEvent } from "@/types/events";
 
 export default function Dev() {
   // State for SQL execution
@@ -91,7 +93,7 @@ export default function Dev() {
   // --- OCR Processing ---
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
-  const [ocrResult, setOcrResult] = useState<any | null>(null);
+  const [ocrResult, setOcrResult] = useState<OcrResponseEvent | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(null);
 
@@ -154,19 +156,24 @@ export default function Dev() {
     }
   };
 
-  // Listen for screen selection results
+  // Listen for ocr results
   useEffect(() => {
-    const handleScreenSelection = (event: CustomEvent) => {
-      const result = event.detail;
-      console.log('Screen selection result received:', result);
-      setScreenSelectionResult(result);
-      setScreenSelectionLoading(false);
-    };
+    let unlistenStream: (() => void) | undefined;
 
-    window.addEventListener('screen-selection-complete', handleScreenSelection as EventListener);
-    
+    async function listenForOcrResults() {
+      unlistenStream = await listen<OcrResponseEvent>('ocr_response', (event) => {
+        const { text } = event.payload;
+        const result = event.payload as OcrResponseEvent;
+        console.log('OCR result received:', text);
+        setOcrResult(result);
+      });
+    }
+
+    listenForOcrResults();
+
     return () => {
-      window.removeEventListener('screen-selection-complete', handleScreenSelection as EventListener);
+      if (unlistenStream) 
+        unlistenStream();
     };
   }, []);
 
@@ -354,13 +361,6 @@ export default function Dev() {
         {ocrResult && (
           <div className="mt-4 space-y-2">
             <h3 className="text-md font-semibold">OCR Results:</h3>
-            <div className="p-2 bg-green-100 border border-green-300 rounded text-sm space-y-1">
-              <div><strong>Processing Time:</strong> {ocrResult.processingTimeMs}ms</div>
-              <div><strong>Word Count:</strong> {ocrResult.wordCount}</div>
-              {ocrResult.confidenceScore && (
-                <div><strong>Confidence:</strong> {(ocrResult.confidenceScore * 100).toFixed(1)}%</div>
-              )}
-            </div>
             <div className="mt-2">
               <Label>Extracted Text:</Label>
               <Textarea

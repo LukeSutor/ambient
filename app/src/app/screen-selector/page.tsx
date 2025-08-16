@@ -110,16 +110,8 @@ export default function ScreenSelectorPage() {
     // Only process if selection has meaningful size
     if (bounds.width > 10 && bounds.height > 10) {
       try {
-        const result = await invoke<ScreenSelectionResult>('process_screen_selection', { bounds });
-        
-        console.log('Screen selection result:', result);
-        
-        // Emit a custom event with the result that the main app can listen to
-        window.dispatchEvent(new CustomEvent('screen-selection-complete', { 
-          detail: result 
-        }));
+        invoke<ScreenSelectionResult>('process_screen_selection', { bounds });
 
-        // Close the selector
         await closeSelector();
       } catch (error) {
         console.error('Failed to process screen selection:', error);

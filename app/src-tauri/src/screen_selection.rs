@@ -116,6 +116,7 @@ pub async fn process_screen_selection(
     // Validate bounds
     if bounds.width <= 0 || bounds.height <= 0 {
         // Emit failed event
+        log::warn!("Invalid screen selection bounds: {:?}", bounds);
         let result = OcrResponseEvent {
             text: String::new(),
             success: false,
@@ -131,6 +132,7 @@ pub async fn process_screen_selection(
     let screenshot_path = take_screenshot(app_handle.clone(), filename.clone());
     let pathbuf = std::path::PathBuf::from(screenshot_path.clone());
     crop_image_selection(pathbuf.clone(), bounds);
+    log::info!("Cropped screenshot saved to: {}", screenshot_path);
 
     // Get ocr result
     let result: OcrResult = process_image_from_file(app_handle.clone(), pathbuf.to_str().unwrap().to_string()).await
