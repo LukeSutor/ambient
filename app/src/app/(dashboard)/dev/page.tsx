@@ -32,7 +32,7 @@ export default function Dev() {
       setSchedulerLoading(false);
     }
   };
-
+2
   // Function to stop capture scheduler
   const handleStopScheduler = async () => {
     setSchedulerLoading(true);

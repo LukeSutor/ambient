@@ -7,12 +7,13 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from "@/components/ui/separator"
-import { Move, X, MessageSquarePlus, Plus, SquareDashedMousePointer } from 'lucide-react';
+import { Move, X, LoaderCircle, MessageSquarePlus, Plus, SquareDashedMousePointer, SquareDashed } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { SettingsService } from '@/lib/settings-service';
 import { HudDimensions } from '@/types/settings';
+import { OcrResponseEvent } from "@/types/events";
 import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
@@ -42,6 +43,8 @@ export default function HudPage() {
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [plusExpanded, setPlusExpanded] = useState(false);
+  const [ocrResults, setOcrResults] = useState<OcrResponseEvent[]>([]);
+  const [ocrLoading, setOcrLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -96,7 +99,7 @@ export default function HudPage() {
       console.log('HUD dimensions changed:', hudDimensions);
     }, [hudDimensions]);
 
-  // Initialize conversation, server, listener, and enable transparent background
+  // Initialize conversation, server, chat listener, ocr listener, and enable transparent background
   useEffect(() => {
     // Load HUD dimensions from settings
     const loadHudDimensions = async () => {
@@ -217,6 +220,22 @@ export default function HudPage() {
       }
     })();
 
+    // Listen for ocr events
+    let unlistenOCR: UnlistenFn | null = null;
+    (async () => {
+      try {
+        unlistenOCR = await listen<OcrResponseEvent>('ocr_response', (event) => {
+          const { text } = event.payload;
+          const result = event.payload as OcrResponseEvent;
+          console.log('OCR result received:', text);
+          setOcrResults((prev) => [...prev, result]);
+          setOcrLoading(false);
+        });
+      } catch (err) {
+        console.error('Failed to set up OCR listener:', err);
+      }
+    })();
+
     // Add class to force transparent bg for this window
     if (typeof document !== 'undefined') {
       document.documentElement.classList.add('hud-transparent');
@@ -233,6 +252,9 @@ export default function HudPage() {
       }
       if (unlistenSettings) {
         try { unlistenSettings(); } catch { }
+      }
+      if (unlistenOCR) {
+        try { unlistenOCR(); } catch { }
       }
     };
   }, []);
@@ -362,9 +384,14 @@ export default function HudPage() {
     }
   };
 
-  const handleCaptureArea = () => {
-    // Logic to handle capture area
-    console.log('Capture Area clicked');
+  const handleCaptureArea = async () => {
+    setOcrLoading(true);
+    try {
+      await invoke('open_screen_selector');
+    } catch (error: any) {
+      console.error('Failed to open screen selector:', error);
+      setOcrLoading(false);
+    }
     setPlusExpanded(false);
   };
 
@@ -445,6 +472,27 @@ export default function HudPage() {
                 />
               </div>
 
+              {/* OCR captures */}
+              {ocrResults.map((capture, index) => (
+                <div
+                key={index}
+                className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1"
+                title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
+              >
+                <SquareDashed className="!h-5 !w-5" />
+                <Button
+                  variant="ghost"
+                  className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
+                  size="icon"
+                  onClick={() => {
+                    setOcrResults(prev => prev.filter((_, i) => i !== index));
+                  }}
+                  >
+                  <X className="!h-3 !w-3 text-black shrink-0" />
+                  </Button>
+                </div>
+              ))}
+
               {/* Additional features expandable area */}
               <div className={`flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""}`}>
                 <div className={`flex flex-row items-center justify-between h-8 gap-x-1 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'w-[80px] opacity-100' : 'w-0 opacity-0'}`}>
@@ -476,9 +524,10 @@ export default function HudPage() {
                   variant="ghost"
                   className="w-8 h-8 rounded-full"
                   size="icon"
+                  disabled={ocrLoading}
                   onClick={() => setPlusExpanded(!plusExpanded)}
                 >
-                  <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />
+                  {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />}
                 </Button>
               </div>
             </div>
