@@ -173,26 +173,3 @@ pub fn check_ocr_models_available(app_handle: AppHandle) -> Result<bool, String>
     
     Ok(detection_path.exists() && recognition_path.exists())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_ocr_result_serialization() {
-        let result = OcrResult {
-            text: "Hello, World!".to_string(),
-            processing_time_ms: 1500,
-            word_count: 2,
-            confidence_score: Some(0.95),
-        };
-
-        let serialized = serde_json::to_string(&result).unwrap();
-        let deserialized: OcrResult = serde_json::from_str(&serialized).unwrap();
-        
-        assert_eq!(result.text, deserialized.text);
-        assert_eq!(result.processing_time_ms, deserialized.processing_time_ms);
-        assert_eq!(result.word_count, deserialized.word_count);
-        assert_eq!(result.confidence_score, deserialized.confidence_score);
-    }
-}

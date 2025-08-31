@@ -150,6 +150,59 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
   }
 }
 
+#[tauri::command]
+pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
+  // Create prompt
+  let prompt_template = match get_prompt("hud_chat") {
+    Some(template) => template,
+    None => {
+      log::error!("[hud_chat] Failed to get prompt template for 'hud_chat'");
+      return Err("Failed to get prompt template for 'hud_chat'".into());
+    }
+  };
+
+  // Combine OCR responses into a single string
+  let mut ocr_text = String::new();
+  if !event.ocr_responses.is_empty() {
+    for (i, ocr_response) in event.ocr_responses.iter().enumerate() {
+      ocr_text.push_str(&format!("<ocr_{}>{}</ocr_{}>\n", i + 1, ocr_response.text, i + 1));
+    }
+    if !ocr_text.is_empty() {
+      ocr_text = format!("\n\nText extracted from user's screen selection(s):\n{}\n", ocr_text);
+    }
+  }
+
+  let prompt = prompt_template
+    .replace("{ocr}", &ocr_text)
+    .replace("{user_request}", &event.text);
+
+  log::debug!("[hud_chat] Generated prompt:\n{}", prompt);
+
+  // Generate response
+  let response = match generate(
+    app_handle.clone(),
+    prompt,
+    None,
+    event.conv_id,
+    Some(false),
+    Some(true),
+  )
+  .await
+  {
+    Ok(response) => {
+      log::debug!("[hud_chat] response: {}", response);
+      response
+    }
+    Err(e) => {
+      log::error!("[hud_chat] Failed to generate response: {}", e);
+      return Err("Failed to generate response".into());
+    }
+  };
+
+  // Return response
+  Ok(response)
+}
+
 // Helper functions
 
 /// Formats tasks with their steps for use in prompts

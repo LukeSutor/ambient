@@ -37,6 +37,26 @@ pub struct SummarizeScreenEvent {
   pub timestamp: String,
 }
 
+pub const CHAT_STREAM: &str = "chat_stream";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct ChatStreamEvent {
+  pub delta: String,
+  pub is_finished: bool,
+  pub full_response: String,
+  pub conv_id: Option<String>,
+}
+
+pub const HUD_CHAT: &str = "hud_chat";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct HudChatEvent {
+  pub text: String,
+  pub ocr_responses: Vec<OcrResponseEvent>,
+  pub timestamp: String,
+  pub conv_id: Option<String>,
+}
+
 pub const OCR_RESPONSE: &str = "ocr_response";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]

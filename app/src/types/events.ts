@@ -4,13 +4,13 @@ export type ApplicationTextData = { process_id: number, process_name: string | n
 
 export type CaptureScreenEvent = { timestamp: string, };
 
+export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, };
+
 export type DetectTasksEvent = { text: string, active_url: string | null, timestamp: string, };
 
 export type ExecuteFunctionEvent = { function_name: string, args: Array<FunctionArgument>, timestamp: string, };
 
 export type FunctionArgument = { key: string, value: string, };
-
-export type GetOcrEvent = { image_path: string, timestamp: string, };
 
 export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
@@ -18,7 +18,9 @@ export type GetUserAckEvent = { message: string, timestamp: string, };
 
 export type GetUserInputEvent = { message: string, timestamp: string, };
 
-export type OcrResponseEvent = { text: string, timestamp: string, };
+export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string | null, };
+
+export type OcrResponseEvent = { text: string, success: boolean, timestamp: string, };
 
 export type SummarizeScreenEvent = { text: string, data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 

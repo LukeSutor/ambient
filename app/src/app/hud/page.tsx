@@ -13,7 +13,7 @@ import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { SettingsService } from '@/lib/settings-service';
 import { HudDimensions } from '@/types/settings';
-import { OcrResponseEvent } from "@/types/events";
+import { OcrResponseEvent, HudChatEvent } from "@/types/events";
 import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
@@ -226,9 +226,12 @@ export default function HudPage() {
     (async () => {
       try {
         unlistenOCR = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          const { text } = event.payload;
           const result = event.payload as OcrResponseEvent;
-          console.log('OCR result received:', text);
+          if (result.success) {
+            console.log('OCR result received:', result.text);
+          } else {
+            console.error('OCR failed');
+          }
           // Clear any active timeout as we've received a result
           if (ocrTimeoutRef.current) {
             clearTimeout(ocrTimeoutRef.current);
@@ -343,13 +346,17 @@ export default function HudPage() {
         }
       }
 
-      // Kick off generation with streaming always on and thinking disabled
-      const finalText = await invoke<string>('generate', {
-        prompt: query,
-        jsonSchema: null,
-        convId: convId ?? null,
-        useThinking: false,
-        stream: true,
+      // Create hud chat event
+      const hudChatEvent: HudChatEvent = {
+        text: query,
+        ocr_responses: ocrResults,
+        conv_id: convId,
+        timestamp: Date.now().toString(),
+      };
+
+      // Generate text with custom hud chat function
+      const finalText = await invoke<string>('handle_hud_chat', {
+        event: hudChatEvent
       });
 
       // Safety: if no stream events arrive, stop loading when invoke resolves
