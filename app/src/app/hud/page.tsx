@@ -36,6 +36,10 @@ export default function HudPage() {
     isExpandedRef.current = isExpanded;
   }, [isExpanded]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const currentConversationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
@@ -95,11 +99,6 @@ export default function HudPage() {
     return cleanText;
   }
 
-    // print hud dimensions every time they change
-  useEffect(() => {
-      console.log('HUD dimensions changed:', hudDimensions);
-    }, [hudDimensions]);
-
   // Initialize conversation, server, chat listener, ocr listener, and enable transparent background
   useEffect(() => {
     // Load HUD dimensions from settings
@@ -125,7 +124,7 @@ export default function HudPage() {
     let unlistenSettings: UnlistenFn | null = null;
     (async () => {
       try {
-        unlistenSettings = await listen('settings-changed', async () => {
+        unlistenSettings = await listen('settings_changed', async () => {
           // Reload HUD dimensions when settings change
           await loadHudDimensions();
           
@@ -174,7 +173,7 @@ export default function HudPage() {
           const { delta, full_response, is_finished, conv_id } = event.payload;
 
           // Ignore if not from current conversation
-          if (conv_id !== currentConversationId) {
+          if (conv_id !== currentConversationIdRef.current) {
             console.log('Ignoring stream event from different conversation');
             return;
           }
@@ -230,9 +229,7 @@ export default function HudPage() {
       try {
         unlistenOCR = await listen<OcrResponseEvent>('ocr_response', (event) => {
           const result = event.payload as OcrResponseEvent;
-          if (result.success) {
-            console.log('OCR result received:', result.text);
-          } else {
+          if (!result.success) {
             console.error('OCR failed');
           }
           // Clear any active timeout as we've received a result
@@ -280,7 +277,7 @@ export default function HudPage() {
     try {
       const newConv = await invoke<Conversation>("create_conversation", { name: null });
       setCurrentConversationId(newConv.id);
-      console.log('Created conversation:', newConv.id);
+      currentConversationIdRef.current = newConv.id;
       return newConv.id;
     } catch (err) {
       console.error("Error creating conversation:", err);
