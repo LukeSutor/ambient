@@ -365,6 +365,7 @@ export default function HudPage() {
   const handleCaptureArea = () => {
     // Logic to handle capture area
     console.log('Capture Area clicked');
+    setPlusExpanded(false);
   };
 
   return (
@@ -445,40 +446,39 @@ export default function HudPage() {
               </div>
 
               {/* Additional features expandable area */}
-              <div className={`flex flex-row justify-center items-center gap-x-1 w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all  ${plusExpanded? "bg-white/40" : ""}`}>
-                {plusExpanded && (
-                  <div className='flex flex-row justify-center items-center h-8 gap-x-1 rounded-full transition-all'>
-                    <Button
-                      variant="ghost"
-                      className="w-8 h-8 rounded-full"
-                      size="icon"
-                      onClick={handleCaptureArea}
-                      title="Capture Area"
-                    >
-                      <SquareDashedMousePointer className="!w-5 !h-5 text-black shrink-0" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="w-8 h-8 rounded-full"
-                      size="icon"
-                      onClick={async () => {
-                        await clearAndCollapse();
-                        await createNewConversation();
-                      }}
-                      title="New Chat"
-                    >
-                      <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />
-                    </Button>
-                    <Separator orientation="vertical" className="bg-black/40 !h-5" />
-                  </div>
-                )}
+              <div className={`flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""}`}>
+                <div className={`flex flex-row items-center justify-between h-8 gap-x-1 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'w-[80px] opacity-100' : 'w-0 opacity-0'}`}>
+                  <Button
+                    variant="ghost"
+                    className="w-8 h-8 rounded-full flex-shrink-0"
+                    size="icon"
+                    onClick={handleCaptureArea}
+                    title="Capture Area"
+                  >
+                    <SquareDashedMousePointer className="!w-5 !h-5 text-black shrink-0" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-8 h-8 rounded-full flex-shrink-0"
+                    size="icon"
+                    onClick={async () => {
+                      setPlusExpanded(false);
+                      await clearAndCollapse();
+                      await createNewConversation();
+                    }}
+                    title="New Chat"
+                  >
+                    <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />
+                  </Button>
+                  <Separator orientation="vertical" className="bg-black/40 !h-5 mr-1" />
+                </div>
                 <Button
                   variant="ghost"
                   className="w-8 h-8 rounded-full"
                   size="icon"
                   onClick={() => setPlusExpanded(!plusExpanded)}
                 >
-                  <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />
+                  <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />
                 </Button>
               </div>
             </div>
