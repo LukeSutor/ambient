@@ -115,6 +115,10 @@ export default function ScreenSelectorPage() {
         await closeSelector();
       } catch (error) {
         console.error('Failed to process screen selection:', error);
+      } finally {
+        // Reset selection
+        setSelectionStart(null);
+        setSelectionEnd(null);
       }
     } else {
       // Reset selection if too small

@@ -45,6 +45,7 @@ export default function HudPage() {
   const [plusExpanded, setPlusExpanded] = useState(false);
   const [ocrResults, setOcrResults] = useState<OcrResponseEvent[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -228,6 +229,11 @@ export default function HudPage() {
           const { text } = event.payload;
           const result = event.payload as OcrResponseEvent;
           console.log('OCR result received:', text);
+          // Clear any active timeout as we've received a result
+          if (ocrTimeoutRef.current) {
+            clearTimeout(ocrTimeoutRef.current);
+            ocrTimeoutRef.current = null;
+          }
           setOcrResults((prev) => [...prev, result]);
           setOcrLoading(false);
         });
@@ -255,6 +261,11 @@ export default function HudPage() {
       }
       if (unlistenOCR) {
         try { unlistenOCR(); } catch { }
+      }
+      // Clear any pending OCR timeout on unmount
+      if (ocrTimeoutRef.current) {
+        clearTimeout(ocrTimeoutRef.current);
+        ocrTimeoutRef.current = null;
       }
     };
   }, []);
@@ -385,12 +396,27 @@ export default function HudPage() {
   };
 
   const handleCaptureArea = async () => {
+    // Reset any previous timeout and start loading
+    if (ocrTimeoutRef.current) {
+      clearTimeout(ocrTimeoutRef.current);
+      ocrTimeoutRef.current = null;
+    }
     setOcrLoading(true);
     try {
       await invoke('open_screen_selector');
+      // Start a 10s timeout; if no OCR result arrives, stop loading
+      ocrTimeoutRef.current = setTimeout(() => {
+        console.warn('OCR capture timed out after 10s.');
+        setOcrLoading(false);
+        ocrTimeoutRef.current = null;
+      }, 10000);
     } catch (error: any) {
       console.error('Failed to open screen selector:', error);
       setOcrLoading(false);
+      if (ocrTimeoutRef.current) {
+        clearTimeout(ocrTimeoutRef.current);
+        ocrTimeoutRef.current = null;
+      }
     }
     setPlusExpanded(false);
   };
@@ -454,47 +480,49 @@ export default function HudPage() {
                 width={32}
                 height={32}
                 alt="Logo"
-                className="w-7 h-7 ml-2 select-none pointer-events-none"
+                className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
                 draggable={false}
                 onDragStart={(e) => e.preventDefault()}
               />
 
-              <div className="flex-1">
+              <div className="flex-1 min-w-32">
                 <Input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask anything"
-                  className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0 w-full"
                   autoComplete="off"
                   autoFocus
                 />
               </div>
 
               {/* OCR captures */}
-              {ocrResults.map((capture, index) => (
-                <div
-                key={index}
-                className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1"
-                title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
-              >
-                <SquareDashed className="!h-5 !w-5" />
-                <Button
-                  variant="ghost"
-                  className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
-                  size="icon"
-                  onClick={() => {
-                    setOcrResults(prev => prev.filter((_, i) => i !== index));
-                  }}
+              <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap shrink min-w-0">
+                {ocrResults.map((capture, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0"
+                    title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
                   >
-                  <X className="!h-3 !w-3 text-black shrink-0" />
-                  </Button>
-                </div>
-              ))}
+                    <SquareDashed className="!h-5 !w-5" />
+                    <Button
+                      variant="ghost"
+                      className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
+                      size="icon"
+                      onClick={() => {
+                        setOcrResults(prev => prev.filter((_, i) => i !== index));
+                      }}
+                    >
+                      <X className="!h-3 !w-3 text-black shrink-0" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
 
               {/* Additional features expandable area */}
-              <div className={`flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""}`}>
+              <div className={`flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""} shrink-0`}>
                 <div className={`flex flex-row items-center justify-between h-8 gap-x-1 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'w-[80px] opacity-100' : 'w-0 opacity-0'}`}>
                   <Button
                     variant="ghost"
