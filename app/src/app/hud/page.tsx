@@ -6,12 +6,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Move, X, MessageSquarePlus  } from 'lucide-react';
+import { Separator } from "@/components/ui/separator"
+import { Move, X, MessageSquarePlus, Plus, SquareDashedMousePointer } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
@@ -45,6 +41,7 @@ export default function HudPage() {
   const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [plusExpanded, setPlusExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -70,7 +67,7 @@ export default function HudPage() {
 
   // Ensure drag visibility resets when pointer is released anywhere
   useEffect(() => {
-    const onUp = () => {setIsDraggingWindow(false); console.log('Pointer released');};
+    const onUp = () => setIsDraggingWindow(false);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('mouseup', onUp);
     return () => {
@@ -79,7 +76,7 @@ export default function HudPage() {
     };
   }, []);
 
-  // Helper to strip <think> blocks similar to landing page
+  // Helper to strip <think> blocks
   function extractThinkingContent(text: string) {
     const thinkStartIndex = text.indexOf('<think>');
     const thinkEndIndex = text.indexOf('</think>');
@@ -365,6 +362,11 @@ export default function HudPage() {
     }
   };
 
+  const handleCaptureArea = () => {
+    // Logic to handle capture area
+    console.log('Capture Area clicked');
+  };
+
   return (
     <div className="w-full h-full bg-transparent">
       {/* Glass Container */}
@@ -442,26 +444,43 @@ export default function HudPage() {
                 />
               </div>
 
-              {/* New chat icon */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`transform h-9 w-9 mr-5 rounded-full flex items-center justify-center hover:bg-white/60 transition-all duration-500 p-0 ${isExpanded ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}
-                    onClick={async () => {
-                      await clearAndCollapse();
-                      await createNewConversation();
-                    }}
-                    title="New Chat"
-                  >
-                    <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Start a new chat</p>
-                </TooltipContent>
-              </Tooltip>
+              {/* Additional features expandable area */}
+              <div className={`flex flex-row justify-center items-center gap-x-1 w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all  ${plusExpanded? "bg-white/40" : ""}`}>
+                {plusExpanded && (
+                  <div className='flex flex-row justify-center items-center h-8 gap-x-1 rounded-full transition-all'>
+                    <Button
+                      variant="ghost"
+                      className="w-8 h-8 rounded-full"
+                      size="icon"
+                      onClick={handleCaptureArea}
+                      title="Capture Area"
+                    >
+                      <SquareDashedMousePointer className="!w-5 !h-5 text-black shrink-0" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-8 h-8 rounded-full"
+                      size="icon"
+                      onClick={async () => {
+                        await clearAndCollapse();
+                        await createNewConversation();
+                      }}
+                      title="New Chat"
+                    >
+                      <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />
+                    </Button>
+                    <Separator orientation="vertical" className="bg-black/40 !h-5" />
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  className="w-8 h-8 rounded-full"
+                  size="icon"
+                  onClick={() => setPlusExpanded(!plusExpanded)}
+                >
+                  <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />
+                </Button>
+              </div>
             </div>
             
             {/* Close icon */}
