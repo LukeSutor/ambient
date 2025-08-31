@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
+use crate::events::{emitter::emit, types::*};
 use crate::constants::{MIN_PORT, MAX_PORT, MAX_PORT_ATTEMPTS, HEALTH_CHECK_ENDPOINT, MAX_HEALTH_CHECK_RETRIES, HEALTH_CHECK_INTERVAL};
 
 /// Global state to track the running server process and port
@@ -630,12 +631,14 @@ pub async fn generate(
                         full_response.push_str(content);
 
                         // Emit stream event to frontend
-                        let stream_data = json!({
-                            "delta": content,
-                            "full_response": full_response
-                        });
+                        let stream_data = ChatStreamEvent {
+                          delta: content.to_string(),
+                          is_finished: false,
+                          full_response: full_response.clone(),
+                          conv_id: conv_id.clone(),
+                        };
 
-                        if let Err(e) = app_handle.emit("chat-stream", &stream_data) {
+                        if let Err(e) = emit(CHAT_STREAM, stream_data) {
                           log::error!("[llama_server] Failed to emit stream event: {}", e);
                         }
                       }
@@ -654,13 +657,14 @@ pub async fn generate(
     }
 
     // Emit final stream completion event
-    let final_stream_data = json!({
-        "delta": "",
-        "full_response": full_response,
-        "is_finished": true
-    });
+    let final_stream_data = ChatStreamEvent {
+      delta: "".to_string(),
+      is_finished: true,
+      full_response: full_response.clone(),
+      conv_id: conv_id.clone(),
+    };
 
-    if let Err(e) = app_handle.emit("chat-stream", &final_stream_data) {
+    if let Err(e) = emit(CHAT_STREAM, final_stream_data) {
       log::error!("[llama_server] Failed to emit final stream event: {}", e);
     }
 

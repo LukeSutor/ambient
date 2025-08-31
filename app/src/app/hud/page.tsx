@@ -13,7 +13,7 @@ import Markdown from 'react-markdown'
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { SettingsService } from '@/lib/settings-service';
 import { HudDimensions } from '@/types/settings';
-import { OcrResponseEvent, HudChatEvent } from "@/types/events";
+import { OcrResponseEvent, HudChatEvent, ChatStreamEvent } from "@/types/events";
 import { set } from 'react-hook-form';
 const logo = '/logo.png';
 
@@ -170,14 +170,17 @@ export default function HudPage() {
     let unlistenStream: UnlistenFn | null = null;
     (async () => {
       try {
-        unlistenStream = await listen('chat-stream', (event) => {
-          const payload: any = event.payload as any;
-          const delta: string = payload?.delta ?? '';
-          const isFinished: boolean = Boolean(payload?.is_finished);
-          const full: string | undefined = payload?.full_response;
+        unlistenStream = await listen<ChatStreamEvent>('chat_stream', (event) => {
+          const { delta, full_response, is_finished, conv_id } = event.payload;
 
-          if (isFinished) {
-            const finalText = extractThinkingContent(full ?? streamContentRef.current);
+          // Ignore if not from current conversation
+          if (conv_id !== currentConversationId) {
+            console.log('Ignoring stream event from different conversation');
+            return;
+          }
+
+          if (is_finished) {
+            const finalText = extractThinkingContent(full_response ?? streamContentRef.current);
             // Patch last assistant message
             setMessages((prev) => {
               const next = [...prev];
@@ -217,7 +220,7 @@ export default function HudPage() {
           }
         });
       } catch (err) {
-        console.error('Failed to set up chat-stream listener:', err);
+        console.error('Failed to set up chat_stream listener:', err);
       }
     })();
 
@@ -428,6 +431,15 @@ export default function HudPage() {
     setPlusExpanded(false);
   };
 
+  const handleNewChat = async () => {
+    // Don't create new conversation if there are no messages
+    if (messages.length > 0) {
+      await clearAndCollapse();
+      await createNewConversation();
+    }
+    setPlusExpanded(false);
+  }
+
   return (
     <div className="w-full h-full bg-transparent">
       {/* Glass Container */}
@@ -544,11 +556,7 @@ export default function HudPage() {
                     variant="ghost"
                     className="w-8 h-8 rounded-full flex-shrink-0"
                     size="icon"
-                    onClick={async () => {
-                      setPlusExpanded(false);
-                      await clearAndCollapse();
-                      await createNewConversation();
-                    }}
+                    onClick={handleNewChat}
                     title="New Chat"
                   >
                     <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />

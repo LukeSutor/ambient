@@ -2,10 +2,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import Image from "next/image";
-import { useCallback, useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button"
-import Link from 'next/link'
+import { ChatStreamEvent } from "@/types/events";
+import { useState, useEffect, useRef } from "react";
 
 // Define the expected payload structure
 interface Message {
@@ -22,12 +20,6 @@ interface Conversation {
   created_at: string;
   updated_at: string;
   message_count: number;
-}
-
-interface StreamResponsePayload {
-  delta: string;
-  is_finished: boolean;
-  full_response: string;
 }
 
 export default function Home() {
@@ -84,11 +76,17 @@ export default function Home() {
     
     async function setupStreamListener() {
       try {
-        unlistenStream = await listen<StreamResponsePayload>('chat-stream', (event) => {
-          const { delta, full_response, is_finished } = event.payload;
-          
-          console.log('Stream event:', { delta, is_finished, deltaLength: delta?.length });
-          
+        unlistenStream = await listen<ChatStreamEvent>('chat_stream', (event) => {
+          const { delta, full_response, is_finished, conv_id } = event.payload;
+
+          console.log('Stream event:', { delta, is_finished, deltaLength: delta?.length, conv_id });
+
+          // If response isn't from current conversation, ignore it
+          if (conv_id !== currentConversationId) {
+            console.log('Ignoring stream event from different conversation');
+            return;
+          }
+
           if (is_finished) {
             // When stream finishes, update the last bot message with the complete content
             setChatHistory((h) => {
