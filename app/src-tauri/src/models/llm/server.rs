@@ -513,7 +513,7 @@ pub async fn generate(
     return Err(format!("Server health check failed: {}", e));
   }
 
-  let system_prompt = system_prompt.unwrap_or("You are a helpful assistant");
+  let system_prompt = system_prompt.unwrap_or("You are a helpful assistant".to_string());
   let should_stream = stream.unwrap_or(false);
   let enable_thinking = use_thinking.unwrap_or(true);
 
