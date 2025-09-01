@@ -499,6 +499,7 @@ pub async fn restart_llama_server(app_handle: AppHandle) -> Result<String, Strin
 pub async fn generate(
   app_handle: AppHandle,
   prompt: String,
+  system_prompt: Option<String>,
   json_schema: Option<String>,
   conv_id: Option<String>,
   use_thinking: Option<bool>,

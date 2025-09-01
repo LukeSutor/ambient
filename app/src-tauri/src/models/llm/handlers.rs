@@ -183,6 +183,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     app_handle.clone(),
     prompt,
     None,
+    None,
     event.conv_id,
     Some(false),
     Some(true),
@@ -290,6 +291,7 @@ async fn generate_and_parse_response(
   let response = match generate(
     app_handle,
     prompt,
+    None,
     Some(schema.to_string()),
     None,
     None,
