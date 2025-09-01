@@ -131,6 +131,16 @@ body.hud-transparent {
   background-color: transparent !important;
 }
 
+/* Screen selector window: force transparent background */
+html.screen-selector-transparent,
+body.screen-selector-transparent {
+  background: transparent !important;
+  background-color: transparent !important;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 /* Semi-transparent glassy scrollbars for HUD */
 .hud-scroll {
   /* Firefox */

@@ -112,6 +112,7 @@ pub async fn open_floating_window(
   .decorations(false)
   .always_on_top(true)
   .shadow(false)
+  .skip_taskbar(true)
   .build()
   .map_err(|e| e.to_string())?;
 

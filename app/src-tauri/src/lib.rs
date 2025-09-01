@@ -1,12 +1,13 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod auth;
 pub mod constants;
-pub mod data;
+pub mod images;
 pub mod db;
 pub mod events;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;
+pub mod screen_selection;
 pub mod settings;
 pub mod setup;
 pub mod tasks;
@@ -149,8 +150,7 @@ pub fn run() {
       windows::refresh_hud_window_size,
       settings::load_user_settings,
       settings::save_user_settings,
-      settings::refresh_settings_cache,
-      data::take_screenshot,
+      images::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
@@ -175,7 +175,6 @@ pub fn run() {
       setup::get_ocr_text_recognition_model_path,
       setup::check_ocr_text_detection_model_download,
       setup::check_ocr_text_recognition_model_download,
-      os_utils::windows::window::get_all_text_from_focused_app,
       os_utils::windows::window::get_brave_url,
       os_utils::windows::window::get_screen_text_formatted,
       os_utils::handlers::capture_eval_data,
@@ -187,14 +186,15 @@ pub fn run() {
       models::llm::server::restart_llama_server,
       models::llm::server::make_completion_request,
       models::llm::server::generate,
-      models::conversations::create_conversation,
-      models::conversations::add_message,
-      models::conversations::get_messages,
-      models::conversations::get_conversation,
-      models::conversations::list_conversations,
-      models::conversations::reset_conversation,
-      models::conversations::delete_conversation,
-      models::conversations::update_conversation_name,
+      models::llm::conversations::create_conversation,
+      models::llm::conversations::add_message,
+      models::llm::conversations::get_messages,
+      models::llm::conversations::get_conversation,
+      models::llm::conversations::list_conversations,
+      models::llm::conversations::reset_conversation,
+      models::llm::conversations::delete_conversation,
+      models::llm::conversations::update_conversation_name,
+      models::llm::handlers::handle_hud_chat,
       auth::logout,
       auth::get_stored_token,
       auth::is_authenticated,
@@ -223,7 +223,12 @@ pub fn run() {
       tasks::commands::analyze_current_screen_for_tasks,
       tasks::commands::get_task_progress_history,
       models::ocr::ocr::process_image,
-      models::ocr::ocr::check_ocr_models_available
+      models::ocr::ocr::check_ocr_models_available,
+      screen_selection::open_screen_selector,
+      screen_selection::close_screen_selector,
+      screen_selection::process_screen_selection,
+      screen_selection::get_screen_dimensions,
+      screen_selection::client_to_screen_coords
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

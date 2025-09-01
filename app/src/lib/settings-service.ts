@@ -1,24 +1,47 @@
 "use client";
 
 import { invoke } from "@tauri-apps/api/core";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { HudDimensions, HudSizeOption, ModelSelection, UserSettings } from "@/types/settings";
 
 export class SettingsService {
+  // Simple in-memory cache on the frontend
+  private static cache: UserSettings | null = null;
+  private static eventsHooked = false;
+
+  private static async ensureEventsHooked() {
+    if (this.eventsHooked) return;
+    try {
+      await listen("settings_changed", () => {
+        // Invalidate local cache when another window updates settings
+        this.cache = null;
+      });
+      this.eventsHooked = true;
+    } catch (e) {
+      console.warn("Failed to listen for settings_changed:", e);
+    }
+  }
+
   /**
    * Load user settings
    */
   static async loadSettings(): Promise<UserSettings> {
     try {
+  await this.ensureEventsHooked();
+      if (this.cache) return this.cache;
       const settings = await invoke<UserSettings>("load_user_settings");
-      return settings;
+      this.cache = settings;
+      return this.cache;
     } catch (error) {
       console.error("Failed to load user settings:", error);
       // Return defaults on error
-      return {
+      const defaults: UserSettings = {
         hud_size: "Normal",
         model_selection: "Local",
       };
+      // Cache defaults to keep behavior consistent within this session
+      this.cache = defaults;
+      return defaults;
     }
   }
 
@@ -27,6 +50,9 @@ export class SettingsService {
    */
   static async saveSettings(settings: UserSettings): Promise<void> {
     try {
+      await this.ensureEventsHooked();
+      // Optimistically update cache
+      this.cache = settings;
       await invoke("save_user_settings", { settings });
     } catch (error) {
       console.error("Failed to save user settings:", error);
@@ -34,7 +60,7 @@ export class SettingsService {
     }
 
     // Emit a settings changed event
-    await emit('settings-changed');
+    await emit('settings_changed');
   }
 
   /**
@@ -62,7 +88,7 @@ export class SettingsService {
       settings.hud_size = size;
       
       // Save the updated settings
-      this.saveSettings(settings);
+      await this.saveSettings(settings);
 
       // Refresh the HUD window size immediately if we know the expanded state
       if (typeof isExpanded === 'boolean') {
@@ -76,9 +102,6 @@ export class SettingsService {
           // Not critical - the window will get the right size on next expand/collapse
         }
       }
-
-      // Emit event to notify HUD and other components of the change
-      await emit('settings-changed');
     } catch (error) {
       console.error("Failed to set HUD size setting:", error);
       throw error;
@@ -154,7 +177,7 @@ export class SettingsService {
       settings.model_selection = selection;
 
       // Save the updated settings
-      this.saveSettings(settings);
+      await this.saveSettings(settings);
     } catch (error) {
       console.error("Failed to set model selection setting:", error);
       throw error;
@@ -166,7 +189,8 @@ export class SettingsService {
    */
   static async refreshCache(): Promise<void> {
     try {
-      await invoke("refresh_settings_cache");
+      // Clear  cache
+      this.cache = null;
     } catch (error) {
       console.error("Failed to refresh settings cache:", error);
     }

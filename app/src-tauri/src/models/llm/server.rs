@@ -3,10 +3,11 @@ use rand::Rng;
 use reqwest;
 use serde_json::{json, Value};
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
+use crate::events::{emitter::emit, types::*};
 use crate::constants::{MIN_PORT, MAX_PORT, MAX_PORT_ATTEMPTS, HEALTH_CHECK_ENDPOINT, MAX_HEALTH_CHECK_RETRIES, HEALTH_CHECK_INTERVAL};
 
 /// Global state to track the running server process and port
@@ -519,7 +520,7 @@ pub async fn generate(
 
   // If conversation ID is provided, load existing messages
   if let Some(conversation_id) = &conv_id {
-    match crate::models::conversations::get_messages(app_handle.clone(), conversation_id.clone())
+    match crate::models::llm::conversations::get_messages(app_handle.clone(), conversation_id.clone())
       .await
     {
       Ok(conv_messages) => {
@@ -630,12 +631,14 @@ pub async fn generate(
                         full_response.push_str(content);
 
                         // Emit stream event to frontend
-                        let stream_data = json!({
-                            "delta": content,
-                            "full_response": full_response
-                        });
+                        let stream_data = ChatStreamEvent {
+                          delta: content.to_string(),
+                          is_finished: false,
+                          full_response: full_response.clone(),
+                          conv_id: conv_id.clone(),
+                        };
 
-                        if let Err(e) = app_handle.emit("chat-stream", &stream_data) {
+                        if let Err(e) = emit(CHAT_STREAM, stream_data) {
                           log::error!("[llama_server] Failed to emit stream event: {}", e);
                         }
                       }
@@ -654,20 +657,21 @@ pub async fn generate(
     }
 
     // Emit final stream completion event
-    let final_stream_data = json!({
-        "delta": "",
-        "full_response": full_response,
-        "is_finished": true
-    });
+    let final_stream_data = ChatStreamEvent {
+      delta: "".to_string(),
+      is_finished: true,
+      full_response: full_response.clone(),
+      conv_id: conv_id.clone(),
+    };
 
-    if let Err(e) = app_handle.emit("chat-stream", &final_stream_data) {
+    if let Err(e) = emit(CHAT_STREAM, final_stream_data) {
       log::error!("[llama_server] Failed to emit final stream event: {}", e);
     }
 
     // Store messages in conversation if conv_id is provided
     if let Some(conversation_id) = conv_id {
       // Add user message
-      if let Err(e) = crate::models::conversations::add_message(
+      if let Err(e) = crate::models::llm::conversations::add_message(
         app_handle.clone(),
         conversation_id.clone(),
         "user".to_string(),
@@ -679,7 +683,7 @@ pub async fn generate(
       }
 
       // Add assistant response
-      if let Err(e) = crate::models::conversations::add_message(
+      if let Err(e) = crate::models::llm::conversations::add_message(
         app_handle.clone(),
         conversation_id,
         "assistant".to_string(),
@@ -736,7 +740,7 @@ pub async fn generate(
     // Store messages in conversation if conv_id is provided
     if let Some(conversation_id) = conv_id {
       // Add user message
-      if let Err(e) = crate::models::conversations::add_message(
+      if let Err(e) = crate::models::llm::conversations::add_message(
         app_handle.clone(),
         conversation_id.clone(),
         "user".to_string(),
@@ -748,7 +752,7 @@ pub async fn generate(
       }
 
       // Add assistant response
-      if let Err(e) = crate::models::conversations::add_message(
+      if let Err(e) = crate::models::llm::conversations::add_message(
         app_handle.clone(),
         conversation_id,
         "assistant".to_string(),

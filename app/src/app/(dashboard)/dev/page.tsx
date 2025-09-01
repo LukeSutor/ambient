@@ -1,10 +1,12 @@
 "use client";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from '@tauri-apps/api/event';
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { OcrResponseEvent } from "@/types/events";
 
 export default function Dev() {
   // State for SQL execution
@@ -30,7 +32,7 @@ export default function Dev() {
       setSchedulerLoading(false);
     }
   };
-
+2
   // Function to stop capture scheduler
   const handleStopScheduler = async () => {
     setSchedulerLoading(true);
@@ -91,7 +93,7 @@ export default function Dev() {
   // --- OCR Processing ---
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
-  const [ocrResult, setOcrResult] = useState<any | null>(null);
+  const [ocrResult, setOcrResult] = useState<OcrResponseEvent | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(null);
 
@@ -108,6 +110,10 @@ export default function Dev() {
     };
     checkOcrModels();
   }, []);
+
+  // --- Screen Selection ---
+  const [screenSelectionResult, setScreenSelectionResult] = useState<any>(null);
+  const [screenSelectionLoading, setScreenSelectionLoading] = useState<boolean>(false);
 
   const fetchScreenText = async () => {
     setScreenTextLoading(true);
@@ -138,6 +144,38 @@ export default function Dev() {
       setEvalCaptureLoading(false);
     }
   };
+
+  // Screen Selection Functions
+  const openScreenSelector = async () => {
+    setScreenSelectionLoading(true);
+    try {
+      await invoke('open_screen_selector');
+    } catch (error: any) {
+      console.error('Failed to open screen selector:', error);
+      setScreenSelectionLoading(false);
+    }
+  };
+
+  // Listen for ocr results
+  useEffect(() => {
+    let unlistenStream: (() => void) | undefined;
+
+    async function listenForOcrResults() {
+      unlistenStream = await listen<OcrResponseEvent>('ocr_response', (event) => {
+        const { text } = event.payload;
+        const result = event.payload as OcrResponseEvent;
+        console.log('OCR result received:', text);
+        setOcrResult(result);
+      });
+    }
+
+    listenForOcrResults();
+
+    return () => {
+      if (unlistenStream) 
+        unlistenStream();
+    };
+  }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -218,6 +256,34 @@ export default function Dev() {
         </Button>
       </div>
 
+      {/* Screen Selection Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
+        <h2 className="text-lg font-semibold">Screen Selection Tool</h2>
+        <p className="text-sm text-gray-600">
+          Click to open a fullscreen overlay where you can select any area of your screen to extract text from that specific region.
+        </p>
+        <Button 
+          onClick={openScreenSelector} 
+          disabled={screenSelectionLoading}
+          variant="default"
+        >
+          {screenSelectionLoading ? "Select an area..." : "📱 Select Screen Area"}
+        </Button>
+        
+        {screenSelectionResult && (
+          <div className="mt-4 space-y-2">
+            <h3 className="text-md font-semibold">Selection Result:</h3>
+            <div className="p-2 bg-gray-100 rounded text-sm">
+              <strong>Bounds:</strong> {screenSelectionResult.bounds.width}x{screenSelectionResult.bounds.height} at ({screenSelectionResult.bounds.x}, {screenSelectionResult.bounds.y})
+            </div>
+            <div className="p-2 bg-white border rounded text-sm max-h-64 overflow-y-auto">
+              <strong>Extracted Text:</strong>
+              <pre className="whitespace-pre-wrap mt-2">{screenSelectionResult.text_content || "No text found in selected area"}</pre>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Evaluation Data Capture Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-orange-50">
         <h2 className="text-lg font-semibold">Evaluation Data Capture</h2>
@@ -295,13 +361,6 @@ export default function Dev() {
         {ocrResult && (
           <div className="mt-4 space-y-2">
             <h3 className="text-md font-semibold">OCR Results:</h3>
-            <div className="p-2 bg-green-100 border border-green-300 rounded text-sm space-y-1">
-              <div><strong>Processing Time:</strong> {ocrResult.processingTimeMs}ms</div>
-              <div><strong>Word Count:</strong> {ocrResult.wordCount}</div>
-              {ocrResult.confidenceScore && (
-                <div><strong>Confidence:</strong> {(ocrResult.confidenceScore * 100).toFixed(1)}%</div>
-              )}
-            </div>
             <div className="mt-2">
               <Label>Extracted Text:</Label>
               <Textarea
