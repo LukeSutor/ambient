@@ -72,8 +72,20 @@ REMEMBER: {"analysis":"<why step completed>","completed":[<step IDs>]}
 Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis."#,
   );
   map.insert(
+    "hud_chat_system",
+    r#"You are a friendly assistant that exists as a floating chat window on a user's screen.
+Your job is to assist the user by providing helpful information and answering questions.
+Respond using markdown when appropriate.{ocr}
+
+Here is the user's request:
+{user_request}
+
+Your responses should be concise, relevant, and focused on the user's question."#,
+  );
+  // Alias used by HUD chat handler
+  map.insert(
     "hud_chat",
-    r#"TASK: You are a friendly assistant that exists as a floating chat window on a user's screen.
+    r#"You are a friendly assistant that exists as a floating chat window on a user's screen.
 Your job is to assist the user by providing helpful information and answering questions.
 Respond using markdown when appropriate.{ocr}
 

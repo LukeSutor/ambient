@@ -14,7 +14,7 @@ import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { SettingsService } from '@/lib/settings-service';
 import { HudDimensions } from '@/types/settings';
 import { OcrResponseEvent, HudChatEvent, ChatStreamEvent } from "@/types/events";
-import { set } from 'react-hook-form';
+import { Message } from '@/types/conversations';
 const logo = '/logo.png';
 
 interface Conversation {
@@ -51,7 +51,6 @@ export default function HudPage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -447,7 +446,6 @@ export default function HudPage() {
           {/* Messages Scroll Area */}
           {isExpanded && (
             <div
-              ref={messagesContainerRef}
               className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
             >
               <div className="flex flex-col space-y-2">

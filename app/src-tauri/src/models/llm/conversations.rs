@@ -1,75 +1,58 @@
-//! Simple Conversation Management System
-//!
-//! This module provides basic conversation management with persistent storage.
-//!
-//! ## Features
-//! - Create new conversations
-//! - Load existing conversations  
-//! - Reset conversation messages
-//! - Delete conversations
-//! - Add messages to conversations
-//! - Auto-generated conversation names
-//!
-//! ## Usage Examples (TypeScript)
-//!
-//! ```typescript
-//! import { invoke } from '@tauri-apps/api/core';
-//!
-//! // Create a new conversation
-//! const conversation = await invoke('create_conversation', {
-//!   name: "My Chat" // Optional
-//! });
-//!
-//! // Add a message
-//! await invoke('add_message', {
-//!   conversationId: conversation.id,
-//!   role: "user",
-//!   content: "Hello!"
-//! });
-//!
-//! // Get messages
-//! const messages = await invoke('get_messages', {
-//!   conversationId: conversation.id
-//! });
-//!
-//! // List conversations
-//! const conversations = await invoke('list_conversations');
-//!
-//! // Reset conversation (clear all messages)
-//! await invoke('reset_conversation', {
-//!   conversationId: conversation.id
-//! });
-//!
-//! // Delete conversation
-//! await invoke('delete_conversation', {
-//!   conversationId: conversation.id
-//! });
-//! ```
-
 use crate::db::DbState;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
+use ts_rs::TS;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(rename_all = "lowercase")]
+#[ts(export, export_to = "conversations.ts")]
+pub enum Role {
+  System,
+  User,
+  Assistant,
+}
+
+impl Role {
+  pub fn as_str(&self) -> &str {
+    match self {
+      Role::System => "system",
+      Role::User => "user",
+      Role::Assistant => "assistant",
+    }
+  }
+
+  pub fn from_str(s: &str) -> Self {
+    match s {
+      "system" => Role::System,
+      "user" => Role::User,
+      "assistant" => Role::Assistant,
+      _ => Role::User,
+    }
+  }
+}
 
 /// Message structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
 pub struct Message {
   pub id: String,
   pub conversation_id: String,
-  pub role: String, // "user" or "assistant"
+  pub role: Role,
   pub content: String,
-  pub timestamp: DateTime<Utc>,
+  pub timestamp: String,
 }
 
 /// Conversation structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
 pub struct Conversation {
   pub id: String,
   pub name: String,
-  pub created_at: DateTime<Utc>,
-  pub updated_at: DateTime<Utc>,
+  pub created_at: String,
+  pub updated_at: String,
   pub message_count: i32,
 }
 
@@ -109,8 +92,8 @@ pub async fn create_conversation(
   let conversation = Conversation {
     id: conversation_id.clone(),
     name: conversation_name.clone(),
-    created_at: now,
-    updated_at: now,
+    created_at: now.to_rfc3339(),
+    updated_at: now.to_rfc3339(),
     message_count: 0,
   };
 
@@ -156,9 +139,9 @@ pub async fn add_message(
   let message = Message {
     id: message_id.clone(),
     conversation_id: conversation_id.clone(),
-    role: role.clone(),
+    role: Role::from_str(&role),
     content: content.clone(),
-    timestamp: now,
+    timestamp: now.to_rfc3339(),
   };
 
   // Insert the message
@@ -166,7 +149,7 @@ pub async fn add_message(
     .execute(
       "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![message_id, conversation_id, role, content, now.to_rfc3339()],
+      params![message_id, conversation_id, role.as_str(), content, now.to_rfc3339()],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
 
@@ -179,7 +162,7 @@ pub async fn add_message(
     .map_err(|e| format!("Failed to update conversation: {}", e))?;
 
   // Auto-update conversation name if it's the first user message
-  if role == "user" {
+  if Role::from_str(&role) == Role::User {
     let message_count: i32 = conn
       .query_row(
         "SELECT message_count FROM conversations WHERE id = ?1",
@@ -224,22 +207,14 @@ pub async fn get_messages(
   let messages = stmt
     .query_map(params![conversation_id], |row| {
       let timestamp_str: String = row.get(4)?;
-      let timestamp = DateTime::parse_from_rfc3339(&timestamp_str)
-        .map_err(|_| {
-          rusqlite::Error::InvalidColumnType(
-            4,
-            "timestamp".to_string(),
-            rusqlite::types::Type::Text,
-          )
-        })?
-        .with_timezone(&Utc);
+      let role_str: String = row.get(2)?;
 
       Ok(Message {
         id: row.get(0)?,
         conversation_id: row.get(1)?,
-        role: row.get(2)?,
+        role: Role::from_str(&role_str),
         content: row.get(3)?,
-        timestamp,
+        timestamp: timestamp_str,
       })
     })
     .map_err(|e| format!("Failed to query messages: {}", e))?
@@ -266,26 +241,8 @@ pub async fn get_conversation(
       "SELECT id, name, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
       params![conversation_id],
       |row| {
-        let created_at_str: String = row.get(2)?;
-        let updated_at_str: String = row.get(3)?;
-        let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-          .map_err(|_| {
-            rusqlite::Error::InvalidColumnType(
-              2,
-              "created_at".to_string(),
-              rusqlite::types::Type::Text,
-            )
-          })?
-          .with_timezone(&Utc);
-        let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
-          .map_err(|_| {
-            rusqlite::Error::InvalidColumnType(
-              3,
-              "updated_at".to_string(),
-              rusqlite::types::Type::Text,
-            )
-          })?
-          .with_timezone(&Utc);
+        let created_at: String = row.get(2)?;
+        let updated_at: String = row.get(3)?;
 
         Ok(Conversation {
           id: row.get(0)?,
@@ -320,26 +277,8 @@ pub async fn list_conversations(app_handle: AppHandle) -> Result<Vec<Conversatio
 
   let conversations = stmt
     .query_map([], |row| {
-      let created_at_str: String = row.get(2)?;
-      let updated_at_str: String = row.get(3)?;
-      let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-        .map_err(|_| {
-          rusqlite::Error::InvalidColumnType(
-            2,
-            "created_at".to_string(),
-            rusqlite::types::Type::Text,
-          )
-        })?
-        .with_timezone(&Utc);
-      let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
-        .map_err(|_| {
-          rusqlite::Error::InvalidColumnType(
-            3,
-            "updated_at".to_string(),
-            rusqlite::types::Type::Text,
-          )
-        })?
-        .with_timezone(&Utc);
+      let created_at: String = row.get(2)?;
+      let updated_at: String = row.get(3)?;
 
       Ok(Conversation {
         id: row.get(0)?,
