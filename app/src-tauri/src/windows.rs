@@ -105,7 +105,7 @@ pub async fn open_floating_window(
     window_label,
     tauri::WebviewUrl::App("/hud".into()),
   )
-  .title("TaskAware Assistant")
+  .title("Cortical Assistant")
   .inner_size(dimensions.width, dimensions.collapsed_height)
   .resizable(false)
   .transparent(true)

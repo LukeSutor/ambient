@@ -39,7 +39,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
   let _tray = TrayIconBuilder::new()
     .icon(icon)
     .menu(&menu)
-    .tooltip("TaskAware Assistant")
+    .tooltip("Cortical Assistant")
     .on_menu_event({
       let app_handle = app.clone();
       move |_app, event| {
