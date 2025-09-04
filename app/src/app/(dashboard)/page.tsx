@@ -272,6 +272,7 @@ export default function Home() {
       try {
         await invoke<string>("generate", { 
           prompt,
+          systemPrompt: null,
           jsonSchema: null,
           convId,
           useThinking: thinkingEnabled,
@@ -291,6 +292,7 @@ export default function Home() {
       try {
         const response = await invoke<string>("generate", { 
           prompt,
+          systemPrompt: null,
           jsonSchema: null,
           convId,
           useThinking: thinkingEnabled,

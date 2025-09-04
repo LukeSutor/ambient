@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "local-computer-use",
+  "productName": "cortical",
   "version": "0.1.0",
   "identifier": "com.tauri.dev",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TaskAware",
+        "title": "Cortical",
         "width": 1200,
         "height": 800,
         "resizable": true,

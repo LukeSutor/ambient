@@ -1,6 +1,6 @@
 use crate::db::{get_latest_activity_summary, insert_activity_summary, DbState};
 use crate::events::{emitter::emit, types::*};
-use crate::models::llm::{prompts::get_prompt, schemas::get_schema, server::generate};
+use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
 use crate::tasks::{TaskService, TaskWithSteps};
 use tauri::{AppHandle, Manager};
 
@@ -153,7 +153,7 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
   // Create prompt
-  let prompt_template = match get_prompt("hud_chat") {
+  let system_prompt_template = match get_prompt("hud_chat") {
     Some(template) => template,
     None => {
       log::error!("[hud_chat] Failed to get prompt template for 'hud_chat'");
@@ -161,31 +161,40 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
+  // Get the current date time YYYY-MM-DD format
+  let current_date_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+  let system_prompt = system_prompt_template
+    .replace("{currentDateTime}", &current_date_time);
+
+  log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
+
   // Combine OCR responses into a single string
   let mut ocr_text = String::new();
   if !event.ocr_responses.is_empty() {
     for (i, ocr_response) in event.ocr_responses.iter().enumerate() {
-      ocr_text.push_str(&format!("<ocr_{}>{}</ocr_{}>\n", i + 1, ocr_response.text, i + 1));
+      ocr_text.push_str(&format!("<cap_{}>{}</cap_{}>\n", i + 1, ocr_response.text, i + 1));
     }
     if !ocr_text.is_empty() {
-      ocr_text = format!("\n\nText extracted from user's screen selection(s):\n{}\n", ocr_text);
+      ocr_text = format!("\nHere's text captured from my screen as context:\n{}\n", ocr_text);
     }
   }
 
-  let prompt = prompt_template
-    .replace("{ocr}", &ocr_text)
-    .replace("{user_request}", &event.text);
+  // Create user prompt with ocr data
+  let user_prompt = format!("{}\n{}", event.text, ocr_text).trim().to_string();
 
-  log::debug!("[hud_chat] Generated prompt:\n{}", prompt);
+  log::debug!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 
   // Generate response
   let response = match generate(
     app_handle.clone(),
-    prompt,
+    user_prompt,
+    Some(system_prompt),
     None,
     event.conv_id,
     Some(false),
     Some(true),
+    None,
   )
   .await
   {
@@ -290,10 +299,12 @@ async fn generate_and_parse_response(
   let response = match generate(
     app_handle,
     prompt,
+    None,
     Some(schema.to_string()),
     None,
     None,
     None,
+    Some(true),
   )
   .await
   {

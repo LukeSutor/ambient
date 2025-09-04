@@ -1,24 +1,29 @@
 import { Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
 import { markdownComponents, darkMarkdownComponents, customUrlTransform } from './markdown-components';
 
 // Basic configuration for LLM-generated content
 export const basicMarkdownConfig: Options = {
-  remarkPlugins: [[remarkGfm, { singleTilde: false }]],
+  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath]],
+  rehypePlugins: [[rehypeKatex]],
   components: markdownComponents,
   urlTransform: customUrlTransform,
 };
 
 // Dark theme configuration
 export const darkMarkdownConfig: Options = {
-  remarkPlugins: [[remarkGfm, { singleTilde: false }]],
+  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath]],
+  rehypePlugins: [[rehypeKatex]],
   components: darkMarkdownComponents,
   urlTransform: customUrlTransform,
 };
 
 // Strict security configuration (for untrusted content)
 export const strictSecureMarkdownConfig: Options = {
-  remarkPlugins: [[remarkGfm, { singleTilde: false }]],
+  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath]],
+  rehypePlugins: [[rehypeKatex]],
   components: markdownComponents,
   urlTransform: customUrlTransform,
   // Disallow potentially dangerous elements

@@ -105,7 +105,7 @@ pub async fn open_floating_window(
     window_label,
     tauri::WebviewUrl::App("/hud".into()),
   )
-  .title("TaskAware Assistant")
+  .title("Cortical Assistant")
   .inner_size(dimensions.width, dimensions.collapsed_height)
   .resizable(false)
   .transparent(true)
@@ -133,4 +133,23 @@ pub async fn close_floating_window(
   } else {
     Err("Window not found".to_string())
   }
+}
+
+
+// Reopen the main window
+#[tauri::command]
+pub async fn open_main_window(
+  app_handle: AppHandle,
+  label: Option<String>,
+) -> Result<(), String> {
+  let window_label = label.unwrap_or_else(|| "main".to_string());
+
+  if let Some(win) = app_handle.get_webview_window(&window_label) {
+    // Focus and show existing window
+    win.show().map_err(|e| e.to_string())?;
+    win.set_focus().map_err(|e| e.to_string())?;
+    return Ok(());
+  }
+
+  Err("Main window not found".to_string())
 }

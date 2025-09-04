@@ -4,8 +4,8 @@
   "description": "enables the default permissions",
   "windows": [
     "main",
-    "simple-floating",
-    "floating-hud"
+    "floating-hud",
+    "screen-selector"
   ],
   "permissions": [
     "core:default",

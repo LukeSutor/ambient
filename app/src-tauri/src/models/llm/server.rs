@@ -499,6 +499,7 @@ pub async fn restart_llama_server(app_handle: AppHandle) -> Result<String, Strin
 pub async fn generate(
   app_handle: AppHandle,
   prompt: String,
+  system_prompt: Option<String>,
   json_schema: Option<String>,
   conv_id: Option<String>,
   use_thinking: Option<bool>,
@@ -512,11 +513,18 @@ pub async fn generate(
     return Err(format!("Server health check failed: {}", e));
   }
 
+  let system_prompt = system_prompt.unwrap_or("You are a helpful assistant".to_string());
   let should_stream = stream.unwrap_or(false);
   let enable_thinking = use_thinking.unwrap_or(true);
 
   // Build messages array from conversation history and new prompt
   let mut messages = Vec::new();
+
+  // Add system message first
+  messages.push(json!({
+    "role": "system",
+    "content": system_prompt
+  }));
 
   // If conversation ID is provided, load existing messages
   if let Some(conversation_id) = &conv_id {
@@ -526,8 +534,8 @@ pub async fn generate(
       Ok(conv_messages) => {
         for msg in conv_messages {
           messages.push(json!({
-              "role": msg.role,
-              "content": msg.content
+            "role": msg.role.as_str(),
+            "content": msg.content
           }));
         }
       }
@@ -542,8 +550,8 @@ pub async fn generate(
 
   // Add the new user message
   messages.push(json!({
-      "role": "user",
-  "content": prompt
+    "role": "user",
+    "content": prompt
   }));
 
   // Build request body

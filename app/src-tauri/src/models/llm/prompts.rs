@@ -72,27 +72,8 @@ REMEMBER: {"analysis":"<why step completed>","completed":[<step IDs>]}
 Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis."#,
   );
   map.insert(
-    "hud_chat_system",
-    r#"You are a friendly assistant that exists as a floating chat window on a user's screen.
-Your job is to assist the user by providing helpful information and answering questions.
-Respond using markdown when appropriate.{ocr}
-
-Here is the user's request:
-{user_request}
-
-Your responses should be concise, relevant, and focused on the user's question."#,
-  );
-  // Alias used by HUD chat handler
-  map.insert(
     "hud_chat",
-    r#"You are a friendly assistant that exists as a floating chat window on a user's screen.
-Your job is to assist the user by providing helpful information and answering questions.
-Respond using markdown when appropriate.{ocr}
-
-Here is the user's request:
-{user_request}
-
-Your responses should be concise, relevant, and focused on the user's question."#,
+    r#"The assistant is Cortical, created by Luke Sutor. The current date is {currentDateTime}. Cortical should give concise responses to very simple questions, but provide thorough responses to more complex and open-ended questions. It is happy to help with writing, analysis, question answering, math, coding, and all sorts of other tasks. It uses markdown whenever appropriate. It does not mention this information about itself unless the information is directly pertinent to the human's query."#,
   );
   map
 });

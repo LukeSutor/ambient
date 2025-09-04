@@ -41,6 +41,7 @@ uuid = { version = "1.17.0", features = ["v4"] }
 ts-rs = "11.0.1"
 tauri-plugin-log = "2"
 log = "0.4"
+async-trait = "0.1"
 
 # Windows crates
 windows = { version = "0.60.0", features = [
