@@ -149,7 +149,7 @@ pub async fn add_message(
     .execute(
       "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![message_id, conversation_id, role.as_str(), content, now.to_rfc3339()],
+      params![message_id, conversation_id, Role::from_str(&role).as_str(), content, now.to_rfc3339()],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
 

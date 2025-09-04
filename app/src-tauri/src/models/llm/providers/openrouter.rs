@@ -38,7 +38,7 @@ async fn build_messages(
     if let Some(conversation_id) = conv_id {
         if let Ok(conv_messages) = crate::models::llm::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await {
             for msg in conv_messages {
-                messages.push(json!({"role": msg.role, "content": msg.content}));
+                messages.push(json!({"role": msg.role.as_str(), "content": msg.content}));
             }
         }
     }
@@ -71,6 +71,9 @@ impl LlmProvider for OpenRouterProvider {
 
         let should_stream = stream.unwrap_or(false);
         let messages = build_messages(&app_handle, prompt.clone(), system_prompt, &conv_id).await;
+
+        // Log all messages for debugging
+        log::debug!("OpenRouter messages: {}", serde_json::to_string_pretty(&messages).unwrap_or_default());
 
         // Build request body
         let mut body = json!({

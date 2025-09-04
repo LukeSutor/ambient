@@ -534,7 +534,7 @@ pub async fn generate(
       Ok(conv_messages) => {
         for msg in conv_messages {
           messages.push(json!({
-            "role": msg.role,
+            "role": msg.role.as_str(),
             "content": msg.content
           }));
         }
