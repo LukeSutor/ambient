@@ -79,6 +79,60 @@ export default function HudPage() {
     }
   }, [hudDimensions]); // Re-run animation when hudDimensions loads
 
+  // GSAP animation for chat expansion when first message is sent
+  useGSAP(() => {
+    if (isExpanded && messagesContainerRef.current && messages.length > 0) {      
+      // Create a timeline for coordinated animations
+      const tl = gsap.timeline();
+      
+      // Instantly apply padding and hide overflow at the start
+      gsap.set(messagesContainerRef.current, { 
+        padding: "12px",
+        overflowY: "hidden" 
+      });
+      
+      // Then animate the messages container growing in
+      tl.to(messagesContainerRef.current,
+        {
+          height: "auto",
+          opacity: 1,
+          scale: 1,
+          duration: 0.6,
+          ease: "back.out(1.2)",
+          onComplete: () => {
+            // Restore scrolling after animation completes
+            if (messagesContainerRef.current) {
+              gsap.set(messagesContainerRef.current, { overflowY: "auto" });
+            }
+          }
+        }
+      );
+      
+      // Simultaneously animate the input container moving down (if needed)
+      if (inputContainerRef.current) {
+        tl.to(inputContainerRef.current,
+          {
+            y: 0, // Ensure it's in final position
+            duration: 0.6,
+            ease: "back.out(1.2)"
+          },
+          0 // Start at the same time as the messages animation
+        );
+      }
+    } else if (!isExpanded && messagesContainerRef.current) {
+      // Animate collapse - reset to initial state
+      gsap.to(messagesContainerRef.current, {
+        height: 0,
+        opacity: 0,
+        scale: 0.95,
+        padding: "0px",
+        overflowY: "hidden", // Hide overflow during collapse too
+        duration: 0.4,
+        ease: "power2.inOut"
+      });
+    }
+  }, [isExpanded, messages.length]); // Re-run when expansion state or message count changes
+
   // Add ResizeObserver to containerRef to detect height changes
   useEffect(() => {
     if (!containerRef.current) return;
@@ -570,32 +624,37 @@ export default function HudPage() {
         {/* Chat Area - takes remaining space after input bar */}
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Messages Scroll Area */}
-          {isExpanded && (
-            <div ref={messagesContainerRef}
-              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
-            >
-              <div className="flex flex-col space-y-2">
-                {messages.map((m, i) => (
-                  <div
-                    key={`m-${i}`}
-                    className={
-                      m.role === 'user'
-                        ? 'max-w-[85%] ml-auto bg-white/60 border border-black/20 rounded-xl px-3 py-2'
-                        : 'max-w-[95%] w-full text-left mx-auto'
-                    }
-                  >
-                    {m.role === 'user' ?
-                      <div className="whitespace-pre-wrap">{m.content}</div>
-                      :
-                      <Markdown {...llmMarkdownConfig}>
-                        {m.content}
-                      </Markdown>}
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
+          <div ref={messagesContainerRef}
+            className="hud-scroll overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
+            style={{
+              height: '0px',
+              opacity: 0,
+              transform: 'scale(0.95)',
+              transformOrigin: 'center bottom',
+              padding: '0px'
+            }}
+          >
+            <div className="flex flex-col space-y-2">
+              {messages.map((m, i) => (
+                <div
+                  key={`m-${i}`}
+                  className={
+                    m.role === 'user'
+                      ? 'max-w-[85%] ml-auto bg-white/60 border border-black/20 rounded-xl px-3 py-2'
+                      : 'max-w-[95%] w-full text-left mx-auto'
+                  }
+                >
+                  {m.role === 'user' ?
+                    <div className="whitespace-pre-wrap">{m.content}</div>
+                    :
+                    <Markdown {...llmMarkdownConfig}>
+                      {m.content}
+                    </Markdown>}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
             </div>
-          )}
+          </div>
 
           {/* Input Container - fixed height at bottom */}
           <div
