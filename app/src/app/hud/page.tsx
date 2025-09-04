@@ -14,6 +14,8 @@ import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { SettingsService } from '@/lib/settings-service';
 import { HudDimensions } from '@/types/settings';
 import { OcrResponseEvent, HudChatEvent, ChatStreamEvent } from "@/types/events";
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 const logo = '/logo.png';
 
 interface Conversation {
@@ -56,6 +58,27 @@ export default function HudPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const measurementRef = useRef<HTMLDivElement>(null);
 
+  // GSAP animation for input box spring entrance
+  useGSAP(() => {
+    if (hudDimensions && inputContainerRef.current) {
+      // Animate the input box from invisible to visible with spring effect
+      gsap.fromTo(inputContainerRef.current, 
+        {
+          scale: 0,
+          opacity: 0,
+          transformOrigin: "center center"
+        },
+        {
+          scale: 1,
+          opacity: 1,
+          duration: 0.25,
+          ease: "back.out(0.8)",
+          delay: 0.05
+        }
+      );
+    }
+  }, [hudDimensions]); // Re-run animation when hudDimensions loads
+
   // Add ResizeObserver to containerRef to detect height changes
   useEffect(() => {
     if (!containerRef.current) return;
@@ -71,9 +94,9 @@ export default function HudPage() {
         }
       }
     });
-    if (measurementRef.current) {
-      resizeObserver.observe(measurementRef.current);
-    }
+    // if (measurementRef.current) {
+    //   resizeObserver.observe(measurementRef.current);
+    // }
     return () => {
       resizeObserver.disconnect();
     };
@@ -101,9 +124,18 @@ export default function HudPage() {
 
   // Ensure drag visibility resets when pointer is released anywhere
   useEffect(() => {
+    clearAndCollapse();
     const onUp = () => setIsDraggingWindow(false);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('mouseup', onUp);
+    // async function resizeHud() {
+    //   try {
+    //     await invoke('resize_hud_expanded', { label: 'floating-hud' });
+    //   } catch (error) {
+    //     console.error('Failed to resize window:', error);
+    //   }
+    // };
+    // resizeHud();
     return () => {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('mouseup', onUp);
@@ -325,15 +357,6 @@ export default function HudPage() {
     }
   }
 
-  async function expandResponseArea() {
-    setIsExpanded(true);
-    // try {
-    //   await invoke('resize_hud_expanded', { label: 'floating-hud' });
-    // } catch (error) {
-    //   console.error('Failed to resize window:', error);
-    // }
-  }
-
   async function collapseResponseArea() {
     setIsExpanded(false);
     try {
@@ -349,10 +372,16 @@ export default function HudPage() {
 
     if (!query || isLoading) return;
 
-    setIsLoading(true);
-    setInput('');
+    // Fully expand window to allow for animations
+    try {
+      await invoke('resize_hud_expanded', { label: 'floating-hud' });
+    } catch (error) {
+      console.error('Failed to resize window:', error);
+    }
 
-    await expandResponseArea();
+    setIsLoading(true);
+    setIsExpanded(true);
+    setInput('');
 
     try {
       // Append user message and an assistant placeholder
@@ -403,6 +432,16 @@ export default function HudPage() {
       });
       setIsStreaming(false);
       streamContentRef.current = '';
+
+      // Dynamically set the size to the content height
+      if (messagesContainerRef.current) {
+        const scrollHeight = messagesContainerRef.current.scrollHeight;
+        try {
+          await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: scrollHeight });
+        } catch (error) {
+          console.error('Failed to resize window:', error);
+        }
+      }
 
     } catch (error) {
       console.error('Error generating response:', error);
@@ -464,11 +503,29 @@ export default function HudPage() {
   }
 
   const handleLogoClick = async () => {
-    console.log('Logo clicked, opening main window');
     try {
       await invoke('open_main_window');
     } catch (error) {
       console.error('Failed to open main window:', error);
+    }
+  }
+
+  const handleExpandFeatures = async () => {
+    // Resize to fit if expanding
+    if (!plusExpanded) {
+      try {
+        await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: 64 });
+      } catch (error) {
+        console.error('Failed to update HUD window height:', error);
+      }
+      setPlusExpanded(true);
+    } else {
+      try {
+        await invoke('resize_hud_collapsed', { label: 'floating-hud' });
+      } catch (error) {
+        console.error('Failed to resize window:', error);
+      }
+      setPlusExpanded(false);
     }
   }
 
@@ -508,13 +565,13 @@ export default function HudPage() {
       </div>
 
       {/* Glass Container */}
-      <div className="relative w-full h-full flex flex-col overflow-hidden">
+      <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
         {/* Chat Area - takes remaining space after input bar */}
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Messages Scroll Area */}
           {isExpanded && (
-            <div  ref={messagesContainerRef}
+            <div ref={messagesContainerRef}
               className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
             >
               <div className="flex flex-col space-y-2">
@@ -549,7 +606,9 @@ export default function HudPage() {
             onMouseLeave={handleMouseLeave}
             style={{
               height: hudDimensions ? `${hudDimensions.collapsed_height}px` : '60px',
-              width: hudDimensions ? `${hudDimensions.width}px` : '500px'
+              width: hudDimensions ? `${hudDimensions.width}px` : '500px',
+              opacity: hudDimensions ? 1 : 0,
+              transform: hudDimensions ? 'scale(1)' : 'scale(0)'
             }}
           >
             <div
@@ -630,7 +689,7 @@ export default function HudPage() {
                   className="w-8 h-8 rounded-full"
                   size="icon"
                   disabled={ocrLoading}
-                  onClick={() => setPlusExpanded(!plusExpanded)}
+                  onClick={handleExpandFeatures}
                 >
                   {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />}
                 </Button>

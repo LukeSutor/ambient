@@ -27,7 +27,17 @@ pub async fn resize_hud_collapsed(
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     let size = LogicalSize::new(dimensions.width, dimensions.collapsed_height);
+    // Get position before resizing
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    log::info!("Current window position before collapsing: {:?}", position);
     window.set_size(size).map_err(|e| e.to_string())?;
+    // Print new position for debugging
+    let new_position = window.outer_position().map_err(|e| e.to_string())?;
+    log::info!("New window position after collapsing: {:?}", new_position);
+
+    // Adjust position to keep top aligned
+    window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
+
     log::info!("HUD window resized to collapsed: {}x{}", dimensions.width, dimensions.collapsed_height);
     Ok(())
   } else {
@@ -47,6 +57,14 @@ pub async fn resize_hud_expanded(
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     let size = LogicalSize::new(dimensions.width, dimensions.expanded_height);
     window.set_size(size).map_err(|e| e.to_string())?;
+    
+    // Adjust position to keep bottom aligned
+    if let Ok(position) = window.outer_position() {
+      let current_size = window.outer_size().map_err(|e| e.to_string())?;
+      let new_y = position.y + (current_size.height as f64 - dimensions.expanded_height) as i32;
+      window.set_position(tauri::PhysicalPosition::new(position.x, new_y)).map_err(|e| e.to_string())?;
+    }
+
     log::info!("HUD window resized to expanded: {}x{}", dimensions.width, dimensions.expanded_height);
     Ok(())
   } else {
@@ -80,10 +98,9 @@ pub async fn resize_hud_dynamic(
     let size = LogicalSize::new(width, new_height);
     window.set_size(size).map_err(|e| e.to_string())?;
 
-    // Adjust position to keep bottom aligned
+    // Adjust position to keep top aligned
     if let Ok(position) = window.outer_position() {
-      let new_y = position.y + (current_size.height as f64 - new_height) as i32;
-      window.set_position(tauri::PhysicalPosition::new(position.x, new_y)).map_err(|e| e.to_string())?;
+      window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
     }
 
     log::info!("HUD window dynamically resized to: {}x{}", current_size.width, new_height);
