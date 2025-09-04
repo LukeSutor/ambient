@@ -54,6 +54,45 @@ pub async fn resize_hud_expanded(
   }
 }
 
+// Dynamically resize the HUD to the required height and shift the position
+#[tauri::command]
+pub async fn resize_hud_dynamic(
+  app_handle: AppHandle,
+  additional_height: f64,
+  label: Option<String>,
+) -> Result<(), String> {
+  if additional_height <= 30.0 {
+    return Ok(());
+  }
+  let window_label = label.unwrap_or_else(|| "floating-hud".to_string());
+
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    // Get collapsed height
+    let dimensions = get_current_hud_dimensions(&app_handle).await;
+    let width = dimensions.width;
+    let new_height = dimensions.collapsed_height + additional_height + 2.0; // Extra padding
+    let new_height = new_height.min(dimensions.expanded_height);
+
+    // Get current size and position
+    let current_size = window.outer_size().map_err(|e| e.to_string())?;
+
+    // Resize the window
+    let size = LogicalSize::new(width, new_height);
+    window.set_size(size).map_err(|e| e.to_string())?;
+
+    // Adjust position to keep bottom aligned
+    if let Ok(position) = window.outer_position() {
+      let new_y = position.y + (current_size.height as f64 - new_height) as i32;
+      window.set_position(tauri::PhysicalPosition::new(position.x, new_y)).map_err(|e| e.to_string())?;
+    }
+
+    log::info!("HUD window dynamically resized to: {}x{}", current_size.width, new_height);
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
+}
+
 /// Refresh the HUD window size based on current settings and expanded state
 #[tauri::command]
 pub async fn refresh_hud_window_size(

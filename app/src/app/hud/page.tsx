@@ -54,6 +54,7 @@ export default function HudPage() {
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const toolboxDropdownRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const measurementRef = useRef<HTMLDivElement>(null);
 
   // Add ResizeObserver to containerRef to detect height changes
   useEffect(() => {
@@ -62,22 +63,21 @@ export default function HudPage() {
       for (let entry of entries) {
         if (entry.contentRect) {
           const newHeight = entry.contentRect.height;
-          console.log('Container height changed:', newHeight);
-          // try {
-          //   await invoke('update_hud_window_height', { label: 'floating-hud', height: Math.round(newHeight) });
-          // } catch (error) {
-          //   console.error('Failed to update HUD window height:', error);
-          // }
+          try {
+            await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: newHeight });
+          } catch (error) {
+            console.error('Failed to update HUD window height:', error);
+          }
         }
       }
     });
-    if (messagesContainerRef.current) {
-      resizeObserver.observe(messagesContainerRef.current);
+    if (measurementRef.current) {
+      resizeObserver.observe(measurementRef.current);
     }
     return () => {
       resizeObserver.disconnect();
     };
-  }, [messagesContainerRef]);
+  }, [measurementRef]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -153,12 +153,12 @@ export default function HudPage() {
         unlistenSettings = await listen('settings_changed', async () => {
           // Reload HUD dimensions when settings change
           await loadHudDimensions();
-          
+
           // Also refresh the actual window size to match current state
           try {
-            await invoke('refresh_hud_window_size', { 
-              label: 'floating-hud', 
-              isExpanded: isExpandedRef.current 
+            await invoke('refresh_hud_window_size', {
+              label: 'floating-hud',
+              isExpanded: isExpandedRef.current
             });
           } catch (error) {
             console.error('Failed to refresh HUD window size:', error);
@@ -327,11 +327,11 @@ export default function HudPage() {
 
   async function expandResponseArea() {
     setIsExpanded(true);
-    try {
-      await invoke('resize_hud_expanded', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to resize window:', error);
-    }
+    // try {
+    //   await invoke('resize_hud_expanded', { label: 'floating-hud' });
+    // } catch (error) {
+    //   console.error('Failed to resize window:', error);
+    // }
   }
 
   async function collapseResponseArea() {
@@ -473,15 +473,48 @@ export default function HudPage() {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-transparent">
+    <div ref={containerRef} className="w-full h-full bg-blue-500">
+      {/* Hidden measurement container - exactly mirrors the real messages container */}
+      <div
+        ref={measurementRef}
+        className="absolute opacity-0 pointer-events-none"
+        style={{
+          width: hudDimensions?.width ? `${hudDimensions.width}px` : '500px',
+          top: '-9999px' // Move offscreen
+        }}
+      >
+        <div className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all">
+          <div className="flex flex-col space-y-2">
+            {messages.map((m, i) => (
+              <div
+                key={`m-${i}`}
+                className={
+                  m.role === 'user'
+                    ? 'max-w-[85%] ml-auto bg-white/60 border border-black/20 rounded-xl px-3 py-2'
+                    : 'max-w-[95%] w-full text-left mx-auto'
+                }
+              >
+                {m.role === 'user' ?
+                  <div className="whitespace-pre-wrap">{m.content}</div>
+                  :
+                  <Markdown {...llmMarkdownConfig}>
+                    {m.content}
+                  </Markdown>}
+              </div>
+            ))}
+            <div />
+          </div>
+        </div>
+      </div>
+
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col overflow-hidden">
 
         {/* Chat Area - takes remaining space after input bar */}
-        <div className="relative flex flex-col min-h-0 h-min" ref={messagesContainerRef}>
+        <div className="relative flex flex-col min-h-0 h-min">
           {/* Messages Scroll Area */}
           {isExpanded && (
-            <div
+            <div  ref={messagesContainerRef}
               className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
             >
               <div className="flex flex-col space-y-2">
@@ -495,11 +528,11 @@ export default function HudPage() {
                     }
                   >
                     {m.role === 'user' ?
-                    <div className="whitespace-pre-wrap">{m.content}</div>
-                    :
-                    <Markdown {...llmMarkdownConfig}>
-                      {m.content}
-                    </Markdown>}
+                      <div className="whitespace-pre-wrap">{m.content}</div>
+                      :
+                      <Markdown {...llmMarkdownConfig}>
+                        {m.content}
+                      </Markdown>}
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
@@ -508,7 +541,7 @@ export default function HudPage() {
           )}
 
           {/* Input Container - fixed height at bottom */}
-          <div 
+          <div
             ref={inputContainerRef}
             className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
             id="input-container"
@@ -523,92 +556,92 @@ export default function HudPage() {
               className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
             >
               <button onClick={handleLogoClick} title="Open Main Window" className="shrink-0">
-              <Image
-                src={logo}
-                width={32}
-                height={32}
-                alt="Logo"
-                className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
-                draggable={false}
-                onDragStart={(e) => e.preventDefault()}
-              />
+                <Image
+                  src={logo}
+                  width={32}
+                  height={32}
+                  alt="Logo"
+                  className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                />
               </button>
 
               <div className="flex-1 min-w-32">
-              <Input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask anything"
-                className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0 w-full"
-                autoComplete="off"
-                autoFocus
-              />
+                <Input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask anything"
+                  className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0 w-full"
+                  autoComplete="off"
+                  autoFocus
+                />
               </div>
 
               {/* OCR captures */}
               <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap shrink min-w-0">
-              {ocrResults.map((capture, index) => (
-                <div
-                key={index}
-                className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0"
-                title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
-                >
-                <SquareDashed className="!h-5 !w-5" />
-                <Button
-                  variant="ghost"
-                  className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
-                  size="icon"
-                  onClick={() => {
-                  setOcrResults(prev => prev.filter((_, i) => i !== index));
-                  }}
-                >
-                  <X className="!h-3 !w-3 text-black shrink-0" />
-                </Button>
-                </div>
-              ))}
+                {ocrResults.map((capture, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0"
+                    title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
+                  >
+                    <SquareDashed className="!h-5 !w-5" />
+                    <Button
+                      variant="ghost"
+                      className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
+                      size="icon"
+                      onClick={() => {
+                        setOcrResults(prev => prev.filter((_, i) => i !== index));
+                      }}
+                    >
+                      <X className="!h-3 !w-3 text-black shrink-0" />
+                    </Button>
+                  </div>
+                ))}
               </div>
 
               {/* Additional features expandable area */}
               <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""} shrink-0`} ref={toolboxDropdownRef}>
-              <div className={`absolute bottom-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                <div className={`absolute bottom-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
+                    onClick={handleCaptureArea}
+                    title="Capture Area"
+                  >
+                    <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
+                    <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
+                    onClick={handleNewChat}
+                    title="New Chat"
+                  >
+                    <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
+                    <span className="text-black text-sm whitespace-nowrap">New Chat</span>
+                  </Button>
+                </div>
                 <Button
-                variant="ghost"
-                className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-                onClick={handleCaptureArea}
-                title="Capture Area"
+                  variant="ghost"
+                  className="w-8 h-8 rounded-full"
+                  size="icon"
+                  disabled={ocrLoading}
+                  onClick={() => setPlusExpanded(!plusExpanded)}
                 >
-                <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
-                <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
+                  {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />}
                 </Button>
-                <Button
-                variant="ghost"
-                className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-                onClick={handleNewChat}
-                title="New Chat"
-                >
-                <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
-                <span className="text-black text-sm whitespace-nowrap">New Chat</span>
-                </Button>
-              </div>
-              <Button
-                variant="ghost"
-                className="w-8 h-8 rounded-full"
-                size="icon"
-                disabled={ocrLoading}
-                onClick={() => setPlusExpanded(!plusExpanded)}
-              >
-                {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />}
-              </Button>
               </div>
             </div>
-            
+
             {/* Close icon */}
             <button
               className={
-              (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-              ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'
+                (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
+                ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'
               }
               onClick={closeWindow}
               title="Close Window"
@@ -621,14 +654,14 @@ export default function HudPage() {
               data-tauri-drag-region
               id="drag-area"
               className={
-                (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') + 
+                (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
                 ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'
               }
               onPointerDown={() => setIsDraggingWindow(true)}
               draggable={false}
               title="Drag Window"
             >
-                <Move className="w-full h-full p-1 text-black pointer-events-none" />
+              <Move className="w-full h-full p-1 text-black pointer-events-none" />
             </div>
           </div>
         </div>
