@@ -437,6 +437,7 @@ export default function HudPage() {
   }
 
   const handleLogoClick = async () => {
+    console.log('Logo clicked, opening main window');
     try {
       await invoke('open_main_window');
     } catch (error) {
@@ -497,16 +498,17 @@ export default function HudPage() {
             <div
               className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
             >
-              <Image
-                onClick={handleLogoClick}
-                src={logo}
-                width={32}
-                height={32}
-                alt="Logo"
-                className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
-                draggable={false}
-                onDragStart={(e) => e.preventDefault()}
-              />
+              <button onClick={handleLogoClick} title="Open Main Window" className="shrink-0">
+                <Image
+                  src={logo}
+                  width={32}
+                  height={32}
+                  alt="Logo"
+                  className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                />
+              </button>
 
               <div className="flex-1 min-w-32">
                 <Input
