@@ -16,6 +16,12 @@ import { HudDimensions } from '@/types/settings';
 import { OcrResponseEvent, HudChatEvent, ChatStreamEvent } from "@/types/events";
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+
+// Simple text component without animation
+const AnimatedText = ({ content }: { content: string }) => {
+  return <div className="whitespace-pre-wrap">{content}</div>;
+};
+
 const logo = '/logo.png';
 
 interface Conversation {
@@ -132,6 +138,55 @@ export default function HudPage() {
       });
     }
   }, [isExpanded, messages.length]); // Re-run when expansion state or message count changes
+
+  // Smooth height animation for messages container when content changes
+  useEffect(() => {
+    if (!messagesContainerRef.current || !isExpanded || messages.length === 0) return;
+
+    let animationFrame: number;
+    let lastHeight = 0;
+
+    const checkHeightChange = () => {
+      const container = messagesContainerRef.current;
+      if (!container) return;
+
+      const contentDiv = container.querySelector('.flex.flex-col.space-y-2') as HTMLElement;
+      if (!contentDiv) return;
+
+      const newHeight = contentDiv.scrollHeight;
+      
+      if (newHeight !== lastHeight && lastHeight > 0 && isStreaming) {
+        // Smoothly animate height change during streaming
+        gsap.to(container, {
+          height: newHeight,
+          duration: 0.25,
+          ease: "power2.out"
+        });
+      }
+      
+      lastHeight = newHeight;
+      
+      if (isStreaming) {
+        animationFrame = requestAnimationFrame(checkHeightChange);
+      }
+    };
+
+    if (isStreaming) {
+      // Start monitoring height changes during streaming
+      const container = messagesContainerRef.current;
+      const contentDiv = container.querySelector('.flex.flex-col.space-y-2') as HTMLElement;
+      if (contentDiv) {
+        lastHeight = contentDiv.scrollHeight;
+        animationFrame = requestAnimationFrame(checkHeightChange);
+      }
+    }
+
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [isExpanded, messages.length, isStreaming]);
 
   // Add ResizeObserver to containerRef to detect height changes
   useEffect(() => {
@@ -647,9 +702,9 @@ export default function HudPage() {
                   {m.role === 'user' ?
                     <div className="whitespace-pre-wrap">{m.content}</div>
                     :
-                    <Markdown {...llmMarkdownConfig}>
-                      {m.content}
-                    </Markdown>}
+                    <div className="prose prose-sm max-w-none">
+                      <AnimatedText content={m.content} />
+                    </div>}
                 </div>
               ))}
               <div ref={messagesEndRef} />
