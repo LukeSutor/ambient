@@ -144,6 +144,7 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
       windows::open_floating_window,
+      windows::open_main_window,
       windows::close_floating_window,
       windows::resize_hud_collapsed,
       windows::resize_hud_expanded,

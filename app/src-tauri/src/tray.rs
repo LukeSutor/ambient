@@ -30,10 +30,11 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 
   // Create menu items
   let open_hud = MenuItem::with_id(app, "open_hud", "Open", true, None::<&str>)?;
+  let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
   let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
   // Create menu
-  let menu = Menu::with_items(app, &[&open_hud, &quit])?;
+  let menu = Menu::with_items(app, &[&open_hud, &settings, &quit])?;
 
   // Create tray icon
   let _tray = TrayIconBuilder::new()
@@ -51,6 +52,15 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
               Some("floating-hud".to_string()),
             )) {
               log::error!("[tray] Failed to open HUD window: {}", e);
+            }
+          }
+          "settings" => {
+            log::info!("[tray] Opening main window");
+            if let Err(e) = tauri::async_runtime::block_on(windows::open_main_window(
+              app_handle.clone(),
+              Some("main".to_string()),
+            )) {
+              log::error!("[tray] Failed to open main window: {}", e);
             }
           }
           "quit" => {
