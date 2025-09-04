@@ -96,17 +96,6 @@ export default function HudPage() {
         padding: "12px",
         overflowY: "hidden" 
       });
-
-      // Get the natural height the messages container will expand to
-      const tempHeight = messagesContainerRef.current.style.height;
-      messagesContainerRef.current.style.height = 'auto';
-      const naturalHeight = messagesContainerRef.current.offsetHeight;
-      messagesContainerRef.current.style.height = tempHeight;
-
-      // Position input container at its current position initially
-      if (inputContainerRef.current) {
-        gsap.set(inputContainerRef.current, { y: -naturalHeight });
-      }
       
       // Then animate the messages container growing in
       tl.to(messagesContainerRef.current,
@@ -117,22 +106,19 @@ export default function HudPage() {
           duration: 0.6,
           ease: "back.out(1.2)",
           onComplete: () => {
-            // Restore scrolling and ensure height is auto after animation completes
+            // Restore scrolling after animation completes
             if (messagesContainerRef.current) {
-              gsap.set(messagesContainerRef.current, { 
-                overflowY: "auto",
-                height: "auto"
-              });
+              gsap.set(messagesContainerRef.current, { overflowY: "auto" });
             }
           }
         }
       );
       
-      // Simultaneously animate the input container moving to its natural position
+      // Simultaneously animate the input container moving down (if needed)
       if (inputContainerRef.current) {
         tl.to(inputContainerRef.current,
           {
-            y: 0, // Move to natural position
+            y: 0, // Ensure it's in final position
             duration: 0.6,
             ease: "back.out(1.2)"
           },
@@ -150,15 +136,6 @@ export default function HudPage() {
         duration: 0.4,
         ease: "power2.inOut"
       });
-      
-      // Reset input container position
-      if (inputContainerRef.current) {
-        gsap.to(inputContainerRef.current, {
-          y: 0,
-          duration: 0.4,
-          ease: "power2.inOut"
-        });
-      }
     }
   }, [isExpanded, messages.length]); // Re-run when expansion state or message count changes
 
@@ -179,28 +156,12 @@ export default function HudPage() {
       const newHeight = contentDiv.scrollHeight;
       
       if (newHeight !== lastHeight && lastHeight > 0 && isStreaming) {
-        // Get current height before animation
-        const currentHeight = container.offsetHeight;
-        
-        // Temporarily set to auto to measure natural height
-        container.style.height = 'auto';
-        const naturalHeight = container.offsetHeight;
-        
-        // Set back to current height
-        container.style.height = currentHeight + 'px';
-        
-        // Animate to the natural height, then set to auto
+        // Smoothly animate height change during streaming
         gsap.to(container, {
-          height: naturalHeight,
+          height: newHeight+32,
           duration: 0.25,
           ease: "power2.out",
-          onComplete: () => {
-            if (container) {
-              container.style.height = 'auto';
-            }
-          }
         });
-        gsap.set(container, { height: 'auto' });
       }
       
       lastHeight = newHeight;
@@ -218,16 +179,11 @@ export default function HudPage() {
         lastHeight = contentDiv.scrollHeight;
         animationFrame = requestAnimationFrame(checkHeightChange);
       }
-    } else {
-      // When not streaming, ensure height is set to auto
-      const container = messagesContainerRef.current;
-      if (container && container.style.height !== 'auto') {
-        container.style.height = 'auto';
-      }
     }
 
     return () => {
       if (animationFrame) {
+        // gsap.set(messagesContainerRef.current, { overflowY: "auto", height: "auto" });
         cancelAnimationFrame(animationFrame);
       }
     };
@@ -684,7 +640,7 @@ export default function HudPage() {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-blue-500">
+    <div ref={containerRef} className="w-full h-full bg-transparent">
       {/* Hidden measurement container - exactly mirrors the real messages container */}
       <div
         ref={measurementRef}
