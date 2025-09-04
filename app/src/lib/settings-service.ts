@@ -27,7 +27,7 @@ export class SettingsService {
    */
   static async loadSettings(): Promise<UserSettings> {
     try {
-  await this.ensureEventsHooked();
+      await this.ensureEventsHooked();
       if (this.cache) return this.cache;
       const settings = await invoke<UserSettings>("load_user_settings");
       this.cache = settings;

@@ -1,6 +1,6 @@
 use crate::db::{get_latest_activity_summary, insert_activity_summary, DbState};
 use crate::events::{emitter::emit, types::*};
-use crate::models::llm::{prompts::get_prompt, schemas::get_schema, server::generate};
+use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
 use crate::tasks::{TaskService, TaskWithSteps};
 use tauri::{AppHandle, Manager};
 
@@ -194,6 +194,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     event.conv_id,
     Some(false),
     Some(true),
+    None,
   )
   .await
   {
@@ -303,6 +304,7 @@ async fn generate_and_parse_response(
     None,
     None,
     None,
+    Some(true),
   )
   .await
   {
