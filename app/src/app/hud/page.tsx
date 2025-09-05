@@ -6,7 +6,6 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Separator } from "@/components/ui/separator"
 import { Move, X, LoaderCircle, MessageSquarePlus, Plus, SquareDashedMousePointer, SquareDashed } from 'lucide-react';
 import Image from "next/image";
 import Markdown from 'react-markdown'
@@ -37,8 +36,6 @@ export default function HudPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const isExpandedRef = useRef(false);
-
-  // Keep ref in sync with state
   useEffect(() => {
     isExpandedRef.current = isExpanded;
   }, [isExpanded]);
@@ -51,6 +48,10 @@ export default function HudPage() {
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  const hudDimensionsRef = useRef<HudDimensions | null>(null);
+  useEffect(() => {
+    hudDimensionsRef.current = hudDimensions;
+  }, [hudDimensions]);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [plusExpanded, setPlusExpanded] = useState(false);
@@ -183,34 +184,10 @@ export default function HudPage() {
 
     return () => {
       if (animationFrame) {
-        // gsap.set(messagesContainerRef.current, { overflowY: "auto", height: "auto" });
         cancelAnimationFrame(animationFrame);
       }
     };
   }, [isExpanded, messages.length, isStreaming]);
-
-  // Add ResizeObserver to containerRef to detect height changes
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const resizeObserver = new ResizeObserver(async (entries) => {
-      for (let entry of entries) {
-        if (entry.contentRect) {
-          const newHeight = entry.contentRect.height;
-          try {
-            await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: newHeight });
-          } catch (error) {
-            console.error('Failed to update HUD window height:', error);
-          }
-        }
-      }
-    });
-    // if (measurementRef.current) {
-    //   resizeObserver.observe(measurementRef.current);
-    // }
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [measurementRef]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -238,14 +215,6 @@ export default function HudPage() {
     const onUp = () => setIsDraggingWindow(false);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('mouseup', onUp);
-    // async function resizeHud() {
-    //   try {
-    //     await invoke('resize_hud_expanded', { label: 'floating-hud' });
-    //   } catch (error) {
-    //     console.error('Failed to resize window:', error);
-    //   }
-    // };
-    // resizeHud();
     return () => {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('mouseup', onUp);
@@ -273,7 +242,12 @@ export default function HudPage() {
     const loadHudDimensions = async () => {
       try {
         const dimensions = await SettingsService.getHudDimensions();
-        setHudDimensions(dimensions);
+        // Only change if different to avoid unnecessary re-renders
+        if (!hudDimensionsRef.current || JSON.stringify(dimensions) !== JSON.stringify(hudDimensionsRef.current)) {
+          setHudDimensions(dimensions);
+          return true;
+        }
+        return false;
       } catch (error) {
         console.error('Failed to load HUD dimensions:', error);
         // Fallback to defaults
@@ -283,6 +257,7 @@ export default function HudPage() {
           expanded_height: 350,
         };
         setHudDimensions(defaultDimensions);
+        return true;
       }
     };
 
@@ -294,16 +269,18 @@ export default function HudPage() {
       try {
         unlistenSettings = await listen('settings_changed', async () => {
           // Reload HUD dimensions when settings change
-          await loadHudDimensions();
+          const dimensionsChanged = await loadHudDimensions();
 
-          // Also refresh the actual window size to match current state
-          try {
-            await invoke('refresh_hud_window_size', {
-              label: 'floating-hud',
-              isExpanded: isExpandedRef.current
-            });
-          } catch (error) {
-            console.error('Failed to refresh HUD window size:', error);
+          // Only refresh the window size if dimensions actually changed
+          if (dimensionsChanged) {
+            try {
+              await invoke('refresh_hud_window_size', {
+                label: 'floating-hud',
+                isExpanded: isExpandedRef.current
+              });
+            } catch (error) {
+              console.error('Failed to refresh HUD window size:', error);
+            }
           }
         });
       } catch (err) {
@@ -469,11 +446,14 @@ export default function HudPage() {
 
   async function collapseResponseArea() {
     setIsExpanded(false);
-    try {
-      await invoke('resize_hud_collapsed', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to resize window:', error);
-    }
+    // Collapse HUD after 250ms to allow input box animation
+    setTimeout(async () => {
+      try {
+        await invoke('resize_hud_collapsed', { label: 'floating-hud' });
+      } catch (error) {
+        console.error('Failed to resize window:', error);
+      }
+    }, 250);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -621,19 +601,27 @@ export default function HudPage() {
   }
 
   const handleExpandFeatures = async () => {
-    // Resize to fit if expanding
+    // Resize to fit if expanding and no messages
     if (!plusExpanded) {
-      try {
-        await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: 64 });
-      } catch (error) {
-        console.error('Failed to update HUD window height:', error);
+      if (messages.length === 0) {
+        try {
+          await invoke('resize_hud_dynamic', { additionalHeight: 76 });
+        } catch (error) {
+          console.error('Failed to update HUD window height:', error);
+        }
       }
       setPlusExpanded(true);
+    // Only collapse if no messages
     } else {
-      try {
-        await invoke('resize_hud_collapsed', { label: 'floating-hud' });
-      } catch (error) {
-        console.error('Failed to resize window:', error);
+      if (messages.length === 0) {
+        // Collapse after a quarter second to allow button press animation
+        setTimeout(async () => {
+          try {
+            await invoke('resize_hud_collapsed', { label: 'floating-hud' });
+          } catch (error) {
+            console.error('Failed to resize window:', error);
+          }
+        }, 250);
       }
       setPlusExpanded(false);
     }
@@ -779,7 +767,7 @@ export default function HudPage() {
 
               {/* Additional features expandable area */}
               <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""} shrink-0`} ref={toolboxDropdownRef}>
-                <div className={`absolute bottom-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}>
+                <div className={`absolute mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-250 ease-in-out overflow-hidden ${plusExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'} ${messages.length === 0 ? "top-full" : "bottom-full"}`}>
                   <Button
                     variant="ghost"
                     className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
