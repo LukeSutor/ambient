@@ -1,21 +1,17 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Separator } from "@/components/ui/separator"
-import { Move, X, LoaderCircle, MessageSquarePlus, Plus, SquareDashedMousePointer, SquareDashed } from 'lucide-react';
-import Image from "next/image";
-import Markdown from 'react-markdown'
-import { llmMarkdownConfig } from '@/components/ui/markdown-config';
-import { SettingsService } from '@/lib/settings-service';
 import { HudDimensions } from '@/types/settings';
-import { OcrResponseEvent, HudChatEvent, ChatStreamEvent } from "@/types/events";
-import { Message } from '@/types/conversations';
-const logo = '/logo.png';
+import { ChatStreamEvent, HudChatEvent, OcrResponseEvent } from '@/types/events';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
+import MessageList from '@/components/hud/message-list';
+import HUDInputBar from '@/components/hud/hud-input-bar';
+import { useHudAnimations } from '@/hooks/use-hud-animations';
+import { useHudStream } from '@/hooks/use-hud-stream';
 
 interface Conversation {
   id: string;
@@ -30,8 +26,6 @@ export default function HudPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const isExpandedRef = useRef(false);
-
-  // Keep ref in sync with state
   useEffect(() => {
     isExpandedRef.current = isExpanded;
   }, [isExpanded]);
@@ -44,6 +38,10 @@ export default function HudPage() {
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  const hudDimensionsRef = useRef<HudDimensions | null>(null);
+  useEffect(() => {
+    hudDimensionsRef.current = hudDimensions;
+  }, [hudDimensions]);
   const streamContentRef = useRef<string>('');
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [plusExpanded, setPlusExpanded] = useState(false);
@@ -51,6 +49,20 @@ export default function HudPage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const measurementRef = useRef<HTMLDivElement>(null);
+
+  // Encapsulated GSAP animations
+  useHudAnimations({
+    hudDimensions,
+    inputContainerRef,
+    messagesContainerRef,
+    isExpanded,
+    messagesLength: messages.length,
+    isStreaming,
+  });
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -74,6 +86,7 @@ export default function HudPage() {
 
   // Ensure drag visibility resets when pointer is released anywhere
   useEffect(() => {
+    clearAndCollapse();
     const onUp = () => setIsDraggingWindow(false);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('mouseup', onUp);
@@ -98,222 +111,34 @@ export default function HudPage() {
     return cleanText;
   }
 
-  // Initialize conversation, server, chat listener, ocr listener, and enable transparent background
-  useEffect(() => {
-    // Load HUD dimensions from settings
-    const loadHudDimensions = async () => {
-      try {
-        const dimensions = await SettingsService.getHudDimensions();
-        setHudDimensions(dimensions);
-      } catch (error) {
-        console.error('Failed to load HUD dimensions:', error);
-        // Fallback to defaults
-        const defaultDimensions: HudDimensions = {
-          width: 500,
-          collapsed_height: 60,
-          expanded_height: 350,
-        };
-        setHudDimensions(defaultDimensions);
-      }
-    };
+  // Stream/events setup
+  const { createNewConversation, closeWindow } = useHudStream({
+    isExpandedRef,
+    setHudDimensions,
+    hudDimensionsRef,
+    setMessages,
+    setIsLoading,
+    setIsStreaming,
+    setOcrResults,
+    setOcrLoading,
+    ocrTimeoutRef,
+    currentConversationIdRef,
+    setCurrentConversationId,
+    messagesEndRef,
+  });
 
-    loadHudDimensions();
-
-    // Set up a listener for settings changes (we'll use a custom event)
-    let unlistenSettings: UnlistenFn | null = null;
-    (async () => {
-      try {
-        unlistenSettings = await listen('settings_changed', async () => {
-          // Reload HUD dimensions when settings change
-          await loadHudDimensions();
-          
-          // Also refresh the actual window size to match current state
-          try {
-            await invoke('refresh_hud_window_size', { 
-              label: 'floating-hud', 
-              isExpanded: isExpandedRef.current 
-            });
-          } catch (error) {
-            console.error('Failed to refresh HUD window size:', error);
-          }
-        });
-      } catch (err) {
-        console.error('Failed to set up settings listener:', err);
-      }
-    })();
-
-    // Ensure LLM server is running and create a conversation
-    (async () => {
-      try {
-        // Try spawning the llama.cpp server (idempotent if already running)
-        await invoke<string>('spawn_llama_server');
-      } catch (e) {
-        // Not fatal; generate() does its own health check too
-        console.warn('spawn_llama_server failed or not available:', e);
-      }
-      const convId = await createNewConversation();
-      // Load any existing messages for this conversation
-      if (convId) {
-        try {
-          const existing = await invoke<any[]>('get_messages', { conversationId: convId });
-          const mapped = existing.map((m) => ({ role: m.role === 'user' ? 'user' as const : 'assistant' as const, content: extractThinkingContent(m.content) }));
-          setMessages(mapped);
-        } catch (err) {
-          console.error('Failed to load existing messages for HUD:', err);
-        }
-      }
-    })();
-
-    // Set up a single stream listener mirroring the main UI approach
-    let unlistenStream: UnlistenFn | null = null;
-    (async () => {
-      try {
-        unlistenStream = await listen<ChatStreamEvent>('chat_stream', (event) => {
-          const { delta, full_response, is_finished, conv_id } = event.payload;
-
-          // Ignore if not from current conversation
-          if (conv_id !== currentConversationIdRef.current) {
-            console.log('Ignoring stream event from different conversation');
-            return;
-          }
-
-          if (is_finished) {
-            const finalText = extractThinkingContent(full_response ?? streamContentRef.current);
-            // Patch last assistant message
-            setMessages((prev) => {
-              const next = [...prev];
-              const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
-              const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
-              if (lastIdx >= 0) {
-                next[lastIdx] = { ...next[lastIdx], content: finalText };
-              }
-              return next;
-            });
-            setIsLoading(false);
-            setIsStreaming(false);
-            streamContentRef.current = '';
-            return;
-          }
-
-          if (delta) {
-            // Accumulate then render cleaned content
-            streamContentRef.current += delta;
-            const clean = extractThinkingContent(streamContentRef.current);
-            setMessages((prev) => {
-              const next = [...prev];
-              const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
-              const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
-              if (lastIdx >= 0) {
-                next[lastIdx] = { ...next[lastIdx], content: clean };
-              } else {
-                // If no assistant placeholder yet, add one
-                next.push({ role: 'assistant', content: clean });
-              }
-              return next;
-            });
-            // Auto-scroll to bottom on new tokens
-            queueMicrotask(() => {
-              messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            });
-          }
-        });
-      } catch (err) {
-        console.error('Failed to set up chat_stream listener:', err);
-      }
-    })();
-
-    // Listen for ocr events
-    let unlistenOCR: UnlistenFn | null = null;
-    (async () => {
-      try {
-        unlistenOCR = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          const result = event.payload as OcrResponseEvent;
-          if (!result.success) {
-            console.error('OCR failed');
-          }
-          // Clear any active timeout as we've received a result
-          if (ocrTimeoutRef.current) {
-            clearTimeout(ocrTimeoutRef.current);
-            ocrTimeoutRef.current = null;
-          }
-          setOcrResults((prev) => [...prev, result]);
-          setOcrLoading(false);
-        });
-      } catch (err) {
-        console.error('Failed to set up OCR listener:', err);
-      }
-    })();
-
-    // Add class to force transparent bg for this window
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.add('hud-transparent');
-      document.body.classList.add('hud-transparent');
-    }
-
-    return () => {
-      if (typeof document !== 'undefined') {
-        document.documentElement.classList.remove('hud-transparent');
-        document.body.classList.remove('hud-transparent');
-      }
-      if (unlistenStream) {
-        try { unlistenStream(); } catch { }
-      }
-      if (unlistenSettings) {
-        try { unlistenSettings(); } catch { }
-      }
-      if (unlistenOCR) {
-        try { unlistenOCR(); } catch { }
-      }
-      // Clear any pending OCR timeout on unmount
-      if (ocrTimeoutRef.current) {
-        clearTimeout(ocrTimeoutRef.current);
-        ocrTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  async function createNewConversation() {
-    try {
-      const newConv = await invoke<Conversation>("create_conversation", { name: null });
-      setCurrentConversationId(newConv.id);
-      currentConversationIdRef.current = newConv.id;
-      return newConv.id;
-    } catch (err) {
-      console.error("Error creating conversation:", err);
-      return null;
-    }
-  }
-
-  async function closeWindow() {
-    try {
-      await invoke('close_floating_window', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to close window:', error);
-      try {
-        const currentWindow = getCurrentWebviewWindow();
-        await currentWindow.close();
-      } catch (altError) {
-        console.error('Direct close method also failed:', altError);
-      }
-    }
-  }
-
-  async function expandResponseArea() {
-    setIsExpanded(true);
-    try {
-      await invoke('resize_hud_expanded', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to resize window:', error);
-    }
-  }
+  // createNewConversation and closeWindow provided by useHudStream
 
   async function collapseResponseArea() {
     setIsExpanded(false);
-    try {
-      await invoke('resize_hud_collapsed', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to resize window:', error);
-    }
+    // Collapse HUD after 250ms to allow input box animation
+    setTimeout(async () => {
+      try {
+        await invoke('resize_hud_collapsed', { label: 'floating-hud' });
+      } catch (error) {
+        console.error('Failed to resize window:', error);
+      }
+    }, 500);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -322,10 +147,16 @@ export default function HudPage() {
 
     if (!query || isLoading) return;
 
-    setIsLoading(true);
-    setInput('');
+    // Fully expand window to allow for animations
+    try {
+      await invoke('resize_hud_expanded', { label: 'floating-hud' });
+    } catch (error) {
+      console.error('Failed to resize window:', error);
+    }
 
-    await expandResponseArea();
+    setIsLoading(true);
+    setIsExpanded(true);
+    setInput('');
 
     try {
       // Append user message and an assistant placeholder
@@ -377,6 +208,16 @@ export default function HudPage() {
       setIsStreaming(false);
       streamContentRef.current = '';
 
+      // Dynamically set the size to the content height
+      if (messagesContainerRef.current) {
+        const scrollHeight = messagesContainerRef.current.scrollHeight;
+        try {
+          await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: scrollHeight });
+        } catch (error) {
+          console.error('Failed to resize window:', error);
+        }
+      }
+
     } catch (error) {
       console.error('Error generating response:', error);
       setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: '[Error generating response]' }]);
@@ -424,7 +265,6 @@ export default function HudPage() {
         ocrTimeoutRef.current = null;
       }
     }
-    setPlusExpanded(false);
   };
 
   const handleNewChat = async () => {
@@ -433,11 +273,9 @@ export default function HudPage() {
       await clearAndCollapse();
       await createNewConversation();
     }
-    setPlusExpanded(false);
   }
 
   const handleLogoClick = async () => {
-    console.log('Logo clicked, opening main window');
     try {
       await invoke('open_main_window');
     } catch (error) {
@@ -445,169 +283,87 @@ export default function HudPage() {
     }
   }
 
+  const handleExpandFeatures = async () => {
+    // Resize to fit if expanding and no messages
+    if (!plusExpanded) {
+      if (messages.length === 0) {
+        try {
+          await invoke('resize_hud_dynamic', { additionalHeight: 76 });
+        } catch (error) {
+          console.error('Failed to update HUD window height:', error);
+        }
+      }
+      setPlusExpanded(true);
+    // Only collapse if no messages
+    } else {
+      if (messages.length === 0) {
+        // Collapse after a quarter second to allow button press animation
+        setTimeout(async () => {
+          try {
+            await invoke('resize_hud_collapsed', { label: 'floating-hud' });
+          } catch (error) {
+            console.error('Failed to resize window:', error);
+          }
+        }, 250);
+      }
+      setPlusExpanded(false);
+    }
+  }
+
   return (
-    <div className="w-full h-full bg-transparent">
+  <div ref={containerRef} className="w-full h-full bg-transparent">
+      {/* Hidden measurement container - exactly mirrors the real messages container */}
+      <div
+        ref={measurementRef}
+        className="absolute opacity-0 pointer-events-none"
+        style={{
+          width: hudDimensions?.width ? `${hudDimensions.width}px` : '500px',
+          top: '-9999px' // Move offscreen
+        }}
+      >
+        <div className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all">
+          <MessageList messages={messages} showMarkdown />
+        </div>
+      </div>
+
       {/* Glass Container */}
-      <div className="relative w-full h-full backdrop-blur-2xl backdrop-saturate-150 flex flex-col overflow-hidden">
+      <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
         {/* Chat Area - takes remaining space after input bar */}
-        <div className="relative flex-1 flex flex-col min-h-0">
+        <div className="relative flex flex-col min-h-0 h-min">
           {/* Messages Scroll Area */}
-          {isExpanded && (
-            <div
-              className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all"
-            >
-              <div className="flex flex-col space-y-2">
-                {messages.map((m, i) => (
-                  <div
-                    key={`m-${i}`}
-                    className={
-                      m.role === 'user'
-                        ? 'max-w-[85%] ml-auto bg-white/60 border border-black/20 rounded-xl px-3 py-2'
-                        : 'max-w-[95%] w-full text-left mx-auto'
-                    }
-                  >
-                    {m.role === 'user' ?
-                    <div className="whitespace-pre-wrap">{m.content}</div>
-                    :
-                    <Markdown {...llmMarkdownConfig}>
-                      {m.content}
-                    </Markdown>}
-                  </div>
-                ))}
-
-                {isStreaming && (
-                  <div className="inline mr-auto h-4 w-3 animate-pulse rounded-sm bg-black/30" />
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            </div>
-          )}
+          <div
+            ref={messagesContainerRef}
+            className="hud-scroll overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
+            style={{ height: '0px', opacity: 0, transform: 'scale(0.95)', transformOrigin: 'center bottom', padding: '0px' }}
+          >
+            <MessageList ref={messagesEndRef} messages={messages} showMarkdown={false} />
+          </div>
 
           {/* Input Container - fixed height at bottom */}
-          <div 
-            className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
-            id="input-container"
-            onMouseEnter={() => setIsHoveringGroup(true)}
+          <HUDInputBar
+            ref={inputContainerRef}
+            hudDimensions={hudDimensions}
+            inputValue={input}
+            setInputValue={setInput}
+            onKeyDown={handleKeyDown}
+            onLogoClick={handleLogoClick}
+            onExpandFeatures={handleExpandFeatures}
+            onCaptureArea={handleCaptureArea}
+            onNewChat={handleNewChat}
+            onClose={closeWindow}
+            onDragStart={() => setIsDraggingWindow(true)}
             onMouseLeave={handleMouseLeave}
-            style={{
-              height: hudDimensions ? `${hudDimensions.collapsed_height}px` : '60px',
-              width: hudDimensions ? `${hudDimensions.width}px` : '500px'
-            }}
-          >
-            <div
-              className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
-            >
-              <button onClick={handleLogoClick} title="Open Main Window" className="shrink-0">
-                <Image
-                  src={logo}
-                  width={32}
-                  height={32}
-                  alt="Logo"
-                  className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
-                />
-              </button>
-
-              <div className="flex-1 min-w-32">
-                <Input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask anything"
-                  className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0 w-full"
-                  autoComplete="off"
-                  autoFocus
-                />
-              </div>
-
-              {/* OCR captures */}
-              <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap shrink min-w-0">
-                {ocrResults.map((capture, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0"
-                    title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
-                  >
-                    <SquareDashed className="!h-5 !w-5" />
-                    <Button
-                      variant="ghost"
-                      className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
-                      size="icon"
-                      onClick={() => {
-                        setOcrResults(prev => prev.filter((_, i) => i !== index));
-                      }}
-                    >
-                      <X className="!h-3 !w-3 text-black shrink-0" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Additional features expandable area */}
-              <div className={`flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? "bg-white/40" : ""} shrink-0`}>
-                <div className={`flex flex-row items-center justify-between h-8 gap-x-1 transition-all duration-300 ease-in-out overflow-hidden ${plusExpanded ? 'w-[80px] opacity-100' : 'w-0 opacity-0'}`}>
-                  <Button
-                    variant="ghost"
-                    className="w-8 h-8 rounded-full flex-shrink-0"
-                    size="icon"
-                    onClick={handleCaptureArea}
-                    title="Capture Area"
-                  >
-                    <SquareDashedMousePointer className="!w-5 !h-5 text-black shrink-0" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-8 h-8 rounded-full flex-shrink-0"
-                    size="icon"
-                    onClick={handleNewChat}
-                    title="New Chat"
-                  >
-                    <MessageSquarePlus className="!w-5 !h-5 text-black shrink-0" />
-                  </Button>
-                  <Separator orientation="vertical" className="bg-black/40 !h-5 mr-1" />
-                </div>
-                <Button
-                  variant="ghost"
-                  className="w-8 h-8 rounded-full"
-                  size="icon"
-                  disabled={ocrLoading}
-                  onClick={() => setPlusExpanded(!plusExpanded)}
-                >
-                  {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />}
-                </Button>
-              </div>
-            </div>
-            
-            {/* Close icon */}
-            <button
-              className={
-              (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-              ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'
-              }
-              onClick={closeWindow}
-              title="Close Window"
-            >
-              <X className="w-full h-full p-1 text-black pointer-events-none" />
-            </button>
-
-            {/* Move handle */}
-            <div
-              data-tauri-drag-region
-              id="drag-area"
-              className={
-                (isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') + 
-                ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'
-              }
-              onPointerDown={() => setIsDraggingWindow(true)}
-              draggable={false}
-              title="Drag Window"
-            >
-                <Move className="w-full h-full p-1 text-black pointer-events-none" />
-            </div>
-          </div>
+            isDraggingWindow={isDraggingWindow}
+            isHoveringGroup={isHoveringGroup}
+            setIsHoveringGroup={setIsHoveringGroup}
+            plusExpanded={plusExpanded}
+            setPlusExpanded={setPlusExpanded}
+            ocrLoading={ocrLoading}
+            ocrResults={ocrResults}
+            removeOcrAt={(i) => setOcrResults((prev) => prev.filter((_, idx) => idx !== i))}
+            messagesCount={messages.length}
+          />
         </div>
       </div>
     </div>

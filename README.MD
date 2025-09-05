@@ -1,108 +1,84 @@
-# TaskAware: AI-Powered Workflow Tracking for Desktop Employees
+# Cortical
 
-**TaskAware** is a privacy-conscious, AI-powered desktop productivity assistant that runs locally on employees' devices. It intelligently monitors screen activity, matches actions to structured tasks, and syncs progress with a centralized dashboard—enabling seamless task tracking without micromanagement or invasive surveillance.
+Local‑first AI assistant that lives on your PC and helps automate everyday tasks.
 
-This project is built using **Tauri**, with a **Next.js frontend**, **Rust backend**, and **llama.cpp** for local LLM inference.
+## Overview
 
----
+Cortical is a Windows desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs quietly in the background and prioritizes privacy by default.
 
-## 🎯 Project Goal
+Built with Tauri (Rust + Next.js).
 
-The goal of TaskAware is to create a system that:
+## Key features
 
-1. **Monitors user activity locally** (e.g. screen text, app usage).
-2. **Understands and tracks task completion** using on-device LLMs.
-3. **Automatically checks off tasks** when the employee performs them.
-4. **Reminds users** when steps are missed.
-5. **Reports to managers** in a clean, actionable dashboard.
-6. Does all this **securely and ethically**, using **on-device AI** to avoid sending sensitive data to the cloud.
+- Local‑first inference with llama.cpp
+  - Ships with a built‑in model downloader
+  - Defaults to Qwen3 1.7B (others can be added)
+- Floating chat window
+  - Chat locally with Qwen3 1.7B
+  - Optional GPT‑OSS‑20B via OpenRouter
+- Screen region context with OCR
+  - Snipping‑tool‑style region capture
+  - Extracts text with OCR and injects it into the conversation
+- Runs in the background, designed to be helpful without getting in your way
 
----
+## How it works
 
-## ✅ Features Implemented
+- The Tauri/Rust backend manages windowing, screen capture, OCR, and model orchestration
+- llama.cpp runs locally; the app communicates with it through a local http server
+- When you choose, OpenRouter can be used as the model provider
+- All local artifacts (models, database, caches) are stored in your Windows AppData folder
 
-- ✅ **Tauri-based Desktop App**: Lightweight, cross-platform, and secure.
-- ✅ **Next.js + TailwindCSS + ShadCN UI**: Clean and responsive user interface.
-- ✅ **Local LLM Integration (llama.cpp)**: Local text generation and reasoning without needing cloud APIs.
-- ✅ **AWS Cognito Auth**: Simple user login/logout system for secure user sessions.
-- ✅ **Windows UI Automation Integration (`windows-rs`)**: Extracts on-screen text for parsing and analysis.
-- ✅ **Event-driven Rust backend**: Architecture designed for modular event handling.
-- ✅ **Utility for model downloading**: Dynamically fetch and install models for local use.
+## Roadmap (vision)
 
----
+- Proactive assistance: draft emails or messages based on detected screen context
+- Scheduling: suggest/create calendar events from chats or on‑screen cues
+- Rich automations: configurable actions triggered by screen activity
+- Cross‑platform: macOS and Linux support
 
-## 🛠️ Remaining Work
+## Quick start (Windows)
 
-Below is a checklist of the features and components that still need to be designed and implemented.
+Prerequisites
+- Rust toolchain (MSVC)
+- Node.js LTS and pnpm
 
-### 👁️ Screen Understanding & Text Formatting
-- [x] Develop more intelligent screen parsing logic to extract structured information from UI elements.
-- [x] Apply heuristics or LLM-driven summarization to remove noise from extracted text.
+Steps
+1) Clone the repo and install dependencies
+2) Create and fill in `app/src-tauri/.env` (see `.env.example`)
+3) Start the app in development mode using `pnpm run tauri dev`
 
-### 🧠 Task Modeling & Progress Tracking
-- [x] Design a system for representing structured task checklists.
-- [x] Define individual task steps in a machine-readable way that the LLM can reference.
-- [ ] Support dynamic task assignment and syncing from a remote database.
+Windows PowerShell
 
-### 🤖 LLM-Powered Task Detection
-- [x] Use function-calling LLM workflows to:
-  - Parse current screen state
-  - Match to known task steps
-  - Mark tasks as complete
-- [ ] Implement a feedback loop where the LLM can nudge the user if steps are skipped.
-- [ ] Implement a chat window where users can get clarification about tasks.
+```powershell
+cd .\app
+pnpm install
+copy .\src-tauri\.env.example .\src-tauri\.env
+# Edit .\src-tauri\.env to add your keys if needed
+pnpm run tauri dev
+```
 
+## Configuration
 
-### 📊 Manager Dashboard
-- [ ] Build a dashboard that:
-  - Displays all tasks assigned to each employee
-  - Shows task completion status in real time
-  - Tracks overall productivity
+- Local models via llama.cpp
+  - A built‑in downloader fetches models
+  - Default: Qwen3 1.7B
+- Optional OpenRouter
+  - Set `OPENROUTER_API_KEY` in `app/src-tauri/.env`
 
-### 🛡️ Privacy and Control
-- [ ] Build a “pause tracking” feature for employees to control when their activity is monitored.
-- [ ] Ensure all monitoring and inference stays strictly local unless explicitly shared by the user.
+See `.env.example` for all supported variables.
 
-### 🔄 Integrations & Syncing
-- [ ] Sync task progress between local app and remote dashboard/database.
-- [ ] Allow new tasks and workflows to be pushed to the client from a centralized interface.
+## OCR and screen capture
 
-### 🧪 Testing & Optimization
-- [ ] Create LLM evals for task tracking.
-- [ ] Write unit and integration tests for screen parsing, event handling, and LLM responses.
+- Region selection opens a snipping‑style overlay; the selected area is OCR’d and added to the chat context
+- OCR is powered by the Rust crate [ocrs](https://github.com/robertknight/ocrs)
 
----
+## Privacy
 
-## 🔧 Technologies Used
+- Local‑first by design: inference and screen processing happen on your machine
+- Optional cloud access through OpenRouter is opt‑in and key‑gated
+- Artifacts (models, logs, OCR snippets) are stored locally
 
-| Tech | Purpose |
-|------|---------|
-| **Tauri** | Cross-platform desktop app shell |
-| **Rust** | System-level backend logic and screen interaction |
-| **Next.js** | UI framework for dashboard and frontend logic |
-| **TailwindCSS + ShadCN** | Fast, modern styling and components |
-| **AWS Cognito** | User authentication and session management |
-| **llama.cpp** | On-device language model inference |
-| **windows-rs + UIAutomation API** | Access screen UI elements and capture text on Windows |
+## Project structure
 
----
-
-## 🚀 Vision for the Future
-
-TaskAware is the first step toward an ethical alternative to invasive employee monitoring systems. Instead of screenshots and keyloggers, this system uses AI to **understand work**, **respect privacy**, and **empower both workers and managers**.
-
-We envision future integrations with:
-- Voice assistants ("Remind me to finish that report")
-- Task auto-prioritization
-- Productivity analysis that works *with* the user
-
----
-
-## 📂 Project Structure
-
-/app/
-└── Tauri application with Next.js frontend
-/backend/
-└── `llama.cpp` code and other utilities
-/ml/
-└── Model training scripts and machine learning experiments
+- `app/` – Tauri app with Next.js frontend and Rust backend
+- `app/src-tauri/` – Tauri config, Rust commands, binaries, and environment
+- `ml/` – experiments and training scripts
