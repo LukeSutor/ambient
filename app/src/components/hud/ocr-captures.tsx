@@ -1,0 +1,37 @@
+'use client';
+
+import React from 'react';
+import { Button } from '@/components/ui/button';
+import { SquareDashed, X } from 'lucide-react';
+import { OcrResponseEvent } from '@/types/events';
+
+interface OcrCapturesProps {
+  captures: OcrResponseEvent[];
+  onRemove: (index: number) => void;
+}
+
+export function OcrCaptures({ captures, onRemove }: OcrCapturesProps) {
+  return (
+    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap shrink min-w-0">
+      {captures.map((capture, index) => (
+        <div
+          key={index}
+          className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0"
+          title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
+        >
+          <SquareDashed className="!h-5 !w-5" />
+          <Button
+            variant="ghost"
+            className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
+            size="icon"
+            onClick={() => onRemove(index)}
+          >
+            <X className="!h-3 !w-3 text-black shrink-0" />
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default OcrCaptures;
