@@ -104,7 +104,7 @@ export default function HudPage() {
           height: "auto",
           opacity: 1,
           scale: 1,
-          duration: 0.6,
+          duration: 1,
           ease: "back.out(1.2)",
           onComplete: () => {
             // Restore scrolling after animation completes
@@ -134,7 +134,7 @@ export default function HudPage() {
         scale: 0.95,
         padding: "0px",
         overflowY: "hidden", // Hide overflow during collapse too
-        duration: 0.4,
+        duration: 0.5,
         ease: "power2.inOut"
       });
     }
@@ -453,7 +453,7 @@ export default function HudPage() {
       } catch (error) {
         console.error('Failed to resize window:', error);
       }
-    }, 250);
+    }, 500);
   }
 
   async function handleSubmit(e: React.FormEvent) {
