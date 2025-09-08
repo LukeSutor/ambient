@@ -1,4 +1,5 @@
 use crate::os_utils::windows::window::ApplicationTextData;
+use crate::memory::types::MemoryEntry;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -79,5 +80,13 @@ pub const EXTRACT_INTERACTIVE_MEMORY: &str = "extract_interactive_memory";
 pub struct ExtractInteractiveMemoryEvent {
   pub message: String,
   pub message_id: String,
+  pub timestamp: String,
+}
+
+pub const MEMORY_EXTRACTED: &str = "memory_extracted";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct MemoryExtractedEvent {
+  pub memory: MemoryEntry,
   pub timestamp: String,
 }

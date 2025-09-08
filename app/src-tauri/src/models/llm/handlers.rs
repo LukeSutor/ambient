@@ -209,6 +209,14 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
+  // Emit extract memory event
+  //TODO: chat messages must be saved here to get an ID to link memory to
+  let extract_event = ExtractInteractiveMemoryEvent {
+    message: event.text,
+    message_id: uuid::Uuid::new_v4().to_string(),
+    timestamp: chrono::Utc::now().to_string(),
+  };
+
   // Return response
   Ok(response)
 }
