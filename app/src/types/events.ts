@@ -8,15 +8,9 @@ export type ChatStreamEvent = { delta: string, is_finished: boolean, full_respon
 
 export type DetectTasksEvent = { text: string, active_url: string | null, timestamp: string, };
 
-export type ExecuteFunctionEvent = { function_name: string, args: Array<FunctionArgument>, timestamp: string, };
-
-export type FunctionArgument = { key: string, value: string, };
+export type ExtractInteractiveMemoryEvent = { message: string, message_id: string, timestamp: string, };
 
 export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
-
-export type GetUserAckEvent = { message: string, timestamp: string, };
-
-export type GetUserInputEvent = { message: string, timestamp: string, };
 
 export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string | null, };
 
@@ -25,7 +19,3 @@ export type OcrResponseEvent = { text: string, success: boolean, timestamp: stri
 export type SummarizeScreenEvent = { text: string, data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
 export type UpdateTasksEvent = { timestamp: string, };
-
-export type UserAckEvent = { acknowledged: boolean, timestamp: string, };
-
-export type UserInputEvent = { message: string, timestamp: string, };

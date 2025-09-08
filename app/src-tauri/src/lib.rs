@@ -4,6 +4,7 @@ pub mod constants;
 pub mod images;
 pub mod db;
 pub mod events;
+pub mod memory;
 pub mod models;
 pub mod os_utils;
 pub mod scheduler;

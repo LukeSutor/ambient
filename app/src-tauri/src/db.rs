@@ -120,6 +120,21 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           last_updated INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_workflows_last_updated ON workflows(last_updated DESC);
+
+        -- Memory entries
+        CREATE TABLE IF NOT EXISTS memory_entries (
+          id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          memory_type TEXT NOT NULL,
+          text TEXT NOT NULL,
+          embedding BLOB NOT NULL,
+          timestamp TEXT NOT NULL,
+          FOREIGN KEY (message_id) REFERENCES conversation_messages(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_memory_entries_timestamp ON memory_entries(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type);
+        CREATE INDEX IF NOT EXISTS idx_memory_entries_message_id ON memory_entries(message_id);
       "#,
   )])
 });
