@@ -1,4 +1,4 @@
-use crate::db::DbState;
+use crate::db::core::DbState;
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};

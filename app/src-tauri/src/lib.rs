@@ -2,7 +2,7 @@
 pub mod auth;
 pub mod constants;
 pub mod images;
-pub mod db;
+pub mod db; // new modular database (core, events, workflows, activity)
 pub mod events;
 pub mod memory;
 pub mod models;
@@ -15,7 +15,7 @@ pub mod tasks;
 pub mod tray;
 pub mod types;
 pub mod windows;
-use db::DbState;
+use db::core::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
@@ -83,7 +83,7 @@ pub fn run() {
 
       // Initialize the database connection during setup
       let app_handle = app.handle().clone();
-      match db::initialize_database(&app_handle) {
+  match db::core::initialize_database(&app_handle) {
         Ok(conn) => {
           log::info!("[setup] Database initialized successfully.");
           // Store the connection in the managed state using the app_handle
@@ -158,14 +158,14 @@ pub fn run() {
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
       scheduler::is_scheduler_running,
-      db::execute_sql,
-      db::reset_database,
-      db::get_events,
-      db::get_workflows,
-      db::insert_workflow,
-      db::delete_workflow,
-      db::insert_activity_summary,
-      db::get_activity_summaries,
+  db::core::execute_sql,
+  db::core::reset_database,
+  db::events::get_events,
+  db::workflows::get_workflows,
+  db::workflows::insert_workflow,
+  db::workflows::delete_workflow,
+  db::activity::insert_activity_summary,
+  db::activity::get_activity_summaries,
       setup::setup,
       setup::get_vlm_text_model_path,
       setup::get_vlm_mmproj_model_path,

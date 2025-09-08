@@ -1,5 +1,5 @@
 use super::types::*;
-use crate::db::DbState;
+use crate::db::core::DbState;
 use crate::models::llm::handlers::{handle_detect_tasks, handle_summarize_screen};
 use crate::os_utils::handlers::{handle_capture_screen, handle_get_screen_diff};
 use tauri::{AppHandle, Listener, Manager};
