@@ -197,6 +197,7 @@ pub fn run() {
       models::llm::conversations::delete_conversation,
       models::llm::conversations::update_conversation_name,
       models::llm::handlers::handle_hud_chat,
+      models::embedding::embedding::generate_embedding,
       auth::logout,
       auth::get_stored_token,
       auth::is_authenticated,
