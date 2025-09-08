@@ -15,8 +15,9 @@ pub static GLOBAL_DB_STATE: Lazy<DbState> = Lazy::new(|| DbState(Mutex::new(None
 
 // Database schema migrations
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
-  Migrations::new(vec![M::up(
-    r#"
+  Migrations::new(vec![
+    M::up(
+      r#"
         -- Conversation tables
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY,
@@ -119,7 +120,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         );
         CREATE INDEX IF NOT EXISTS idx_workflows_last_updated ON workflows(last_updated DESC);
 
-        -- Memory entries
+        -- Memory tables
         CREATE TABLE IF NOT EXISTS memory_entries (
           id TEXT PRIMARY KEY,
           message_id TEXT NOT NULL,
@@ -130,11 +131,18 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           FOREIGN KEY (message_id) REFERENCES conversation_messages(id) ON DELETE CASCADE
         );
 
+        CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_vec USING vec0(embedding float[768]);
+        CREATE TABLE IF NOT EXISTS memory_entry_vec_map (
+          memory_id TEXT UNIQUE NOT NULL,
+          FOREIGN KEY(memory_id) REFERENCES memory_entries(id) ON DELETE CASCADE
+        );
+
         CREATE INDEX IF NOT EXISTS idx_memory_entries_timestamp ON memory_entries(timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_message_id ON memory_entries(message_id);
       "#,
-  )])
+    ),
+  ])
 });
 
 fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
