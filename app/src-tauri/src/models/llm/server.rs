@@ -236,6 +236,7 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
       "q8_0",
       "--mlock", // Keep model in RAM
       "-fa",     // Use fast attention
+      "on",
       "--no-webui",
       "--log-disable",
       "--jinja",

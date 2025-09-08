@@ -118,7 +118,7 @@ async fn initialize_vlm(app_handle: tauri::AppHandle) -> Result<String, String> 
   Ok("VLM models initialized successfully.".to_string())
 }
 
-/// Gets the path of the VLM text model file.
+/// Gets the path of the VLM text model file
 #[tauri::command]
 pub fn get_vlm_text_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
@@ -129,7 +129,7 @@ pub fn get_vlm_text_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, 
   Ok(vlm_models_dir.join(TEXT_FILE))
 }
 
-/// Gets the path of the VLM mmproj model file.
+/// Gets the path of the VLM mmproj model file
 #[tauri::command]
 pub fn get_vlm_mmproj_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
@@ -140,7 +140,7 @@ pub fn get_vlm_mmproj_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf
   Ok(vlm_models_dir.join(MMPROJ_FILE))
 }
 
-/// Gets the path of the LLM model file.
+/// Gets the path of the LLM model file
 #[tauri::command]
 pub fn get_llm_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
@@ -151,7 +151,7 @@ pub fn get_llm_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, Strin
   Ok(llm_models_dir.join(LLM_FILE))
 }
 
-/// Checks if the VLM text model file is downloaded.
+/// Checks if the VLM text model file is downloaded
 #[tauri::command]
 pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
   match get_vlm_text_model_path(app_handle) {
@@ -164,7 +164,7 @@ pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<boo
   }
 }
 
-/// Checks if the VLM mmproj model file is downloaded.
+/// Checks if the VLM mmproj model file is downloaded
 #[tauri::command]
 pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
   match get_vlm_mmproj_model_path(app_handle) {
@@ -177,7 +177,7 @@ pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<b
   }
 }
 
-/// Checks if the LLM model file is downloaded.
+/// Checks if the LLM model file is downloaded
 
 #[tauri::command]
 pub fn check_llm_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
@@ -187,7 +187,7 @@ pub fn check_llm_model_download(app_handle: tauri::AppHandle) -> Result<bool, St
   }
 }
 
-/// Gets the path of the OCR text detection model file.
+/// Gets the path of the OCR text detection model file
 #[tauri::command]
 pub fn get_ocr_text_detection_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
@@ -198,7 +198,7 @@ pub fn get_ocr_text_detection_model_path(app_handle: tauri::AppHandle) -> Result
   Ok(ocr_models_dir.join(TEXT_DETECTION_FILE))
 }
 
-/// Gets the path of the OCR text recognition model file.
+/// Gets the path of the OCR text recognition model file
 #[tauri::command]
 pub fn get_ocr_text_recognition_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
@@ -209,7 +209,7 @@ pub fn get_ocr_text_recognition_model_path(app_handle: tauri::AppHandle) -> Resu
   Ok(ocr_models_dir.join(TEXT_RECOGNITION_FILE))
 }
 
-/// Checks if the OCR text detection model file exists.
+/// Checks if the OCR text detection model file exists
 #[tauri::command]
 pub fn check_ocr_text_detection_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
   match get_ocr_text_detection_model_path(app_handle) {
@@ -221,7 +221,7 @@ pub fn check_ocr_text_detection_model_download(app_handle: tauri::AppHandle) -> 
   }
 }
 
-/// Checks if the OCR text recognition model file exists.
+/// Checks if the OCR text recognition model file exists
 #[tauri::command]
 pub fn check_ocr_text_recognition_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
   match get_ocr_text_recognition_model_path(app_handle) {
@@ -230,6 +230,26 @@ pub fn check_ocr_text_recognition_model_download(app_handle: tauri::AppHandle) -
       log::error!("[check_setup] Failed to get OCR text recognition model path: {}", e);
       Ok(false)
     }
+  }
+}
+
+/// Gets the path of the embedding model file
+#[tauri::command]
+pub fn get_embedding_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+  let app_data_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
+  let embedding_models_dir = app_data_path.join(EMBEDDING_DIR);
+  Ok(embedding_models_dir.join(EMBEDDING_FILE))
+}
+
+/// Checks if the embedding model file is downloaded
+#[tauri::command]
+pub fn check_embedding_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+  match get_embedding_model_path(app_handle) {
+    Ok(path) => Ok(path.exists() && path.is_file()),
+    Err(e) => Err(e),
   }
 }
 

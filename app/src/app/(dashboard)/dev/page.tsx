@@ -97,6 +97,27 @@ export default function Dev() {
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(null);
 
+  // --- Embedding Test ---
+  const [embeddingInput, setEmbeddingInput] = useState<string>("");
+  const [embeddingArray, setEmbeddingArray] = useState<number[] | null>(null);
+  const [embeddingLoading, setEmbeddingLoading] = useState<boolean>(false);
+  const [embeddingError, setEmbeddingError] = useState<string | null>(null);
+
+  const handleGenerateEmbedding = async () => {
+    if (!embeddingInput.trim()) return;
+    setEmbeddingLoading(true);
+    setEmbeddingError(null);
+    setEmbeddingArray(null);
+    try {
+      const result = await invoke<number[]>("generate_embedding", { input: embeddingInput });
+      setEmbeddingArray(result);
+    } catch (err: any) {
+      setEmbeddingError(typeof err === 'string' ? err : JSON.stringify(err));
+    } finally {
+      setEmbeddingLoading(false);
+    }
+  };
+
   // Check OCR models availability on component mount
   useEffect(() => {
     const checkOcrModels = async () => {
@@ -378,6 +399,40 @@ export default function Dev() {
           <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
             <strong>Error:</strong> {ocrError}
           </div>
+        )}
+      </div>
+
+      {/* Embedding Test Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-purple-50">
+        <h2 className="text-lg font-semibold">Embedding Test</h2>
+        <p className="text-sm text-gray-600">Enter text to generate an embedding using the local model.</p>
+        <Textarea
+          value={embeddingInput}
+          onChange={(e) => setEmbeddingInput(e.target.value)}
+          rows={3}
+          placeholder="Type a sentence or short paragraph..."
+        />
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            onClick={handleGenerateEmbedding}
+            disabled={embeddingLoading || !embeddingInput.trim()}
+            variant="default"
+          >
+            {embeddingLoading ? "Generating..." : "Generate Embedding"}
+          </Button>
+          {embeddingArray && (
+            <span className="text-xs text-gray-700">Dims: {embeddingArray.length}</span>
+          )}
+        </div>
+        {embeddingError && (
+          <div className="p-2 bg-red-100 border border-red-300 rounded text-xs font-mono overflow-x-auto">
+            Error: {embeddingError}
+          </div>
+        )}
+        {embeddingArray && !embeddingError && (
+          <pre className="p-2 bg-white border rounded text-[10px] leading-tight max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
+            {embeddingArray.slice(0, 64).map(n => n.toFixed(4)).join(', ')}{embeddingArray.length > 64 ? ' ...' : ''}
+          </pre>
         )}
       </div>
 

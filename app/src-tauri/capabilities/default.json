@@ -29,6 +29,27 @@
       "allow": [
         {
           "args": true,
+          "name": "binaries/embedding",
+          "sidecar": true
+        },
+        {
+          "args": [
+            "-m",
+            {
+              "validator": ".*"
+            },
+            "-p",
+            {
+              "validator": ".*"
+            },
+            "--ctx-size",
+            "2048"
+          ],
+          "name": "binaries/server",
+          "sidecar": true
+        },
+        {
+          "args": true,
           "name": "binaries/server",
           "sidecar": true
         },
@@ -58,16 +79,12 @@
             "q8_0",
             "--mlock",
             "-fa",
+            "on",
             "--no-webui",
             "--log-disable",
             "--jinja"
           ],
           "name": "binaries/server",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "llama",
           "sidecar": true
         },
         {

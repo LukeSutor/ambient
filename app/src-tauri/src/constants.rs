@@ -5,6 +5,7 @@ use tokio::time::Duration;
 pub const VLM_DIR: &str = "models/vlm";
 pub const LLM_DIR: &str = "models/llm";
 pub const OCR_DIR: &str = "models/ocr";
+pub const EMBEDDING_DIR: &str = "models/embedding";
 
 // VLM model filenames
 pub const TEXT_FILE: &str = "text-model.gguf";
@@ -16,6 +17,9 @@ pub const LLM_FILE: &str = "Qwen3-1.7B-Q4_K_M.gguf";
 // OCR model filenames
 pub const TEXT_DETECTION_FILE: &str = "text-detection.rten";
 pub const TEXT_RECOGNITION_FILE: &str = "text-recognition.rten";
+
+// Embedding model filename
+pub const EMBEDDING_FILE: &str = "embeddinggemma-300m-Q4_0.gguf";
 
 // LLM model download link (example - update with actual model)
 pub const LLM_LINK: &str =

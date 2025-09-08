@@ -205,9 +205,13 @@ export default function HudPage() {
         }
         return next;
       });
-      setIsStreaming(false);
+    } catch (error) {
+      console.error('Error generating response:', error);
+      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: '[Error generating response]' }]);
+      setIsLoading(false);
+    } finally {
       streamContentRef.current = '';
-
+      setIsStreaming(false);
       // Dynamically set the size to the content height
       if (messagesContainerRef.current) {
         const scrollHeight = messagesContainerRef.current.scrollHeight;
@@ -217,13 +221,6 @@ export default function HudPage() {
           console.error('Failed to resize window:', error);
         }
       }
-
-    } catch (error) {
-      console.error('Error generating response:', error);
-      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: '[Error generating response]' }]);
-      setIsLoading(false);
-      setIsStreaming(false);
-      streamContentRef.current = '';
     }
   }
 
