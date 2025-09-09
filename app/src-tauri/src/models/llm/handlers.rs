@@ -1,6 +1,7 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
 use crate::db::core::DbState;
-use crate::db::conversations::{add_message, Message};
+use crate::db::conversations::{add_message};
+use crate::memory::service::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
 use crate::tasks::{TaskService, TaskWithSteps};
@@ -171,19 +172,38 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
 
   log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
 
+  // Get 3 most relevant memories
+  let relevant_memories = match find_similar_memories(&app_handle.clone(), &event.text, 3).await {
+    Ok(memories) => memories,
+    Err(e) => {
+      log::warn!("[hud_chat] Failed to find similar memories: {}", e);
+      Vec::new()
+    }
+  };
+
+  // Create memory context string
+  let mut memory_context = String::new();
+  if !relevant_memories.is_empty() {
+    memory_context.push_str("Here are some relevant memories you have of our past interactions:\n");
+    for memory in relevant_memories {
+      memory_context.push_str(&format!("- {}\n", memory.text));
+    }
+    memory_context.push_str("\n");
+  }
+
   // Combine OCR responses into a single string
   let mut ocr_text = String::new();
   if !event.ocr_responses.is_empty() {
-    for (i, ocr_response) in event.ocr_responses.iter().enumerate() {
-      ocr_text.push_str(&format!("<screen_result>{}</screen_result>\n", ocr_response.text));
+    for ocr_response in event.ocr_responses.iter() {
+      ocr_text.push_str(&format!("{}\n", ocr_response.text));
     }
     if !ocr_text.is_empty() {
       ocr_text = format!("\nHere's text captured from my screen as context:\n{}\n", ocr_text);
     }
   }
 
-  // Create user prompt with ocr data
-  let user_prompt = format!("{}\n{}", event.text, ocr_text).trim().to_string();
+  // Create user prompt with ocr data and memory context
+  let user_prompt = format!("{}\n{}\nTask: {}", memory_context, ocr_text, event.text).trim().to_string();
 
   log::debug!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 

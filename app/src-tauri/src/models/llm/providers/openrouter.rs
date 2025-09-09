@@ -58,7 +58,7 @@ impl LlmProvider for OpenRouterProvider {
         system_prompt: Option<String>,
         json_schema: Option<String>,
         conv_id: Option<String>,
-        use_thinking: Option<bool>,
+        _use_thinking: Option<bool>,
         stream: Option<bool>,
     ) -> Result<String, String> {
         let api_key = get_openrouter_api_key()?;

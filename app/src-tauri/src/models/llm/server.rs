@@ -151,18 +151,6 @@ async fn find_available_port() -> Result<u16, ServerError> {
   )))
 }
 
-/// Get the currently used port (if server is running)
-fn get_current_port() -> Option<u16> {
-  let server_state = SERVER_STATE.lock().unwrap();
-  server_state.port
-}
-
-/// Get the current API key (if server is running)
-fn get_current_api_key() -> Option<String> {
-  let server_state = SERVER_STATE.lock().unwrap();
-  server_state.api_key.clone()
-}
-
 /// Get server config using stored port and API key
 fn get_current_server_config(app_handle: &AppHandle) -> Result<ServerConfig, ServerError> {
   let (port, api_key) = {
@@ -472,12 +460,6 @@ pub async fn make_completion_request(
     .map_err(|e| format!("Failed to parse completion response: {}", e))?;
 
   Ok(result)
-}
-
-/// Get the current server port (if running)
-#[tauri::command]
-pub async fn get_server_port() -> Result<Option<u16>, String> {
-  Ok(get_current_port())
 }
 
 /// Restart the llama.cpp server
