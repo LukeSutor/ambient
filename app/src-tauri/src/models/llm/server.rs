@@ -529,7 +529,7 @@ pub async fn generate(
 
   // If conversation ID is provided, load existing messages
   if let Some(conversation_id) = &conv_id {
-    match crate::models::llm::conversations::get_messages(app_handle.clone(), conversation_id.clone())
+  match crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone())
       .await
     {
       Ok(conv_messages) => {
@@ -680,7 +680,7 @@ pub async fn generate(
     // Store messages in conversation if conv_id is provided
     if let Some(conversation_id) = conv_id {
       // Add user message
-      if let Err(e) = crate::models::llm::conversations::add_message(
+  if let Err(e) = crate::db::conversations::add_message(
         app_handle.clone(),
         conversation_id.clone(),
         "user".to_string(),
@@ -692,7 +692,7 @@ pub async fn generate(
       }
 
       // Add assistant response
-      if let Err(e) = crate::models::llm::conversations::add_message(
+  if let Err(e) = crate::db::conversations::add_message(
         app_handle.clone(),
         conversation_id,
         "assistant".to_string(),
@@ -749,7 +749,7 @@ pub async fn generate(
     // Store messages in conversation if conv_id is provided
     if let Some(conversation_id) = conv_id {
       // Add user message
-      if let Err(e) = crate::models::llm::conversations::add_message(
+  if let Err(e) = crate::db::conversations::add_message(
         app_handle.clone(),
         conversation_id.clone(),
         "user".to_string(),
@@ -761,7 +761,7 @@ pub async fn generate(
       }
 
       // Add assistant response
-      if let Err(e) = crate::models::llm::conversations::add_message(
+  if let Err(e) = crate::db::conversations::add_message(
         app_handle.clone(),
         conversation_id,
         "assistant".to_string(),
