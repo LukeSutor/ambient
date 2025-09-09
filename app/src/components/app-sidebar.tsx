@@ -53,8 +53,8 @@ const data = {
       icon: CheckSquare
     },
     {
-      title: "Integrations",
-      url: "/integrations",
+      title: "Memories",
+      url: "/memories",
       icon: Blocks
     }
   ],

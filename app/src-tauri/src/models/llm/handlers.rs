@@ -1,7 +1,7 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
 use crate::db::core::DbState;
 use crate::db::conversations::{add_message};
-use crate::memory::service::find_similar_memories;
+use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
 use crate::tasks::{TaskService, TaskWithSteps};
@@ -155,6 +155,28 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
 
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
+  // Save the user message to the database
+  let user_message = match add_message(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "user".to_string(),
+    event.text.clone(),
+  ).await {
+    Ok(message) => Some(message),
+    Err(e) => {
+      log::error!("[hud_chat] Failed to save user message: {}", e);
+      None
+    }
+  };
+
+  // Emit extract memory event
+  let extract_event = ExtractInteractiveMemoryEvent {
+    message: event.text.clone(),
+    message_id: user_message.map_or("".to_string(), |m| m.id),
+    timestamp: chrono::Utc::now().to_string(),
+  };
+  let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
+  
   // Create prompt
   let system_prompt_template = match get_prompt("hud_chat") {
     Some(template) => template,
@@ -180,6 +202,11 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
       Vec::new()
     }
   };
+
+  // Log relevant memories
+  for memory in &relevant_memories {
+    log::debug!("[hud_chat] Relevant memory: {}", memory.text);
+  }
 
   // Create memory context string
   let mut memory_context = String::new();
@@ -230,20 +257,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
-  // Save the user and assistant messages to the database
-  let user_message = match add_message(
-    app_handle.clone(),
-    event.conv_id.clone(),
-    "user".to_string(),
-    event.text.clone(),
-  ).await {
-    Ok(message) => Some(message),
-    Err(e) => {
-      log::error!("[hud_chat] Failed to save user message: {}", e);
-      None
-    }
-  };
-
+  // Save the assistant response to the database
   if let Err(e) = add_message(
     app_handle.clone(),
     event.conv_id.clone(),
@@ -252,14 +266,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   ).await {
     log::error!("[hud_chat] Failed to save assistant message: {}", e);
   }
-
-  // Emit extract memory event
-  let extract_event = ExtractInteractiveMemoryEvent {
-    message: event.text.clone(),
-    message_id: user_message.map_or("".to_string(), |m| m.id),
-    timestamp: chrono::Utc::now().to_string(),
-  };
-  let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
 
   // Return response
   Ok(response)

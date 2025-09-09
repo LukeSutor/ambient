@@ -58,6 +58,37 @@ pub async fn handle_extract_interactive_memory(
         }
     };
 
+    // Extract the memory text
+    let extracted_memory = match serde_json::from_str::<serde_json::Value>(&extracted_memory) {
+        Ok(json) => {
+            match json.get("memory") {
+                Some(memory_value) => {
+                    match memory_value.as_str() {
+                        Some(memory_text) => memory_text.to_string(),
+                        None => {
+                            log::error!("[memory] Memory field is not a string");
+                            return;
+                        }
+                    }
+                }
+                None => {
+                    log::error!("[memory] No 'memory' field found in JSON response");
+                    return;
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("[memory] Failed to parse JSON response: {}", e);
+            return;
+        }
+    };
+
+    // Skip if extracted memory is empty
+    if extracted_memory.trim().is_empty() {
+        log::info!("[memory] Extracted memory is empty, skipping save");
+        return;
+    }
+
     // Generate memory embedding
     let embedding = match generate_embedding(app_handle.clone(), extracted_memory.clone()).await {
         Ok(emb) => emb,

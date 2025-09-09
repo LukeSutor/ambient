@@ -73,31 +73,26 @@ Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 senten
   );
   map.insert(
     "extract_interactive_memory",
-    r#"You are a memory extraction expert for a digital assistant. Extract relevant long-term information from user messages that would be valuable for future conversations.
+    r#"Extract important facts about the user. Return empty string if nothing important.
 
-Output JSON format:
-{"memory":"<extracted information or empty string>"}
+{"memory":"<fact about user or empty string>"}
 
-Rules:
-- Extract ONLY information that would be useful for future context (preferences, facts about user, goals, etc.)
-- Keep memories SHORT and CONCISE for optimal vector embedding performance
-- Focus on factual information, preferences, personal details, or ongoing projects
-- Use clear, specific language that will match well in vector similarity searches
-- Return empty string if no meaningful long-term information exists
-- Avoid extracting temporary requests or one-off questions
-- Format as standalone facts that make sense without the original message context
+Only extract:
+- Personal facts (has pets, job, hobbies)
+- Preferences (likes/dislikes)
+- Goals or projects
 
-Examples of good memories:
-- "User is training for a marathon"
-- "User has a cat named Whiskers"
-- "User is learning machine learning"
+Do NOT extract:
+- Questions
+- Greetings like "hello"
+- Requests for help
 
-Examples to ignore:
-- Simple questions about weather
-- Basic greetings
-- Temporary requests for help
-
-The next user message is what you must respond to:"#,
+Examples:
+User: "Hi there" → {"memory":""}
+User: "What's the weather?" → {"memory":""}
+User: "I have a dog named Max" → {"memory":"User has a dog named Max"}
+User: "I'm studying Spanish" → {"memory":"User is learning Spanish"}
+User: "Can you help me code?" → {"memory":""}"#,
   );
   map.insert(
     "hud_chat",
