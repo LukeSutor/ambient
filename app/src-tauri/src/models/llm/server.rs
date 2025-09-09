@@ -677,36 +677,6 @@ pub async fn generate(
       log::error!("[llama_server] Failed to emit final stream event: {}", e);
     }
 
-    // Store messages in conversation if conv_id is provided
-    if let Some(conversation_id) = conv_id {
-      // Add user message
-  if let Err(e) = crate::db::conversations::add_message(
-        app_handle.clone(),
-        conversation_id.clone(),
-        "user".to_string(),
-        prompt,
-      )
-      .await
-      {
-        log::warn!("[llama_server] Warning: Failed to save user message: {}", e);
-      }
-
-      // Add assistant response
-  if let Err(e) = crate::db::conversations::add_message(
-        app_handle.clone(),
-        conversation_id,
-        "assistant".to_string(),
-        full_response.clone(),
-      )
-      .await
-      {
-        log::warn!(
-          "[llama_server] Warning: Failed to save assistant message: {}",
-          e
-        );
-      }
-    }
-
     Ok(full_response)
   } else {
     // Handle non-streaming response
@@ -745,36 +715,6 @@ pub async fn generate(
 
     // Extract token usage if available
     let tokens_generated = result["usage"]["completion_tokens"].as_u64().unwrap_or(0);
-
-    // Store messages in conversation if conv_id is provided
-    if let Some(conversation_id) = conv_id {
-      // Add user message
-  if let Err(e) = crate::db::conversations::add_message(
-        app_handle.clone(),
-        conversation_id.clone(),
-        "user".to_string(),
-        prompt,
-      )
-      .await
-      {
-        log::warn!("[llama_server] Warning: Failed to save user message: {}", e);
-      }
-
-      // Add assistant response
-  if let Err(e) = crate::db::conversations::add_message(
-        app_handle.clone(),
-        conversation_id,
-        "assistant".to_string(),
-        generated_text.clone(),
-      )
-      .await
-      {
-        log::warn!(
-          "[llama_server] Warning: Failed to save assistant message: {}",
-          e
-        );
-      }
-    }
 
     let total_seconds = elapsed.as_secs_f64();
     let tokens_per_second = if total_seconds > 0.0 && tokens_generated > 0 {

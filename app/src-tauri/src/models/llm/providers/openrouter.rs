@@ -159,12 +159,6 @@ impl LlmProvider for OpenRouterProvider {
                 conv_id: conv_id.clone(),
             });
 
-            // Save messages if conv_id
-            if let Some(conversation_id) = conv_id {
-                let _ = crate::db::conversations::add_message(app_handle.clone(), conversation_id.clone(), "user".to_string(), prompt).await;
-                let _ = crate::db::conversations::add_message(app_handle.clone(), conversation_id, "assistant".to_string(), full.clone()).await;
-            }
-
             Ok(full)
         } else {
             let resp = client
@@ -181,11 +175,6 @@ impl LlmProvider for OpenRouterProvider {
             }
             let json: Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
             let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
-
-            if let Some(conversation_id) = conv_id {
-                let _ = crate::db::conversations::add_message(app_handle.clone(), conversation_id.clone(), "user".to_string(), prompt).await;
-                let _ = crate::db::conversations::add_message(app_handle.clone(), conversation_id, "assistant".to_string(), content.clone()).await;
-            }
 
             Ok(content)
         }

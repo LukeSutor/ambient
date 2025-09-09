@@ -55,7 +55,7 @@ pub struct HudChatEvent {
   pub text: String,
   pub ocr_responses: Vec<OcrResponseEvent>,
   pub timestamp: String,
-  pub conv_id: Option<String>,
+  pub conv_id: String,
 }
 
 pub const OCR_RESPONSE: &str = "ocr_response";

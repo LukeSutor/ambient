@@ -1,5 +1,6 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
 use crate::db::core::DbState;
+use crate::db::conversations::{add_message, Message};
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
 use crate::tasks::{TaskService, TaskWithSteps};
@@ -174,7 +175,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   let mut ocr_text = String::new();
   if !event.ocr_responses.is_empty() {
     for (i, ocr_response) in event.ocr_responses.iter().enumerate() {
-      ocr_text.push_str(&format!("<cap_{}>{}</cap_{}>\n", i + 1, ocr_response.text, i + 1));
+      ocr_text.push_str(&format!("<screen_result>{}</screen_result>\n", ocr_response.text));
     }
     if !ocr_text.is_empty() {
       ocr_text = format!("\nHere's text captured from my screen as context:\n{}\n", ocr_text);
@@ -192,7 +193,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     user_prompt,
     Some(system_prompt),
     None,
-    event.conv_id,
+    Some(event.conv_id.clone()),
     Some(false),
     Some(true),
     None,
@@ -209,19 +210,46 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
+  // Save the user and assistant messages to the database
+  let user_message = match add_message(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "user".to_string(),
+    event.text.clone(),
+  ).await {
+    Ok(message) => Some(message),
+    Err(e) => {
+      log::error!("[hud_chat] Failed to save user message: {}", e);
+      None
+    }
+  };
+
+  if let Err(e) = add_message(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "assistant".to_string(),
+    response.clone(),
+  ).await {
+    log::error!("[hud_chat] Failed to save assistant message: {}", e);
+  }
+
   // Emit extract memory event
-  //TODO: chat messages must be saved here to get an ID to link memory to
   let extract_event = ExtractInteractiveMemoryEvent {
-    message: event.text,
-    message_id: uuid::Uuid::new_v4().to_string(),
+    message: event.text.clone(),
+    message_id: user_message.map_or("".to_string(), |m| m.id),
     timestamp: chrono::Utc::now().to_string(),
   };
+  let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
 
   // Return response
   Ok(response)
 }
 
+
+
 // Helper functions
+
+
 
 /// Formats tasks with their steps for use in prompts
 pub fn format_tasks(tasks: &[TaskWithSteps]) -> String {

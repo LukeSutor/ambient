@@ -12,6 +12,12 @@ pub async fn handle_extract_interactive_memory(
     event: ExtractInteractiveMemoryEvent,
     app_handle: &AppHandle,
 ) {
+    // Return an error if message id is empty
+    if event.message_id.is_empty() {
+        log::error!("[memory] Missing message ID for interactive memory extraction");
+        return;
+    }
+    
     // Load system prompt
     let system_prompt = match get_prompt("extract_interactive_memory") {
         Some(p) => p.to_string(),
@@ -21,12 +27,12 @@ pub async fn handle_extract_interactive_memory(
         }
     };
 
-    // Load schema (optional but expected). If missing, log and continue without schema.
+    // Load schema
     let schema = match get_schema("extract_interactive_memory") {
         Some(s) => Some(s.to_string()),
         None => {
-            log::warn!("[memory] Missing schema for extract_interactive_memory – proceeding without schema");
-            None
+            log::error!("[memory] Missing schema: extract_interactive_memory");
+            return;
         }
     };
 
