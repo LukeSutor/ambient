@@ -203,11 +203,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
-  // Log relevant memories
-  for memory in &relevant_memories {
-    log::debug!("[hud_chat] Relevant memory: {}", memory.text);
-  }
-
   // Create memory context string
   let mut memory_context = String::new();
   if !relevant_memories.is_empty() {
@@ -230,7 +225,12 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   }
 
   // Create user prompt with ocr data and memory context
-  let user_prompt = format!("{}\n{}\nTask: {}", memory_context, ocr_text, event.text).trim().to_string();
+  let user_prompt = format!(
+    "{}{}Task: {}",
+    if memory_context.is_empty() { "" } else { &format!("{}\n", memory_context) },
+    if ocr_text.is_empty() { "" } else { &format!("{}\n", ocr_text) },
+    event.text
+  );
 
   log::debug!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 
