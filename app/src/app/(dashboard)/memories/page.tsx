@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Trash2 } from "lucide-react";
+import type { MemoryEntry } from "@/types/memory";
 
 type MemoryListItem = {
     id: string;
@@ -27,13 +29,14 @@ export default function MemoriesPage() {
     const [error, setError] = useState<string | null>(null);
     const loaderRef = useRef<HTMLDivElement | null>(null);
     const didInitRef = useRef(false);
+    const serverCountRef = useRef(0); // number of items fetched from the backend (excludes optimistic/event inserts)
 
     const loadPage = useCallback(async () => {
         if (isLoading || !hasMore) return;
         setIsLoading(true);
         setError(null);
         try {
-            const offset = items.length;
+            const offset = serverCountRef.current;
             const result = (await invoke("get_memory_entries_with_message", {
                 offset,
                 limit: PAGE_SIZE,
@@ -45,6 +48,7 @@ export default function MemoriesPage() {
                 const filtered = page.filter((i) => !prevIds.has(i.id));
                 return [...prev, ...filtered];
             });
+            serverCountRef.current += page.length;
             if (page.length < PAGE_SIZE) setHasMore(false);
         } catch (e: any) {
             setError(typeof e === "string" ? e : e?.message ?? "Failed to load memories");
@@ -75,6 +79,57 @@ export default function MemoriesPage() {
         return () => observer.disconnect();
     }, [loadPage]);
 
+    // listen for memory_extracted events and prepend new item
+    useEffect(() => {
+        let unlisten: UnlistenFn | null = null;
+        let mounted = true;
+        (async () => {
+            try {
+                unlisten = await listen<{ memory: MemoryEntry; timestamp: string }>(
+                    "memory_extracted",
+                    (e) => {
+                        if (!mounted) return;
+                        const mem = e.payload.memory;
+                        (async () => {
+                            let messageContent: string | null = null;
+                            if (mem.message_id) {
+                                try {
+                                    const msg = (await invoke<any>("get_message", { messageId: mem.message_id })) as { content?: string } | null;
+                                    if (!mounted) return;
+                                    messageContent = msg?.content ?? '';
+                                } catch (err) {
+                                    // If fetching fails, proceed without message content
+                                    console.warn("get_message failed for", mem.message_id, err);
+                                }
+                            }
+
+                            if (!mounted) return;
+                            const newItem: MemoryListItem = {
+                                id: mem.id,
+                                message_id: mem.message_id,
+                                memory_type: mem.memory_type,
+                                text: mem.text,
+                                timestamp: mem.timestamp,
+                                message_content: messageContent,
+                            };
+                            setItems((prev) => {
+                                if (prev.some((i) => i.id === newItem.id)) return prev;
+                                return [newItem, ...prev];
+                            });
+                        })();
+                        // Do not change serverCountRef here; it's only for backend-fetched items
+                    }
+                );
+            } catch (_) {
+                // no-op: if listener fails, page still works
+            }
+        })();
+        return () => {
+            mounted = false;
+            if (unlisten) unlisten();
+        };
+    }, []);
+
     const onDeleteOne = useCallback(async (id: string) => {
         try {
             await invoke("delete_memory_entry", { id });
@@ -89,6 +144,7 @@ export default function MemoriesPage() {
             await invoke("delete_all_memories");
             setItems([]);
             setHasMore(false);
+            serverCountRef.current = 0;
         } catch (e: any) {
             setError(typeof e === "string" ? e : e?.message ?? "Failed to delete all memories");
         }

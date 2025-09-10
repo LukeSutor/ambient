@@ -224,6 +224,40 @@ pub async fn get_messages(
   Ok(messages)
 }
 
+/// Get a message by its id
+#[tauri::command]
+pub async fn get_message(
+  app_handle: AppHandle,
+  message_id: String,
+) -> Result<Message, String> {
+  let state = app_handle.state::<DbState>();
+  let db_guard = state.0.lock().unwrap();
+  let conn = db_guard
+    .as_ref()
+    .ok_or("Database connection not available")?;
+
+  let message = conn
+    .query_row(
+      "SELECT id, conversation_id, role, content, timestamp FROM conversation_messages WHERE id = ?1",
+      params![message_id],
+      |row| {
+        let timestamp_str: String = row.get(4)?;
+        let role_str: String = row.get(2)?;
+
+        Ok(Message {
+          id: row.get(0)?,
+          conversation_id: row.get(1)?,
+          role: Role::from_str(&role_str),
+          content: row.get(3)?,
+          timestamp: timestamp_str,
+        })
+      },
+    )
+    .map_err(|e| format!("Failed to get message: {}", e))?;
+
+  Ok(message)
+}
+
 /// Get a conversation by ID
 #[tauri::command]
 pub async fn get_conversation(

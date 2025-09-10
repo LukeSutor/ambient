@@ -169,6 +169,7 @@ pub fn run() {
       db::conversations::create_conversation,
       db::conversations::add_message,
       db::conversations::get_messages,
+  db::conversations::get_message,
       db::conversations::get_conversation,
       db::conversations::list_conversations,
       db::conversations::reset_conversation,
