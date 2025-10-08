@@ -240,6 +240,7 @@ pub async fn find_similar_memories(
 	app_handle: &tauri::AppHandle,
 	prompt: &str,
 	k: u32,
+	p: f32,
 ) -> Result<Vec<MemoryEntry>, String> {
 	// 1) Generate query embedding for the prompt
 	let query_embedding: Vec<f32> = generate_embedding(app_handle.clone(), prompt.to_string())
@@ -270,7 +271,7 @@ pub async fn find_similar_memories(
 		return Ok(Vec::new());
 	}
 
-	// 3) Query top-k similar rows using sqlite-vec's MATCH operator
+	// 3) Query using cosine distance function directly
 	//    Join through the mapping table to fetch full memory entries (including embedding BLOB).
 	let sql = r#"
 		SELECT
@@ -280,12 +281,12 @@ pub async fn find_similar_memories(
 		  me.text,
 		  me.embedding,
 		  me.timestamp,
-		  v.distance
+		  vec_distance_cosine(v.embedding, ?1) AS cosine_distance
 		FROM memory_entries_vec AS v
 		JOIN memory_entry_vec_map AS m ON v.rowid = m.rowid
 		JOIN memory_entries AS me ON me.id = m.memory_id
-		WHERE v.embedding MATCH ?1 AND v.k = ?2
-		ORDER BY v.distance
+		ORDER BY cosine_distance
+		LIMIT ?2
 	"#;
 
 	// Ensure k is at least 1
@@ -300,6 +301,8 @@ pub async fn find_similar_memories(
 		.query(rusqlite::params![query_embedding.as_bytes(), k_neighbors])
 		.map_err(|e| format!("Query execution failed: {}", e))?;
 
+	log::info!("[memory] Searching for top {} similar memories with threshold {:.2}", k_neighbors, p);
+
 	let mut results: Vec<MemoryEntry> = Vec::new();
 	while let Some(row) = rows.next().map_err(|e| format!("Row fetch failed: {}", e))? {
 		let id: String = row.get(0).map_err(|e| e.to_string())?;
@@ -308,20 +311,34 @@ pub async fn find_similar_memories(
 		let text: String = row.get(3).map_err(|e| e.to_string())?;
 		let embedding_blob: Vec<u8> = row.get(4).map_err(|e| e.to_string())?;
 		let timestamp: String = row.get(5).map_err(|e| e.to_string())?;
-		// distance is at index 6, but we don't include it in MemoryEntry; still read to advance
-		let _distance: f64 = row.get(6).map_err(|e| e.to_string())?;
+		let cosine_distance: f64 = row.get(6).map_err(|e| e.to_string())?;
 
-		// Convert BLOB back into Vec<f32> (little-endian)
-		let embedding = bytes_to_f32_vec(&embedding_blob)?;
+		// Convert cosine distance to cosine similarity
+		// Cosine distance is typically 1 - cosine_similarity, so similarity = 1 - distance
+		let similarity = 1.0 - cosine_distance as f32;
 
-		results.push(MemoryEntry {
-			id,
-			message_id,
-			memory_type,
-			text,
-			embedding,
-			timestamp,
-		});
+		// Print memory and similarity for debugging
+		log::debug!(
+			"[memory] Found memory with cosine similarity {:.4}: {}",
+			similarity,
+			text
+		);
+		
+		// Only include memories that meet the similarity threshold
+		if similarity >= p {
+			// Convert BLOB back into Vec<f32> (little-endian)
+			let embedding = bytes_to_f32_vec(&embedding_blob)?;
+
+			results.push(MemoryEntry {
+				id,
+				message_id,
+				memory_type,
+				text,
+				embedding,
+				timestamp,
+				similarity: Some(similarity as f64),
+			});
+		}
 	}
 
 	Ok(results)

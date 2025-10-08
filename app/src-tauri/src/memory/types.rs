@@ -10,4 +10,5 @@ pub struct MemoryEntry {
     pub text: String,
     pub embedding: Vec<f32>,
     pub timestamp: String,
+    pub similarity: Option<f64>,
 }

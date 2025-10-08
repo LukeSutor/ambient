@@ -176,6 +176,9 @@ export default function HudPage() {
         }
       }
 
+      // Throw error if still no conversation id
+      if (!convId) throw new Error('No conversation ID available');
+
       // Create hud chat event
       const hudChatEvent: HudChatEvent = {
         text: query,

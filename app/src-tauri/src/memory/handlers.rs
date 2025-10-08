@@ -105,6 +105,7 @@ pub async fn handle_extract_interactive_memory(
         text: extracted_memory.clone(),
         embedding,
         timestamp: chrono::Utc::now().to_rfc3339(),
+        similarity: None,
     };
 
     // Save to database
