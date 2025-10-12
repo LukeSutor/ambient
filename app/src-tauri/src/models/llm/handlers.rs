@@ -1,6 +1,6 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
 use crate::db::core::DbState;
-use crate::db::conversations::{add_message};
+use crate::db::conversations::{add_message, add_message_with_id};
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
@@ -155,12 +155,13 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
 
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
-  // Save the user message to the database
-  let user_message = match add_message(
+  // Save the user message to the database with the provided message_id
+  let user_message = match add_message_with_id(
     app_handle.clone(),
     event.conv_id.clone(),
     "user".to_string(),
     event.text.clone(),
+    Some(event.message_id.clone()),
   ).await {
     Ok(message) => Some(message),
     Err(e) => {
@@ -172,7 +173,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   // Emit extract memory event
   let extract_event = ExtractInteractiveMemoryEvent {
     message: event.text.clone(),
-    message_id: user_message.map_or("".to_string(), |m| m.id),
+    message_id: event.message_id.clone(),
     timestamp: chrono::Utc::now().to_string(),
   };
   let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);

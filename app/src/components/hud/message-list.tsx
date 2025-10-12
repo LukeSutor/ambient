@@ -4,11 +4,10 @@ import React, { forwardRef } from 'react';
 import Markdown from 'react-markdown';
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import AnimatedText from '@/components/ui/animated-text';
-import { MemoryEntry } from '@/types/memory';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
+import { Button } from '@/components/ui/button';
 import { NotebookPen } from 'lucide-react';
-
-export type ChatMessage = { role: 'user' | 'assistant'; content: string; memory: MemoryEntry | null };
+import { ChatMessage } from '@/lib/conversations';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -17,9 +16,7 @@ interface MessageListProps {
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
 export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
-  ({ messages, showMarkdown = true }, endRef) => {
-    console.log('Rendering MessageList with messages:', messages);
-    
+  ({ messages, showMarkdown = true }, endRef) => {    
     // Helper function to check if previous message has memory
     const hasPreviousMemory = (index: number) => {
       return index > 0 && messages[index - 1]?.role === 'user' && messages[index - 1]?.memory !== null;
@@ -40,19 +37,37 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
               <div className="whitespace-pre-wrap">{m.content}</div>
             ) : (
               <div>
-                {/* Always reserve space for the tooltip area */}
+                {/* Always reserve space for the memory indicator area */}
                 <div className="h-6 flex items-center justify-start mb-1">
                   {hasPreviousMemory(i) ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1 text-muted-foreground cursor-help">
+                    <HoverCard>
+                      <HoverCardTrigger asChild>
+                        <div className="flex items-center gap-1 text-muted-foreground">
                           <NotebookPen className="h-4 w-4" />
+                          <span className='font-semibold'>Updated saved memory</span>
                         </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        <p>Updated saved memory</p>
-                      </TooltipContent>
-                    </Tooltip>
+                      </HoverCardTrigger>
+                      <HoverCardContent side="top" className="w-min max-w-80 bg-white/70">
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-sm text-black">
+                              {messages[i - 1]?.memory?.text || 'No memory text available'}
+                            </p>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full bg-white/50"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              // TODO: Implement manage memories functionality
+                            }}
+                          >
+                            Manage Memories
+                          </Button>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
                   ) : (
                     <div className="h-4 w-4" />
                   )}
@@ -61,13 +76,6 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
                   <Markdown {...llmMarkdownConfig}>{m.content}</Markdown>
                 ) : (
                   <div className="prose prose-sm max-w-none">
-                    {messages[i-1]?.memory && (
-                      <div className="mb-2 p-2 bg-yellow-50 border-l-4 border-yellow-400">
-                        <p className="font-semibold">Context from memory:</p>
-                        <p className="whitespace-pre-wrap">{messages[i-1].memory?.text}</p>
-                      </div>
-                    )}
-                    <p>assistant</p>
                     <AnimatedText content={m.content} />
                   </div>
                 )}

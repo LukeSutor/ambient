@@ -127,13 +127,23 @@ pub async fn add_message(
   role: String,
   content: String,
 ) -> Result<Message, String> {
+  add_message_with_id(app_handle, conversation_id, role, content, None).await
+}
+
+pub async fn add_message_with_id(
+  app_handle: AppHandle,
+  conversation_id: String,
+  role: String,
+  content: String,
+  message_id: Option<String>,
+) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
     .as_ref()
     .ok_or("Database connection not available")?;
 
-  let message_id = Uuid::new_v4().to_string();
+  let message_id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
   let now = Utc::now();
 
   let message = Message {
