@@ -6,7 +6,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { SettingsService } from '@/lib/settings-service';
 import type { HudDimensions } from '@/types/settings';
-import type { ChatStreamEvent, HudChatEvent, OcrResponseEvent } from '@/types/events';
+import type { ChatStreamEvent, HudChatEvent, OcrResponseEvent, MemoryExtractedEvent } from '@/types/events';
+import { MemoryEntry } from '@/types/memory';
 
 export interface Conversation {
   id: string;
@@ -33,7 +34,7 @@ export function useHudStream({
   isExpandedRef: MutableRefObject<boolean>;
   setHudDimensions: (d: HudDimensions | null) => void;
   hudDimensionsRef: MutableRefObject<HudDimensions | null>;
-  setMessages: React.Dispatch<React.SetStateAction<{ role: 'user' | 'assistant'; content: string }[]>>;
+  setMessages: React.Dispatch<React.SetStateAction<{ role: 'user' | 'assistant'; content: string; memory: MemoryEntry | null }[]>>;
   setIsLoading: (b: boolean) => void;
   setIsStreaming: (b: boolean) => void;
   setOcrResults: React.Dispatch<React.SetStateAction<OcrResponseEvent[]>>;
@@ -78,6 +79,7 @@ export function useHudStream({
     let unlistenSettings: UnlistenFn | null = null;
     let unlistenStream: UnlistenFn | null = null;
     let unlistenOCR: UnlistenFn | null = null;
+    let unlistenMemoryExtracted: UnlistenFn | null = null;
 
     (async () => {
       // Dimensions and settings listener
@@ -112,6 +114,7 @@ export function useHudStream({
         const mapped = existing.map((m) => ({
           role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
           content: extractThinkingContent(m.content),
+          memory: m.memory ? (m.memory as MemoryEntry) : null,
         }));
         setMessages(mapped);
       } catch (err) {
@@ -149,7 +152,7 @@ export function useHudStream({
               if (lastIdx >= 0) {
                 next[lastIdx] = { ...next[lastIdx], content: clean };
               } else {
-                next.push({ role: 'assistant', content: clean });
+                next.push({ role: 'assistant', content: clean, memory: null });
               }
               return next;
             });
@@ -176,6 +179,26 @@ export function useHudStream({
         console.error('Failed to set up OCR listener:', err);
       }
 
+      // Memory extracted listener
+      try {
+        unlistenMemoryExtracted = await listen<MemoryExtractedEvent>('memory_extracted', (event) => {
+          const { memory } = event.payload;
+          console.log('Memory extracted:', memory);
+          // Update the messages so that the message with the matching message_id (if any) gets the memory attached
+          setMessages((prev) => {
+            const next = prev.map((m) => {
+              if (m.role === 'user' && memory.message_id && m.content) {
+                return { ...m, memory };
+              }
+              return m;
+            });
+            return next;
+          });
+        });
+      } catch (err) {
+        console.error('Failed to set up memory_extracted listener:', err);
+      }
+
       // Transparent background class
       if (typeof document !== 'undefined') {
         document.documentElement.classList.add('hud-transparent');
@@ -191,6 +214,7 @@ export function useHudStream({
       try { unlistenStream?.(); } catch {}
       try { unlistenSettings?.(); } catch {}
       try { unlistenOCR?.(); } catch {}
+      try { unlistenMemoryExtracted?.(); } catch {}
       if (ocrTimeoutRef.current) {
         clearTimeout(ocrTimeoutRef.current);
         ocrTimeoutRef.current = null;

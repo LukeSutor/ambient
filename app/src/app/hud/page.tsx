@@ -6,6 +6,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { HudDimensions } from '@/types/settings';
 import { ChatStreamEvent, HudChatEvent, OcrResponseEvent } from '@/types/events';
+import { MemoryEntry } from '@/types/memory';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import MessageList from '@/components/hud/message-list';
@@ -43,7 +44,7 @@ export default function HudPage() {
     hudDimensionsRef.current = hudDimensions;
   }, [hudDimensions]);
   const streamContentRef = useRef<string>('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string; memory: MemoryEntry | null }[]>([]);
   const [plusExpanded, setPlusExpanded] = useState(false);
   const [ocrResults, setOcrResults] = useState<OcrResponseEvent[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
@@ -160,7 +161,7 @@ export default function HudPage() {
 
     try {
       // Append user message and an assistant placeholder
-      setMessages((prev) => [...prev, { role: 'user', content: query }, { role: 'assistant', content: '' }]);
+      setMessages((prev) => [...prev, { role: 'user', content: query, memory: null }, { role: 'assistant', content: '', memory: null }]);
       setIsStreaming(true);
       streamContentRef.current = '';
 
@@ -204,13 +205,14 @@ export default function HudPage() {
           next[lastIdx] = {
             role: 'assistant',
             content: existing && existing.length > 0 ? existing : extractThinkingContent(finalText),
+            memory: null,
           };
         }
         return next;
       });
     } catch (error) {
       console.error('Error generating response:', error);
-      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: '[Error generating response]' }]);
+      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: '[Error generating response]', memory: null }]);
       setIsLoading(false);
     } finally {
       streamContentRef.current = '';
