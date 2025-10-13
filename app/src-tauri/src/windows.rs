@@ -1,5 +1,6 @@
 use tauri::{AppHandle, LogicalSize, Manager};
 use crate::settings::{HudDimensions, load_user_settings};
+use crate::constants::HUD_WINDOW_LABEL;
 
 /// Get current HUD dimensions from user settings
 async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
@@ -8,9 +9,13 @@ async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
     Err(_) => {
       // Default fallback dimensions
       HudDimensions {
-        width: 500.0,
-        collapsed_height: 60.0,
-        expanded_height: 350.0,
+        default_width: 200.0,
+        default_height: 200.0,
+        chat_width: 500.0,
+        input_bar_height: 60.0,
+        chat_max_height: 350.0,
+        login_width: 400.0,
+        login_height: 300.0,
       }
     }
   }
@@ -26,7 +31,7 @@ pub async fn resize_hud_collapsed(
   let dimensions = get_current_hud_dimensions(&app_handle).await;
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let size = LogicalSize::new(dimensions.width, dimensions.collapsed_height);
+    let size = LogicalSize::new(dimensions.chat_width, dimensions.input_bar_height);
     // Get position before resizing
     let position = window.outer_position().map_err(|e| e.to_string())?;
     log::info!("Current window position before collapsing: {:?}", position);
@@ -38,7 +43,7 @@ pub async fn resize_hud_collapsed(
     // Adjust position to keep top aligned
     window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
 
-    log::info!("HUD window resized to collapsed: {}x{}", dimensions.width, dimensions.collapsed_height);
+    log::info!("HUD window resized to collapsed: {}x{}", dimensions.chat_width, dimensions.input_bar_height);
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -55,17 +60,17 @@ pub async fn resize_hud_expanded(
   let dimensions = get_current_hud_dimensions(&app_handle).await;
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let size = LogicalSize::new(dimensions.width, dimensions.expanded_height);
+    let size = LogicalSize::new(dimensions.chat_width, dimensions.chat_max_height);
     window.set_size(size).map_err(|e| e.to_string())?;
     
     // Adjust position to keep bottom aligned
     if let Ok(position) = window.outer_position() {
       let current_size = window.outer_size().map_err(|e| e.to_string())?;
-      let new_y = position.y + (current_size.height as f64 - dimensions.expanded_height) as i32;
+      let new_y = position.y + (current_size.height as f64 - dimensions.chat_max_height) as i32;
       window.set_position(tauri::PhysicalPosition::new(position.x, new_y)).map_err(|e| e.to_string())?;
     }
 
-    log::info!("HUD window resized to expanded: {}x{}", dimensions.width, dimensions.expanded_height);
+    log::info!("HUD window resized to expanded: {}x{}", dimensions.chat_width, dimensions.chat_max_height);
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -87,9 +92,9 @@ pub async fn resize_hud_dynamic(
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     // Get collapsed height
     let dimensions = get_current_hud_dimensions(&app_handle).await;
-    let width = dimensions.width;
-    let new_height = dimensions.collapsed_height + additional_height + 2.0; // Extra padding
-    let new_height = new_height.min(dimensions.expanded_height);
+    let width = dimensions.chat_width;
+    let new_height = dimensions.input_bar_height + additional_height + 2.0; // Extra padding
+    let new_height = new_height.min(dimensions.chat_max_height);
 
     // Get current size and position
     let current_size = window.outer_size().map_err(|e| e.to_string())?;
@@ -110,6 +115,35 @@ pub async fn resize_hud_dynamic(
   }
 }
 
+// Resize the HUD to the input size, keeping top aligned and ensuring the window doesn't overflow the bottom of the screen
+#[tauri::command]
+pub async fn resize_hud(
+  app_handle: AppHandle,
+  width: f64,
+  height: f64,
+) -> Result<(), String> {
+  let window_label = HUD_WINDOW_LABEL.to_string();
+
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    let size = LogicalSize::new(width, height);
+    // Get position before resizing
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    log::info!("Current window position before resizing: {:?}", position);
+    window.set_size(size).map_err(|e| e.to_string())?;
+    // Print new position for debugging
+    let new_position = window.outer_position().map_err(|e| e.to_string())?;
+    log::info!("New window position after resizing: {:?}", new_position);
+
+    // Adjust position to keep top aligned
+    window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
+
+    log::info!("HUD window resized to: {}x{}", width, height);
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
+}
+
 /// Refresh the HUD window size based on current settings and expanded state
 #[tauri::command]
 pub async fn refresh_hud_window_size(
@@ -122,14 +156,14 @@ pub async fn refresh_hud_window_size(
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     let height = if is_expanded {
-      dimensions.expanded_height
+      dimensions.chat_max_height
     } else {
-      dimensions.collapsed_height
+      dimensions.input_bar_height
     };
-    
-    let size = LogicalSize::new(dimensions.width, height);
+
+    let size = LogicalSize::new(dimensions.chat_width, height);
     window.set_size(size).map_err(|e| e.to_string())?;
-    log::info!("HUD window size refreshed: {}x{} (expanded: {})", dimensions.width, height, is_expanded);
+    log::info!("HUD window size refreshed: {}x{} (expanded: {})", dimensions.chat_width, height, is_expanded);
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -162,7 +196,7 @@ pub async fn open_floating_window(
     tauri::WebviewUrl::App("/hud".into()),
   )
   .title("Cortical Assistant")
-  .inner_size(dimensions.width, dimensions.collapsed_height)
+  .inner_size(dimensions.chat_width, dimensions.input_bar_height)
   .resizable(false)
   .transparent(true)
   .decorations(false)

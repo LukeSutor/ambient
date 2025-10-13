@@ -33,7 +33,7 @@ export default function HudPage() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const measurementRef = useRef<HTMLDivElement>(null);
 
-  // Conversation Manager (replaces all conversation state/logic)
+  // Conversation Manager
   const {
     messages,
     conversationId,
