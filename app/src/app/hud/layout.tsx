@@ -1,6 +1,6 @@
 'use client';
 
-import { ConversationProvider } from '@/lib/conversations';
+import { AppProvider } from '@/lib/providers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function HudLayout({
@@ -10,7 +10,7 @@ export default function HudLayout({
 }) {
   // Nested layouts must not render <html> or <body>; keep this a client component now.
   return (
-    <ConversationProvider>
+    <AppProvider>
       <TooltipProvider>
         <>
           {/* Force transparent background for this window on first paint */}
@@ -26,6 +26,6 @@ export default function HudLayout({
           </div>
         </>
       </TooltipProvider>
-    </ConversationProvider>
+    </AppProvider>
   );
 }

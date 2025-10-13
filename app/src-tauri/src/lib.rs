@@ -153,6 +153,7 @@ pub fn run() {
       windows::refresh_hud_window_size,
       settings::load_user_settings,
       settings::save_user_settings,
+      settings::emit_settings_changed,
       images::take_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,

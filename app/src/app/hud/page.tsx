@@ -6,7 +6,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { HudDimensions } from '@/types/settings';
 import { OcrResponseEvent } from '@/types/events';
-import { SettingsService } from '@/lib/settings-service';
+import { useSettings } from '@/lib/settings';
 import MessageList from '@/components/hud/message-list';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useHudAnimations } from '@/hooks/use-hud-animations';
@@ -44,55 +44,14 @@ export default function HudPage() {
     clear,
   } = useConversation(messagesEndRef);
 
-  // Load HUD dimensions and set up settings listener
+  // Settings Manager
+  const { getHudDimensions } = useSettings();
+
+  // Load HUD dimensions
   useEffect(() => {
-    const loadDimensions = async () => {
-      try {
-        const dimensions = await SettingsService.getHudDimensions();
-        setHudDimensions(dimensions);
-      } catch (error) {
-        console.error('Failed to load HUD dimensions:', error);
-      }
-    };
-
-    loadDimensions();
-
-    // Set up settings change listener
-    const setupListener = async () => {
-      try {
-        const unlisten = await listen('settings_changed', async () => {
-          await loadDimensions();
-          try {
-            await invoke('refresh_hud_window_size', { 
-              label: 'floating-hud', 
-              isExpanded 
-            });
-          } catch (error) {
-            console.error('Failed to refresh HUD window size:', error);
-          }
-        });
-        return unlisten;
-      } catch (error) {
-        console.error('Failed to set up settings listener:', error);
-        return null;
-      }
-    };
-
-    let cleanup: UnlistenFn | null = null;
-    setupListener().then((fn) => {
-      cleanup = fn;
-    });
-
-    return () => {
-      if (cleanup) {
-        try {
-          cleanup();
-        } catch (error) {
-          console.error('Error cleaning up settings listener:', error);
-        }
-      }
-    };
-  }, [isExpanded]);
+    const dimensions = getHudDimensions();
+    setHudDimensions(dimensions);
+  }, [getHudDimensions]);
 
   // Set up OCR listener
   useEffect(() => {

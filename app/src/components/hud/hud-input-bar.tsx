@@ -66,8 +66,8 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
       onMouseLeave={onMouseLeave}
       ref={ref}
       style={{
-        height: hudDimensions ? `${hudDimensions.collapsed_height}px` : '60px',
-        width: hudDimensions ? `${hudDimensions.width}px` : '500px',
+        height: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
+        width: hudDimensions ? `${hudDimensions.chat_width}px` : '500px',
         opacity: hudDimensions ? 1 : 0,
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}

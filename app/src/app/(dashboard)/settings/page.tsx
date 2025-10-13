@@ -23,66 +23,46 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { invoke } from "@tauri-apps/api/core";
-import { useState, useEffect } from "react";
-import { SettingsService } from "@/lib/settings-service";
+import { useSettings } from "@/lib/settings";
 import { HudSizeOption, ModelSelection } from "@/types/settings";
 import { CheckCircle, Zap, Shield, Crown } from "lucide-react"
 
 export default function Settings() {
-    const [hudSize, setHudSize] = useState<HudSizeOption>("Normal");
-    const [modelSelection, setModelSelection] = useState<ModelSelection>("Local");
-    const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+    const { 
+        settings, 
+        isLoading: isLoadingSettings, 
+        setHudSize: updateHudSize,
+        setModelSelection: updateModelSelection,
+        getHudSize,
+        getModelSelection,
+    } = useSettings();
 
-    // Load settings on component mount
-    useEffect(() => {
-        const loadCurrentSettings = async () => {
-            try {
-                const settings = await SettingsService.loadSettings();
-                setHudSize(settings.hud_size);
-                setModelSelection(settings.model_selection);
-            } catch (error) {
-                console.error("Failed to load settings:", error);
-                toast.error("Failed to load settings");
-            } finally {
-                setIsLoadingSettings(false);
-            }
-        };
-
-        loadCurrentSettings();
-    }, []);
+    const hudSize = settings?.hud_size ?? 'Normal';
+    const modelSelection = settings?.model_selection ?? 'Local';
 
     async function handleHudSizeChange(value: string) {
         const newSize = value as HudSizeOption;
-        setHudSize(newSize);
         
         try {
-            // Let the HUD component handle the window resize via event listener
-            await SettingsService.setHudSize(newSize);
+            await updateHudSize(newSize, true);
             const displayName = newSize.charAt(0).toUpperCase() + newSize.slice(1);
             toast.success(`HUD size changed to ${displayName}`);
         } catch (error) {
             console.error("Failed to save HUD size setting:", error);
             toast.error("Failed to save setting");
-            // Revert to previous value on error
-            const previousSize = await SettingsService.getHudSize();
-            setHudSize(previousSize);
         }
     }
 
     async function handleModelSelectionChange(value: string) {
         const newModel = value as ModelSelection;
-        setModelSelection(newModel);
 
         try {
-            await SettingsService.setModelSelection(newModel);
+            await updateModelSelection(newModel);
             const displayName = newModel.charAt(0).toUpperCase() + newModel.slice(1);
             toast.success(`Model selection changed to ${displayName}`);
         } catch (error) {
             console.error("Failed to save model selection setting:", error);
             toast.error("Failed to save setting");
-            // Revert to previous value on error
-            const previousModel = await SettingsService.getModelSelection();
-            setModelSelection(previousModel);
         }
     }
 
