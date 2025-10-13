@@ -1,4 +1,4 @@
-use crate::db::DbState;
+use crate::db::core::DbState;
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -127,13 +127,23 @@ pub async fn add_message(
   role: String,
   content: String,
 ) -> Result<Message, String> {
+  add_message_with_id(app_handle, conversation_id, role, content, None).await
+}
+
+pub async fn add_message_with_id(
+  app_handle: AppHandle,
+  conversation_id: String,
+  role: String,
+  content: String,
+  message_id: Option<String>,
+) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
     .as_ref()
     .ok_or("Database connection not available")?;
 
-  let message_id = Uuid::new_v4().to_string();
+  let message_id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
   let now = Utc::now();
 
   let message = Message {
@@ -222,6 +232,40 @@ pub async fn get_messages(
     .map_err(|e| format!("Failed to collect messages: {}", e))?;
 
   Ok(messages)
+}
+
+/// Get a message by its id
+#[tauri::command]
+pub async fn get_message(
+  app_handle: AppHandle,
+  message_id: String,
+) -> Result<Message, String> {
+  let state = app_handle.state::<DbState>();
+  let db_guard = state.0.lock().unwrap();
+  let conn = db_guard
+    .as_ref()
+    .ok_or("Database connection not available")?;
+
+  let message = conn
+    .query_row(
+      "SELECT id, conversation_id, role, content, timestamp FROM conversation_messages WHERE id = ?1",
+      params![message_id],
+      |row| {
+        let timestamp_str: String = row.get(4)?;
+        let role_str: String = row.get(2)?;
+
+        Ok(Message {
+          id: row.get(0)?,
+          conversation_id: row.get(1)?,
+          role: Role::from_str(&role_str),
+          content: row.get(3)?,
+          timestamp: timestamp_str,
+        })
+      },
+    )
+    .map_err(|e| format!("Failed to get message: {}", e))?;
+
+  Ok(message)
 }
 
 /// Get a conversation by ID

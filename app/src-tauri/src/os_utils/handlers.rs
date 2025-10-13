@@ -221,7 +221,7 @@ pub async fn handle_get_screen_diff(event: GetScreenDiffEvent, _app_handle: &App
 /// This saves the previous task detection loop's data for evaluation
 #[tauri::command]
 pub async fn capture_eval_data(app_handle: AppHandle) -> Result<String, String> {
-  use crate::db::DbState;
+  use crate::db::core::DbState;
   use crate::models::llm::handlers::format_tasks;
   use crate::tasks::TaskService;
 

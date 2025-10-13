@@ -43,8 +43,6 @@ pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<
 
     let embedding = parse_embedding_output(&stdout)?;
 
-    log::info!("[Embedding] Generated embedding: {:?}", embedding);
-
     Ok(embedding)
 }
 

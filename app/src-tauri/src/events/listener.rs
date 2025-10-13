@@ -1,5 +1,6 @@
 use super::types::*;
-use crate::db::DbState;
+use crate::memory::handlers::handle_extract_interactive_memory;
+use crate::db::core::DbState;
 use crate::models::llm::handlers::{handle_detect_tasks, handle_summarize_screen};
 use crate::os_utils::handlers::{handle_capture_screen, handle_get_screen_diff};
 use tauri::{AppHandle, Listener, Manager};
@@ -76,6 +77,24 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
       }
       Err(e) => {
         log::error!("[events] Failed to parse summarize screen event: {}", e);
+      }
+    }
+  });
+
+  let app_handle_clone5 = app_handle.clone();
+  app_handle.listen(EXTRACT_INTERACTIVE_MEMORY, move |event| {
+    let payload_str = event.payload();
+    match serde_json::from_str::<ExtractInteractiveMemoryEvent>(payload_str) {
+      Ok(event_data) => {
+        log::info!("[events] Extract interactive memory event received");
+        // For async function, we need to spawn a task
+        let app_handle_clone = app_handle_clone5.clone();
+        tauri::async_runtime::spawn(async move {
+          handle_extract_interactive_memory(event_data, &app_handle_clone).await;
+        });
+      }
+      Err(e) => {
+        log::error!("[events] Failed to parse extract interactive memory event: {}", e);
       }
     }
   });

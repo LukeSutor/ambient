@@ -7,7 +7,7 @@ import {
   SquareTerminal,
   House,
   Code,
-  Blocks,
+  NotebookPen,
   CheckSquare
 } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
@@ -53,9 +53,9 @@ const data = {
       icon: CheckSquare
     },
     {
-      title: "Integrations",
-      url: "/integrations",
-      icon: Blocks
+      title: "Memories",
+      url: "/memories",
+      icon: NotebookPen
     }
   ],
   navSecondary: [

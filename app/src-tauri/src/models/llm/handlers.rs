@@ -1,4 +1,7 @@
-use crate::db::{get_latest_activity_summary, insert_activity_summary, DbState};
+use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
+use crate::db::core::DbState;
+use crate::db::conversations::{add_message, add_message_with_id};
+use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
 use crate::tasks::{TaskService, TaskWithSteps};
@@ -152,6 +155,29 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
 
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
+  // Save the user message to the database with the provided message_id
+  let user_message = match add_message_with_id(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "user".to_string(),
+    event.text.clone(),
+    Some(event.message_id.clone()),
+  ).await {
+    Ok(message) => Some(message),
+    Err(e) => {
+      log::error!("[hud_chat] Failed to save user message: {}", e);
+      None
+    }
+  };
+
+  // Emit extract memory event
+  let extract_event = ExtractInteractiveMemoryEvent {
+    message: event.text.clone(),
+    message_id: event.message_id.clone(),
+    timestamp: chrono::Utc::now().to_string(),
+  };
+  let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
+  
   // Create prompt
   let system_prompt_template = match get_prompt("hud_chat") {
     Some(template) => template,
@@ -169,19 +195,43 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
 
   log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
 
+  // Get 3 most relevant memories
+  let relevant_memories = match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
+    Ok(memories) => memories,
+    Err(e) => {
+      log::warn!("[hud_chat] Failed to find similar memories: {}", e);
+      Vec::new()
+    }
+  };
+
+  // Create memory context string
+  let mut memory_context = String::new();
+  if !relevant_memories.is_empty() {
+    memory_context.push_str("Here are some relevant memories you have of our past interactions:\n");
+    for memory in relevant_memories {
+      memory_context.push_str(&format!("- {}\n", memory.text));
+    }
+    memory_context.push_str("\n");
+  }
+
   // Combine OCR responses into a single string
   let mut ocr_text = String::new();
   if !event.ocr_responses.is_empty() {
-    for (i, ocr_response) in event.ocr_responses.iter().enumerate() {
-      ocr_text.push_str(&format!("<cap_{}>{}</cap_{}>\n", i + 1, ocr_response.text, i + 1));
+    for ocr_response in event.ocr_responses.iter() {
+      ocr_text.push_str(&format!("{}\n", ocr_response.text));
     }
     if !ocr_text.is_empty() {
       ocr_text = format!("\nHere's text captured from my screen as context:\n{}\n", ocr_text);
     }
   }
 
-  // Create user prompt with ocr data
-  let user_prompt = format!("{}\n{}", event.text, ocr_text).trim().to_string();
+  // Create user prompt with ocr data and memory context
+  let user_prompt = format!(
+    "{}{}Task: {}",
+    if memory_context.is_empty() { "" } else { &format!("{}\n", memory_context) },
+    if ocr_text.is_empty() { "" } else { &format!("{}\n", ocr_text) },
+    event.text
+  );
 
   log::debug!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 
@@ -191,7 +241,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     user_prompt,
     Some(system_prompt),
     None,
-    event.conv_id,
+    Some(event.conv_id.clone()),
     Some(false),
     Some(true),
     None,
@@ -208,11 +258,25 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
+  // Save the assistant response to the database
+  if let Err(e) = add_message(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "assistant".to_string(),
+    response.clone(),
+  ).await {
+    log::error!("[hud_chat] Failed to save assistant message: {}", e);
+  }
+
   // Return response
   Ok(response)
 }
 
+
+
 // Helper functions
+
+
 
 /// Formats tasks with their steps for use in prompts
 pub fn format_tasks(tasks: &[TaskWithSteps]) -> String {

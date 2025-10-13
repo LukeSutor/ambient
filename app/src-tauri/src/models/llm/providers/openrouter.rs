@@ -36,7 +36,7 @@ async fn build_messages(
     messages.push(json!({"role":"system","content":system_prompt}));
 
     if let Some(conversation_id) = conv_id {
-        if let Ok(conv_messages) = crate::models::llm::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await {
+    if let Ok(conv_messages) = crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await {
             for msg in conv_messages {
                 messages.push(json!({"role": msg.role.as_str(), "content": msg.content}));
             }
@@ -58,7 +58,7 @@ impl LlmProvider for OpenRouterProvider {
         system_prompt: Option<String>,
         json_schema: Option<String>,
         conv_id: Option<String>,
-        use_thinking: Option<bool>,
+        _use_thinking: Option<bool>,
         stream: Option<bool>,
     ) -> Result<String, String> {
         let api_key = get_openrouter_api_key()?;
@@ -159,12 +159,6 @@ impl LlmProvider for OpenRouterProvider {
                 conv_id: conv_id.clone(),
             });
 
-            // Save messages if conv_id
-            if let Some(conversation_id) = conv_id {
-                let _ = crate::models::llm::conversations::add_message(app_handle.clone(), conversation_id.clone(), "user".to_string(), prompt).await;
-                let _ = crate::models::llm::conversations::add_message(app_handle.clone(), conversation_id, "assistant".to_string(), full.clone()).await;
-            }
-
             Ok(full)
         } else {
             let resp = client
@@ -181,11 +175,6 @@ impl LlmProvider for OpenRouterProvider {
             }
             let json: Value = resp.json().await.map_err(|e| format!("Failed to parse response: {}", e))?;
             let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
-
-            if let Some(conversation_id) = conv_id {
-                let _ = crate::models::llm::conversations::add_message(app_handle.clone(), conversation_id.clone(), "user".to_string(), prompt).await;
-                let _ = crate::models::llm::conversations::add_message(app_handle.clone(), conversation_id, "assistant".to_string(), content.clone()).await;
-            }
 
             Ok(content)
         }

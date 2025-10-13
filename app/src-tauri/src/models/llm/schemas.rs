@@ -41,6 +41,21 @@ static SCHEMAS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
   "additionalProperties": false
 }"#,
   );
+  map.insert(
+    "extract_interactive_memory",
+    r#"{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "memory": {
+      "type": "string",
+      "description": "Extracted long-term information from user messages"
+    }
+  },
+  "required": ["memory"],
+  "additionalProperties": false
+}"#,
+  );
   map
 });
 

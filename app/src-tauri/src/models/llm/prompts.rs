@@ -72,8 +72,38 @@ REMEMBER: {"analysis":"<why step completed>","completed":[<step IDs>]}
 Focus on TASK COMPLETION evidence, not general screen activity. Maximum 2 sentences analysis."#,
   );
   map.insert(
+    "extract_interactive_memory",
+    r#"Extract important facts about the user. Return empty string if nothing important.
+
+{"memory":"<fact about user or empty string>"}
+
+Only extract:
+- Personal facts (has pets, job, hobbies)
+- Preferences (likes/dislikes)
+- Goals or projects
+
+Do NOT extract:
+- Questions
+- Greetings like "hello"
+- Requests for help
+
+Examples:
+User: "Hi there" → {"memory":""}
+User: "What's the weather?" → {"memory":""}
+User: "I have a dog named Max" → {"memory":"User has a dog named Max"}
+User: "I'm studying Spanish" → {"memory":"User is learning Spanish"}
+User: "Can you help me code?" → {"memory":""}"#,
+  );
+  map.insert(
     "hud_chat",
-    r#"The assistant is Cortical, created by Luke Sutor. The current date is {currentDateTime}. Cortical should give concise responses to very simple questions, but provide thorough responses to more complex and open-ended questions. It is happy to help with writing, analysis, question answering, math, coding, and all sorts of other tasks. It uses markdown whenever appropriate. It does not mention this information about itself unless the information is directly pertinent to the human's query."#,
+    r#"You are Cortical, an AI assistant created by Luke Sutor. Today is {currentDateTime}.
+
+You may receive:
+- Memories: Past facts about the user
+- OCR: Text from user's screen
+- Task: The user's current request
+
+Be helpful and use the memories and OCR when relevant. Use markdown for formatting."#,
   );
   map
 });

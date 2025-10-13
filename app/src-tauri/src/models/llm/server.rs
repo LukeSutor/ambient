@@ -151,18 +151,6 @@ async fn find_available_port() -> Result<u16, ServerError> {
   )))
 }
 
-/// Get the currently used port (if server is running)
-fn get_current_port() -> Option<u16> {
-  let server_state = SERVER_STATE.lock().unwrap();
-  server_state.port
-}
-
-/// Get the current API key (if server is running)
-fn get_current_api_key() -> Option<String> {
-  let server_state = SERVER_STATE.lock().unwrap();
-  server_state.api_key.clone()
-}
-
 /// Get server config using stored port and API key
 fn get_current_server_config(app_handle: &AppHandle) -> Result<ServerConfig, ServerError> {
   let (port, api_key) = {
@@ -474,12 +462,6 @@ pub async fn make_completion_request(
   Ok(result)
 }
 
-/// Get the current server port (if running)
-#[tauri::command]
-pub async fn get_server_port() -> Result<Option<u16>, String> {
-  Ok(get_current_port())
-}
-
 /// Restart the llama.cpp server
 #[tauri::command]
 pub async fn restart_llama_server(app_handle: AppHandle) -> Result<String, String> {
@@ -529,7 +511,7 @@ pub async fn generate(
 
   // If conversation ID is provided, load existing messages
   if let Some(conversation_id) = &conv_id {
-    match crate::models::llm::conversations::get_messages(app_handle.clone(), conversation_id.clone())
+  match crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone())
       .await
     {
       Ok(conv_messages) => {
@@ -677,36 +659,6 @@ pub async fn generate(
       log::error!("[llama_server] Failed to emit final stream event: {}", e);
     }
 
-    // Store messages in conversation if conv_id is provided
-    if let Some(conversation_id) = conv_id {
-      // Add user message
-      if let Err(e) = crate::models::llm::conversations::add_message(
-        app_handle.clone(),
-        conversation_id.clone(),
-        "user".to_string(),
-        prompt,
-      )
-      .await
-      {
-        log::warn!("[llama_server] Warning: Failed to save user message: {}", e);
-      }
-
-      // Add assistant response
-      if let Err(e) = crate::models::llm::conversations::add_message(
-        app_handle.clone(),
-        conversation_id,
-        "assistant".to_string(),
-        full_response.clone(),
-      )
-      .await
-      {
-        log::warn!(
-          "[llama_server] Warning: Failed to save assistant message: {}",
-          e
-        );
-      }
-    }
-
     Ok(full_response)
   } else {
     // Handle non-streaming response
@@ -745,36 +697,6 @@ pub async fn generate(
 
     // Extract token usage if available
     let tokens_generated = result["usage"]["completion_tokens"].as_u64().unwrap_or(0);
-
-    // Store messages in conversation if conv_id is provided
-    if let Some(conversation_id) = conv_id {
-      // Add user message
-      if let Err(e) = crate::models::llm::conversations::add_message(
-        app_handle.clone(),
-        conversation_id.clone(),
-        "user".to_string(),
-        prompt,
-      )
-      .await
-      {
-        log::warn!("[llama_server] Warning: Failed to save user message: {}", e);
-      }
-
-      // Add assistant response
-      if let Err(e) = crate::models::llm::conversations::add_message(
-        app_handle.clone(),
-        conversation_id,
-        "assistant".to_string(),
-        generated_text.clone(),
-      )
-      .await
-      {
-        log::warn!(
-          "[llama_server] Warning: Failed to save assistant message: {}",
-          e
-        );
-      }
-    }
 
     let total_seconds = elapsed.as_secs_f64();
     let tokens_per_second = if total_seconds > 0.0 && tokens_generated > 0 {

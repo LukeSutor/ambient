@@ -1,0 +1,111 @@
+import { invoke } from '@tauri-apps/api/core';
+import { Conversation, ChatMessage } from './types';
+import { transformBackendMessage } from './transformers';
+import { OcrResponseEvent, HudChatEvent } from '@/types/events';
+
+/**
+ * Creates a new conversation
+ * @param name - Optional conversation name
+ * @returns Promise resolving to the created Conversation
+ */
+export async function createConversation(name?: string): Promise<Conversation> {
+  try {
+    const conversation = await invoke<Conversation>('create_conversation', { 
+      name: name || null 
+    });
+    return conversation;
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to create conversation:', error);
+    throw new Error('Failed to create conversation');
+  }
+}
+
+/**
+ * Loads all messages for a conversation
+ * @param conversationId - ID of the conversation to load
+ * @returns Promise resolving to array of ChatMessages
+ */
+export async function loadMessages(conversationId: string): Promise<ChatMessage[]> {
+  try {
+    const backendMessages = await invoke<any[]>('get_messages', { 
+      conversationId 
+    });
+    
+    return backendMessages.map(transformBackendMessage);
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to load messages:', error);
+    throw new Error('Failed to load messages');
+  }
+}
+
+/**
+ * Sends a message and triggers LLM generation with streaming
+ * @param conversationId - ID of the conversation
+ * @param content - Message content
+ * @param ocrResults - OCR context to include with the message
+ * @param messageId - The message ID to use for the user message
+ * @returns Promise resolving to final response text (may not be needed if streaming)
+ */
+export async function sendMessage(
+  conversationId: string,
+  content: string,
+  ocrResults: OcrResponseEvent[],
+  messageId: string
+): Promise<string> {
+  try {
+    const hudChatEvent: HudChatEvent = {
+      text: content,
+      ocr_responses: ocrResults,
+      conv_id: conversationId,
+      timestamp: Date.now().toString(),
+      message_id: messageId,
+    };
+
+    const finalText = await invoke<string>('handle_hud_chat', {
+      event: hudChatEvent,
+    });
+
+    return finalText;
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to send message:', error);
+    throw new Error('Failed to send message');
+  }
+}
+
+/**
+ * Deletes a conversation and all its messages
+ * @param conversationId - ID of the conversation to delete
+ */
+export async function deleteConversation(conversationId: string): Promise<void> {
+  try {
+    await invoke('delete_conversation', { conversationId });
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to delete conversation:', error);
+    throw new Error('Failed to delete conversation');
+  }
+}
+
+/**
+ * Resets a conversation (clears all messages but keeps the conversation)
+ * @param conversationId - ID of the conversation to reset
+ */
+export async function resetConversation(conversationId: string): Promise<void> {
+  try {
+    await invoke('reset_conversation', { conversationId });
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to reset conversation:', error);
+    throw new Error('Failed to reset conversation');
+  }
+}
+
+/**
+ * Ensures the llama server is running
+ */
+export async function ensureLlamaServerRunning(): Promise<void> {
+  try {
+    await invoke<string>('spawn_llama_server');
+  } catch (error) {
+    console.warn('[ConversationAPI] spawn_llama_server warning:', error);
+    // Don't throw - this is not critical
+  }
+}

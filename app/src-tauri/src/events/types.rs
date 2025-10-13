@@ -1,4 +1,5 @@
 use crate::os_utils::windows::window::ApplicationTextData;
+use crate::memory::types::MemoryEntry;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -54,7 +55,8 @@ pub struct HudChatEvent {
   pub text: String,
   pub ocr_responses: Vec<OcrResponseEvent>,
   pub timestamp: String,
-  pub conv_id: Option<String>,
+  pub conv_id: String,
+  pub message_id: String,
 }
 
 pub const OCR_RESPONSE: &str = "ocr_response";
@@ -73,50 +75,19 @@ pub struct UpdateTasksEvent {
   pub timestamp: String,
 }
 
-pub const GET_USER_ACK: &str = "get_user_ack";
+pub const EXTRACT_INTERACTIVE_MEMORY: &str = "extract_interactive_memory";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
-pub struct GetUserAckEvent {
+pub struct ExtractInteractiveMemoryEvent {
   pub message: String,
+  pub message_id: String,
   pub timestamp: String,
 }
 
-pub const USER_ACK: &str = "user_ack";
+pub const MEMORY_EXTRACTED: &str = "memory_extracted";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
-pub struct UserAckEvent {
-  pub acknowledged: bool,
-  pub timestamp: String,
-}
-
-pub const GET_USER_INPUT: &str = "get_user_input";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct GetUserInputEvent {
-  pub message: String,
-  pub timestamp: String,
-}
-
-pub const USER_INPUT: &str = "user_input";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct UserInputEvent {
-  pub message: String,
-  pub timestamp: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct FunctionArgument {
-  pub key: String,
-  pub value: String,
-}
-
-pub const EXECUTE_FUNCTION: &str = "execute_function";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct ExecuteFunctionEvent {
-  pub function_name: String,
-  pub args: Vec<FunctionArgument>,
+pub struct MemoryExtractedEvent {
+  pub memory: MemoryEntry,
   pub timestamp: String,
 }

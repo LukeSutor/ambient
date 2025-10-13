@@ -5,54 +5,138 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { HudDimensions } from '@/types/settings';
-import { ChatStreamEvent, HudChatEvent, OcrResponseEvent } from '@/types/events';
-import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
+import { OcrResponseEvent } from '@/types/events';
+import { SettingsService } from '@/lib/settings-service';
 import MessageList from '@/components/hud/message-list';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useHudAnimations } from '@/hooks/use-hud-animations';
-import { useHudStream } from '@/hooks/use-hud-stream';
-
-interface Conversation {
-  id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-  message_count: number;
-}
+import { useConversationManager } from '@/lib/conversations';
 
 export default function HudPage() {
+  // UI State
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const isExpandedRef = useRef(false);
-  useEffect(() => {
-    isExpandedRef.current = isExpanded;
-  }, [isExpanded]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const currentConversationIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    currentConversationIdRef.current = currentConversationId;
-  }, [currentConversationId]);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
-  const hudDimensionsRef = useRef<HudDimensions | null>(null);
-  useEffect(() => {
-    hudDimensionsRef.current = hudDimensions;
-  }, [hudDimensions]);
-  const streamContentRef = useRef<string>('');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [plusExpanded, setPlusExpanded] = useState(false);
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  
+  // OCR State
   const [ocrResults, setOcrResults] = useState<OcrResponseEvent[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const measurementRef = useRef<HTMLDivElement>(null);
+
+  // Conversation Manager (replaces all conversation state/logic)
+  const {
+    messages,
+    conversationId,
+    isStreaming,
+    isLoading,
+    sendMessage,
+    createNew,
+    clear,
+  } = useConversationManager(messagesEndRef);
+
+  // Load HUD dimensions and set up settings listener
+  useEffect(() => {
+    const loadDimensions = async () => {
+      try {
+        const dimensions = await SettingsService.getHudDimensions();
+        setHudDimensions(dimensions);
+      } catch (error) {
+        console.error('Failed to load HUD dimensions:', error);
+        setHudDimensions({ width: 500, collapsed_height: 60, expanded_height: 350 });
+      }
+    };
+
+    loadDimensions();
+
+    // Set up settings change listener
+    const setupListener = async () => {
+      try {
+        const unlisten = await listen('settings_changed', async () => {
+          await loadDimensions();
+          try {
+            await invoke('refresh_hud_window_size', { 
+              label: 'floating-hud', 
+              isExpanded 
+            });
+          } catch (error) {
+            console.error('Failed to refresh HUD window size:', error);
+          }
+        });
+        return unlisten;
+      } catch (error) {
+        console.error('Failed to set up settings listener:', error);
+        return null;
+      }
+    };
+
+    let cleanup: UnlistenFn | null = null;
+    setupListener().then((fn) => {
+      cleanup = fn;
+    });
+
+    return () => {
+      if (cleanup) {
+        try {
+          cleanup();
+        } catch (error) {
+          console.error('Error cleaning up settings listener:', error);
+        }
+      }
+    };
+  }, [isExpanded]);
+
+  // Set up OCR listener
+  useEffect(() => {
+    const setupOcrListener = async () => {
+      try {
+        const unlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
+          const result = event.payload;
+          if (!result.success) console.error('OCR failed');
+          
+          if (ocrTimeoutRef.current) {
+            clearTimeout(ocrTimeoutRef.current);
+            ocrTimeoutRef.current = null;
+          }
+          
+          setOcrResults((prev) => [...prev, result]);
+          setOcrLoading(false);
+        });
+        return unlisten;
+      } catch (error) {
+        console.error('Failed to set up OCR listener:', error);
+        return null;
+      }
+    };
+
+    let cleanup: UnlistenFn | null = null;
+    setupOcrListener().then((fn) => {
+      cleanup = fn;
+    });
+
+    return () => {
+      if (cleanup) {
+        try {
+          cleanup();
+        } catch (error) {
+          console.error('Error cleaning up OCR listener:', error);
+        }
+      }
+      if (ocrTimeoutRef.current) {
+        clearTimeout(ocrTimeoutRef.current);
+        ocrTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Encapsulated GSAP animations
   useHudAnimations({
@@ -96,38 +180,20 @@ export default function HudPage() {
     };
   }, []);
 
-  // Helper to strip <think> blocks
-  function extractThinkingContent(text: string) {
-    const thinkStartIndex = text.indexOf('<think>');
-    const thinkEndIndex = text.indexOf('</think>');
-    let cleanText = text;
-    if (thinkStartIndex !== -1) {
-      if (thinkEndIndex !== -1) {
-        cleanText = text.substring(0, thinkStartIndex) + text.substring(thinkEndIndex + 8);
-      } else {
-        cleanText = text.substring(0, thinkStartIndex);
+  // Window management functions
+  async function closeWindow() {
+    try {
+      await invoke('close_floating_window', { label: 'floating-hud' });
+    } catch (error) {
+      console.error('Failed to close window:', error);
+      try {
+        const currentWindow = getCurrentWebviewWindow();
+        await currentWindow.close();
+      } catch (altError) {
+        console.error('Direct close method also failed:', altError);
       }
     }
-    return cleanText;
   }
-
-  // Stream/events setup
-  const { createNewConversation, closeWindow } = useHudStream({
-    isExpandedRef,
-    setHudDimensions,
-    hudDimensionsRef,
-    setMessages,
-    setIsLoading,
-    setIsStreaming,
-    setOcrResults,
-    setOcrLoading,
-    ocrTimeoutRef,
-    currentConversationIdRef,
-    setCurrentConversationId,
-    messagesEndRef,
-  });
-
-  // createNewConversation and closeWindow provided by useHudStream
 
   async function collapseResponseArea() {
     setIsExpanded(false);
@@ -154,78 +220,45 @@ export default function HudPage() {
       console.error('Failed to resize window:', error);
     }
 
-    setIsLoading(true);
     setIsExpanded(true);
     setInput('');
 
-    try {
-      // Append user message and an assistant placeholder
-      setMessages((prev) => [...prev, { role: 'user', content: query }, { role: 'assistant', content: '' }]);
-      setIsStreaming(true);
-      streamContentRef.current = '';
-
-      // Ensure we have a conversation id, create directly if missing to avoid race with state update
-      let convId = currentConversationId;
+    // Ensure we have a conversation
+    let convId = conversationId;
+    if (!convId) {
+      convId = await createNew();
       if (!convId) {
-        try {
-          const newConv = await invoke<Conversation>('create_conversation', { name: null });
-          setCurrentConversationId(newConv.id);
-          convId = newConv.id;
-        } catch (convErr) {
-          console.error('Failed to create conversation:', convErr);
-        }
+        console.error('Failed to create conversation');
+        return;
       }
+    }
 
-      // Create hud chat event
-      const hudChatEvent: HudChatEvent = {
-        text: query,
-        ocr_responses: ocrResults,
-        conv_id: convId,
-        timestamp: Date.now().toString(),
-      };
+    try {
+      // Send message (will optimistically update UI)
+      await sendMessage(convId, query, ocrResults);
+      
+      // Clear OCR results after sending
+      setOcrResults([]);
 
-      // Generate text with custom hud chat function
-      const finalText = await invoke<string>('handle_hud_chat', {
-        event: hudChatEvent
-      });
-
-      // Safety: if no stream events arrive, stop loading when invoke resolves
-      setIsLoading(false);
-      setMessages((prev) => {
-        // If stream produced content, leave it. Otherwise set finalText.
-        const next = [...prev];
-        const idx = [...next].reverse().findIndex((m) => m.role === 'assistant');
-        const lastIdx = idx >= 0 ? next.length - 1 - idx : -1;
-        if (lastIdx >= 0) {
-          const existing = next[lastIdx]?.content ?? '';
-          next[lastIdx] = {
-            role: 'assistant',
-            content: existing && existing.length > 0 ? existing : extractThinkingContent(finalText),
-          };
-        }
-        return next;
-      });
-    } catch (error) {
-      console.error('Error generating response:', error);
-      setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', content: '[Error generating response]' }]);
-      setIsLoading(false);
-    } finally {
-      streamContentRef.current = '';
-      setIsStreaming(false);
-      // Dynamically set the size to the content height
+      // Dynamically resize window to fit content
       if (messagesContainerRef.current) {
         const scrollHeight = messagesContainerRef.current.scrollHeight;
         try {
-          await invoke('resize_hud_dynamic', { label: 'floating-hud', additionalHeight: scrollHeight });
+          await invoke('resize_hud_dynamic', { 
+            label: 'floating-hud', 
+            additionalHeight: scrollHeight 
+          });
         } catch (error) {
           console.error('Failed to resize window:', error);
         }
       }
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
     }
   }
 
   async function clearAndCollapse() {
-    setMessages([]);
+    clear();
     await collapseResponseArea();
   }
 
@@ -268,7 +301,7 @@ export default function HudPage() {
     // Don't create new conversation if there are no messages
     if (messages.length > 0) {
       await clearAndCollapse();
-      await createNewConversation();
+      await createNew();
     }
   }
 

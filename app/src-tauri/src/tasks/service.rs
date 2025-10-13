@@ -1,4 +1,4 @@
-use crate::db::DbState;
+use crate::db::core::DbState;
 use crate::tasks::detection::TaskDetectionService;
 use crate::tasks::models::*;
 use chrono::{DateTime, Utc};
