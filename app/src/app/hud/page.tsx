@@ -10,7 +10,7 @@ import { SettingsService } from '@/lib/settings-service';
 import MessageList from '@/components/hud/message-list';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useHudAnimations } from '@/hooks/use-hud-animations';
-import { useConversationManager } from '@/lib/conversations';
+import { useConversation } from '@/lib/conversations';
 
 export default function HudPage() {
   // UI State
@@ -42,7 +42,7 @@ export default function HudPage() {
     sendMessage,
     createNew,
     clear,
-  } = useConversationManager(messagesEndRef);
+  } = useConversation(messagesEndRef);
 
   // Load HUD dimensions and set up settings listener
   useEffect(() => {
@@ -52,7 +52,6 @@ export default function HudPage() {
         setHudDimensions(dimensions);
       } catch (error) {
         console.error('Failed to load HUD dimensions:', error);
-        setHudDimensions({ width: 500, collapsed_height: 60, expanded_height: 350 });
       }
     };
 
@@ -347,7 +346,7 @@ export default function HudPage() {
         ref={measurementRef}
         className="absolute opacity-0 pointer-events-none"
         style={{
-          width: hudDimensions?.width ? `${hudDimensions.width}px` : '500px',
+          width: hudDimensions?.chat_width ? `${hudDimensions.chat_width}px` : '500px',
           top: '-9999px' // Move offscreen
         }}
       >

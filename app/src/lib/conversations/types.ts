@@ -1,5 +1,4 @@
 import { MemoryEntry } from '@/types/memory';
-import { OcrResponseEvent } from '@/types/events';
 
 /**
  * Message role type
@@ -29,7 +28,7 @@ export interface Conversation {
 }
 
 /**
- * Conversation state for the reducer
+ * Conversation state
  */
 export interface ConversationState {
   conversationId: string | null;
@@ -38,21 +37,3 @@ export interface ConversationState {
   isLoading: boolean;
   streamingContent: string;
 }
-
-/**
- * Context for sending messages (OCR results, etc.)
- */
-export interface MessageContext {
-  ocrResults: OcrResponseEvent[];
-}
-
-/**
- * Initial state for the conversation reducer
- */
-export const initialConversationState: ConversationState = {
-  conversationId: null,
-  messages: [],
-  isStreaming: false,
-  isLoading: false,
-  streamingContent: '',
-};

@@ -13,7 +13,7 @@ export type ExtractInteractiveMemoryEvent = { message: string, message_id: strin
 
 export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
-export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string, };
+export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string, message_id: string, };
 
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 

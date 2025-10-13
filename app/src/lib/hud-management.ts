@@ -9,7 +9,7 @@ export class HudManagement {
         const dimensions: HudDimensions = await SettingsService.getHudDimensions();
 
         await invoke("resize_hud", {
-            width: dimensions.width,
+            width: dimensions.chat_width,
             height: dimensions.input_bar_height,
         });
         this.isExpanded = false;

@@ -1,64 +1,62 @@
-import { ChatMessage, ConversationState } from '../types';
+'use client';
+
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { ConversationState, ChatMessage } from './types';
 import { MemoryEntry } from '@/types/memory';
+
+/**
+ * Initial state for conversations
+ */
+const initialState: ConversationState = {
+  conversationId: null,
+  messages: [],
+  isStreaming: false,
+  isLoading: false,
+  streamingContent: '',
+};
 
 /**
  * Action types for the conversation reducer
  */
-export enum ConversationActionType {
-  SET_CONVERSATION_ID = 'SET_CONVERSATION_ID',
-  LOAD_MESSAGES = 'LOAD_MESSAGES',
-  ADD_USER_MESSAGE = 'ADD_USER_MESSAGE',
-  START_ASSISTANT_MESSAGE = 'START_ASSISTANT_MESSAGE',
-  UPDATE_STREAMING_CONTENT = 'UPDATE_STREAMING_CONTENT',
-  FINALIZE_STREAM = 'FINALIZE_STREAM',
-  ATTACH_MEMORY = 'ATTACH_MEMORY',
-  CLEAR_MESSAGES = 'CLEAR_MESSAGES',
-  SET_LOADING = 'SET_LOADING',
-  SET_STREAMING = 'SET_STREAMING',
-}
+type ConversationAction =
+  | { type: 'SET_CONVERSATION_ID'; payload: string | null }
+  | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
+  | { type: 'ADD_USER_MESSAGE'; payload: ChatMessage }
+  | { type: 'START_ASSISTANT_MESSAGE' }
+  | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
+  | { type: 'FINALIZE_STREAM'; payload: string }
+  | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
+  | { type: 'CLEAR_MESSAGES' }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_STREAMING'; payload: boolean };
 
 /**
- * Action union type
+ * Conversation reducer - handles all state updates
  */
-export type ConversationAction =
-  | { type: ConversationActionType.SET_CONVERSATION_ID; payload: string | null }
-  | { type: ConversationActionType.LOAD_MESSAGES; payload: ChatMessage[] }
-  | { type: ConversationActionType.ADD_USER_MESSAGE; payload: ChatMessage }
-  | { type: ConversationActionType.START_ASSISTANT_MESSAGE }
-  | { type: ConversationActionType.UPDATE_STREAMING_CONTENT; payload: string }
-  | { type: ConversationActionType.FINALIZE_STREAM; payload: string }
-  | { type: ConversationActionType.ATTACH_MEMORY; payload: { messageId: string; memory: MemoryEntry } }
-  | { type: ConversationActionType.CLEAR_MESSAGES }
-  | { type: ConversationActionType.SET_LOADING; payload: boolean }
-  | { type: ConversationActionType.SET_STREAMING; payload: boolean };
-
-/**
- * Conversation reducer
- */
-export function conversationReducer(
+function conversationReducer(
   state: ConversationState,
   action: ConversationAction
 ): ConversationState {
   switch (action.type) {
-    case ConversationActionType.SET_CONVERSATION_ID:
+    case 'SET_CONVERSATION_ID':
       return {
         ...state,
         conversationId: action.payload,
       };
 
-    case ConversationActionType.LOAD_MESSAGES:
+    case 'LOAD_MESSAGES':
       return {
         ...state,
         messages: action.payload,
       };
 
-    case ConversationActionType.ADD_USER_MESSAGE:
+    case 'ADD_USER_MESSAGE':
       return {
         ...state,
         messages: [...state.messages, action.payload],
       };
 
-    case ConversationActionType.START_ASSISTANT_MESSAGE:
+    case 'START_ASSISTANT_MESSAGE':
       return {
         ...state,
         messages: [
@@ -75,7 +73,7 @@ export function conversationReducer(
         streamingContent: '',
       };
 
-    case ConversationActionType.UPDATE_STREAMING_CONTENT:
+    case 'UPDATE_STREAMING_CONTENT': {
       // Find the last assistant message and update its content
       const updatedMessages = [...state.messages];
       const lastAssistantIndex = [...updatedMessages]
@@ -95,8 +93,9 @@ export function conversationReducer(
         messages: updatedMessages,
         streamingContent: action.payload,
       };
+    }
 
-    case ConversationActionType.FINALIZE_STREAM:
+    case 'FINALIZE_STREAM': {
       // Update the last assistant message with final content
       const finalizedMessages = [...state.messages];
       const lastAssistIdx = [...finalizedMessages]
@@ -118,16 +117,12 @@ export function conversationReducer(
         streamingContent: '',
         isLoading: false,
       };
+    }
 
-    case ConversationActionType.ATTACH_MEMORY:
+    case 'ATTACH_MEMORY': {
       // Find user message by ID and attach memory
-      console.log("ATTACH_MEMORY action received");
-      console.log("state.messages:", state.messages);
-      console.log("action.payload:", action.payload);
       const messagesWithMemory = state.messages.map((msg) => {
-        console.log(msg.id + " " + action.payload.messageId);
         if (msg.id === action.payload.messageId && msg.role === 'user') {
-            console.log("msg:", msg);
           return {
             ...msg,
             memory: action.payload.memory,
@@ -140,8 +135,9 @@ export function conversationReducer(
         ...state,
         messages: messagesWithMemory,
       };
+    }
 
-    case ConversationActionType.CLEAR_MESSAGES:
+    case 'CLEAR_MESSAGES':
       return {
         ...state,
         messages: [],
@@ -150,13 +146,13 @@ export function conversationReducer(
         streamingContent: '',
       };
 
-    case ConversationActionType.SET_LOADING:
+    case 'SET_LOADING':
       return {
         ...state,
         isLoading: action.payload,
       };
 
-    case ConversationActionType.SET_STREAMING:
+    case 'SET_STREAMING':
       return {
         ...state,
         isStreaming: action.payload,
@@ -165,4 +161,52 @@ export function conversationReducer(
     default:
       return state;
   }
+}
+
+/**
+ * Context type
+ */
+interface ConversationContextType {
+  state: ConversationState;
+  dispatch: React.Dispatch<ConversationAction>;
+}
+
+/**
+ * Conversation Context
+ */
+const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
+
+/**
+ * Conversation Provider Props
+ */
+interface ConversationProviderProps {
+  children: ReactNode;
+}
+
+/**
+ * Conversation Provider Component
+ * Wraps the application to provide shared conversation state
+ */
+export function ConversationProvider({ children }: ConversationProviderProps) {
+  const [state, dispatch] = useReducer(conversationReducer, initialState);
+
+  return (
+    <ConversationContext.Provider value={{ state, dispatch }}>
+      {children}
+    </ConversationContext.Provider>
+  );
+}
+
+/**
+ * Hook to access conversation context
+ * Must be used within a ConversationProvider
+ */
+export function useConversationContext(): ConversationContextType {
+  const context = useContext(ConversationContext);
+  
+  if (!context) {
+    throw new Error('useConversationContext must be used within a ConversationProvider');
+  }
+  
+  return context;
 }
