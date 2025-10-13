@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { ConversationProvider } from '@/lib/conversations';
+import { WindowsProvider } from '../windows/WindowsProvider';
 import { SettingsProvider } from '@/lib/settings';
 
 interface AppProviderProps {
@@ -18,9 +19,11 @@ interface AppProviderProps {
 export function AppProvider({ children }: AppProviderProps) {
   return (
     <SettingsProvider>
-      <ConversationProvider>
-        {children}
-      </ConversationProvider>
+        <ConversationProvider>
+            <WindowsProvider>
+                {children}
+            </WindowsProvider>
+        </ConversationProvider>
     </SettingsProvider>
   );
 }

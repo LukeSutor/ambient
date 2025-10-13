@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Conversation, ChatMessage } from './types';
-import { transformBackendMessage } from './transformers';
+import { Conversation } from './types';
 import { OcrResponseEvent, HudChatEvent } from '@/types/events';
 
 /**
@@ -17,24 +16,6 @@ export async function createConversation(name?: string): Promise<Conversation> {
   } catch (error) {
     console.error('[ConversationAPI] Failed to create conversation:', error);
     throw new Error('Failed to create conversation');
-  }
-}
-
-/**
- * Loads all messages for a conversation
- * @param conversationId - ID of the conversation to load
- * @returns Promise resolving to array of ChatMessages
- */
-export async function loadMessages(conversationId: string): Promise<ChatMessage[]> {
-  try {
-    const backendMessages = await invoke<any[]>('get_messages', { 
-      conversationId 
-    });
-    
-    return backendMessages.map(transformBackendMessage);
-  } catch (error) {
-    console.error('[ConversationAPI] Failed to load messages:', error);
-    throw new Error('Failed to load messages');
   }
 }
 
