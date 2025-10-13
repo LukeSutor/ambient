@@ -38,11 +38,11 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
             ) : (
               <div>
                 {/* Always reserve space for the memory indicator area */}
-                <div className="h-6 flex items-center justify-start mb-1">
+                <div className="h-4 flex items-center justify-start mb-1">
                   {hasPreviousMemory(i) ? (
                     <HoverCard>
                       <HoverCardTrigger asChild>
-                        <div className="flex items-center gap-1 text-muted-foreground">
+                        <div className="flex items-center gap-1 text-sm text-black/50">
                           <NotebookPen className="h-4 w-4" />
                           <span className='font-semibold'>Updated saved memory</span>
                         </div>
