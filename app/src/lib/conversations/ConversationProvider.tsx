@@ -22,6 +22,8 @@ type ConversationAction =
   | { type: 'SET_CONVERSATION_ID'; payload: string | null }
   | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
   | { type: 'ADD_USER_MESSAGE'; payload: ChatMessage }
+  | { type: 'START_USER_MESSAGE'; payload: { id: string; timestamp: string } }
+  | { type: 'FINALIZE_USER_MESSAGE'; payload: { id: string; content: string } }
   | { type: 'START_ASSISTANT_MESSAGE' }
   | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
   | { type: 'FINALIZE_STREAM'; payload: string }
@@ -55,6 +57,39 @@ function conversationReducer(
         ...state,
         messages: [...state.messages, action.payload],
       };
+
+    case 'START_USER_MESSAGE':
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          {
+            id: action.payload.id,
+            role: 'user',
+            content: '',
+            memory: null,
+            timestamp: action.payload.timestamp,
+          },
+        ],
+      };
+
+    case 'FINALIZE_USER_MESSAGE': {
+      // Find user message by ID and update its content
+      const updatedMessages = state.messages.map((msg) => {
+        if (msg.id === action.payload.id && msg.role === 'user') {
+          return {
+            ...msg,
+            content: action.payload.content,
+          };
+        }
+        return msg;
+      });
+
+      return {
+        ...state,
+        messages: updatedMessages,
+      };
+    }
 
     case 'START_ASSISTANT_MESSAGE':
       return {

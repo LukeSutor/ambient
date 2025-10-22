@@ -128,16 +128,13 @@ pub async fn resize_hud(
     let size = LogicalSize::new(width, height);
     // Get position before resizing
     let position = window.outer_position().map_err(|e| e.to_string())?;
-    log::info!("Current window position before resizing: {:?}", position);
     window.set_size(size).map_err(|e| e.to_string())?;
     // Print new position for debugging
     let new_position = window.outer_position().map_err(|e| e.to_string())?;
-    log::info!("New window position after resizing: {:?}", new_position);
 
     // Adjust position to keep top aligned
     window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
 
-    log::info!("HUD window resized to: {}x{}", width, height);
     Ok(())
   } else {
     Err("Window not found".to_string())

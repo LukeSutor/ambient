@@ -261,9 +261,23 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         throw new Error('No conversation ID provided');
       }
 
-      // Optimistically add user message
+      // Create user message with ID and timestamp
       const userMessage = createUserMessage(content);
-      dispatch({ type: 'ADD_USER_MESSAGE', payload: userMessage });
+
+      // Start user message with empty content (for animation)
+      dispatch({ 
+        type: 'START_USER_MESSAGE', 
+        payload: { id: userMessage.id, timestamp: userMessage.timestamp } 
+      });
+
+      // Use requestAnimationFrame to ensure the empty state is rendered first
+      requestAnimationFrame(() => {
+        // Then fill in the content to trigger the grid animation
+        dispatch({ 
+          type: 'FINALIZE_USER_MESSAGE', 
+          payload: { id: userMessage.id, content: userMessage.content } 
+        });
+      });
 
       // Start assistant message placeholder
       dispatch({ type: 'START_ASSISTANT_MESSAGE' });

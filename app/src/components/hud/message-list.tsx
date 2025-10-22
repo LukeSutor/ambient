@@ -29,14 +29,19 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
             key={`m-${i}`}
             className={
               m.role === 'user'
-                ? 'max-w-[85%] ml-auto bg-white/60 border border-black/20 rounded-xl px-3 py-2'
-                : 'max-w-[95%] w-full text-left mx-auto'
+                ? 'max-w-[85%] ml-auto grid transition-[grid-template-rows] duration-300 ease-out'
+                : 'max-w-[95%] w-full text-left mx-auto grid transition-[grid-template-rows] duration-300 ease-out'
             }
+            style={{
+              gridTemplateRows: m.content ? '1fr' : '0fr'
+            }}
           >
             {m.role === 'user' ? (
-              <div className="whitespace-pre-wrap">{m.content}</div>
+              <div className="overflow-hidden bg-white/60 border border-black/20 rounded-xl px-3 py-2">
+                <div className="whitespace-pre-wrap">{m.content}</div>
+              </div>
             ) : (
-              <div>
+              <div className="overflow-hidden">
                 {/* Always reserve space for the memory indicator area */}
                 <div className="h-4 flex items-center justify-start mb-1">
                   {hasPreviousMemory(i) ? (
