@@ -118,7 +118,6 @@ export function useSettings() {
         dispatch({ type: 'SET_LOADING', payload: true });
         const settings = await invoke<UserSettings>('load_user_settings');
         dispatch({ type: 'SET_SETTINGS', payload: settings });
-        console.log('[useSettings] Settings loaded:', settings);
       } catch (error) {
         console.error('[useSettings] Failed to load settings:', error);
         

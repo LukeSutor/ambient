@@ -11,6 +11,7 @@ import MessageList from '@/components/hud/message-list';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useHudAnimations } from '@/hooks/use-hud-animations';
 import { useConversation } from '@/lib/conversations';
+import { useWindows } from '@/lib/windows/useWindows';
 
 export default function HudPage() {
   // UI State
@@ -31,7 +32,6 @@ export default function HudPage() {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const measurementRef = useRef<HTMLDivElement>(null);
 
   // Conversation Manager
   const {
@@ -46,6 +46,9 @@ export default function HudPage() {
 
   // Settings Manager
   const { getHudDimensions } = useSettings();
+
+  // Window Manager
+  const { isExpanded: isWindowExpanded, expandChat, trackContentAndResize } = useWindows();
 
   // Load HUD dimensions
   useEffect(() => {
@@ -105,6 +108,14 @@ export default function HudPage() {
     messagesLength: messages.length,
     isStreaming,
   });
+
+  // Track content height changes and resize window dynamically during streaming
+  useEffect(() => {
+    const cleanup = trackContentAndResize(
+      messagesContainerRef,
+    );
+    return cleanup;
+  }, [trackContentAndResize]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -171,13 +182,6 @@ export default function HudPage() {
 
     if (!query || isLoading) return;
 
-    // Fully expand window to allow for animations
-    try {
-      await invoke('resize_hud_expanded', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to resize window:', error);
-    }
-
     setIsExpanded(true);
     setInput('');
 
@@ -197,19 +201,6 @@ export default function HudPage() {
       
       // Clear OCR results after sending
       setOcrResults([]);
-
-      // Dynamically resize window to fit content
-      if (messagesContainerRef.current) {
-        const scrollHeight = messagesContainerRef.current.scrollHeight;
-        try {
-          await invoke('resize_hud_dynamic', { 
-            label: 'floating-hud', 
-            additionalHeight: scrollHeight 
-          });
-        } catch (error) {
-          console.error('Failed to resize window:', error);
-        }
-      }
     } catch (error) {
       console.error('Error in handleSubmit:', error);
     }
@@ -298,22 +289,17 @@ export default function HudPage() {
     }
   }
 
-  return (
-  <div ref={containerRef} className="w-full h-full bg-transparent">
-      {/* Hidden measurement container - exactly mirrors the real messages container */}
-      <div
-        ref={measurementRef}
-        className="absolute opacity-0 pointer-events-none"
-        style={{
-          width: hudDimensions?.chat_width ? `${hudDimensions.chat_width}px` : '500px',
-          top: '-9999px' // Move offscreen
-        }}
-      >
-        <div className="hud-scroll flex-1 overflow-y-auto p-3 space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 transition-all">
-          <MessageList messages={messages} showMarkdown />
-        </div>
-      </div>
+  // Print changes to message list scrollheight in realtime
+  useEffect(() => {
+    // if (messages.length < 1) return;
+    if (messagesContainerRef.current) {
+      const scrollHeight = messagesContainerRef.current.scrollHeight;
+      console.log('Messages updated scroll height:', scrollHeight);
+    }
+  }, [messagesContainerRef.current?.scrollHeight]);
 
+  return (
+  <div ref={containerRef} className="w-full h-full bg-blue-500">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
@@ -322,8 +308,7 @@ export default function HudPage() {
           {/* Messages Scroll Area */}
           <div
             ref={messagesContainerRef}
-            className="hud-scroll overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
-            style={{ height: '0px', opacity: 0, transform: 'scale(0.95)', transformOrigin: 'center bottom', padding: '0px' }}
+            className="hud-scroll h-full overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
           >
             <MessageList ref={messagesEndRef} messages={messages} showMarkdown={false} />
           </div>

@@ -23,7 +23,7 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
     };
 
     return (
-      <div className="flex flex-col space-y-2">
+      <div id="message-list" className="flex flex-col space-y-2">
         {messages.map((m, i) => (
           <div
             key={`m-${i}`}

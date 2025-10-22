@@ -1,14 +1,14 @@
 'use client';
 
-import { MutableRefObject, useEffect } from 'react';
+import { RefObject, useEffect } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import type { HudDimensions } from '@/types/settings';
 
 interface UseHudAnimationsArgs {
   hudDimensions: HudDimensions | null;
-  inputContainerRef: MutableRefObject<HTMLDivElement | null>;
-  messagesContainerRef: MutableRefObject<HTMLDivElement | null>;
+  inputContainerRef: RefObject<HTMLDivElement | null>;
+  messagesContainerRef: RefObject<HTMLDivElement | null>;
   isExpanded: boolean;
   messagesLength: number;
   isStreaming: boolean;
@@ -42,7 +42,6 @@ export function useHudAnimations({
       const tl = gsap.timeline();
       gsap.set(container, { padding: '12px', overflowY: 'hidden' });
       tl.to(container, {
-        height: 'auto',
         opacity: 1,
         scale: 1,
         duration: 1,
@@ -60,7 +59,6 @@ export function useHudAnimations({
       }
     } else {
       gsap.to(container, {
-        height: 0,
         opacity: 0,
         scale: 0.95,
         padding: '0px',
@@ -70,39 +68,6 @@ export function useHudAnimations({
       });
     }
   }, [isExpanded, messagesLength]);
-
-  // Smooth height adjustments during streaming
-  useEffect(() => {
-    if (!messagesContainerRef.current || !isExpanded || messagesLength === 0) return;
-
-    let animationFrame: number | null = null;
-    let lastHeight = 0;
-
-    const checkHeightChange = () => {
-      const container = messagesContainerRef.current!;
-      const contentDiv = container.querySelector('.flex.flex-col.space-y-2') as HTMLElement | null;
-      if (!contentDiv) return;
-      const newHeight = contentDiv.scrollHeight;
-      if (newHeight !== lastHeight && lastHeight > 0 && isStreaming) {
-        gsap.to(container, { height: newHeight + 32, duration: 0.25, ease: 'power2.out' });
-      }
-      lastHeight = newHeight;
-      if (isStreaming) animationFrame = requestAnimationFrame(checkHeightChange);
-    };
-
-    if (isStreaming) {
-      const container = messagesContainerRef.current;
-      const contentDiv = container?.querySelector('.flex.flex-col.space-y-2') as HTMLElement | null;
-      if (contentDiv) {
-        lastHeight = contentDiv.scrollHeight;
-        animationFrame = requestAnimationFrame(checkHeightChange);
-      }
-    }
-
-    return () => {
-      if (animationFrame) cancelAnimationFrame(animationFrame);
-    };
-  }, [isExpanded, messagesLength, isStreaming, messagesContainerRef]);
 }
 
 export default useHudAnimations;

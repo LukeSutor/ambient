@@ -150,6 +150,7 @@ pub fn run() {
       windows::resize_hud_collapsed,
       windows::resize_hud_expanded,
       windows::resize_hud_dynamic,
+      windows::resize_hud,
       windows::refresh_hud_window_size,
       settings::load_user_settings,
       settings::save_user_settings,
