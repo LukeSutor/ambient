@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { HudDimensions } from '@/types/settings';
 import { OcrResponseEvent } from '@/types/events';
 import { useSettings } from '@/lib/settings';
@@ -18,7 +17,6 @@ export default function HudPage() {
   const [input, setInput] = useState('');
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
-  const [plusExpanded, setPlusExpanded] = useState(false);
   const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
   
   // OCR State
@@ -36,7 +34,6 @@ export default function HudPage() {
   const {
     messages,
     conversationId,
-    isStreaming,
     isLoading,
     sendMessage,
     createNew,
@@ -49,11 +46,9 @@ export default function HudPage() {
   // Window Manager
   const {
     isChatExpanded,
-    setMinimizedChat,
     setExpandedChat,
     minimizeChat,
-    refreshHUDSize,
-    trackContentAndResize
+    trackContentAndResize,
   } = useWindows();
 
   // Load HUD dimensions
@@ -108,7 +103,7 @@ export default function HudPage() {
         ocrTimeoutRef.current = null;
       }
     };
-  }, [hudDimensions, minimizeChat, refreshHUDSize]);
+  }, [hudDimensions, minimizeChat]);
 
   // Encapsulated GSAP animations
   useHudAnimations({
@@ -159,21 +154,6 @@ export default function HudPage() {
     };
   }, []);
 
-  // Window management functions
-  async function closeWindow() {
-    try {
-      await invoke('close_floating_window', { label: 'floating-hud' });
-    } catch (error) {
-      console.error('Failed to close window:', error);
-      try {
-        const currentWindow = getCurrentWebviewWindow();
-        await currentWindow.close();
-      } catch (altError) {
-        console.error('Direct close method also failed:', altError);
-      }
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const query = input.trim();
@@ -205,8 +185,8 @@ export default function HudPage() {
   }
 
   async function clearAndCollapse() {
-    clear();
     await minimizeChat();
+    clear();
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -252,43 +232,8 @@ export default function HudPage() {
     }
   }
 
-  const handleLogoClick = async () => {
-    try {
-      await invoke('open_main_window');
-    } catch (error) {
-      console.error('Failed to open main window:', error);
-    }
-  }
-
-  const handleExpandFeatures = async () => {
-    // Resize to fit if expanding and no messages
-    if (!plusExpanded) {
-      if (messages.length === 0) {
-        try {
-          await invoke('resize_hud_dynamic', { additionalHeight: 76 });
-        } catch (error) {
-          console.error('Failed to update HUD window height:', error);
-        }
-      }
-      setPlusExpanded(true);
-    // Only collapse if no messages
-    } else {
-      if (messages.length === 0) {
-        // Collapse after a quarter second to allow button press animation
-        setTimeout(async () => {
-          try {
-            await invoke('resize_hud_collapsed', { label: 'floating-hud' });
-          } catch (error) {
-            console.error('Failed to resize window:', error);
-          }
-        }, 250);
-      }
-      setPlusExpanded(false);
-    }
-  }
-
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-5s00">
+  <div ref={containerRef} className="w-full h-full bg-blue-5a00">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
@@ -310,22 +255,16 @@ export default function HudPage() {
             inputValue={input}
             setInputValue={setInput}
             onKeyDown={handleKeyDown}
-            onLogoClick={handleLogoClick}
-            onExpandFeatures={handleExpandFeatures}
             onCaptureArea={handleCaptureArea}
             onNewChat={handleNewChat}
-            onClose={closeWindow}
             onDragStart={() => setIsDraggingWindow(true)}
             onMouseLeave={handleMouseLeave}
             isDraggingWindow={isDraggingWindow}
             isHoveringGroup={isHoveringGroup}
             setIsHoveringGroup={setIsHoveringGroup}
-            plusExpanded={plusExpanded}
-            setPlusExpanded={setPlusExpanded}
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
             removeOcrAt={(i) => setOcrResults((prev) => prev.filter((_, idx) => idx !== i))}
-            messagesCount={messages.length}
           />
         </div>
       </div>

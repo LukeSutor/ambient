@@ -9,6 +9,7 @@ import { WindowsState } from './types';
 const initialState: WindowsState = {
   isLogin: true,
   isChatExpanded: false,
+  isFeaturesExpanded: false,
   settingsDestination: '',
 };
 
@@ -19,6 +20,8 @@ type WindowsAction =
   | { type: 'SET_LOGIN'; }
   | { type: 'SET_MINIMIZED_CHAT'; }
   | { type: 'SET_EXPANDED_CHAT'; }
+  | { type: 'SET_FEATURES_EXPANDED'; }
+  | { type: 'SET_FEATURES_COLLAPSED'; }
   | { type: 'OPEN_SETTINGS'; payload?: string; };
 
 /**
@@ -47,6 +50,20 @@ function windowsReducer(
         ...state,
         isLogin: false,
         isChatExpanded: true,
+      };
+
+    case 'SET_FEATURES_EXPANDED':
+      return {
+        ...state,
+        isLogin: false,
+        isFeaturesExpanded: true,
+      };
+
+    case 'SET_FEATURES_COLLAPSED':
+      return {
+        ...state,
+        isLogin: false,
+        isFeaturesExpanded: false,
       };
 
     case 'OPEN_SETTINGS':

@@ -76,6 +76,7 @@ export function useWindows() {
             ) + dimensions.input_bar_height;
 
             try {
+                //TODO: Fix bug with cutting off expanded features list
                 await invoke('resize_hud', {
                     width: dimensions.chat_width,
                     height: windowHeight
@@ -99,17 +100,78 @@ export function useWindows() {
         };
     }, [getHudDimensions]);
 
+    const toggleFeatures = useCallback(async (
+        featuresRef: RefObject<HTMLDivElement | null>
+    ) => {
+        if (!featuresRef.current) return;
+
+        const isExpanded = state.isFeaturesExpanded;
+
+        if (isExpanded) {
+            dispatch({ type: 'SET_FEATURES_COLLAPSED' });
+            
+            if (state.isChatExpanded) {
+                //TODO: shrink to previous chat size if needed
+            } else {
+                // Shrink back if not expanded
+                setTimeout(async () => {
+                    await refreshHUDSize();
+                }, 250);
+            }
+        } else {
+            dispatch({ type: 'SET_FEATURES_EXPANDED' });
+
+            if (state.isChatExpanded) {
+                //TODO: expand to fit features if needed
+            } else {
+                // Expand to fit features
+                const featuresHeight = featuresRef.current.scrollHeight;
+                const dimensions = getHudDimensions();
+                const newHeight = dimensions.input_bar_height + featuresHeight - 6;
+                
+                try {
+                    await invoke('resize_hud', {
+                        width: dimensions.chat_width,
+                        height: newHeight
+                    });
+                } catch (error) {
+                    console.error('Failed to resize for features expansion:', error);
+                }
+            }
+        }
+
+    }, [state.isFeaturesExpanded, state.isChatExpanded, dispatch, getHudDimensions]);
+
+    const closeHUD = useCallback(async () => {
+        try {
+            await invoke('close_floating_window', { label: 'floating-hud' });
+        } catch (error) {
+            console.error('Failed to close window:', error);
+        }
+    }, [dispatch]);
+
+    const openSettings = useCallback(async (destination?: string) => {
+        dispatch({ type: 'OPEN_SETTINGS', payload: destination });
+        try {
+            await invoke('open_main_window');
+        } catch (error) {
+            console.error('Failed to open main window:', error);
+        }
+    }, [dispatch]);
+
     // ============================================================
     // Return API
     // ============================================================
     return {
-        isLogin: state.isLogin,
-        isChatExpanded: state.isChatExpanded,
+        ...state,
         setLogin,
         setMinimizedChat,
         setExpandedChat,
         refreshHUDSize,
         minimizeChat,
-        trackContentAndResize
+        trackContentAndResize,
+        toggleFeatures,
+        closeHUD,
+        openSettings,
     };
 }
