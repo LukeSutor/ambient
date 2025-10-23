@@ -11,13 +11,12 @@ import { ChatMessage } from '@/lib/conversations';
 
 interface MessageListProps {
   messages: ChatMessage[];
-  isChatExpanded: boolean;
   showMarkdown?: boolean; // Allow turning off markdown for perf if desired
 }
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
 export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
-  ({ messages, isChatExpanded, showMarkdown = true }, endRef) => {
+  ({ messages, showMarkdown = true }, endRef) => {    
     // Helper function to check if previous message has memory
     const hasPreviousMemory = (index: number) => {
       return index > 0 && messages[index - 1]?.role === 'user' && messages[index - 1]?.memory !== null;

@@ -300,7 +300,7 @@ export default function HudPage() {
             className="hud-scroll h-full overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
             style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
             >
-            <MessageList ref={messagesEndRef} messages={messages} isChatExpanded={isChatExpanded} />
+            <MessageList ref={messagesEndRef} messages={messages} />
             </div>
 
           {/* Input Container - fixed height at bottom */}
