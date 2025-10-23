@@ -55,13 +55,10 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
     openSettings,
   } = useWindows();
   
-  const featuresDropdownRef = useRef<HTMLDivElement | null>(null);
-
-  // Sync local ref with windows manager ref
-  React.useEffect(() => {
-    if (featuresDropdownRef.current) {
-      windowsFeaturesRef.current = featuresDropdownRef.current;
-    }
+  // Use callback ref to sync with windows manager ref
+  // This gets called whenever the element is mounted/unmounted
+  const featuresDropdownRef = React.useCallback((node: HTMLDivElement | null) => {
+    windowsFeaturesRef.current = node;
   }, [windowsFeaturesRef]);
 
   return (

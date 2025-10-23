@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { HudDimensions } from '@/types/settings';
@@ -26,7 +26,6 @@ export default function HudPage() {
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -46,11 +45,20 @@ export default function HudPage() {
   // Window Manager
   const {
     isChatExpanded,
-    messagesContainerRef: windowsMessagesRef,
+    messagesContainerRef,
     setExpandedChat,
     minimizeChat,
     trackContentAndResize,
   } = useWindows();
+  
+  // Keep a local ref for GSAP animations (needed for useHudAnimations)
+  const localMessagesContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Callback ref to sync both refs
+  const messagesContainerCallback = useCallback((node: HTMLDivElement | null) => {
+    localMessagesContainerRef.current = node;
+    messagesContainerRef.current = node;
+  }, [messagesContainerRef]);
 
   // Load HUD dimensions
   useEffect(() => {
@@ -110,21 +118,16 @@ export default function HudPage() {
   useHudAnimations({
     hudDimensions,
     inputContainerRef,
-    messagesContainerRef,
+    messagesContainerRef: localMessagesContainerRef,
     isChatExpanded,
     messagesLength: messages.length,
   });
 
-  // Sync local ref with windows manager ref and track content changes
+  // Track content height changes and resize window dynamically during streaming
   useEffect(() => {
-    if (messagesContainerRef.current) {
-      windowsMessagesRef.current = messagesContainerRef.current;
-    }
-    
-    // Only start tracking after ref is synced
     const cleanup = trackContentAndResize();
     return cleanup;
-  }, [windowsMessagesRef, trackContentAndResize]);
+  }, [trackContentAndResize]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -164,7 +167,7 @@ export default function HudPage() {
 
     if (!query || isLoading) return;
 
-    setExpandedChat();
+    await setExpandedChat();
     setInput('');
 
     // Ensure we have a conversation
@@ -237,7 +240,7 @@ export default function HudPage() {
   }
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-5a00">
+  <div ref={containerRef} className="w-full h-full bg-blue-500">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
@@ -245,7 +248,7 @@ export default function HudPage() {
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Messages Scroll Area */}
             <div
-            ref={messagesContainerRef}
+            ref={messagesContainerCallback}
             className="hud-scroll h-full overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
             style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
             >

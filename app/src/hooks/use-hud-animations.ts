@@ -59,7 +59,6 @@ export function useHudAnimations({
       gsap.to(container, {
         opacity: 0,
         scale: 0.95,
-        padding: '0px',
         overflowY: 'hidden',
         duration: 0.5,
         ease: 'power2.inOut',

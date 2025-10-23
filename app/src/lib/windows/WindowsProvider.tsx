@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useRef, RefObject } from 'react';
 import { WindowsState } from './types';
 
 /**
@@ -11,6 +11,8 @@ const initialState: WindowsState = {
   isChatExpanded: false,
   isFeaturesExpanded: false,
   settingsDestination: '',
+  messagesContainerRef: React.createRef<null>(),
+  featuresRef: React.createRef<null>(),
 };
 
 /**
@@ -103,6 +105,10 @@ interface WindowsProviderProps {
  */
 export function WindowsProvider({ children }: WindowsProviderProps) {
   const [state, dispatch] = useReducer(windowsReducer, initialState);
+  
+  // Store refs at the provider level so they persist across renders
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const featuresRef = useRef<HTMLDivElement | null>(null);
 
   return (
     <WindowsContext.Provider value={{ state, dispatch }}>
