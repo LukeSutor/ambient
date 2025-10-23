@@ -10,6 +10,10 @@ export function useWindows() {
     const { state, dispatch } = useWindowsContext();
     const { getHudDimensions } = useSettings();
     const lastHeightRef = useRef<number | null>(null);
+    
+    // Store refs internally
+    const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+    const featuresRef = useRef<HTMLDivElement | null>(null);
 
     // ============================================================
     // Operations
@@ -43,12 +47,8 @@ export function useWindows() {
     /**
      * Track content height changes and dynamically resize window
      * Uses ResizeObserver for real-time height monitoring during streaming
-     * 
-     * @param messagesContainerRef - Reference to the messages container element
      */
-    const trackContentAndResize = useCallback((
-        messagesContainerRef: RefObject<HTMLDivElement | null>,
-    ) => {
+    const trackContentAndResize = useCallback(() => {
         const dimensions = getHudDimensions();
 
         if (!messagesContainerRef.current) {
@@ -100,9 +100,7 @@ export function useWindows() {
         };
     }, [getHudDimensions]);
 
-    const toggleFeatures = useCallback(async (
-        featuresRef: RefObject<HTMLDivElement | null>
-    ) => {
+    const toggleFeatures = useCallback(async () => {
         if (!featuresRef.current) return;
 
         const isExpanded = state.isFeaturesExpanded;
@@ -164,6 +162,10 @@ export function useWindows() {
     // ============================================================
     return {
         ...state,
+        // Refs (for components to register their elements)
+        messagesContainerRef,
+        featuresRef,
+        // Operations
         setLogin,
         setMinimizedChat,
         setExpandedChat,

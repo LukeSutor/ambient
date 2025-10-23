@@ -49,12 +49,20 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
   const {
     isFeaturesExpanded,
     isChatExpanded,
+    featuresRef: windowsFeaturesRef,
     toggleFeatures,
     closeHUD,
     openSettings,
   } = useWindows();
   
   const featuresDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Sync local ref with windows manager ref
+  React.useEffect(() => {
+    if (featuresDropdownRef.current) {
+      windowsFeaturesRef.current = featuresDropdownRef.current;
+    }
+  }, [windowsFeaturesRef]);
 
   return (
     <div
@@ -106,7 +114,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onCaptureArea(); toggleFeatures(featuresDropdownRef); }}
+              onClick={() => { onCaptureArea(); toggleFeatures(); }}
               title="Capture Area"
             >
               <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
@@ -115,7 +123,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onNewChat(); toggleFeatures(featuresDropdownRef); }}
+              onClick={() => { onNewChat(); toggleFeatures(); }}
               title="New Chat"
             >
               <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
@@ -127,7 +135,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             className="w-8 h-8 rounded-full"
             size="icon"
             disabled={ocrLoading}
-            onClick={() => toggleFeatures(featuresDropdownRef)}
+            onClick={() => toggleFeatures()}
           >
             {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${isFeaturesExpanded ? 'rotate-45' : 'rotate-0'}`} />}
           </Button>

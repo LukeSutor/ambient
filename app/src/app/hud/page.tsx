@@ -46,6 +46,7 @@ export default function HudPage() {
   // Window Manager
   const {
     isChatExpanded,
+    messagesContainerRef: windowsMessagesRef,
     setExpandedChat,
     minimizeChat,
     trackContentAndResize,
@@ -114,13 +115,16 @@ export default function HudPage() {
     messagesLength: messages.length,
   });
 
-  // Track content height changes and resize window dynamically during streaming
+  // Sync local ref with windows manager ref and track content changes
   useEffect(() => {
-    const cleanup = trackContentAndResize(
-      messagesContainerRef,
-    );
+    if (messagesContainerRef.current) {
+      windowsMessagesRef.current = messagesContainerRef.current;
+    }
+    
+    // Only start tracking after ref is synced
+    const cleanup = trackContentAndResize();
     return cleanup;
-  }, [trackContentAndResize]);
+  }, [windowsMessagesRef, trackContentAndResize]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
