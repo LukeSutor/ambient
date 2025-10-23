@@ -134,7 +134,7 @@ pub async fn resize_hud(
 
     // Adjust position to keep top aligned
     window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
-
+    log::info!("HUD window resized to: {}x{}", width, height);
     Ok(())
   } else {
     Err("Window not found".to_string())

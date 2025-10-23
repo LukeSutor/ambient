@@ -3,6 +3,6 @@
  */
 export interface WindowsState {
     isLogin: boolean;
-    isExpanded: boolean;
+    isChatExpanded: boolean;
     settingsDestination: string;
 }

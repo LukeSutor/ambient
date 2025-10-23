@@ -9,7 +9,6 @@ import { useSettings } from '../settings/useSettings';
 export function useWindows() {
     const { state, dispatch } = useWindowsContext();
     const { getHudDimensions } = useSettings();
-    const resizeTimeoutRef = useRef<number | null>(null);
     const lastHeightRef = useRef<number | null>(null);
 
     // ============================================================
@@ -19,29 +18,26 @@ export function useWindows() {
         dispatch({ type: 'SET_LOGIN' });
     }, [dispatch]);
 
-    const minimizeChat = useCallback(async () => {
+    const setMinimizedChat = useCallback(() => {
+        dispatch({ type: 'SET_MINIMIZED_CHAT' });
+    }, [dispatch]);
+
+    const setExpandedChat = useCallback(() => {
+        dispatch({ type: 'SET_EXPANDED_CHAT' });
+    }, [dispatch]);
+
+    const refreshHUDSize = useCallback(async () => {
         const dimensions = getHudDimensions();
         try {
             await invoke('resize_hud', { width: dimensions.chat_width, height: dimensions.input_bar_height });
-            dispatch({ type: 'SET_MINIMIZED_CHAT' });
         } catch (error) {
-            console.error('[useWindows] Failed to minimize chat HUD:', error);
+            console.error('[useWindows] Failed to refresh HUD size:', error);
         }
     }, [dispatch, getHudDimensions]);
 
-    const expandChat = useCallback(async (messagesContainerRef: RefObject<HTMLDivElement | null>) => {
-        const dimensions = getHudDimensions();
-        try {
-            if (messagesContainerRef.current) {
-                const scrollHeight = messagesContainerRef.current.scrollHeight;
-                let new_height = Math.min(dimensions.chat_max_height, scrollHeight) + dimensions.input_bar_height;
-                console.log("EXPANDING HUD")
-                await invoke('resize_hud', { width: dimensions.chat_width, height: new_height });
-            }
-            dispatch({ type: 'SET_EXPANDED_CHAT' });
-        } catch (error) {
-            console.error('[useWindows] Failed to expand chat HUD:', error);
-        }
+    const minimizeChat = useCallback(async () => {
+        dispatch({ type: 'SET_MINIMIZED_CHAT' });
+        await refreshHUDSize();
     }, [dispatch, getHudDimensions]);
 
     /**
@@ -56,7 +52,6 @@ export function useWindows() {
         const dimensions = getHudDimensions();
 
         if (!messagesContainerRef.current) {
-            console.log("no container");
             return;
         }
 
@@ -67,8 +62,8 @@ export function useWindows() {
 
             const contentHeight = container.scrollHeight;
 
-            const totalHeight = contentHeight + 6; // Add small padding
-            
+            const totalHeight = contentHeight + 6;
+
             // Skip if height hasn't changed
             if (totalHeight === lastHeightRef.current) return;
 
@@ -81,7 +76,6 @@ export function useWindows() {
             ) + dimensions.input_bar_height;
 
             try {
-                console.log("resizing hud to height:", windowHeight);
                 await invoke('resize_hud', {
                     width: dimensions.chat_width,
                     height: windowHeight
@@ -101,10 +95,7 @@ export function useWindows() {
         // Cleanup function
         return () => {
             resizeObserver.disconnect();
-            if (resizeTimeoutRef.current) {
-                clearTimeout(resizeTimeoutRef.current);
-                resizeTimeoutRef.current = null;
-            }
+            dispatch({ type: 'SET_MINIMIZED_CHAT' });
         };
     }, [getHudDimensions]);
 
@@ -113,10 +104,12 @@ export function useWindows() {
     // ============================================================
     return {
         isLogin: state.isLogin,
-        isExpanded: state.isExpanded,
+        isChatExpanded: state.isChatExpanded,
         setLogin,
+        setMinimizedChat,
+        setExpandedChat,
+        refreshHUDSize,
         minimizeChat,
-        expandChat,
         trackContentAndResize
     };
 }

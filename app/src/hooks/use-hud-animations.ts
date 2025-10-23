@@ -9,18 +9,16 @@ interface UseHudAnimationsArgs {
   hudDimensions: HudDimensions | null;
   inputContainerRef: RefObject<HTMLDivElement | null>;
   messagesContainerRef: RefObject<HTMLDivElement | null>;
-  isExpanded: boolean;
+  isChatExpanded: boolean;
   messagesLength: number;
-  isStreaming: boolean;
 }
 
 export function useHudAnimations({
   hudDimensions,
   inputContainerRef,
   messagesContainerRef,
-  isExpanded,
+  isChatExpanded,
   messagesLength,
-  isStreaming,
 }: UseHudAnimationsArgs) {
   // Input spring entrance when HUD dimensions load
   useGSAP(() => {
@@ -38,7 +36,7 @@ export function useHudAnimations({
     if (!messagesContainerRef.current) return;
     const container = messagesContainerRef.current;
 
-    if (isExpanded && messagesLength > 0) {
+    if (isChatExpanded && messagesLength > 0) {
       const tl = gsap.timeline();
       gsap.set(container, { padding: '12px', overflowY: 'hidden' });
       tl.to(container, {
@@ -67,7 +65,7 @@ export function useHudAnimations({
         ease: 'power2.inOut',
       });
     }
-  }, [isExpanded, messagesLength]);
+  }, [isChatExpanded, messagesLength]);
 }
 
 export default useHudAnimations;

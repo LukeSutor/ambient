@@ -16,7 +16,6 @@ import { useWindows } from '@/lib/windows/useWindows';
 export default function HudPage() {
   // UI State
   const [input, setInput] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const [plusExpanded, setPlusExpanded] = useState(false);
@@ -48,7 +47,14 @@ export default function HudPage() {
   const { getHudDimensions } = useSettings();
 
   // Window Manager
-  const { isExpanded: isWindowExpanded, expandChat, trackContentAndResize } = useWindows();
+  const {
+    isChatExpanded,
+    setMinimizedChat,
+    setExpandedChat,
+    minimizeChat,
+    refreshHUDSize,
+    trackContentAndResize
+  } = useWindows();
 
   // Load HUD dimensions
   useEffect(() => {
@@ -56,8 +62,13 @@ export default function HudPage() {
     setHudDimensions(dimensions);
   }, [getHudDimensions]);
 
-  // Set up OCR listener
+  // Set up OCR listener and initialize HUD size after dimensions are loaded
   useEffect(() => {
+    // Only initialize if dimensions are loaded
+    if (!hudDimensions) return;
+
+    minimizeChat();
+
     const setupOcrListener = async () => {
       try {
         const unlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
@@ -97,16 +108,15 @@ export default function HudPage() {
         ocrTimeoutRef.current = null;
       }
     };
-  }, []);
+  }, [hudDimensions, minimizeChat, refreshHUDSize]);
 
   // Encapsulated GSAP animations
   useHudAnimations({
     hudDimensions,
     inputContainerRef,
     messagesContainerRef,
-    isExpanded,
+    isChatExpanded,
     messagesLength: messages.length,
-    isStreaming,
   });
 
   // Track content height changes and resize window dynamically during streaming
@@ -164,25 +174,13 @@ export default function HudPage() {
     }
   }
 
-  async function collapseResponseArea() {
-    setIsExpanded(false);
-    // Collapse HUD after 250ms to allow input box animation
-    setTimeout(async () => {
-      try {
-        await invoke('resize_hud_collapsed', { label: 'floating-hud' });
-      } catch (error) {
-        console.error('Failed to resize window:', error);
-      }
-    }, 500);
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const query = input.trim();
 
     if (!query || isLoading) return;
 
-    setIsExpanded(true);
+    setExpandedChat();
     setInput('');
 
     // Ensure we have a conversation
@@ -208,7 +206,7 @@ export default function HudPage() {
 
   async function clearAndCollapse() {
     clear();
-    await collapseResponseArea();
+    await minimizeChat();
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -289,29 +287,21 @@ export default function HudPage() {
     }
   }
 
-  // Print changes to message list scrollheight in realtime
-  useEffect(() => {
-    // if (messages.length < 1) return;
-    if (messagesContainerRef.current) {
-      const scrollHeight = messagesContainerRef.current.scrollHeight;
-      console.log('Messages updated scroll height:', scrollHeight);
-    }
-  }, [messagesContainerRef.current?.scrollHeight]);
-
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-500">
+  <div ref={containerRef} className="w-full h-full bg-blue-5s00">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
         {/* Chat Area - takes remaining space after input bar */}
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Messages Scroll Area */}
-          <div
+            <div
             ref={messagesContainerRef}
             className="hud-scroll h-full overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
-          >
-            <MessageList ref={messagesEndRef} messages={messages} showMarkdown={false} />
-          </div>
+            style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
+            >
+            <MessageList ref={messagesEndRef} messages={messages} isChatExpanded={isChatExpanded} />
+            </div>
 
           {/* Input Container - fixed height at bottom */}
           <HUDInputBar

@@ -8,7 +8,7 @@ import { WindowsState } from './types';
  */
 const initialState: WindowsState = {
   isLogin: true,
-  isExpanded: false,
+  isChatExpanded: false,
   settingsDestination: '',
 };
 
@@ -39,14 +39,14 @@ function windowsReducer(
       return {
         ...state,
         isLogin: false,
-        isExpanded: false,
+        isChatExpanded: false,
       };
 
     case 'SET_EXPANDED_CHAT':
       return {
         ...state,
         isLogin: false,
-        isExpanded: true,
+        isChatExpanded: true,
       };
 
     case 'OPEN_SETTINGS':
