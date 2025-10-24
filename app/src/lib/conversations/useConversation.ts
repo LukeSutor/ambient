@@ -309,8 +309,14 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Clears all messages in the current conversation
    */
-  const clear = useCallback((): void => {
-    dispatch({ type: 'CLEAR_MESSAGES' });
+  const clear = useCallback((delay?: number): void => {
+    if (delay) {
+      setTimeout(() => {
+        dispatch({ type: 'CLEAR_MESSAGES' });
+      }, delay);
+    } else {
+      dispatch({ type: 'CLEAR_MESSAGES' });
+    }
   }, [dispatch]);
 
   /**

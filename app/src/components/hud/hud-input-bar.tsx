@@ -111,7 +111,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onCaptureArea(); toggleFeatures(); }}
+              onClick={() => { onCaptureArea(); toggleFeatures(false); }}
               title="Capture Area"
             >
               <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
@@ -120,7 +120,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onNewChat(); toggleFeatures(); }}
+              onClick={() => { onNewChat(); toggleFeatures(false); }}
               title="New Chat"
             >
               <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />

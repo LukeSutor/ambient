@@ -24,6 +24,9 @@ export default function HudPage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Window management cleanup function
+  const [windowCleanup, setWindowCleanup] = useState<UnlistenFn | null>(null);
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
@@ -126,6 +129,7 @@ export default function HudPage() {
   // Track content height changes and resize window dynamically during streaming
   useEffect(() => {
     const cleanup = trackContentAndResize();
+    setWindowCleanup(() => cleanup);
     return cleanup;
   }, [trackContentAndResize]);
 
@@ -192,8 +196,12 @@ export default function HudPage() {
   }
 
   async function clearAndCollapse() {
-    await minimizeChat();
-    clear();
+    if (windowCleanup) {
+      windowCleanup();
+      setWindowCleanup(null);
+    }
+    await minimizeChat(2000);
+    clear(2000);
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

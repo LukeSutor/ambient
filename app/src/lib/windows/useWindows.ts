@@ -2,6 +2,8 @@
 
 import { useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import { useWindowsContext } from './WindowsProvider';
 import { useSettings } from '../settings/useSettings';
 
@@ -11,15 +13,43 @@ export function useWindows() {
     const lastHeightRef = useRef<number | null>(null);
 
     // ============================================================
+    // Effects
+    // ============================================================
+    useGSAP(() => {
+        if (!state.messagesContainerRef.current) return;
+        const container = state.messagesContainerRef.current;
+        if (state.isChatExpanded) {
+            console.log('Expanding chat area animation');
+            gsap.set(container, { padding: '12px' });
+            gsap.to(container, {
+                opacity: 1,
+                scale: 1,
+                duration: 1,
+                ease: 'back.out(1.2)',
+            });
+        } else {
+            console.log('Collapsing chat area animation');
+            // Get current height for smooth transition
+            // const currentHeight = container.getBoundingClientRect().height;
+            // gsap.set(container, { height: currentHeight, overflowY: 'hidden' });
+            gsap.to(container, {
+                opacity: 0,
+                scale: 0.95,
+                duration: 0.5,
+                padding: 0,
+                ease: 'power2.inOut',
+                // onComplete: () => { gsap.set(container, { padding: '0px' }); }
+            });
+        }
+    }, [state.isChatExpanded]);
+
+    // ============================================================
     // Helpers
     // ============================================================
     const getWindowHeight = useCallback((expandedOverride?: boolean, featuresOverride?: boolean) => {
         // Returns the window height based on current state
         //TODO: update code to use this function properly
-        console.log('expandedoverride:', expandedOverride, 'featuresOverride:', featuresOverride);
         const dimensions = getHudDimensions();
-
-        console.log(state.messagesContainerRef.current, state.featuresRef.current);
 
         if (!state.messagesContainerRef.current || !state.featuresRef.current) {
             console.log('[useWindows] Refs not set, returning input bar height');
@@ -29,9 +59,6 @@ export function useWindows() {
         const isExpanded = expandedOverride !== undefined ? expandedOverride : state.isChatExpanded;
         const isFeaturesExpanded = featuresOverride !== undefined ? featuresOverride : state.isFeaturesExpanded;
 
-        console.log('scrollHeight:', state.messagesContainerRef.current.scrollHeight);
-        console.log('isExpanded:', isExpanded, 'isFeaturesExpanded:', isFeaturesExpanded);
-
         if (isExpanded) {
             // Calculate height based on chat content and features panel
             const chatHeight = Math.min(
@@ -40,7 +67,6 @@ export function useWindows() {
             ) + 6;
             const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
             const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
-            console.log('[useWindows] Calculated expanded chat height:', newHeight);
             return newHeight;
         } else {
             return dimensions.input_bar_height;
@@ -65,16 +91,24 @@ export function useWindows() {
     const refreshHUDSize = useCallback(async () => {
         const dimensions = getHudDimensions();
         try {
-            const height = getWindowHeight();
+            const height = getWindowHeight(false, false);
+            console.log('[useWindows] Refreshing HUD size to', { width: dimensions.chat_width, height });
             await invoke('resize_hud', { width: dimensions.chat_width, height });
         } catch (error) {
             console.error('[useWindows] Failed to refresh HUD size:', error);
         }
     }, [dispatch, getHudDimensions]);
 
-    const minimizeChat = useCallback(async () => {
-        dispatch({ type: 'SET_MINIMIZED_CHAT' });
-        await refreshHUDSize();
+    const minimizeChat = useCallback(async (delay?: number) => {
+        if (delay) {
+            setTimeout(async () => {
+                dispatch({ type: 'SET_MINIMIZED_CHAT' });
+                await refreshHUDSize();
+            }, delay);
+        } else {
+            dispatch({ type: 'SET_MINIMIZED_CHAT' });
+            await refreshHUDSize();
+        }
     }, [dispatch, getHudDimensions]);
 
     /**
