@@ -65,8 +65,12 @@ export default function HudPage() {
 
   // Load HUD dimensions
   useEffect(() => {
-    const dimensions = getHudDimensions();
-    setHudDimensions(dimensions);
+    let cancelled = false;
+    (async () => {
+      const dimensions = await getHudDimensions();
+      if (!cancelled) setHudDimensions(dimensions);
+    })();
+    return () => { cancelled = true; };
   }, [getHudDimensions]);
 
   // Set up OCR listener and initialize HUD size after dimensions are loaded
@@ -155,7 +159,6 @@ export default function HudPage() {
 
   // Ensure drag visibility resets when pointer is released anywhere
   useEffect(() => {
-    clearAndCollapse();
     const onUp = () => setIsDraggingWindow(false);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('mouseup', onUp);
@@ -200,8 +203,8 @@ export default function HudPage() {
       windowCleanup();
       setWindowCleanup(null);
     }
-    await minimizeChat(2000);
-    clear(2000);
+    clear(250);
+    await minimizeChat(300);
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

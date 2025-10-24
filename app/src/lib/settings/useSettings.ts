@@ -179,12 +179,14 @@ export function useSettings() {
   /**
    * Gets current HUD size setting
    */
-  const getHudSize = useCallback((): HudSizeOption => {
-    if (!state.settings) {
-      return 'Normal';
+  const getHudSize = useCallback(async (): Promise<HudSizeOption> => {
+    // Ensure settings are loaded before returning a value
+    if (state.settings) {
+      return state.settings.hud_size;
     }
-    return state.settings.hud_size;
-  }, [state.settings]);
+    const settings = await loadSettings();
+    return settings.hud_size;
+  }, [state.settings, loadSettings]);
 
   /**
    * Sets HUD size setting
@@ -231,20 +233,22 @@ export function useSettings() {
   /**
    * Gets HUD dimensions based on current size setting
    */
-  const getHudDimensions = useCallback((): HudDimensions => {
-    const size = getHudSize();
+  const getHudDimensions = useCallback(async (): Promise<HudDimensions> => {
+    const size = await getHudSize();
     return hudSizeOptionToDimensions(size);
   }, [getHudSize]);
 
   /**
    * Gets current model selection setting
    */
-  const getModelSelection = useCallback((): ModelSelection => {
-    if (!state.settings) {
-      return 'Local';
+  const getModelSelection = useCallback(async (): Promise<ModelSelection> => {
+    // Ensure settings are loaded before returning a value
+    if (state.settings) {
+      return state.settings.model_selection;
     }
-    return state.settings.model_selection;
-  }, [state.settings]);
+    const settings = await loadSettings();
+    return settings.model_selection;
+  }, [state.settings, loadSettings]);
 
   /**
    * Sets model selection setting

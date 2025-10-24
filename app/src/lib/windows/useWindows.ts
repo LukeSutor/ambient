@@ -20,7 +20,7 @@ export function useWindows() {
         const container = state.messagesContainerRef.current;
         if (state.isChatExpanded) {
             console.log('Expanding chat area animation');
-            gsap.set(container, { padding: '12px' });
+            gsap.set(container, { padding: '12px', scale: 0.95 });
             gsap.to(container, {
                 opacity: 1,
                 scale: 1,
@@ -29,16 +29,12 @@ export function useWindows() {
             });
         } else {
             console.log('Collapsing chat area animation');
-            // Get current height for smooth transition
-            // const currentHeight = container.getBoundingClientRect().height;
-            // gsap.set(container, { height: currentHeight, overflowY: 'hidden' });
             gsap.to(container, {
-                opacity: 0,
-                scale: 0.95,
-                duration: 0.5,
+                opacity: 1,
+                scale: 0,
+                duration: 0.25,
                 padding: 0,
                 ease: 'power2.inOut',
-                // onComplete: () => { gsap.set(container, { padding: '0px' }); }
             });
         }
     }, [state.isChatExpanded]);
@@ -46,10 +42,10 @@ export function useWindows() {
     // ============================================================
     // Helpers
     // ============================================================
-    const getWindowHeight = useCallback((expandedOverride?: boolean, featuresOverride?: boolean) => {
+    const getWindowHeight = useCallback(async (expandedOverride?: boolean, featuresOverride?: boolean) => {
         // Returns the window height based on current state
         //TODO: update code to use this function properly
-        const dimensions = getHudDimensions();
+        const dimensions = await getHudDimensions();
 
         if (!state.messagesContainerRef.current || !state.featuresRef.current) {
             console.log('[useWindows] Refs not set, returning input bar height');
@@ -89,9 +85,9 @@ export function useWindows() {
     }, [dispatch]);
 
     const refreshHUDSize = useCallback(async () => {
-        const dimensions = getHudDimensions();
+        const dimensions = await getHudDimensions();
         try {
-            const height = getWindowHeight(false, false);
+            const height = await getWindowHeight(false, false);
             console.log('[useWindows] Refreshing HUD size to', { width: dimensions.chat_width, height });
             await invoke('resize_hud', { width: dimensions.chat_width, height });
         } catch (error) {
@@ -125,8 +121,8 @@ export function useWindows() {
         const handleResize = async () => {
             if (!container) return;
 
-            const dimensions = getHudDimensions();
-            const newHeight = getWindowHeight(true);
+            const dimensions = await getHudDimensions();
+            const newHeight = await getWindowHeight(true);
 
             // Skip if height hasn't changed
             if (newHeight === lastHeightRef.current) return;
@@ -181,7 +177,7 @@ export function useWindows() {
             } else {
                 // Expand to fit features
                 const featuresHeight = state.featuresRef.current.scrollHeight;
-                const dimensions = getHudDimensions();
+                const dimensions = await getHudDimensions();
                 const newHeight = dimensions.input_bar_height + featuresHeight - 6;
                 
                 try {
