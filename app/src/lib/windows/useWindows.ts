@@ -50,7 +50,6 @@ export function useWindows() {
         const dimensions = await getHudDimensions();
 
         if (!state.messagesContainerRef.current || !state.featuresRef.current) {
-            console.log('[useWindows] Refs not set, returning input bar height');
             return dimensions.input_bar_height;
         }
 
@@ -67,7 +66,8 @@ export function useWindows() {
             const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
             return newHeight;
         } else {
-            return dimensions.input_bar_height;
+            const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
+            return dimensions.input_bar_height + featuresHeight;
         }
     }, [getHudDimensions]);
 
@@ -155,40 +155,42 @@ export function useWindows() {
         };
     }, [getHudDimensions]);
 
-    const toggleFeatures = useCallback(async (newState?: boolean) => {
+    const toggleFeatures = useCallback(async (nextState?: boolean) => {
         if (!state.featuresRef.current) return;
 
-        const isExpanded = newState !== undefined ? !newState : state.isFeaturesExpanded;
+        // Determine the target state (expand vs collapse)
+        const willExpand = nextState !== undefined ? nextState : !state.isFeaturesExpanded;
 
-        if (isExpanded) {
-            dispatch({ type: 'SET_FEATURES_COLLAPSED' });
-            
-            if (state.isChatExpanded) {
-                //TODO: shrink to previous chat size if needed
-            } else {
-                // Shrink back if not expanded
-                setTimeout(async () => {
-                    await refreshHUDSize();
-                }, 250);
-            }
-        } else {
+        // Compute dimensions once per toggle
+        const dims = await getHudDimensions();
+
+        if (willExpand) {
             dispatch({ type: 'SET_FEATURES_EXPANDED' });
 
+            // If chat is expanded, add features height; otherwise grow from input height
+            const newHeight = await getWindowHeight(state.isChatExpanded, true);
+            try {
+                await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
+            } catch (error) {
+                console.error('Failed to resize for features expand:', error);
+            }
+        } else {
+            dispatch({ type: 'SET_FEATURES_COLLAPSED' });
+
             if (state.isChatExpanded) {
-                //TODO: expand to fit features if needed
-            } else {
-                // Expand to fit features
-                const featuresHeight = state.featuresRef.current.scrollHeight;
-                const dimensions = await getHudDimensions();
-                const newHeight = dimensions.input_bar_height + featuresHeight - 6;
-                
+                const newHeight = await getWindowHeight(true, false);
                 try {
-                    await invoke('resize_hud', {
-                        width: dimensions.chat_width,
-                        height: newHeight
-                    });
+                    await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
                 } catch (error) {
-                    console.error('Failed to resize for features expansion:', error);
+                    console.error('Failed to resize for features collapse:', error);
+                }
+            } else {
+                // When chat is not expanded, collapse back toward input height
+                const newHeight = await getWindowHeight(false, false);
+                try {
+                    await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
+                } catch (error) {
+                    console.error('Failed to resize for features collapse:', error);
                 }
             }
         }

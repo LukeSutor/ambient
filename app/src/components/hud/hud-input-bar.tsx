@@ -1,6 +1,6 @@
 'use client';
 
-import React, { forwardRef, useRef } from 'react';
+import React, { useEffect, useCallback, forwardRef, useRef } from 'react';
 import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -55,11 +55,39 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
     openSettings,
   } = useWindows();
   
+  // Button ref for outside-click checks
+  const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
+  
   // Use callback ref to sync with windows manager ref
   // This gets called whenever the element is mounted/unmounted
-  const featuresDropdownRef = React.useCallback((node: HTMLDivElement | null) => {
+  const featuresDropdownRef = useCallback((node: HTMLDivElement | null) => {
     windowsFeaturesRef.current = node;
   }, [windowsFeaturesRef]);
+
+  // Close the features dropdown when clicking outside of the dropdown or its toggle button
+  useEffect(() => {
+    if (!isFeaturesExpanded) return;
+
+    const handleDocumentMouseDown = (e: MouseEvent) => {
+      const dropdownEl = windowsFeaturesRef.current;
+      const buttonEl = featuresButtonRef.current;
+      const target = e.target as Node | null;
+
+      // If click is inside dropdown or toggle button, ignore
+      if ((dropdownEl && target && dropdownEl.contains(target)) ||
+          (buttonEl && target && buttonEl.contains(target))) {
+        return;
+      }
+
+      // Otherwise, close the dropdown
+      toggleFeatures(false);
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+    };
+  }, [isFeaturesExpanded, windowsFeaturesRef, toggleFeatures]);
 
   return (
     <div
@@ -107,7 +135,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
 
         {/* Additional features expandable area */}
         <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${isFeaturesExpanded ? 'bg-white/40' : ''} shrink-0`}>
-          <div className={`absolute mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-250 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'} ${isChatExpanded ? 'bottom-full' : 'top-full'}`} ref={featuresDropdownRef}>
+          <div className={`absolute top-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-250 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`} ref={featuresDropdownRef}>
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
@@ -132,6 +160,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             className="w-8 h-8 rounded-full"
             size="icon"
             disabled={ocrLoading}
+            ref={featuresButtonRef}
             onClick={() => toggleFeatures()}
           >
             {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${isFeaturesExpanded ? 'rotate-45' : 'rotate-0'}`} />}

@@ -78,8 +78,6 @@ export default function HudPage() {
     // Only initialize if dimensions are loaded
     if (!hudDimensions) return;
 
-    minimizeChat();
-
     const setupOcrListener = async () => {
       try {
         const unlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
@@ -259,7 +257,7 @@ export default function HudPage() {
   }
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-5a00">
+  <div ref={containerRef} className="w-full h-full bg-blue-500">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 
