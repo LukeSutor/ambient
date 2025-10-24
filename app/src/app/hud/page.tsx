@@ -170,6 +170,14 @@ export default function HudPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    console.log(messages, conversationId)
+
+    if (!windowCleanup) {
+      const cleanup = trackContentAndResize();
+      setWindowCleanup(() => cleanup);
+    }
+
     const query = input.trim();
 
     if (!query || isLoading) return;
@@ -213,7 +221,7 @@ export default function HudPage() {
       handleSubmit(e as any);
     }
     if (e.key === 'Escape') {
-      clearAndCollapse();
+      handleNewChat();
     }
   };
 
@@ -251,7 +259,7 @@ export default function HudPage() {
   }
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-500">
+  <div ref={containerRef} className="w-full h-full bg-blue-5a00">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
 

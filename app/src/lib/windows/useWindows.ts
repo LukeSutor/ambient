@@ -20,7 +20,7 @@ export function useWindows() {
         const container = state.messagesContainerRef.current;
         if (state.isChatExpanded) {
             console.log('Expanding chat area animation');
-            gsap.set(container, { padding: '12px', scale: 0.95 });
+            gsap.set(container, { padding: '12px', scale: 0.95, height: 'auto' });
             gsap.to(container, {
                 opacity: 1,
                 scale: 1,
@@ -30,11 +30,13 @@ export function useWindows() {
         } else {
             console.log('Collapsing chat area animation');
             gsap.to(container, {
-                opacity: 1,
-                scale: 0,
+                opacity: 0,
+                scale: 0.95,
+                height: 0,
                 duration: 0.25,
                 padding: 0,
                 ease: 'power2.inOut',
+                onComplete: () => { gsap.set(container, { scale: 0, height: 'auto' }); }
             });
         }
     }, [state.isChatExpanded]);
