@@ -8,6 +8,7 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/h
 import { Button } from '@/components/ui/button';
 import { NotebookPen } from 'lucide-react';
 import { ChatMessage } from '@/lib/conversations';
+import { useWindows } from '@/lib/windows/useWindows';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -17,6 +18,12 @@ interface MessageListProps {
 // Container element forwards ref to the tail sentinel to support scrollIntoView
 export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
   ({ messages, showMarkdown = true }, endRef) => {    
+  // Window Manager
+    const {
+      minimizeChat,
+      trackContentAndResize,
+    } = useWindows();
+
     // Helper function to check if previous message has memory
     const hasPreviousMemory = (index: number) => {
       return index > 0 && messages[index - 1]?.role === 'user' && messages[index - 1]?.memory !== null;

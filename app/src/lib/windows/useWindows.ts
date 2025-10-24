@@ -197,6 +197,16 @@ export function useWindows() {
 
     }, [state.isFeaturesExpanded, state.isChatExpanded, dispatch, getHudDimensions]);
 
+    const toggleChatHistory = useCallback(async (nextState?: boolean) => {
+        const willExpand = nextState !== undefined ? nextState : !state.isChatHistoryExpanded;
+
+        if (willExpand) {
+            dispatch({ type: 'SET_CHAT_HISTORY_EXPANDED' });
+        } else {
+            dispatch({ type: 'SET_CHAT_HISTORY_COLLAPSED' });
+        }
+    }, [state.isChatHistoryExpanded, state.isChatExpanded, state.isFeaturesExpanded, dispatch]);
+
     const closeHUD = useCallback(async () => {
         try {
             await invoke('close_floating_window', { label: 'floating-hud' });

@@ -8,8 +8,9 @@ import { OcrResponseEvent } from '@/types/events';
 import { useSettings } from '@/lib/settings';
 import MessageList from '@/components/hud/message-list';
 import HUDInputBar from '@/components/hud/hud-input-bar';
-import { useHudAnimations } from '@/hooks/use-hud-animations';
 import { useConversation } from '@/lib/conversations';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import { useWindows } from '@/lib/windows/useWindows';
 
 export default function HudPage() {
@@ -72,6 +73,16 @@ export default function HudPage() {
     })();
     return () => { cancelled = true; };
   }, [getHudDimensions]);
+  
+  useGSAP(() => {
+    if (hudDimensions && inputContainerRef.current) {
+      gsap.fromTo(
+        inputContainerRef.current,
+        { scale: 0, opacity: 0, transformOrigin: 'center center' },
+        { scale: 1, opacity: 1, duration: 0.25, ease: 'back.out(0.8)', delay: 0.1 }
+      );
+    }
+  }, [hudDimensions]);
 
   // Set up OCR listener and initialize HUD size after dimensions are loaded
   useEffect(() => {
@@ -119,15 +130,6 @@ export default function HudPage() {
     };
   }, [hudDimensions, minimizeChat]);
 
-  // Encapsulated GSAP animations
-  useHudAnimations({
-    hudDimensions,
-    inputContainerRef,
-    messagesContainerRef: localMessagesContainerRef,
-    isChatExpanded,
-    messagesLength: messages.length,
-  });
-
   // Track content height changes and resize window dynamically during streaming
   useEffect(() => {
     const cleanup = trackContentAndResize();
@@ -168,8 +170,6 @@ export default function HudPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    console.log(messages, conversationId)
 
     if (!windowCleanup) {
       const cleanup = trackContentAndResize();

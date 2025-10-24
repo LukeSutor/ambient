@@ -10,6 +10,7 @@ const initialState: WindowsState = {
   isLogin: true,
   isChatExpanded: false,
   isFeaturesExpanded: false,
+  isChatHistoryExpanded: false,
   settingsDestination: '',
   messagesContainerRef: React.createRef<null>(),
   featuresRef: React.createRef<null>(),
@@ -24,6 +25,8 @@ type WindowsAction =
   | { type: 'SET_EXPANDED_CHAT'; }
   | { type: 'SET_FEATURES_EXPANDED'; }
   | { type: 'SET_FEATURES_COLLAPSED'; }
+  | { type: 'SET_CHAT_HISTORY_EXPANDED'; }
+  | { type: 'SET_CHAT_HISTORY_COLLAPSED'; }
   | { type: 'OPEN_SETTINGS'; payload?: string; };
 
 /**
@@ -66,6 +69,19 @@ function windowsReducer(
         ...state,
         isLogin: false,
         isFeaturesExpanded: false,
+      };
+
+    case 'SET_CHAT_HISTORY_EXPANDED':
+      return {
+        ...state,
+        isChatExpanded: true,
+        isChatHistoryExpanded: true,
+      };
+
+    case 'SET_CHAT_HISTORY_COLLAPSED':
+      return {
+        ...state,
+        isChatHistoryExpanded: false,
       };
 
     case 'OPEN_SETTINGS':
