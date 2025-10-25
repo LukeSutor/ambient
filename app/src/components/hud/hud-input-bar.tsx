@@ -53,6 +53,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
     isFeaturesExpanded,
     featuresRef: windowsFeaturesRef,
     toggleFeatures,
+    setFeaturesMinimized,
     toggleChatHistory,
     closeHUD,
     openSettings,
@@ -142,7 +143,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onCaptureArea(); toggleFeatures(false); }}
+              onClick={() => { onCaptureArea(); setFeaturesMinimized(); }}
               title="Capture Area"
             >
               <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
@@ -151,7 +152,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onNewChat(); toggleFeatures(false); }}
+              onClick={() => { onNewChat(); setFeaturesMinimized(); }}
               title="New Chat"
             >
               <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
@@ -160,7 +161,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { toggleChatHistory(); toggleFeatures(false); }}
+              onClick={() => { toggleChatHistory(); setFeaturesMinimized(); }}
               title="Previous Chats"
             >
               <History className="!w-4 !h-4 text-black shrink-0" />

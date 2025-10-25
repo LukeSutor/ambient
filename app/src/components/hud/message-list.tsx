@@ -128,7 +128,10 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
 
     const currentTarget = observerTarget.current;
     if (currentTarget) {
+      console.log("observing")
       observer.observe(currentTarget);
+    } else {
+      console.log("not observing")
     }
 
     return () => {
@@ -136,7 +139,7 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
         observer.unobserve(currentTarget);
       }
     };
-  }, [hasMoreConversations, loadingMore, loadMoreConversations]);
+  }, [hasMoreConversations, loadingMore, loadMoreConversations, isChatHistoryExpanded]);
 
   const handleUpdateConversationName = async () => {
     console.log("updating");
@@ -153,7 +156,7 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
   return (
     <div className="flex flex-row w-full h-full gap-0">
       {/* Chat history - Left scroll container */}
-      <div className={`flex flex-row transition-all duration-300 ${isChatHistoryExpanded ? "w-1/2" : "w-0 h-0"}`}>
+      <div className={`flex flex-row transition-all duration-300 overflow-hidden ${isChatHistoryExpanded ? (messages.length > 0 && isChatExpanded ? "w-1/2" : "w-full") : "w-0 h-0"}`}>
         <div 
           className="flex flex-col w-full hud-scroll overflow-y-auto pr-2"
           style={{ maxHeight, minHeight }}
@@ -200,19 +203,20 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
                       <Skeleton className="h-5 w-full" />
                     </div>
                   ))}
-                  {/* Intersection observer target */}
-                  <div ref={observerTarget} className="h-1 w-full" />
+                  <div ref={observerTarget} className="w-10 h-10 bg-black">HELO</div>
                 </>
               )}
             </>
           )}
         </div>
-        <Separator orientation="vertical" decorative={true} className="bg-black/20 mx-2 h-full" />
+        {messages.length > 0 &&
+          <Separator orientation="vertical" decorative={true} className="bg-black/20 mx-2 h-full" />
+        }
       </div>
 
       {/* Message list */}
       <div 
-        className={`flex flex-col hud-scroll overflow-y-auto w-full`}
+        className={`flex flex-col hud-scroll overflow-y-auto transition-all duration-300 ${messages.length > 0 ? "w-full" : "w-0 overflow-hidden"}`}
         style={{ maxHeight }}
       >
         <div className="flex flex-col space-y-2 px-2">

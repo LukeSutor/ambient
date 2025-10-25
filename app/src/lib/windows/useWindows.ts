@@ -18,7 +18,7 @@ export function useWindows() {
     useGSAP(() => {
         if (!state.messagesContainerRef.current) return;
         const container = state.messagesContainerRef.current;
-        if (state.isChatExpanded) {
+        if (state.isChatExpanded || state.isChatHistoryExpanded) {
             console.log('Expanding chat area animation');
             gsap.set(container, { padding: '12px', scale: 0.95, height: 'auto' });
             gsap.to(container, {
@@ -39,7 +39,7 @@ export function useWindows() {
                 onComplete: () => { gsap.set(container, { scale: 0, height: 'auto' }); }
             });
         }
-    }, [state.isChatExpanded]);
+    }, [state.isChatExpanded, state.isChatHistoryExpanded]);
 
     // ============================================================
     // Helpers
@@ -155,7 +155,11 @@ export function useWindows() {
         };
     }, [getHudDimensions]);
 
-    const toggleFeatures = useCallback(async (nextState?: boolean) => {
+    const setFeaturesMinimized = useCallback(() => {
+        dispatch({ type: 'SET_FEATURES_COLLAPSED' });
+    }, [dispatch]);
+
+    const toggleFeatures = useCallback(async (nextState?: boolean, skipDelay?: boolean) => {
         if (!state.featuresRef.current) return;
 
         // Determine the target state (expand vs collapse)
@@ -185,7 +189,7 @@ export function useWindows() {
                 } catch (error) {
                 console.error('Failed to resize for features collapse:', error);
                 }
-            }, 100);
+            }, skipDelay ? 0 : 100);
             } else {
             // When chat is not expanded, collapse back toward input height
             const newHeight = await getWindowHeight(false, false);
@@ -195,7 +199,7 @@ export function useWindows() {
                 } catch (error) {
                 console.error('Failed to resize for features collapse:', error);
                 }
-            }, 100);
+            }, skipDelay ? 0 : 100);
             }
         }
 
@@ -240,6 +244,7 @@ export function useWindows() {
         refreshHUDSize,
         minimizeChat,
         trackContentAndResize,
+        setFeaturesMinimized,
         toggleFeatures,
         toggleChatHistory,
         closeHUD,
