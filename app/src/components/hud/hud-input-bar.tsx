@@ -160,7 +160,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { toggleChatHistory(); toggleFeatures(); }}
+              onClick={() => { toggleChatHistory(); toggleFeatures(false); }}
               title="Previous Chats"
             >
               <History className="!w-4 !h-4 text-black shrink-0" />

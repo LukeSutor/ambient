@@ -267,10 +267,10 @@ export default function HudPage() {
           {/* Messages Scroll Area */}
             <div
             ref={messagesContainerCallback}
-            className="hud-scroll h-full overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
+            className="h-full text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2 p-2"
             style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
             >
-            <MessageList ref={messagesEndRef} />
+            <MessageList hudDimensions={hudDimensions} ref={messagesEndRef} />
             </div>
 
           {/* Input Container - fixed height at bottom */}

@@ -322,9 +322,11 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Get all conversations
    */
-  const getConversations = useCallback(async (): Promise<Conversation[]> => {
+  const getConversations = useCallback(async (limit: number, offset: number): Promise<Conversation[]> => {
     try {
-      const conversations = await invoke<Conversation[]>('list_conversations');
+      const conversations = await invoke<Conversation[]>('list_conversations', { 
+        limit: limit, offset: offset
+      });
       return conversations;
     } catch (error) {
       console.error('[useConversation] Failed to load conversations:', error);
