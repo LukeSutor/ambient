@@ -38,6 +38,7 @@ export default function HudPage() {
     messages,
     conversationId,
     isLoading,
+    isStreaming,
     sendMessage,
     createNew,
     clear,
@@ -269,7 +270,7 @@ export default function HudPage() {
             className="hud-scroll h-full overflow-y-auto space-y-2 text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
             style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
             >
-            <MessageList ref={messagesEndRef} messages={messages} />
+            <MessageList ref={messagesEndRef} />
             </div>
 
           {/* Input Container - fixed height at bottom */}
@@ -289,6 +290,7 @@ export default function HudPage() {
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
             removeOcrAt={(i) => setOcrResults((prev) => prev.filter((_, idx) => idx !== i))}
+            isStreaming={isStreaming}
           />
         </div>
       </div>

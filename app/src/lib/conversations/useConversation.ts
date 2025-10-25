@@ -320,6 +320,19 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch]);
 
   /**
+   * Get all conversations
+   */
+  const getConversations = useCallback(async (): Promise<Conversation[]> => {
+    try {
+      const conversations = await invoke<Conversation[]>('list_conversations');
+      return conversations;
+    } catch (error) {
+      console.error('[useConversation] Failed to load conversations:', error);
+    }
+    return [];
+  }, [dispatch]);
+
+  /**
    * Ensures the llama server is running
    */
   const ensureServer = useCallback(async (): Promise<void> => {
@@ -347,6 +360,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     loadMessages,
     sendMessage,
     clear,
+    getConversations,
     ensureServer,
   };
 }

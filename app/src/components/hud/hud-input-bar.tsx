@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useEffect, useCallback, forwardRef, useRef } from 'react';
+import React, { useEffect, useCallback, forwardRef, useRef, use } from 'react';
 import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X } from 'lucide-react';
+import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
+import { useConversation } from '@/lib/conversations';
 import { useWindows } from '@/lib/windows/useWindows';
 
 interface HUDInputBarProps {
@@ -25,6 +26,7 @@ interface HUDInputBarProps {
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
   removeOcrAt: (i: number) => void;
+  isStreaming: boolean;
 }
 
 const logo = '/logo.png';
@@ -44,13 +46,14 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
   ocrLoading,
   ocrResults,
   removeOcrAt,
+  isStreaming,
 }, ref) {
   // Window Manager
   const {
     isFeaturesExpanded,
-    isChatExpanded,
     featuresRef: windowsFeaturesRef,
     toggleFeatures,
+    toggleChatHistory,
     closeHUD,
     openSettings,
   } = useWindows();
@@ -135,7 +138,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
 
         {/* Additional features expandable area */}
         <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${isFeaturesExpanded ? 'bg-white/40' : ''} shrink-0`}>
-          <div className={`absolute top-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-250 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`} ref={featuresDropdownRef}>
+          <div className={`absolute top-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-1 transition-all duration-100 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`} ref={featuresDropdownRef}>
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
@@ -154,12 +157,21 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
               <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
               <span className="text-black text-sm whitespace-nowrap">New Chat</span>
             </Button>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
+              onClick={() => { toggleChatHistory(); toggleFeatures(); }}
+              title="Previous Chats"
+            >
+              <History className="!w-4 !h-4 text-black shrink-0" />
+              <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
+            </Button>
           </div>
           <Button
             variant="ghost"
             className="w-8 h-8 rounded-full"
             size="icon"
-            disabled={ocrLoading}
+            disabled={ocrLoading || isStreaming}
             ref={featuresButtonRef}
             onClick={() => toggleFeatures()}
           >

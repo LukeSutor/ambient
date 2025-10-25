@@ -170,28 +170,32 @@ export function useWindows() {
             // If chat is expanded, add features height; otherwise grow from input height
             const newHeight = await getWindowHeight(state.isChatExpanded, true);
             try {
-                await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
+            await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
             } catch (error) {
-                console.error('Failed to resize for features expand:', error);
+            console.error('Failed to resize for features expand:', error);
             }
         } else {
             dispatch({ type: 'SET_FEATURES_COLLAPSED' });
 
             if (state.isChatExpanded) {
-                const newHeight = await getWindowHeight(true, false);
+            const newHeight = await getWindowHeight(true, false);
+            setTimeout(async () => {
                 try {
-                    await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
+                await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
                 } catch (error) {
-                    console.error('Failed to resize for features collapse:', error);
+                console.error('Failed to resize for features collapse:', error);
                 }
+            }, 100);
             } else {
-                // When chat is not expanded, collapse back toward input height
-                const newHeight = await getWindowHeight(false, false);
+            // When chat is not expanded, collapse back toward input height
+            const newHeight = await getWindowHeight(false, false);
+            setTimeout(async () => {
                 try {
-                    await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
+                await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
                 } catch (error) {
-                    console.error('Failed to resize for features collapse:', error);
+                console.error('Failed to resize for features collapse:', error);
                 }
+            }, 100);
             }
         }
 
@@ -237,6 +241,7 @@ export function useWindows() {
         minimizeChat,
         trackContentAndResize,
         toggleFeatures,
+        toggleChatHistory,
         closeHUD,
         openSettings,
     };
