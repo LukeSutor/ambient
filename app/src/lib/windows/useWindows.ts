@@ -15,32 +15,6 @@ export function useWindows() {
     // ============================================================
     // Effects
     // ============================================================
-    // useGSAP(() => {
-    //     if (!state.dynamicChatContentRef.current) return;
-    //     const container = state.dynamicChatContentRef.current;
-    //     if (state.isChatExpanded || state.isChatHistoryExpanded) {
-    //         console.log('Expanding chat area animation');
-    //         gsap.set(container, { padding: '12px', scale: 0.95, height: 'auto' });
-    //         gsap.to(container, {
-    //             opacity: 1,
-    //             scale: 1,
-    //             duration: 1,
-    //             ease: 'back.out(1.2)',
-    //         });
-    //     } else {
-    //         console.log('Collapsing chat area animation');
-    //         gsap.to(container, {
-    //             opacity: 0,
-    //             scale: 0.95,
-    //             height: 0,
-    //             duration: 0.25,
-    //             padding: 0,
-    //             ease: 'power2.inOut',
-    //             onComplete: () => { gsap.set(container, { scale: 0, height: 'auto' }); }
-    //         });
-    //     }
-    // }, [state.isChatExpanded, state.isChatHistoryExpanded]);
-
     useEffect(() => {
         // Resize the window based on the height of the dynamic content
         if (!state.dynamicChatContentRef.current) {
@@ -48,6 +22,12 @@ export function useWindows() {
         }
 
         const container = state.dynamicChatContentRef.current;
+
+        // Check if observer already exists and is observing
+        if (state.resizeObserverRef.current) {
+            console.log('[useWindows] ResizeObserver already exists, skipping creation');
+            return;
+        }
 
         const handleResize = async () => {
             if (!container) return;
@@ -75,45 +55,41 @@ export function useWindows() {
             handleResize();
         });
 
+        console.log('[useWindows] Creating new ResizeObserver');
+        state.resizeObserverRef.current = resizeObserver;
         resizeObserver.observe(container);
 
         // Cleanup function
         return () => {
-            resizeObserver.disconnect();
+            console.log('[useWindows] Cleaning up ResizeObserver');
+            if (state.resizeObserverRef.current) {
+                state.resizeObserverRef.current.disconnect();
+                state.resizeObserverRef.current = null;
+            }
             dispatch({ type: 'SET_MINIMIZED_CHAT' });
         };
-    }, [state.dynamicChatContentRef]);
+    }, [state.dynamicChatContentRef, state.resizeObserverRef]);
 
     // ============================================================
     // Helpers
     // ============================================================
-    const getWindowHeight = useCallback(async (expandedOverride?: boolean, featuresOverride?: boolean) => {
+    const getWindowHeight = useCallback(async (featuresOverride?: boolean) => {
         // Returns the window height based on current state
-        //TODO: update code to use this function properly
         const dimensions = await getHudDimensions();
 
         if (!state.dynamicChatContentRef.current || !state.featuresRef.current) {
             return dimensions.input_bar_height;
         }
 
-        // const isExpanded = expandedOverride !== undefined ? expandedOverride : state.isChatExpanded;
         const isFeaturesExpanded = featuresOverride !== undefined ? featuresOverride : state.isFeaturesExpanded;
 
-        // console.log('isExpanded', isExpanded, 'isFeatures', isFeaturesExpanded);
-
-        // if (isExpanded) {
-            // Calculate height based on chat content and features panel
-            const chatHeight = Math.min(
-                state.dynamicChatContentRef.current.scrollHeight,
-                dimensions.chat_max_height
-            ) + 6;
-            const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
-            const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
-            return newHeight;
-        // } else {
-        //     const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
-        //     return dimensions.input_bar_height + featuresHeight;
-        // }
+        const chatHeight = Math.min(
+            state.dynamicChatContentRef.current.scrollHeight,
+            dimensions.chat_max_height
+        ) + 6;
+        const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
+        const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
+        return newHeight;
     }, [getHudDimensions]);
 
     // ============================================================
@@ -134,7 +110,7 @@ export function useWindows() {
     const refreshHUDSize = useCallback(async () => {
         const dimensions = await getHudDimensions();
         try {
-            const height = await getWindowHeight(false, false);
+            const height = await getWindowHeight(false);
             console.log('[useWindows] Refreshing HUD size to', { width: dimensions.chat_width, height });
             await invoke('resize_hud', { width: dimensions.chat_width, height });
         } catch (error) {
@@ -171,7 +147,7 @@ export function useWindows() {
             dispatch({ type: 'SET_FEATURES_EXPANDED' });
 
             // If chat is expanded, add features height; otherwise grow from input height
-            const newHeight = await getWindowHeight(state.isChatExpanded, true);
+            const newHeight = await getWindowHeight(true);
             try {
             await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
             } catch (error) {
@@ -181,7 +157,7 @@ export function useWindows() {
             dispatch({ type: 'SET_FEATURES_COLLAPSED' });
 
             if (state.isChatExpanded) {
-            const newHeight = await getWindowHeight(true, false);
+            const newHeight = await getWindowHeight(false);
             setTimeout(async () => {
                 try {
                 await invoke('resize_hud', { width: dims.chat_width, height: newHeight });
@@ -191,7 +167,7 @@ export function useWindows() {
             }, skipDelay ? 0 : 100);
             } else {
             // When chat is not expanded, collapse back toward input height
-            const newHeight = await getWindowHeight(false, false);
+            const newHeight = await getWindowHeight(false);
             setTimeout(async () => {
                 try {
                 await invoke('resize_hud', { width: dims.chat_width, height: newHeight });

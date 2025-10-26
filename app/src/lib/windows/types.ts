@@ -11,4 +11,5 @@ export interface WindowsState {
     settingsDestination: string;
     dynamicChatContentRef: RefObject<HTMLDivElement | null>;
     featuresRef: RefObject<HTMLDivElement | null>;
+    resizeObserverRef: RefObject<ResizeObserver | null>;
 }

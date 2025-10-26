@@ -139,7 +139,7 @@ export function ConversationList({
   return (
     <ContentContainer>
       <div
-        className="flex flex-col w-full h-full hud-scroll overflow-y-auto pt-4 px-2"
+        className="flex flex-col w-full h-full hud-scroll overflow-y-auto pt-2 px-2"
       >
         <div className="flex flex-row justify-between items-center mb-2 ml-3 text-black/80">
           <p className="text-sm font-semibold whitespace-nowrap">Chat History</p>

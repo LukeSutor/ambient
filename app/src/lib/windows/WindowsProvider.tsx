@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode, createRef } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, createRef, useRef } from 'react';
 import { WindowsState } from './types';
 
 /**
@@ -14,6 +14,7 @@ const initialState: WindowsState = {
   settingsDestination: '',
   dynamicChatContentRef: createRef<null>(),
   featuresRef: createRef<null>(),
+  resizeObserverRef: { current: null },
 };
 
 /**

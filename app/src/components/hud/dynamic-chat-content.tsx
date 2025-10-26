@@ -35,17 +35,17 @@ export function DynamicChatContent({ hudDimensions }: DynamicChatContentProps) {
   const maxHeight = hudDimensions ? `${hudDimensions.chat_max_height}px` : '500px';
 
   return (
-    <div className={`flex flex-col overflow-hidden mx-2 ${(isChatExpanded || isChatHistoryExpanded) ? "" : "w-0 h-0"}`}
+    <div className={`flex flex-col mx-2 ${(isChatExpanded || isChatHistoryExpanded) ? "" : "w-0 h-0"}`}
       style={{maxHeight}}
       >
-      <div className={`flex flex-row h-full ${isChatExpanded && isChatHistoryExpanded ? "space-x-2" : ""}`}>
+      <div className={`flex flex-row min-h-0 ${isChatExpanded && isChatHistoryExpanded ? "space-x-2" : ""}`}>
         {/* Conversation list */}
-        <div className={`overflow-hidden transition-all duration-300 ${dynamicConversationsClass()}`}>
+        <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicConversationsClass()}`}>
           <ConversationList hudDimensions={hudDimensions} />
         </div>
 
         {/* Message list */}
-        <div className={`overflow-hidden transition-all duration-300 ${dynamicMessagesClass()}`}>
+        <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicMessagesClass()}`}>
           <MessageList hudDimensions={hudDimensions} />
         </div>
       </div>
