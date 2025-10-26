@@ -1,18 +1,29 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { HudDimensions } from '@/types/settings';
-import { useWindows } from '@/lib/windows/useWindows';
 import { MessageList } from '@/components/hud/message-list';
 import { ConversationList } from '@/components/hud/conversation-list';
+import { ChatMessage } from '@/lib/conversations/types';
+import { Conversation } from '@/types/conversations';
 
 interface DynamicChatContentProps {
     hudDimensions: HudDimensions | null;
+    isChatExpanded: boolean;
+    isChatHistoryExpanded: boolean;
+    messages: ChatMessage[];
+    messagesEndRef: React.RefObject<HTMLDivElement | null>;
+    getConversations: (limit: number, offset: number) => Promise<Conversation[]>;
+    toggleChatHistory: (nextState?: boolean) => Promise<void>;
 };
 
-export function DynamicChatContent({ hudDimensions }: DynamicChatContentProps) {
-  const {
-    isChatExpanded,
-    isChatHistoryExpanded
-  } = useWindows();
+export function DynamicChatContent({ 
+  hudDimensions, 
+  isChatExpanded, 
+  isChatHistoryExpanded,
+  messages,
+  messagesEndRef,
+  getConversations,
+  toggleChatHistory,
+}: DynamicChatContentProps) {
 
   const dynamicConversationsClass = useCallback(() => {
     if (!isChatHistoryExpanded) {
@@ -41,12 +52,18 @@ export function DynamicChatContent({ hudDimensions }: DynamicChatContentProps) {
       <div className={`flex flex-row min-h-0 ${isChatExpanded && isChatHistoryExpanded ? "space-x-2" : ""}`}>
         {/* Conversation list */}
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicConversationsClass()}`}>
-          <ConversationList />
+          <ConversationList 
+            getConversations={getConversations}
+            toggleChatHistory={toggleChatHistory}
+          />
         </div>
 
         {/* Message list */}
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicMessagesClass()}`}>
-          <MessageList />
+          <MessageList 
+            messages={messages}
+            messagesEndRef={messagesEndRef}
+          />
         </div>
       </div>
     </div>

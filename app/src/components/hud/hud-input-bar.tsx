@@ -10,8 +10,6 @@ import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { useConversation } from '@/lib/conversations';
-import { useWindows } from '@/lib/windows/useWindows';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
@@ -29,6 +27,13 @@ interface HUDInputBarProps {
   ocrResults: OcrResponseEvent[];
   removeOcrAt: (i: number) => void;
   isStreaming: boolean;
+  isFeaturesExpanded: boolean;
+  featuresRef: React.MutableRefObject<HTMLDivElement | null>;
+  setFeaturesMinimized: () => void;
+  toggleFeatures: (nextState?: boolean, skipDelay?: boolean) => Promise<void>;
+  toggleChatHistory: (nextState?: boolean) => Promise<void>;
+  closeHUD: () => Promise<void>;
+  openSettings: (destination?: string) => Promise<void>;
 }
 
 const logo = '/logo.png';
@@ -49,18 +54,14 @@ export function HUDInputBar({
   ocrResults,
   removeOcrAt,
   isStreaming,
+  isFeaturesExpanded,
+  featuresRef: windowsFeaturesRef,
+  setFeaturesMinimized,
+  toggleFeatures,
+  toggleChatHistory,
+  closeHUD,
+  openSettings,
 }: HUDInputBarProps) {
-  // Window Manager
-  const {
-    isFeaturesExpanded,
-    featuresRef: windowsFeaturesRef,
-    toggleFeatures,
-    setFeaturesMinimized,
-    toggleChatHistory,
-    closeHUD,
-    openSettings,
-  } = useWindows();
-  
   // Button ref for outside-click checks
   const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
   // Ref for load animation

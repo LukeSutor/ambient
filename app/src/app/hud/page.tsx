@@ -36,6 +36,7 @@ export default function HudPage() {
     sendMessage,
     createNew,
     clear,
+    getConversations,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
@@ -44,8 +45,17 @@ export default function HudPage() {
   // Window Manager
   const {
     dynamicChatContentRef,
+    isChatExpanded,
+    isChatHistoryExpanded,
+    isFeaturesExpanded,
+    featuresRef,
     setChatExpanded,
     minimizeChat,
+    setFeaturesMinimized,
+    toggleFeatures,
+    toggleChatHistory,
+    closeHUD,
+    openSettings,
   } = useWindows();
   
   // Callback ref to sync both refs
@@ -220,13 +230,21 @@ export default function HudPage() {
   }
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-50a0">
+  <div ref={containerRef} className="w-full h-full bg-blue-500">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Dynamic Chat Content Area */}
           <div ref={dynamicChatContentCallback}>
-            <DynamicChatContent hudDimensions={hudDimensions} />
+            <DynamicChatContent 
+              hudDimensions={hudDimensions}
+              isChatExpanded={isChatExpanded}
+              isChatHistoryExpanded={isChatHistoryExpanded}
+              messages={messages}
+              messagesEndRef={messagesEndRef}
+              getConversations={getConversations}
+              toggleChatHistory={toggleChatHistory}
+            />
           </div>
 
           {/* Input Container - fixed height at bottom */}
@@ -246,6 +264,13 @@ export default function HudPage() {
             ocrResults={ocrResults}
             removeOcrAt={(i) => setOcrResults((prev) => prev.filter((_, idx) => idx !== i))}
             isStreaming={isStreaming}
+            isFeaturesExpanded={isFeaturesExpanded}
+            featuresRef={featuresRef}
+            setFeaturesMinimized={setFeaturesMinimized}
+            toggleFeatures={toggleFeatures}
+            toggleChatHistory={toggleChatHistory}
+            closeHUD={closeHUD}
+            openSettings={openSettings}
           />
         </div>
       </div>

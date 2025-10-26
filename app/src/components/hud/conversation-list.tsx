@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Conversation } from '@/types/conversations';
-import { useConversation } from '@/lib/conversations';
-import { HudDimensions } from '@/types/settings';
-import { useWindows } from '@/lib/windows/useWindows';
 import { ContentContainer } from './content-container';
 import { Loader2, Ellipsis, Trash2, Pen, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,7 +16,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 const CONVERSATION_LIMIT = 20;
 const SKELETON_COUNT = 3;
 
-export function ConversationList() {
+interface ConversationListProps {
+  getConversations: (limit: number, offset: number) => Promise<Conversation[]>;
+  toggleChatHistory: (nextState?: boolean) => Promise<void>;
+}
+
+export function ConversationList({ getConversations, toggleChatHistory }: ConversationListProps) {
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState<boolean>(true);
@@ -30,19 +32,7 @@ export function ConversationList() {
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
 
   // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
-
-  // Conversation Manager
-  const {
-    messages,
-    getConversations,
-  } = useConversation(messagesEndRef);
-
-  // Window Manager
-  const {
-    toggleChatHistory,
-  } = useWindows();
 
   // Set editing conversation ID to null when escape key is pressed
   useEffect(() => {

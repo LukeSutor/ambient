@@ -6,18 +6,16 @@ import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Button } from '@/components/ui/button';
 import { NotebookPen } from 'lucide-react';
-import { useConversation } from '@/lib/conversations';
 import { ContentContainer } from '@/components/hud/content-container';
+import { ChatMessage } from '@/lib/conversations/types';
+
+interface MessageListProps {
+  messages: ChatMessage[];
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
+}
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
-export function MessageList() {
-  // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Conversation Manager
-  const {
-    messages,
-  } = useConversation(messagesEndRef);
+export function MessageList({ messages, messagesEndRef }: MessageListProps) {
 
   // Helper function to check if previous message has memory
   const hasPreviousMemory = (index: number) => {
