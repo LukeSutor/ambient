@@ -26,8 +26,7 @@ export function MessageList() {
 
   return (
     <ContentContainer>
-      <div 
-        className="w-full h-full flex flex-col hud-scroll overflow-y-auto">
+      <div className="w-full h-full flex flex-col hud-scroll overflow-y-auto p-4">
         <div className="flex flex-col space-y-2">
           {messages.map((m, i) => (
             <div

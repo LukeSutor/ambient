@@ -182,7 +182,7 @@ export default function Home() {
   // Load all conversations for the sidebar
   async function loadConversations() {
     try {
-      const convs = await invoke<Conversation[]>("list_conversations");
+      const convs = await invoke<Conversation[]>("list_conversations", { limit: 100, offset: 0 });
       setConversations(convs);
     } catch (err) {
       console.error("Error loading conversations:", err);

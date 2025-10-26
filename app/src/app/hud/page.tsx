@@ -23,9 +23,6 @@ export default function HudPage() {
   const [ocrLoading, setOcrLoading] = useState(false);
   const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Window management cleanup function
-  const [windowCleanup, setWindowCleanup] = useState<UnlistenFn | null>(null);
-
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -175,10 +172,6 @@ export default function HudPage() {
   }
 
   async function clearAndCollapse() {
-    // if (windowCleanup) {
-    //   windowCleanup();
-    //   setWindowCleanup(null);
-    // }
     clear(250);
     await minimizeChat(300);
   }
@@ -227,7 +220,7 @@ export default function HudPage() {
   }
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-500">
+  <div ref={containerRef} className="w-full h-full bg-blue-50a0">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
         <div className="relative flex flex-col min-h-0 h-min">

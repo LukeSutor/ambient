@@ -170,11 +170,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   // ============================================================
 
   useEffect(() => {
+    console.log('state', state)
     // Check shared initialization ref to prevent multiple initializations
     if (state.initializationRef.current) {
       return;
     }
-    
+    //TODO: conversation ID isn't being saved across useConversation() calls
     state.initializationRef.current = true;
 
     const initialize = async () => {

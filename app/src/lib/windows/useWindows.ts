@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
 import { useWindowsContext } from './WindowsProvider';
 import { useSettings } from '../settings/useSettings';
 
