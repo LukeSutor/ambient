@@ -33,8 +33,7 @@ const CONVERSATION_LIMIT = 20;
 const SKELETON_COUNT = 3;
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
-export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
-  ({ hudDimensions, showMarkdown = true }, endRef) => {
+export function MessageList({ hudDimensions, showMarkdown = true }: MessageListProps) {
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState<boolean>(true);
@@ -58,7 +57,6 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
   const {
     isChatExpanded,
     isChatHistoryExpanded,
-    setExpandedChat,
   } = useWindows();
 
   // Set editing conversation ID to null when escape key is pressed
@@ -115,31 +113,31 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
     setLoadingMore(false);
   }, [conversationPage, loadingMore, hasMoreConversations, getConversations]);
 
-  // Intersection Observer for infinite scroll
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMoreConversations && !loadingMore) {
-          loadMoreConversations();
-        }
-      },
-      { threshold: 0.1 }
-    );
+  // // Intersection Observer for infinite scroll
+  // useEffect(() => {
+  //   const observer = new IntersectionObserver(
+  //     (entries) => {
+  //       if (entries[0].isIntersecting && hasMoreConversations && !loadingMore) {
+  //         loadMoreConversations();
+  //       }
+  //     },
+  //     { threshold: 0.1 }
+  //   );
 
-    const currentTarget = observerTarget.current;
-    if (currentTarget) {
-      console.log("observing")
-      observer.observe(currentTarget);
-    } else {
-      console.log("not observing")
-    }
+  //   const currentTarget = observerTarget.current;
+  //   if (currentTarget) {
+  //     console.log("observing")
+  //     observer.observe(currentTarget);
+  //   } else {
+  //     console.log("not observing")
+  //   }
 
-    return () => {
-      if (currentTarget) {
-        observer.unobserve(currentTarget);
-      }
-    };
-  }, [hasMoreConversations, loadingMore, loadMoreConversations, isChatHistoryExpanded]);
+  //   return () => {
+  //     if (currentTarget) {
+  //       observer.unobserve(currentTarget);
+  //     }
+  //   };
+  // }, [hasMoreConversations, loadingMore, loadMoreConversations, isChatHistoryExpanded]);
 
   const handleUpdateConversationName = async () => {
     console.log("updating");
@@ -284,13 +282,12 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(
               )}
             </div>
           ))}
-          <div ref={endRef} />
+          <div ref={messagesEndRef} />
         </div>
       </div>
     </div>
   );
 }
-);
 
 MessageList.displayName = 'MessageList';
 

@@ -6,12 +6,10 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { HudDimensions } from '@/types/settings';
 import { OcrResponseEvent } from '@/types/events';
 import { useSettings } from '@/lib/settings';
-import MessageList from '@/components/hud/message-list';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useConversation } from '@/lib/conversations';
-import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
 import { useWindows } from '@/lib/windows/useWindows';
+import { DynamicChatContent } from '@/components/hud/dynamic-chat-content';
 
 export default function HudPage() {
   // UI State
@@ -30,7 +28,6 @@ export default function HudPage() {
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const inputContainerRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Conversation Manager
@@ -49,21 +46,15 @@ export default function HudPage() {
 
   // Window Manager
   const {
-    isChatExpanded,
-    messagesContainerRef,
-    setExpandedChat,
+    dynamicChatContentRef,
+    setChatExpanded,
     minimizeChat,
-    trackContentAndResize,
   } = useWindows();
   
-  // Keep a local ref for GSAP animations (needed for useHudAnimations)
-  const localMessagesContainerRef = useRef<HTMLDivElement | null>(null);
-  
   // Callback ref to sync both refs
-  const messagesContainerCallback = useCallback((node: HTMLDivElement | null) => {
-    localMessagesContainerRef.current = node;
-    messagesContainerRef.current = node;
-  }, [messagesContainerRef]);
+  const dynamicChatContentCallback = useCallback((node: HTMLDivElement | null) => {
+    dynamicChatContentRef.current = node;
+  }, [dynamicChatContentRef]);
 
   // Load HUD dimensions
   useEffect(() => {
@@ -75,16 +66,6 @@ export default function HudPage() {
     return () => { cancelled = true; };
   }, [getHudDimensions]);
   
-  useGSAP(() => {
-    if (hudDimensions && inputContainerRef.current) {
-      gsap.fromTo(
-        inputContainerRef.current,
-        { scale: 0, opacity: 0, transformOrigin: 'center center' },
-        { scale: 1, opacity: 1, duration: 0.25, ease: 'back.out(0.8)', delay: 0.1 }
-      );
-    }
-  }, [hudDimensions]);
-
   // Set up OCR listener and initialize HUD size after dimensions are loaded
   useEffect(() => {
     // Only initialize if dimensions are loaded
@@ -131,12 +112,12 @@ export default function HudPage() {
     };
   }, [hudDimensions, minimizeChat]);
 
-  // Track content height changes and resize window dynamically during streaming
-  useEffect(() => {
-    const cleanup = trackContentAndResize();
-    setWindowCleanup(() => cleanup);
-    return cleanup;
-  }, [trackContentAndResize]);
+  // // Track content height changes and resize window dynamically during streaming
+  // useEffect(() => {
+  //   const cleanup = trackContentAndResize();
+  //   setWindowCleanup(() => cleanup);
+  //   return cleanup;
+  // }, [trackContentAndResize]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -172,16 +153,16 @@ export default function HudPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!windowCleanup) {
-      const cleanup = trackContentAndResize();
-      setWindowCleanup(() => cleanup);
-    }
+    // if (!windowCleanup) {
+    //   const cleanup = trackContentAndResize();
+    //   setWindowCleanup(() => cleanup);
+    // }
 
     const query = input.trim();
 
     if (!query || isLoading) return;
 
-    await setExpandedChat();
+    await setChatExpanded();
     setInput('');
 
     // Ensure we have a conversation
@@ -206,10 +187,10 @@ export default function HudPage() {
   }
 
   async function clearAndCollapse() {
-    if (windowCleanup) {
-      windowCleanup();
-      setWindowCleanup(null);
-    }
+    // if (windowCleanup) {
+    //   windowCleanup();
+    //   setWindowCleanup(null);
+    // }
     clear(250);
     await minimizeChat(300);
   }
@@ -261,21 +242,20 @@ export default function HudPage() {
   <div ref={containerRef} className="w-full h-full bg-blue-500">
       {/* Glass Container */}
       <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
-
-        {/* Chat Area - takes remaining space after input bar */}
         <div className="relative flex flex-col min-h-0 h-min">
-          {/* Messages Scroll Area */}
-            <div
-            ref={messagesContainerCallback}
+          {/* Dynamic Chat Content Area */}
+          <div ref={dynamicChatContentCallback}>
+            <DynamicChatContent hudDimensions={hudDimensions} />
+          </div>
+            {/* <div
             className="h-full text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
             style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
             >
             <MessageList hudDimensions={hudDimensions} ref={messagesEndRef} />
-            </div>
+            </div> */}
 
           {/* Input Container - fixed height at bottom */}
           <HUDInputBar
-            ref={inputContainerRef}
             hudDimensions={hudDimensions}
             inputValue={input}
             setInputValue={setInput}

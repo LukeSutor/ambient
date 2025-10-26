@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -15,31 +15,75 @@ export function useWindows() {
     // ============================================================
     // Effects
     // ============================================================
-    useGSAP(() => {
-        if (!state.messagesContainerRef.current) return;
-        const container = state.messagesContainerRef.current;
-        if (state.isChatExpanded || state.isChatHistoryExpanded) {
-            console.log('Expanding chat area animation');
-            gsap.set(container, { padding: '12px', scale: 0.95, height: 'auto' });
-            gsap.to(container, {
-                opacity: 1,
-                scale: 1,
-                duration: 1,
-                ease: 'back.out(1.2)',
-            });
-        } else {
-            console.log('Collapsing chat area animation');
-            gsap.to(container, {
-                opacity: 0,
-                scale: 0.95,
-                height: 0,
-                duration: 0.25,
-                padding: 0,
-                ease: 'power2.inOut',
-                onComplete: () => { gsap.set(container, { scale: 0, height: 'auto' }); }
-            });
+    // useGSAP(() => {
+    //     if (!state.dynamicChatContentRef.current) return;
+    //     const container = state.dynamicChatContentRef.current;
+    //     if (state.isChatExpanded || state.isChatHistoryExpanded) {
+    //         console.log('Expanding chat area animation');
+    //         gsap.set(container, { padding: '12px', scale: 0.95, height: 'auto' });
+    //         gsap.to(container, {
+    //             opacity: 1,
+    //             scale: 1,
+    //             duration: 1,
+    //             ease: 'back.out(1.2)',
+    //         });
+    //     } else {
+    //         console.log('Collapsing chat area animation');
+    //         gsap.to(container, {
+    //             opacity: 0,
+    //             scale: 0.95,
+    //             height: 0,
+    //             duration: 0.25,
+    //             padding: 0,
+    //             ease: 'power2.inOut',
+    //             onComplete: () => { gsap.set(container, { scale: 0, height: 'auto' }); }
+    //         });
+    //     }
+    // }, [state.isChatExpanded, state.isChatHistoryExpanded]);
+
+    useEffect(() => {
+        // Resize the window based on the height of the dynamic content
+        if (!state.dynamicChatContentRef.current) {
+            return;
         }
-    }, [state.isChatExpanded, state.isChatHistoryExpanded]);
+
+        const container = state.dynamicChatContentRef.current;
+
+        const handleResize = async () => {
+            if (!container) return;
+
+            const dimensions = await getHudDimensions();
+            const newHeight = await getWindowHeight();
+            console.log('new height', newHeight);
+
+            // Skip if height hasn't changed
+            if (newHeight === lastHeightRef.current) return;
+
+            lastHeightRef.current = newHeight;
+
+            try {
+                await invoke('resize_hud', {
+                    width: dimensions.chat_width,
+                    height: newHeight
+                });
+            } catch (error) {
+                console.error('[useWindows] Failed to resize during tracking:', error);
+            }
+        };
+
+        // Set up ResizeObserver for real-time content height changes
+        const resizeObserver = new ResizeObserver(() => {
+            handleResize();
+        });
+
+        resizeObserver.observe(container);
+
+        // Cleanup function
+        return () => {
+            resizeObserver.disconnect();
+            dispatch({ type: 'SET_MINIMIZED_CHAT' });
+        };
+    }, [state.dynamicChatContentRef]);
 
     // ============================================================
     // Helpers
@@ -49,26 +93,28 @@ export function useWindows() {
         //TODO: update code to use this function properly
         const dimensions = await getHudDimensions();
 
-        if (!state.messagesContainerRef.current || !state.featuresRef.current) {
+        if (!state.dynamicChatContentRef.current || !state.featuresRef.current) {
             return dimensions.input_bar_height;
         }
 
-        const isExpanded = expandedOverride !== undefined ? expandedOverride : state.isChatExpanded;
+        // const isExpanded = expandedOverride !== undefined ? expandedOverride : state.isChatExpanded;
         const isFeaturesExpanded = featuresOverride !== undefined ? featuresOverride : state.isFeaturesExpanded;
 
-        if (isExpanded) {
+        // console.log('isExpanded', isExpanded, 'isFeatures', isFeaturesExpanded);
+
+        // if (isExpanded) {
             // Calculate height based on chat content and features panel
             const chatHeight = Math.min(
-                state.messagesContainerRef.current.scrollHeight,
+                state.dynamicChatContentRef.current.scrollHeight,
                 dimensions.chat_max_height
             ) + 6;
             const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
             const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
             return newHeight;
-        } else {
-            const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
-            return dimensions.input_bar_height + featuresHeight;
-        }
+        // } else {
+        //     const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
+        //     return dimensions.input_bar_height + featuresHeight;
+        // }
     }, [getHudDimensions]);
 
     // ============================================================
@@ -78,11 +124,11 @@ export function useWindows() {
         dispatch({ type: 'SET_LOGIN' });
     }, [dispatch]);
 
-    const setMinimizedChat = useCallback(() => {
+    const setChatMinimized = useCallback(() => {
         dispatch({ type: 'SET_MINIMIZED_CHAT' });
     }, [dispatch]);
 
-    const setExpandedChat = useCallback(() => {
+    const setChatExpanded = useCallback(() => {
         dispatch({ type: 'SET_EXPANDED_CHAT' });
     }, [dispatch]);
 
@@ -114,11 +160,11 @@ export function useWindows() {
      * Uses ResizeObserver for real-time height monitoring during streaming
      */
     const trackContentAndResize = useCallback(() => {
-        if (!state.messagesContainerRef.current) {
+        if (!state.dynamicChatContentRef?.current) {
             return;
         }
 
-        const container = state.messagesContainerRef.current;
+        const container = state.dynamicChatContentRef.current;
 
         const handleResize = async () => {
             if (!container) return;
@@ -239,8 +285,8 @@ export function useWindows() {
         ...state,
         // Operations
         setLogin,
-        setMinimizedChat,
-        setExpandedChat,
+        setChatMinimized,
+        setChatExpanded,
         refreshHUDSize,
         minimizeChat,
         trackContentAndResize,

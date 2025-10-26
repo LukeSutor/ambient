@@ -9,6 +9,6 @@ export interface WindowsState {
     isFeaturesExpanded: boolean;
     isChatHistoryExpanded: boolean;
     settingsDestination: string;
-    messagesContainerRef: RefObject<HTMLDivElement | null>;
+    dynamicChatContentRef: RefObject<HTMLDivElement | null>;
     featuresRef: RefObject<HTMLDivElement | null>;
 }

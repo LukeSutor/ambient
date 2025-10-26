@@ -8,6 +8,8 @@ import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, 
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
 import { useConversation } from '@/lib/conversations';
 import { useWindows } from '@/lib/windows/useWindows';
 
@@ -31,7 +33,7 @@ interface HUDInputBarProps {
 
 const logo = '/logo.png';
 
-export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function HUDInputBar({
+export function HUDInputBar({
   hudDimensions,
   inputValue,
   setInputValue,
@@ -47,7 +49,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
   ocrResults,
   removeOcrAt,
   isStreaming,
-}, ref) {
+}: HUDInputBarProps) {
   // Window Manager
   const {
     isFeaturesExpanded,
@@ -61,9 +63,10 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
   
   // Button ref for outside-click checks
   const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Ref for load animation
+  const inputRef = useRef<HTMLDivElement | null>(null);
   
   // Use callback ref to sync with windows manager ref
-  // This gets called whenever the element is mounted/unmounted
   const featuresDropdownRef = useCallback((node: HTMLDivElement | null) => {
     windowsFeaturesRef.current = node;
   }, [windowsFeaturesRef]);
@@ -93,13 +96,25 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
     };
   }, [isFeaturesExpanded, windowsFeaturesRef, toggleFeatures]);
 
+  // Animate input bar appearing
+  useGSAP(() => {
+    if (hudDimensions && inputRef.current) {
+      gsap.fromTo(
+        inputRef.current,
+        { scale: 0, opacity: 0, transformOrigin: 'center center' },
+        { scale: 1, opacity: 1, duration: 0.25, ease: 'back.out(0.8)', delay: 0.1 }
+      );
+    }
+  }, [hudDimensions]);
+
+
   return (
     <div
       className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
       id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
-      ref={ref}
+      ref={inputRef}
       style={{
         height: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
         width: hudDimensions ? `${hudDimensions.chat_width}px` : '500px',
@@ -205,6 +220,6 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
       </div>
     </div>
   );
-});
+}
 
 export default HUDInputBar;
