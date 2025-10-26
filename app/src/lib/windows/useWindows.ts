@@ -54,7 +54,6 @@ export function useWindows() {
 
             const dimensions = await getHudDimensions();
             const newHeight = await getWindowHeight();
-            console.log('new height', newHeight);
 
             // Skip if height hasn't changed
             if (newHeight === lastHeightRef.current) return;
@@ -155,52 +154,6 @@ export function useWindows() {
         }
     }, [dispatch, getHudDimensions]);
 
-    /**
-     * Track content height changes and dynamically resize window
-     * Uses ResizeObserver for real-time height monitoring during streaming
-     */
-    const trackContentAndResize = useCallback(() => {
-        if (!state.dynamicChatContentRef?.current) {
-            return;
-        }
-
-        const container = state.dynamicChatContentRef.current;
-
-        const handleResize = async () => {
-            if (!container) return;
-
-            const dimensions = await getHudDimensions();
-            const newHeight = await getWindowHeight(true);
-
-            // Skip if height hasn't changed
-            if (newHeight === lastHeightRef.current) return;
-
-            lastHeightRef.current = newHeight;
-
-            try {
-                await invoke('resize_hud', {
-                    width: dimensions.chat_width,
-                    height: newHeight
-                });
-            } catch (error) {
-                console.error('[useWindows] Failed to resize during tracking:', error);
-            }
-        };
-
-        // Set up ResizeObserver for real-time content height changes
-        const resizeObserver = new ResizeObserver(() => {
-            handleResize();
-        });
-
-        resizeObserver.observe(container);
-
-        // Cleanup function
-        return () => {
-            resizeObserver.disconnect();
-            dispatch({ type: 'SET_MINIMIZED_CHAT' });
-        };
-    }, [getHudDimensions]);
-
     const setFeaturesMinimized = useCallback(() => {
         dispatch({ type: 'SET_FEATURES_COLLAPSED' });
     }, [dispatch]);
@@ -289,7 +242,6 @@ export function useWindows() {
         setChatExpanded,
         refreshHUDSize,
         minimizeChat,
-        trackContentAndResize,
         setFeaturesMinimized,
         toggleFeatures,
         toggleChatHistory,

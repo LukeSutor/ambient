@@ -92,7 +92,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
           // Filter by conversation ID to prevent corruption
           if (conv_id !== state.conversationId) {
-            console.log('[useConversation] Ignoring stream event for different conversation');
             return;
           }
 

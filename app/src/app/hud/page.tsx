@@ -112,13 +112,6 @@ export default function HudPage() {
     };
   }, [hudDimensions, minimizeChat]);
 
-  // // Track content height changes and resize window dynamically during streaming
-  // useEffect(() => {
-  //   const cleanup = trackContentAndResize();
-  //   setWindowCleanup(() => cleanup);
-  //   return cleanup;
-  // }, [trackContentAndResize]);
-
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
     // Get the bounding box of drag area
@@ -152,11 +145,6 @@ export default function HudPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    // if (!windowCleanup) {
-    //   const cleanup = trackContentAndResize();
-    //   setWindowCleanup(() => cleanup);
-    // }
 
     const query = input.trim();
 
@@ -247,12 +235,6 @@ export default function HudPage() {
           <div ref={dynamicChatContentCallback}>
             <DynamicChatContent hudDimensions={hudDimensions} />
           </div>
-            {/* <div
-            className="h-full text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
-            style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
-            >
-            <MessageList hudDimensions={hudDimensions} ref={messagesEndRef} />
-            </div> */}
 
           {/* Input Container - fixed height at bottom */}
           <HUDInputBar

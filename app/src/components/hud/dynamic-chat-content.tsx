@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { HudDimensions } from '@/types/settings';
 import { useWindows } from '@/lib/windows/useWindows';
-import MessageList from '@/components/hud/message-list';
+import { MessageList } from '@/components/hud/message-list';
+import { ConversationList } from '@/components/hud/conversation-list';
 
 interface DynamicChatContentProps {
     hudDimensions: HudDimensions | null;
@@ -9,20 +10,45 @@ interface DynamicChatContentProps {
 
 export function DynamicChatContent({ hudDimensions }: DynamicChatContentProps) {
   const {
-    dynamicChatContentRef
+    isChatExpanded,
+    isChatHistoryExpanded
   } = useWindows();
 
-  return (
-    <div ref={dynamicChatContentRef}>
+  const dynamicConversationsClass = useCallback(() => {
+    if (!isChatHistoryExpanded) {
+      return "w-0 h-0";
+    } else if (!isChatExpanded) {
+      return "w-full"
+    }
+    return "w-[60%]"
+  }, [isChatExpanded, isChatHistoryExpanded])
 
-      {/* Message list */}
-      <div
-      className="h-full text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-xl mx-2"
-      style={{maxHeight: hudDimensions?.chat_max_height ?? 500}}
+  const dynamicMessagesClass = useCallback(() => {
+    if (!isChatExpanded) {
+      return "w-0 h-0";
+    } else if (!isChatHistoryExpanded) {
+      return "w-full"
+    }
+    return "w-full"
+  }, [isChatExpanded, isChatHistoryExpanded])
+
+  const maxHeight = hudDimensions ? `${hudDimensions.chat_max_height}px` : '500px';
+
+  return (
+    <div className={`flex flex-col overflow-hidden mx-2 ${(isChatExpanded || isChatHistoryExpanded) ? "" : "w-0 h-0"}`}
+      style={{maxHeight}}
       >
-        <MessageList hudDimensions={hudDimensions} />
+      <div className={`flex flex-row h-full ${isChatExpanded && isChatHistoryExpanded ? "space-x-2" : ""}`}>
+        {/* Conversation list */}
+        <div className={`overflow-hidden transition-all duration-300 ${dynamicConversationsClass()}`}>
+          <ConversationList hudDimensions={hudDimensions} />
+        </div>
+
+        {/* Message list */}
+        <div className={`overflow-hidden transition-all duration-300 ${dynamicMessagesClass()}`}>
+          <MessageList hudDimensions={hudDimensions} />
+        </div>
       </div>
-      {/* Dynamic chat content goes here */}
     </div>
   );
 };

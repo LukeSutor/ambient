@@ -31,12 +31,19 @@ pub async fn resize_hud(
   let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let size = LogicalSize::new(width, height);
+    // Check current size
+    let current_size = window.inner_size().map_err(|e| e.to_string())?;
+    let requested_size = LogicalSize::new(width, height);
+    
+    // Skip resize if size is already the same
+    if current_size.width as f64 == width && current_size.height as f64 == height {
+      log::debug!("HUD window already at requested size: {}x{}", width, height);
+      return Ok(());
+    }
+
     // Get position before resizing
     let position = window.outer_position().map_err(|e| e.to_string())?;
-    window.set_size(size).map_err(|e| e.to_string())?;
-    // Print new position for debugging
-    let new_position = window.outer_position().map_err(|e| e.to_string())?;
+    window.set_size(requested_size).map_err(|e| e.to_string())?;
 
     // Adjust position to keep top aligned
     window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
