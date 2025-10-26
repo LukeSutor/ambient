@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useRef } from 'react';
 import { ConversationState, ChatMessage } from './types';
 import { MemoryEntry } from '@/types/memory';
 
@@ -13,6 +13,7 @@ const initialState: ConversationState = {
   isStreaming: false,
   isLoading: false,
   streamingContent: '',
+  initializationRef: { current: false },
 };
 
 /**

@@ -25,7 +25,6 @@ export function useWindows() {
 
         // Check if observer already exists and is observing
         if (state.resizeObserverRef.current) {
-            console.log('[useWindows] ResizeObserver already exists, skipping creation');
             return;
         }
 
@@ -55,7 +54,6 @@ export function useWindows() {
             handleResize();
         });
 
-        console.log('[useWindows] Creating new ResizeObserver');
         state.resizeObserverRef.current = resizeObserver;
         resizeObserver.observe(container);
 

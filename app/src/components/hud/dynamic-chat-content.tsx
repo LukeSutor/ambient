@@ -41,12 +41,12 @@ export function DynamicChatContent({ hudDimensions }: DynamicChatContentProps) {
       <div className={`flex flex-row min-h-0 ${isChatExpanded && isChatHistoryExpanded ? "space-x-2" : ""}`}>
         {/* Conversation list */}
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicConversationsClass()}`}>
-          <ConversationList hudDimensions={hudDimensions} />
+          <ConversationList />
         </div>
 
         {/* Message list */}
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicMessagesClass()}`}>
-          <MessageList hudDimensions={hudDimensions} />
+          <MessageList />
         </div>
       </div>
     </div>

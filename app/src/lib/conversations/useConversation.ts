@@ -65,7 +65,6 @@ function createUserMessage(content: string, memory: MemoryEntry | null = null): 
 export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement | null>) {
   const { state, dispatch } = useConversationContext();
   const cleanupRef = useRef<(() => void) | null>(null);
-  const initializedRef = useRef(false);
 
   // ============================================================
   // Event Listeners Setup
@@ -126,8 +125,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         const memoryUnlisten = await listen<MemoryExtractedEvent>('memory_extracted', (event) => {
           const { memory } = event.payload;
           
-          console.log('[useConversation] Memory extracted:', memory);
-
           // Attach memory to the message with matching message_id
           if (memory.message_id) {
             dispatch({ 
@@ -173,8 +170,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   // ============================================================
 
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
+    // Check shared initialization ref to prevent multiple initializations
+    if (state.initializationRef.current) {
+      return;
+    }
+    
+    state.initializationRef.current = true;
 
     const initialize = async () => {
       console.log('[useConversation] Initializing...');
@@ -182,9 +183,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       // Ensure llama server is running
       try {
         await invoke<string>('spawn_llama_server');
-      } catch (error) {
-        console.warn('[useConversation] spawn_llama_server warning:', error);
-      }
+      } catch (error) {}
 
       // Create initial conversation if none exists
       if (!state.conversationId) {
@@ -202,7 +201,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     };
 
     initialize();
-  }, []); // Only run once on mount
+  }, [state.initializationRef]); // Depend on the shared ref
 
   // ============================================================
   // Operations

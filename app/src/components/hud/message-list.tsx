@@ -3,21 +3,14 @@
 import React, { useRef } from 'react';
 import Markdown from 'react-markdown';
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
-import AnimatedText from '@/components/ui/animated-text';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Button } from '@/components/ui/button';
 import { NotebookPen } from 'lucide-react';
 import { useConversation } from '@/lib/conversations';
-import { HudDimensions } from '@/types/settings';
 import { ContentContainer } from '@/components/hud/content-container';
 
-interface MessageListProps {
-  hudDimensions: HudDimensions | null;
-  showMarkdown?: boolean; // Allow turning off markdown for perf if desired
-}
-
 // Container element forwards ref to the tail sentinel to support scrollIntoView
-export function MessageList({ hudDimensions, showMarkdown = true }: MessageListProps) {
+export function MessageList() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -89,13 +82,7 @@ export function MessageList({ hudDimensions, showMarkdown = true }: MessageListP
                       <div className="h-4 w-4" />
                     )}
                   </div>
-                  {showMarkdown ? (
-                    <Markdown {...llmMarkdownConfig}>{m.content}</Markdown>
-                  ) : (
-                    <div className="prose prose-sm max-w-none">
-                      <AnimatedText content={m.content} />
-                    </div>
-                  )}
+                  <Markdown {...llmMarkdownConfig}>{m.content}</Markdown>
                 </div>
               )}
             </div>

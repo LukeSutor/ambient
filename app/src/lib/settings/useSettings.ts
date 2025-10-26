@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useSettingsContext } from './SettingsProvider';
@@ -51,7 +51,6 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
  */
 export function useSettings() {
   const { state, dispatch } = useSettingsContext();
-  const initializedRef = useRef(false);
 
   // ============================================================
   // Event Listener Setup
@@ -108,8 +107,12 @@ export function useSettings() {
   // ============================================================
 
   useEffect(() => {
-    if (initializedRef.current || state.settings) return;
-    initializedRef.current = true;
+    // Check shared initialization ref to prevent multiple initializations
+    if (state.initializationRef.current || state.settings) {
+      return;
+    }
+    
+    state.initializationRef.current = true;
 
     const initialize = async () => {
       console.log('[useSettings] Initializing settings...');
@@ -131,7 +134,7 @@ export function useSettings() {
     };
 
     initialize();
-  }, [state.settings, dispatch]);
+  }, [state.initializationRef, state.settings, dispatch]);
 
   // ============================================================
   // Operations

@@ -16,16 +16,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface ConversationListProps {
-  hudDimensions: HudDimensions | null;
-}
-
 const CONVERSATION_LIMIT = 20;
 const SKELETON_COUNT = 3;
 
-export function ConversationList({
-  hudDimensions
-}: ConversationListProps) {
+export function ConversationList() {
   // State
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState<boolean>(true);
@@ -47,8 +41,6 @@ export function ConversationList({
 
   // Window Manager
   const {
-    isChatExpanded,
-    isChatHistoryExpanded,
     toggleChatHistory,
   } = useWindows();
 

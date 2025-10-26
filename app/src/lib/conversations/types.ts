@@ -1,4 +1,5 @@
 import { MemoryEntry } from '@/types/memory';
+import { MutableRefObject } from 'react';
 
 /**
  * Message role type
@@ -36,4 +37,5 @@ export interface ConversationState {
   isStreaming: boolean;
   isLoading: boolean;
   streamingContent: string;
+  initializationRef: MutableRefObject<boolean>;
 }

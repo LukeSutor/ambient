@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, MutableRefObject } from 'react';
 import { UserSettings, HudSizeOption, ModelSelection } from '@/types/settings';
 
 /**
@@ -9,6 +9,7 @@ import { UserSettings, HudSizeOption, ModelSelection } from '@/types/settings';
 interface SettingsState {
   settings: UserSettings | null;
   isLoading: boolean;
+  initializationRef: MutableRefObject<boolean>;
 }
 
 /**
@@ -17,6 +18,7 @@ interface SettingsState {
 const initialState: SettingsState = {
   settings: null,
   isLoading: true,
+  initializationRef: { current: false },
 };
 
 /**
