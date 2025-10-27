@@ -30,7 +30,7 @@ export function MessageList({ messages, messagesEndRef }: MessageListProps) {
             <div
               key={`m-${i}`}
               className={
-                m.role === 'user'
+                m.role.toLowerCase() === 'user'
                   ? 'max-w-[85%] ml-auto grid transition-[grid-template-rows] duration-300 ease-out'
                   : 'max-w-[95%] w-full text-left mx-auto grid transition-[grid-template-rows] duration-300 ease-out'
               }
@@ -38,7 +38,7 @@ export function MessageList({ messages, messagesEndRef }: MessageListProps) {
                 gridTemplateRows: m.content ? '1fr' : '0fr'
               }}
             >
-              {m.role === 'user' ? (
+              {m.role.toLowerCase() === 'user' ? (
                 <div className="overflow-hidden bg-white/60 border border-black/20 rounded-xl px-3 py-2">
                   <div className="whitespace-pre-wrap">{m.content}</div>
                 </div>

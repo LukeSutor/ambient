@@ -30,6 +30,7 @@ type ConversationAction =
   | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
   | { type: 'DELETE_CONVERSATION'; payload: { id: string } }
   | { type: 'SET_NO_MORE_CONVERSATIONS' }
+  | { type: 'LOAD_CONVERSATION'; payload: Conversation }
   | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
   | { type: 'ADD_USER_MESSAGE'; payload: ChatMessage }
   | { type: 'START_USER_MESSAGE'; payload: { id: string; timestamp: string } }
@@ -86,6 +87,12 @@ function conversationReducer(
       return {
         ...state,
         hasMoreConversations: false,
+      };
+
+    case 'LOAD_CONVERSATION':
+      return {
+        ...state,
+        conversationId: action.payload.id,
       };
 
     case 'LOAD_MESSAGES':

@@ -32,12 +32,13 @@ const conversationNameSchema = z.object({
 interface ConversationListProps {
   conversations: Conversation[];
   hasMoreConversations: boolean;
+  loadConversation: (id: string) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   renameConversation: (conversationId: string, newName: string) => Promise<void>;
   toggleChatHistory: (nextState?: boolean) => Promise<void>;
 }
 
-export function ConversationList({ conversations, hasMoreConversations, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
+export function ConversationList({ conversations, hasMoreConversations, loadConversation, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
   // State
   const [loadingMore, setLoadingMore] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
@@ -126,7 +127,7 @@ export function ConversationList({ conversations, hasMoreConversations, loadMore
             {conversations.map((conv) => (
               editingConversationId !== conv.id ? (
                 <div key={conv.id} className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg">
-                  <Button variant="ghost" className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent">
+                  <Button onClick={() => loadConversation(conv.id)} variant="ghost" className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent">
                     <span className="truncate">{conv.name || 'Untitled Conversation'}</span>
                   </Button>
                   <DropdownMenu>

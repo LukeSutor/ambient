@@ -39,7 +39,7 @@ function extractThinkingContent(text: string): string {
 function transformBackendMessage(backendMessage: any): ChatMessage {
   return {
     id: backendMessage.id,
-    role: backendMessage.role === 'user' ? 'user' : 'assistant',
+    role: backendMessage.role.toLowerCase() === 'user' ? 'user' : 'assistant',
     content: extractThinkingContent(backendMessage.content),
     memory: backendMessage.memory ? (backendMessage.memory as MemoryEntry) : null,
     timestamp: backendMessage.timestamp,
@@ -212,7 +212,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   // ============================================================
 
   /**
-   * Creates a new conversation
+   * Resets the conversation state
    */
   const resetConversation = useCallback(async (name?: string): Promise<string | null> => {
     try {
@@ -234,6 +234,19 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       dispatch({ type: 'DELETE_CONVERSATION', payload: { id } });
     } catch (error) {
       console.error('[useConversation] Failed to delete conversation:', error);
+    }
+  }, [dispatch]);
+
+  /**
+   * Loads a conversation by ID
+   */
+  const loadConversation = useCallback(async (id: string): Promise<void> => {
+    try {
+      const conversation = await invoke<Conversation>('get_conversation', { conversationId: id });
+      dispatch({ type: 'LOAD_CONVERSATION', payload: conversation });
+      await loadMessages(id);
+    } catch (error) {
+      console.error('[useConversation] Failed to load conversation:', error);
     }
   }, [dispatch]);
 
@@ -323,7 +336,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_STREAMING', payload: false });
     }
-  }, [dispatch]);
+  }, [dispatch, state.conversationId]);
 
   /**
    * Clears all messages in the current conversation
@@ -416,6 +429,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     // Operations
     resetConversation,
     deleteConversation,
+    loadConversation,
     loadMessages,
     sendMessage,
     clear,

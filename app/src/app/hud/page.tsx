@@ -37,6 +37,7 @@ export default function HudPage() {
     isStreaming,
     sendMessage,
     resetConversation,
+    loadConversation,
     loadMoreConversations,
     renameConversation,
     clear,
@@ -74,14 +75,12 @@ export default function HudPage() {
       if (!cancelled) setHudDimensions(dimensions);
     })();
     return () => { cancelled = true; };
-  }, [getHudDimensions]);
+  }, []);
   
   // Set up OCR listener and initialize HUD size after dimensions are loaded
   useEffect(() => {
-    // Only initialize if dimensions are loaded
-    if (!hudDimensions) return;
-
     const setupOcrListener = async () => {
+      console.log('Setting up OCR listener');
       try {
         const unlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
           const result = event.payload;
@@ -120,7 +119,7 @@ export default function HudPage() {
         ocrTimeoutRef.current = null;
       }
     };
-  }, [hudDimensions, minimizeChat]);
+  }, []);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -237,6 +236,7 @@ export default function HudPage() {
               messagesEndRef={messagesEndRef}
               conversations={conversations}
               hasMoreConversations={hasMoreConversations}
+              loadConversation={loadConversation}
               loadMoreConversations={loadMoreConversations}
               renameConversation={renameConversation}
               toggleChatHistory={toggleChatHistory}

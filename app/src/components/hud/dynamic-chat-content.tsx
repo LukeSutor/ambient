@@ -13,6 +13,7 @@ interface DynamicChatContentProps {
     messagesEndRef: React.RefObject<HTMLDivElement | null>;
     conversations: Conversation[];
     hasMoreConversations: boolean;
+    loadConversation: (id: string) => Promise<void>;
     loadMoreConversations: () => Promise<void>;
     renameConversation: (conversationId: string, newName: string) => Promise<void>;
     toggleChatHistory: (nextState?: boolean) => Promise<void>;
@@ -26,6 +27,7 @@ export function DynamicChatContent({
   messagesEndRef,
   conversations,
   hasMoreConversations,
+  loadConversation,
   loadMoreConversations,
   renameConversation,
   toggleChatHistory,
@@ -61,6 +63,7 @@ export function DynamicChatContent({
           <ConversationList 
             conversations={conversations}
             hasMoreConversations={hasMoreConversations}
+            loadConversation={loadConversation}
             loadMoreConversations={loadMoreConversations}
             renameConversation={renameConversation}
             toggleChatHistory={toggleChatHistory}
