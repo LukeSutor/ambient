@@ -4,9 +4,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
-import { ChatMessage, Conversation } from './types';
+import { Conversation } from '@/types/conversations';
+import { ChatMessage } from './types';
 import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
+
+const CONVERSATION_LIMIT = 20;
 
 /**
  * Extracts and removes <think> tags from LLM responses
@@ -65,6 +68,9 @@ function createUserMessage(content: string, memory: MemoryEntry | null = null): 
 export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement | null>) {
   const { state, dispatch } = useConversationContext();
   const cleanupRef = useRef<(() => void) | null>(null);
+  const isLoadingMoreRef = useRef(false);
+
+
 
   // ============================================================
   // Event Listeners Setup
@@ -155,9 +161,10 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       console.log('[useConversation] Event listeners cleaned up');
     };
 
-    // Cleanup on unmount or conversationId change
+    // Cleanup on unmount
     return () => {
       isMounted = false;
+
       if (cleanupRef.current) {
         cleanupRef.current();
         cleanupRef.current = null;
@@ -170,7 +177,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   // ============================================================
 
   useEffect(() => {
-    console.log('state', state)
     // Check shared initialization ref to prevent multiple initializations
     if (state.initializationRef.current) {
       return;
@@ -186,18 +192,15 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         await invoke<string>('spawn_llama_server');
       } catch (error) {}
 
-      // Create initial conversation if none exists
-      if (!state.conversationId) {
-        try {
-          const conversation = await invoke<Conversation>('create_conversation', { 
-            name: null 
-          });
-          dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
-          dispatch({ type: 'CLEAR_MESSAGES' });
-          console.log('[useConversation] Created initial conversation:', conversation.id);
-        } catch (error) {
-          console.error('[useConversation] Failed to create conversation:', error);
-        }
+      // Load the conversations list
+      try {
+        const conversations = await invoke<Conversation[]>('list_conversations', { 
+          limit: CONVERSATION_LIMIT, offset: 0
+        });
+        dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
+        console.log('[useConversation] Loaded conversations');
+      } catch (error) {
+        console.error('[useConversation] Failed to load conversations:', error);
       }
     };
 
@@ -211,17 +214,26 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Creates a new conversation
    */
-  const createNew = useCallback(async (name?: string): Promise<string | null> => {
+  const resetConversation = useCallback(async (name?: string): Promise<string | null> => {
     try {
-      const conversation = await invoke<Conversation>('create_conversation', { 
-        name: name || null 
-      });
-      dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
+      dispatch({ type: 'SET_CONVERSATION_ID', payload: null });
       dispatch({ type: 'CLEAR_MESSAGES' });
-      return conversation.id;
+      return null;
     } catch (error) {
       console.error('[useConversation] Failed to create conversation:', error);
       return null;
+    }
+  }, [dispatch]);
+
+  /**
+   * Deletes a conversation by ID
+   */
+  const deleteConversation = useCallback(async (id: string): Promise<void> => {
+    try {
+      await invoke('delete_conversation', { conversationId: id });
+      dispatch({ type: 'DELETE_CONVERSATION', payload: { id } });
+    } catch (error) {
+      console.error('[useConversation] Failed to delete conversation:', error);
     }
   }, [dispatch]);
 
@@ -245,7 +257,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
    * Sends a message with optional OCR context
    */
   const sendMessage = useCallback(async (
-    conversationId: string,
+    conversationId: string | null,
     content: string,
     ocrResults: OcrResponseEvent[] = []
   ): Promise<void> => {
@@ -256,8 +268,16 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         return;
       }
 
-      if (!conversationId) {
-        throw new Error('No conversation ID provided');
+      // Create conversation if it doesn't exist yet (first message)
+      let activeConversationId = conversationId;
+      if (!activeConversationId) {
+        console.log('[useConversation] Creating conversation for first message');
+        const conversation = await invoke<Conversation>('create_conversation', { 
+          name: null 
+        });
+        activeConversationId = conversation.id;
+        dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
+        console.log('[useConversation] Created conversation:', conversation.id);
       }
 
       // Create user message with ID and timestamp
@@ -287,7 +307,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       const hudChatEvent: HudChatEvent = {
         text: content,
         ocr_responses: ocrResults,
-        conv_id: conversationId,
+        conv_id: activeConversationId,
         timestamp: Date.now().toString(),
         message_id: userMessage.id,
       };
@@ -321,16 +341,57 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Get all conversations
    */
-  const getConversations = useCallback(async (limit: number, offset: number): Promise<Conversation[]> => {
-    try {
-      const conversations = await invoke<Conversation[]>('list_conversations', { 
-        limit: limit, offset: offset
-      });
-      return conversations;
-    } catch (error) {
-      console.error('[useConversation] Failed to load conversations:', error);
+  const loadMoreConversations = useCallback(async (): Promise<void> => {
+    // Prevent concurrent calls
+    if (isLoadingMoreRef.current || !state.hasMoreConversations) {
+      return;
     }
-    return [];
+
+    isLoadingMoreRef.current = true;
+    
+    try {
+      const nextPage = state.conversationPage + 1;
+      const offset = nextPage * CONVERSATION_LIMIT;
+      const conversations = await invoke<Conversation[]>('list_conversations', { 
+        limit: CONVERSATION_LIMIT, 
+        offset 
+      });
+      if (conversations.length < CONVERSATION_LIMIT) {
+        // No more conversations to load
+        dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
+      }
+      dispatch({ type: 'ADD_CONVERSATIONS', payload: conversations });
+    } catch (error) {
+      console.error('[useConversation] Failed to load more conversations:', error);
+    } finally {
+      isLoadingMoreRef.current = false;
+    }
+  }, [dispatch, state.conversationPage]);
+
+  /**
+   * Refresh conversations list based on current page
+   */
+  const refreshConversations = useCallback(async (): Promise<void> => {
+    try {
+      const conversations = await invoke<Conversation[]>('list_conversations', { limit: CONVERSATION_LIMIT * (state.conversationPage + 1), offset: 0 });
+      dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
+    } catch (error) {
+      console.error('[useConversation] Failed to refresh conversations:', error);
+    } finally {
+    }
+  }, [dispatch]);
+
+  /**
+   * Rename a conversation
+   */
+  const renameConversation = useCallback(async (id: string, newName: string): Promise<void> => {
+    try {
+      await invoke('update_conversation_name', { conversationId: id, name: newName });
+      dispatch({ type: 'RENAME_CONVERSATION', payload: { id, newName } });
+      await refreshConversations();
+    } catch (error) {
+      console.error('[useConversation] Failed to rename conversation:', error);
+    }
   }, [dispatch]);
 
   /**
@@ -350,18 +411,16 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
   return {
     // State
-    conversationId: state.conversationId,
-    messages: state.messages,
-    isStreaming: state.isStreaming,
-    isLoading: state.isLoading,
-    streamingContent: state.streamingContent,
+    ...state,
     
     // Operations
-    createNew,
+    resetConversation,
+    deleteConversation,
     loadMessages,
     sendMessage,
     clear,
-    getConversations,
+    loadMoreConversations,
+    renameConversation,
     ensureServer,
   };
 }

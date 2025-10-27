@@ -1,5 +1,5 @@
 import { MemoryEntry } from '@/types/memory';
-import { MutableRefObject } from 'react';
+import { RefObject } from 'react';
 
 /**
  * Message role type
@@ -37,5 +37,8 @@ export interface ConversationState {
   isStreaming: boolean;
   isLoading: boolean;
   streamingContent: string;
-  initializationRef: MutableRefObject<boolean>;
+  conversations: Conversation[];
+  conversationPage: number;
+  hasMoreConversations: boolean;
+  initializationRef: RefObject<boolean>;
 }

@@ -12,27 +12,47 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
 
-const CONVERSATION_LIMIT = 20;
 const SKELETON_COUNT = 3;
 
+const conversationNameSchema = z.object({
+  name: z.string().min(1, "Name cannot be empty").max(100, "Name must be less than 100 characters"),
+});
+
 interface ConversationListProps {
-  getConversations: (limit: number, offset: number) => Promise<Conversation[]>;
+  conversations: Conversation[];
+  hasMoreConversations: boolean;
+  loadMoreConversations: () => Promise<void>;
+  renameConversation: (conversationId: string, newName: string) => Promise<void>;
   toggleChatHistory: (nextState?: boolean) => Promise<void>;
 }
 
-export function ConversationList({ getConversations, toggleChatHistory }: ConversationListProps) {
+export function ConversationList({ conversations, hasMoreConversations, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
   // State
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loadingConversations, setLoadingConversations] = useState<boolean>(true);
-  const [loadingMore, setLoadingMore] = useState<boolean>(false);
-  const [conversationPage, setConversationPage] = useState<number>(0);
-  const [hasMoreConversations, setHasMoreConversations] = useState<boolean>(true);
-  const [newConversationName, setNewConversationName] = useState<string>('');
+  const [loadingMore, setLoadingMore] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+
+  // Form setup
+  const form = useForm<z.infer<typeof conversationNameSchema>>({
+    resolver: zodResolver(conversationNameSchema),
+    defaultValues: {
+      name: "",
+    },
+  });
 
   // Refs
   const observerTarget = useRef<HTMLDivElement>(null);
+  const isLoadingRef = useRef(false);
 
   // Set editing conversation ID to null when escape key is pressed
   useEffect(() => {
@@ -47,75 +67,43 @@ export function ConversationList({ getConversations, toggleChatHistory }: Conver
     };
   }, []);
 
-  // Load conversations on mount
+  // Intersection Observer for infinite scroll
   useEffect(() => {
-    let isMounted = true;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreConversations && !isLoadingRef.current) {
+          console.log("loading more conversations");
+          isLoadingRef.current = true;
+          setLoadingMore(true);
+          loadMoreConversations().finally(() => {
+            isLoadingRef.current = false;
+            setLoadingMore(false);
+          });
+        }
+      },
+      { threshold: 0.1 }
+    );
 
-    const loadConversations = async () => {
-      setLoadingConversations(true);
-      const convs = await getConversations(CONVERSATION_LIMIT, 0);
-      if (isMounted) {
-        setConversations(convs);
-        setHasMoreConversations(convs.length === CONVERSATION_LIMIT);
-        setConversationPage(0);
-      }
-      setLoadingConversations(false);
-    };
-
-    loadConversations();
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
 
     return () => {
-      isMounted = false;
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
     };
-  }, [getConversations]);
+  }, [observerTarget.current, hasMoreConversations, loadMoreConversations]);
 
-  // Load more conversations function
-  const loadMoreConversations = useCallback(async () => {
-    if (loadingMore || !hasMoreConversations) return;
+  const handleUpdateConversationName = async (values: z.infer<typeof conversationNameSchema>) => {
+    await renameConversation(editingConversationId!, values.name);
+    setEditingConversationId(null);
+  };
 
-    setLoadingMore(true);
-    const nextPage = conversationPage + 1;
-    const newConvs = await getConversations(CONVERSATION_LIMIT, nextPage * CONVERSATION_LIMIT);
-    
-    if (newConvs.length > 0) {
-      setConversations(prev => [...prev, ...newConvs]);
-      setConversationPage(nextPage);
-      setHasMoreConversations(newConvs.length === CONVERSATION_LIMIT);
-    } else {
-      setHasMoreConversations(false);
-    }
-    
-    setLoadingMore(false);
-  }, [conversationPage, loadingMore, hasMoreConversations, getConversations]);
-
-  // // Intersection Observer for infinite scroll
-  // useEffect(() => {
-  //   const observer = new IntersectionObserver(
-  //     (entries) => {
-  //       if (entries[0].isIntersecting && hasMoreConversations && !loadingMore) {
-  //         loadMoreConversations();
-  //       }
-  //     },
-  //     { threshold: 0.1 }
-  //   );
-
-  //   const currentTarget = observerTarget.current;
-  //   if (currentTarget) {
-  //     console.log("observing")
-  //     observer.observe(currentTarget);
-  //   } else {
-  //     console.log("not observing")
-  //   }
-
-  //   return () => {
-  //     if (currentTarget) {
-  //       observer.unobserve(currentTarget);
-  //     }
-  //   };
-  // }, [hasMoreConversations, loadingMore, loadMoreConversations, isChatHistoryExpanded]);
-
-  const handleUpdateConversationName = async () => {
-    console.log("updating");
+  const startEditing = (conv: Conversation) => {
+    setEditingConversationId(conv.id);
+    form.reset({ name: conv.name || '' });
   };
 
   return (
@@ -129,7 +117,7 @@ export function ConversationList({ getConversations, toggleChatHistory }: Conver
             <X className="w-4 h-4" />
           </Button>
         </div>
-        {loadingConversations ? (
+        {conversations.length === 0 ? (
           <div className="flex items-center justify-center py-2">
             <Loader2 className="animate-spin text-black/50" />
           </div>
@@ -149,15 +137,46 @@ export function ConversationList({ getConversations, toggleChatHistory }: Conver
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuGroup>
-                        <DropdownMenuItem onClick={() => { setNewConversationName(conv.name || ''); setEditingConversationId(conv.id) }}><Pen className="mr-2" />Rename</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => startEditing(conv)}><Pen className="mr-2" />Rename</DropdownMenuItem>
                         <DropdownMenuItem variant="destructive" onClick={() => { }}><Trash2 className="mr-2" />Delete</DropdownMenuItem>
                       </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
               ) : (
-                <div key={conv.id} className="px-3">
-                  <Input onSubmit={handleUpdateConversationName} onChange={(e) => setNewConversationName(e.target.value)} className="text-sm font-semibold" value={newConversationName} />
+                <div key={conv.id}>
+                  <Form {...form}>
+                    <form onSubmit={form.handleSubmit(handleUpdateConversationName)} className="space-y-2">
+                      <FormField
+                        control={form.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                className="text-sm font-semibold h-8" 
+                                autoFocus
+                                onBlur={() => {
+                                  // Submit on blur if there are no errors
+                                  if (Object.keys(form.formState.errors).length === 0) {
+                                    form.handleSubmit(handleUpdateConversationName)();
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    form.handleSubmit(handleUpdateConversationName)();
+                                  }
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage className="text-xs" />
+                          </FormItem>
+                        )}
+                      />
+                    </form>
+                  </Form>
                 </div>
               )
             ))}
@@ -170,7 +189,7 @@ export function ConversationList({ getConversations, toggleChatHistory }: Conver
                     <Skeleton className="h-5 w-full" />
                   </div>
                 ))}
-                <div ref={observerTarget} className="w-10 h-10 bg-black">HELO</div>
+                <div ref={observerTarget} className="w-1 h-1"></div>
               </>
             )}
           </>

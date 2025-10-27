@@ -30,13 +30,16 @@ export default function HudPage() {
   // Conversation Manager
   const {
     messages,
+    conversations,
+    hasMoreConversations,
     conversationId,
     isLoading,
     isStreaming,
     sendMessage,
-    createNew,
+    resetConversation,
+    loadMoreConversations,
+    renameConversation,
     clear,
-    getConversations,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
@@ -160,19 +163,9 @@ export default function HudPage() {
     await setChatExpanded();
     setInput('');
 
-    // Ensure we have a conversation
-    let convId = conversationId;
-    if (!convId) {
-      convId = await createNew();
-      if (!convId) {
-        console.error('Failed to create conversation');
-        return;
-      }
-    }
-
     try {
-      // Send message (will optimistically update UI)
-      await sendMessage(convId, query, ocrResults);
+      // Send message (will create conversation if needed)
+      await sendMessage(conversationId, query, ocrResults);
       
       // Clear OCR results after sending
       setOcrResults([]);
@@ -225,7 +218,7 @@ export default function HudPage() {
     // Don't create new conversation if there are no messages
     if (messages.length > 0) {
       await clearAndCollapse();
-      await createNew();
+      await resetConversation();
     }
   }
 
@@ -242,7 +235,10 @@ export default function HudPage() {
               isChatHistoryExpanded={isChatHistoryExpanded}
               messages={messages}
               messagesEndRef={messagesEndRef}
-              getConversations={getConversations}
+              conversations={conversations}
+              hasMoreConversations={hasMoreConversations}
+              loadMoreConversations={loadMoreConversations}
+              renameConversation={renameConversation}
               toggleChatHistory={toggleChatHistory}
             />
           </div>

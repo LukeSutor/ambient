@@ -11,7 +11,10 @@ interface DynamicChatContentProps {
     isChatHistoryExpanded: boolean;
     messages: ChatMessage[];
     messagesEndRef: React.RefObject<HTMLDivElement | null>;
-    getConversations: (limit: number, offset: number) => Promise<Conversation[]>;
+    conversations: Conversation[];
+    hasMoreConversations: boolean;
+    loadMoreConversations: () => Promise<void>;
+    renameConversation: (conversationId: string, newName: string) => Promise<void>;
     toggleChatHistory: (nextState?: boolean) => Promise<void>;
 };
 
@@ -21,7 +24,10 @@ export function DynamicChatContent({
   isChatHistoryExpanded,
   messages,
   messagesEndRef,
-  getConversations,
+  conversations,
+  hasMoreConversations,
+  loadMoreConversations,
+  renameConversation,
   toggleChatHistory,
 }: DynamicChatContentProps) {
 
@@ -53,7 +59,10 @@ export function DynamicChatContent({
         {/* Conversation list */}
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicConversationsClass()}`}>
           <ConversationList 
-            getConversations={getConversations}
+            conversations={conversations}
+            hasMoreConversations={hasMoreConversations}
+            loadMoreConversations={loadMoreConversations}
+            renameConversation={renameConversation}
             toggleChatHistory={toggleChatHistory}
           />
         </div>

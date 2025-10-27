@@ -405,7 +405,7 @@ pub async fn delete_conversation(
   Ok(())
 }
 
-/// Update conversation name (optional utility)
+/// Update conversation name
 #[tauri::command]
 pub async fn update_conversation_name(
   app_handle: AppHandle,

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, ReactNode, useRef } from 'react';
-import { ConversationState, ChatMessage } from './types';
+import { ChatMessage, ConversationState } from './types';
+import { Conversation } from '@/types/conversations';
 import { MemoryEntry } from '@/types/memory';
 
 /**
@@ -13,6 +14,9 @@ const initialState: ConversationState = {
   isStreaming: false,
   isLoading: false,
   streamingContent: '',
+  conversations: [],
+  conversationPage: 0,
+  hasMoreConversations: true,
   initializationRef: { current: false },
 };
 
@@ -21,6 +25,11 @@ const initialState: ConversationState = {
  */
 type ConversationAction =
   | { type: 'SET_CONVERSATION_ID'; payload: string | null }
+  | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
+  | { type: 'ADD_CONVERSATIONS'; payload: Conversation[] }
+  | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
+  | { type: 'DELETE_CONVERSATION'; payload: { id: string } }
+  | { type: 'SET_NO_MORE_CONVERSATIONS' }
   | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
   | { type: 'ADD_USER_MESSAGE'; payload: ChatMessage }
   | { type: 'START_USER_MESSAGE'; payload: { id: string; timestamp: string } }
@@ -45,6 +54,38 @@ function conversationReducer(
       return {
         ...state,
         conversationId: action.payload,
+      };
+
+    case 'RENAME_CONVERSATION':
+      return {
+        ...state,
+        conversations: state.conversations.map((conv) =>
+          conv.id === action.payload.id ? { ...conv, name: action.payload.newName } : conv
+        ),
+      };
+
+    case 'DELETE_CONVERSATION':
+      return {
+        ...state,
+        conversations: state.conversations.filter((conv) => conv.id !== action.payload.id),
+      };
+
+    case 'SET_CONVERSATIONS':
+      return {
+        ...state,
+        conversations: action.payload,
+      };
+
+    case 'ADD_CONVERSATIONS':
+      return {
+        ...state,
+        conversations: [...state.conversations, ...action.payload],
+      };
+
+    case 'SET_NO_MORE_CONVERSATIONS':
+      return {
+        ...state,
+        hasMoreConversations: false,
       };
 
     case 'LOAD_MESSAGES':

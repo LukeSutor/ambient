@@ -107,7 +107,6 @@ export function useWindows() {
         const dimensions = await getHudDimensions();
         try {
             const height = await getWindowHeight(false);
-            console.log('[useWindows] Refreshing HUD size to', { width: dimensions.chat_width, height });
             await invoke('resize_hud', { width: dimensions.chat_width, height });
         } catch (error) {
             console.error('[useWindows] Failed to refresh HUD size:', error);
