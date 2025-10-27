@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Conversation } from '@/types/conversations';
 import { ContentContainer } from './content-container';
 import { Loader2, Ellipsis, Trash2, Pen, X } from 'lucide-react';
@@ -32,13 +32,14 @@ const conversationNameSchema = z.object({
 interface ConversationListProps {
   conversations: Conversation[];
   hasMoreConversations: boolean;
+  setChatExpanded: (expanded: boolean) => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   renameConversation: (conversationId: string, newName: string) => Promise<void>;
   toggleChatHistory: (nextState?: boolean) => Promise<void>;
 }
 
-export function ConversationList({ conversations, hasMoreConversations, loadConversation, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
+export function ConversationList({ conversations, hasMoreConversations, setChatExpanded, loadConversation, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
   // State
   const [loadingMore, setLoadingMore] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
@@ -97,6 +98,11 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
     };
   }, [observerTarget.current, hasMoreConversations, loadMoreConversations]);
 
+  const handleLoadConversation = (id: string) => async () => {
+    await loadConversation(id);
+    setChatExpanded(true);
+  };
+
   const handleUpdateConversationName = async (values: z.infer<typeof conversationNameSchema>) => {
     await renameConversation(editingConversationId!, values.name);
     setEditingConversationId(null);
@@ -127,7 +133,7 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
             {conversations.map((conv) => (
               editingConversationId !== conv.id ? (
                 <div key={conv.id} className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg">
-                  <Button onClick={() => loadConversation(conv.id)} variant="ghost" className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent">
+                  <Button onClick={handleLoadConversation(conv.id)} variant="ghost" className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent">
                     <span className="truncate">{conv.name || 'Untitled Conversation'}</span>
                   </Button>
                   <DropdownMenu>

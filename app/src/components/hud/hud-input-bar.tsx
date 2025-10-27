@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useCallback, forwardRef, useRef, use } from 'react';
+import React, { useEffect, useCallback, useRef, RefObject } from 'react';
 import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,8 @@ interface HUDInputBarProps {
   inputValue: string;
   setInputValue: (v: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  onCaptureArea: () => void;
+  dispatchOCRCapture: () => void;
+  deleteOCRResult: (index: number) => void;
   onNewChat: () => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
@@ -25,10 +26,9 @@ interface HUDInputBarProps {
   setIsHoveringGroup: (b: boolean) => void;
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
-  removeOcrAt: (i: number) => void;
   isStreaming: boolean;
   isFeaturesExpanded: boolean;
-  featuresRef: React.MutableRefObject<HTMLDivElement | null>;
+  featuresRef: RefObject<HTMLDivElement | null>;
   setFeaturesMinimized: () => void;
   toggleFeatures: (nextState?: boolean, skipDelay?: boolean) => Promise<void>;
   toggleChatHistory: (nextState?: boolean) => Promise<void>;
@@ -43,7 +43,8 @@ export function HUDInputBar({
   inputValue,
   setInputValue,
   onKeyDown,
-  onCaptureArea,
+  dispatchOCRCapture,
+  deleteOCRResult,
   onNewChat,
   onDragStart,
   onMouseLeave,
@@ -52,7 +53,6 @@ export function HUDInputBar({
   setIsHoveringGroup,
   ocrLoading,
   ocrResults,
-  removeOcrAt,
   isStreaming,
   isFeaturesExpanded,
   featuresRef: windowsFeaturesRef,
@@ -151,7 +151,7 @@ export function HUDInputBar({
           />
         </div>
 
-        <OcrCaptures captures={ocrResults} onRemove={removeOcrAt} />
+        <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
 
         {/* Additional features expandable area */}
         <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${isFeaturesExpanded ? 'bg-white/40' : ''} shrink-0`}>
@@ -159,7 +159,7 @@ export function HUDInputBar({
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onCaptureArea(); setFeaturesMinimized(); }}
+              onClick={() => { dispatchOCRCapture(); setFeaturesMinimized(); }}
               title="Capture Area"
             >
               <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />

@@ -1,4 +1,5 @@
 import { MemoryEntry } from '@/types/memory';
+import { OcrResponseEvent } from '@/types/events';
 import { RefObject } from 'react';
 
 /**
@@ -37,6 +38,9 @@ export interface ConversationState {
   isStreaming: boolean;
   isLoading: boolean;
   streamingContent: string;
+  ocrResults: OcrResponseEvent[];
+  ocrLoading: boolean;
+  ocrTimeoutRef: RefObject<ReturnType<typeof setTimeout> | null>;
   conversations: Conversation[];
   conversationPage: number;
   hasMoreConversations: boolean;

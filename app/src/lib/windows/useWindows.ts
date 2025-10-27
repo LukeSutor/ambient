@@ -83,6 +83,7 @@ export function useWindows() {
             state.dynamicChatContentRef.current.scrollHeight,
             dimensions.chat_max_height
         ) + 6;
+        console.log('[useWindows] Calculated chat height:', chatHeight);
         const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
         const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
         return newHeight;

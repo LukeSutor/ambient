@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { HudDimensions } from '@/types/settings';
-import { OcrResponseEvent } from '@/types/events';
 import { useSettings } from '@/lib/settings';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useConversation } from '@/lib/conversations';
@@ -18,11 +15,6 @@ export default function HudPage() {
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
   const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
   
-  // OCR State
-  const [ocrResults, setOcrResults] = useState<OcrResponseEvent[]>([]);
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const ocrTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -33,6 +25,8 @@ export default function HudPage() {
     conversations,
     hasMoreConversations,
     conversationId,
+    ocrResults,
+    ocrLoading,
     isLoading,
     isStreaming,
     sendMessage,
@@ -40,6 +34,9 @@ export default function HudPage() {
     loadConversation,
     loadMoreConversations,
     renameConversation,
+    dispatchOCRCapture,
+    deleteOCRResult,
+    clearOCRResults,
     clear,
   } = useConversation(messagesEndRef);
 
@@ -61,7 +58,11 @@ export default function HudPage() {
     closeHUD,
     openSettings,
   } = useWindows();
-  
+
+  useEffect(() => {
+    console.log('messages', messages);
+  }, [messages]);
+
   // Callback ref to sync both refs
   const dynamicChatContentCallback = useCallback((node: HTMLDivElement | null) => {
     dynamicChatContentRef.current = node;
@@ -75,50 +76,6 @@ export default function HudPage() {
       if (!cancelled) setHudDimensions(dimensions);
     })();
     return () => { cancelled = true; };
-  }, []);
-  
-  // Set up OCR listener and initialize HUD size after dimensions are loaded
-  useEffect(() => {
-    const setupOcrListener = async () => {
-      console.log('Setting up OCR listener');
-      try {
-        const unlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          const result = event.payload;
-          if (!result.success) console.error('OCR failed');
-          
-          if (ocrTimeoutRef.current) {
-            clearTimeout(ocrTimeoutRef.current);
-            ocrTimeoutRef.current = null;
-          }
-          
-          setOcrResults((prev) => [...prev, result]);
-          setOcrLoading(false);
-        });
-        return unlisten;
-      } catch (error) {
-        console.error('Failed to set up OCR listener:', error);
-        return null;
-      }
-    };
-
-    let cleanup: UnlistenFn | null = null;
-    setupOcrListener().then((fn) => {
-      cleanup = fn;
-    });
-
-    return () => {
-      if (cleanup) {
-        try {
-          cleanup();
-        } catch (error) {
-          console.error('Error cleaning up OCR listener:', error);
-        }
-      }
-      if (ocrTimeoutRef.current) {
-        clearTimeout(ocrTimeoutRef.current);
-        ocrTimeoutRef.current = null;
-      }
-    };
   }, []);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
@@ -164,10 +121,10 @@ export default function HudPage() {
 
     try {
       // Send message (will create conversation if needed)
-      await sendMessage(conversationId, query, ocrResults);
+      await sendMessage(conversationId, query);
       
       // Clear OCR results after sending
-      setOcrResults([]);
+      clearOCRResults();
     } catch (error) {
       console.error('Error in handleSubmit:', error);
     }
@@ -185,31 +142,6 @@ export default function HudPage() {
     }
     if (e.key === 'Escape') {
       handleNewChat();
-    }
-  };
-
-  const handleCaptureArea = async () => {
-    // Reset any previous timeout and start loading
-    if (ocrTimeoutRef.current) {
-      clearTimeout(ocrTimeoutRef.current);
-      ocrTimeoutRef.current = null;
-    }
-    setOcrLoading(true);
-    try {
-      await invoke('open_screen_selector');
-      // Start a 10s timeout; if no OCR result arrives, stop loading
-      ocrTimeoutRef.current = setTimeout(() => {
-        console.warn('OCR capture timed out after 10s.');
-        setOcrLoading(false);
-        ocrTimeoutRef.current = null;
-      }, 10000);
-    } catch (error: any) {
-      console.error('Failed to open screen selector:', error);
-      setOcrLoading(false);
-      if (ocrTimeoutRef.current) {
-        clearTimeout(ocrTimeoutRef.current);
-        ocrTimeoutRef.current = null;
-      }
     }
   };
 
@@ -236,6 +168,7 @@ export default function HudPage() {
               messagesEndRef={messagesEndRef}
               conversations={conversations}
               hasMoreConversations={hasMoreConversations}
+              setChatExpanded={async (expanded: boolean) => { await setChatExpanded(); }}
               loadConversation={loadConversation}
               loadMoreConversations={loadMoreConversations}
               renameConversation={renameConversation}
@@ -249,7 +182,8 @@ export default function HudPage() {
             inputValue={input}
             setInputValue={setInput}
             onKeyDown={handleKeyDown}
-            onCaptureArea={handleCaptureArea}
+            dispatchOCRCapture={dispatchOCRCapture}
+            deleteOCRResult={deleteOCRResult}
             onNewChat={handleNewChat}
             onDragStart={() => setIsDraggingWindow(true)}
             onMouseLeave={handleMouseLeave}
@@ -258,7 +192,6 @@ export default function HudPage() {
             setIsHoveringGroup={setIsHoveringGroup}
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
-            removeOcrAt={(i) => setOcrResults((prev) => prev.filter((_, idx) => idx !== i))}
             isStreaming={isStreaming}
             isFeaturesExpanded={isFeaturesExpanded}
             featuresRef={featuresRef}

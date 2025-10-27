@@ -4,6 +4,7 @@ import React, { createContext, useContext, useReducer, ReactNode, useRef } from 
 import { ChatMessage, ConversationState } from './types';
 import { Conversation } from '@/types/conversations';
 import { MemoryEntry } from '@/types/memory';
+import { OcrResponseEvent } from '@/types/events';
 
 /**
  * Initial state for conversations
@@ -14,6 +15,9 @@ const initialState: ConversationState = {
   isStreaming: false,
   isLoading: false,
   streamingContent: '',
+  ocrResults: [],
+  ocrLoading: false,
+  ocrTimeoutRef: { current: null },
   conversations: [],
   conversationPage: 0,
   hasMoreConversations: true,
@@ -39,9 +43,15 @@ type ConversationAction =
   | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
   | { type: 'FINALIZE_STREAM'; payload: string }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
+  | { type: 'ADD_OCR_RESULT'; payload: OcrResponseEvent }
+  | { type: 'DELETE_OCR_RESULT'; payload: number }
+  | { type: 'CLEAR_OCR_RESULTS' }
+  | { type: 'SET_OCR_TIMEOUT'; payload: ReturnType<typeof setTimeout> | null }
+  | { type: 'CLEAR_OCR_TIMEOUT' }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_STREAMING'; payload: boolean };
+  | { type: 'SET_STREAMING'; payload: boolean }
+  | { type: 'SET_OCR_LOADING'; payload: boolean };
 
 /**
  * Conversation reducer - handles all state updates
@@ -221,6 +231,39 @@ function conversationReducer(
       };
     }
 
+    case 'ADD_OCR_RESULT':
+      return {
+        ...state,
+        ocrResults: [...state.ocrResults, action.payload],
+      };
+
+    case 'CLEAR_OCR_RESULTS':
+      return {
+        ...state,
+        ocrResults: [],
+      };
+
+    case 'DELETE_OCR_RESULT':
+      return {
+        ...state,
+        ocrResults: state.ocrResults.filter((_, idx) => idx !== action.payload),
+      };
+
+    case 'SET_OCR_TIMEOUT':
+      return {
+        ...state,
+        ocrTimeoutRef: { current: action.payload },
+      };
+
+    case 'CLEAR_OCR_TIMEOUT':
+      if (state.ocrTimeoutRef.current) {
+        clearTimeout(state.ocrTimeoutRef.current);
+      }
+      return {
+        ...state,
+        ocrTimeoutRef: { current: null },
+      };
+
     case 'CLEAR_MESSAGES':
       return {
         ...state,
@@ -240,6 +283,12 @@ function conversationReducer(
       return {
         ...state,
         isStreaming: action.payload,
+      };
+
+    case 'SET_OCR_LOADING':
+      return {
+        ...state,
+        ocrLoading: action.payload,
       };
 
     default:

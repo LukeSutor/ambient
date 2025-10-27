@@ -10,6 +10,7 @@ import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent }
 import { MemoryEntry } from '@/types/memory';
 
 const CONVERSATION_LIMIT = 20;
+const OCR_TIMEOUT_MS = 10000;
 
 /**
  * Extracts and removes <think> tags from LLM responses
@@ -141,6 +142,16 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         });
         unlisteners.push(memoryUnlisten);
 
+        // OCR Listener
+        const ocrUnlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
+          // Add OCR result and stop loading state
+          const result = event.payload;
+          dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
+          dispatch({ type: 'ADD_OCR_RESULT', payload: result });
+          dispatch({ type: 'SET_OCR_LOADING', payload: false });
+        });
+        unlisteners.push(ocrUnlisten);
+
         console.log('[useConversation] Event listeners initialized');
       } catch (error) {
         console.error('[useConversation] Failed to setup events:', error);
@@ -151,6 +162,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
     // Store cleanup function
     cleanupRef.current = () => {
+      // Clear any existing OCR timeout
+      dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
+
       unlisteners.forEach((unlisten) => {
         try {
           unlisten();
@@ -272,7 +286,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const sendMessage = useCallback(async (
     conversationId: string | null,
     content: string,
-    ocrResults: OcrResponseEvent[] = []
   ): Promise<void> => {
     try {
       // Validate message
@@ -319,7 +332,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       // Send to backend (streaming will be handled by event listeners)
       const hudChatEvent: HudChatEvent = {
         text: content,
-        ocr_responses: ocrResults,
+        ocr_responses: state.ocrResults,
         conv_id: activeConversationId,
         timestamp: Date.now().toString(),
         message_id: userMessage.id,
@@ -336,7 +349,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_STREAMING', payload: false });
     }
-  }, [dispatch, state.conversationId]);
+  }, [dispatch, state.conversationId, state.ocrResults]);
 
   /**
    * Clears all messages in the current conversation
@@ -408,6 +421,42 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch]);
 
   /**
+   * Dispatch an OCR capture event
+   */
+  const dispatchOCRCapture = useCallback(async(): Promise<void> => {
+    dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
+    dispatch({ type: 'SET_OCR_LOADING', payload: true });
+    try {
+      await invoke('open_screen_selector');
+      // Start a 10s timeout; if no OCR result arrives, stop loading
+      const ocrTimeout = setTimeout(() => {
+        console.warn('OCR capture timed out after 10s.');
+        dispatch({ type: 'SET_OCR_LOADING', payload: false });
+        dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
+      }, OCR_TIMEOUT_MS);
+      dispatch({ type: 'SET_OCR_TIMEOUT', payload: ocrTimeout });
+    } catch (error: any) {
+      console.error('Failed to open screen selector:', error);
+      dispatch({ type: 'SET_OCR_LOADING', payload: false });
+      dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
+    }
+  }, [dispatch]);
+
+  /**
+   * Delete an OCR result by its index
+   */
+  const deleteOCRResult = useCallback((index: number): void => {
+    dispatch({ type: 'DELETE_OCR_RESULT', payload: index });
+  }, [dispatch]);
+
+  /**
+   * Clear OCR results
+   */
+  const clearOCRResults = useCallback((): void => {
+    dispatch({ type: 'CLEAR_OCR_RESULTS' });
+  }, [dispatch]);
+
+  /**
    * Ensures the llama server is running
    */
   const ensureServer = useCallback(async (): Promise<void> => {
@@ -435,6 +484,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     clear,
     loadMoreConversations,
     renameConversation,
+    dispatchOCRCapture,
+    deleteOCRResult,
+    clearOCRResults,
     ensureServer,
   };
 }
