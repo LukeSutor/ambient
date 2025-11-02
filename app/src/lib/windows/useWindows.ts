@@ -79,11 +79,10 @@ export function useWindows() {
 
         const isFeaturesExpanded = featuresOverride !== undefined ? featuresOverride : state.isFeaturesExpanded;
 
-        const chatHeight = Math.min(
+        let chatHeight = Math.min(
             state.dynamicChatContentRef.current.scrollHeight,
             dimensions.chat_max_height
-        ) + 6;
-        console.log('[useWindows] Calculated chat height:', chatHeight);
+        );
         const featuresHeight = isFeaturesExpanded ? state.featuresRef.current.scrollHeight - 6 : 0;
         const newHeight = chatHeight + featuresHeight + dimensions.input_bar_height;
         return newHeight;

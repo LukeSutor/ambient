@@ -59,10 +59,6 @@ export default function HudPage() {
     openSettings,
   } = useWindows();
 
-  useEffect(() => {
-    console.log('messages', messages);
-  }, [messages]);
-
   // Callback ref to sync both refs
   const dynamicChatContentCallback = useCallback((node: HTMLDivElement | null) => {
     dynamicChatContentRef.current = node;

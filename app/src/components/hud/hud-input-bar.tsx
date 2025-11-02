@@ -110,7 +110,6 @@ export function HUDInputBar({
     dimensionsRef.current = hudDimensions;
     
     if (hudDimensions && inputRef.current) {
-      console.log('Animating input bar with new dimensions:', hudDimensions);
       gsap.fromTo(
         inputRef.current,
         { scale: 0, opacity: 0, transformOrigin: 'center center' },
