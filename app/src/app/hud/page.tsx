@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { HudDimensions } from '@/types/settings';
 import { useSettings } from '@/lib/settings';
 import HUDInputBar from '@/components/hud/hud-input-bar';
@@ -41,7 +41,7 @@ export default function HudPage() {
   } = useConversation(messagesEndRef);
 
   // Settings Manager
-  const { getHudDimensions } = useSettings();
+  const { settings, getHudDimensions } = useSettings();
 
   // Window Manager
   const {
@@ -68,15 +68,25 @@ export default function HudPage() {
     dynamicChatContentRef.current = node;
   }, [dynamicChatContentRef]);
 
-  // Load HUD dimensions
+  // Load HUD dimensions only once on mount or when settings change
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const dimensions = await getHudDimensions();
-      if (!cancelled) setHudDimensions(dimensions);
+      if (!cancelled) {
+        // Only update if dimensions actually changed
+        setHudDimensions(prev => {
+          if (!prev) return dimensions;
+          // Deep comparison to avoid unnecessary updates
+          if (JSON.stringify(prev) === JSON.stringify(dimensions)) {
+            return prev;
+          }
+          return dimensions;
+        });
+      }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [settings]); // Only depend on settings, not the function
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -84,12 +94,9 @@ export default function HudPage() {
     const dragArea = document.getElementById('drag-area');
     if (!dragArea) return;
 
+    // See if mouse is within bounding box
     const rect = dragArea.getBoundingClientRect();
-
-    // Get the mouse coordinates in 100ms
     let mouseCoords = { x: e.clientX, y: e.clientY };
-
-    // Print whether mouse is within bounding box
     const isWithinBox = rect && mouseCoords.x >= rect.left && mouseCoords.x <= rect.right && mouseCoords.y >= rect.top && mouseCoords.y <= rect.bottom;
 
     // set dragging off if not within bounding box

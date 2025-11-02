@@ -195,7 +195,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     if (state.initializationRef.current) {
       return;
     }
-    //TODO: conversation ID isn't being saved across useConversation() calls
     state.initializationRef.current = true;
 
     const initialize = async () => {

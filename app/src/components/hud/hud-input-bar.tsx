@@ -66,6 +66,8 @@ export function HUDInputBar({
   const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
   // Ref for load animation
   const inputRef = useRef<HTMLDivElement | null>(null);
+  // Dimensions ref to check for changes
+  const dimensionsRef = useRef<HudDimensions | null>(null);
   
   // Use callback ref to sync with windows manager ref
   const featuresDropdownRef = useCallback((node: HTMLDivElement | null) => {
@@ -99,7 +101,16 @@ export function HUDInputBar({
 
   // Animate input bar appearing
   useGSAP(() => {
+    // Only animate if dimensions actually changed (deep comparison)
+    if (dimensionsRef.current && hudDimensions && 
+        JSON.stringify(dimensionsRef.current) === JSON.stringify(hudDimensions)) {
+      return;
+    }
+    
+    dimensionsRef.current = hudDimensions;
+    
     if (hudDimensions && inputRef.current) {
+      console.log('Animating input bar with new dimensions:', hudDimensions);
       gsap.fromTo(
         inputRef.current,
         { scale: 0, opacity: 0, transformOrigin: 'center center' },
