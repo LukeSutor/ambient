@@ -69,7 +69,7 @@ pub async fn sign_up(
       .await
       .unwrap_or_else(|_| "Unknown error".to_string());
     log::warn!("SignUp failed: {}", error_text);
-    return Err(format!("SignUp failed: {}", error_text));
+    return Err(error_text);
   }
 
   let signup_response: CognitoSignUpResponse = response
@@ -249,7 +249,7 @@ pub async fn sign_in(username: String, password: String) -> Result<SignInResult,
       .await
       .unwrap_or_else(|_| "Unknown error".to_string());
     log::warn!("SignIn failed: {}", error_text);
-    return Err(format!("SignIn failed: {}", error_text));
+    return Err(error_text);
   }
 
   let auth_response: CognitoInitiateAuthResponse = response

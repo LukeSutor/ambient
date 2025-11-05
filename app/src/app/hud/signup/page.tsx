@@ -150,8 +150,16 @@ export default function SignUp() {
         setFormStep('verify');
       }
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'Sign up failed');
+      console.error('Sign up failed:', err);
+      // Turn err into json and extract message
+      let message = 'Sign up failed.';
+      try {
+        const errorObj = JSON.parse(err as string);
+        message = errorObj.message || message;
+      } catch(err) {
+        console.error('Error parsing sign-up error message:', err);
+      }
+      setError(message);
     } finally {
       setIsLoading(false);
     }

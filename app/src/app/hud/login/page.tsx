@@ -1,8 +1,7 @@
 "use client"
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GoogleLoginButton } from '@/components/google-login-button';
 import { AuthService } from '@/lib/auth';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 
 const formSchema = z.object({
   username: z.string().min(1, {
@@ -67,7 +67,13 @@ export default function Login() {
       router.push('/hud');
     } catch (err) {
       console.error('Sign in failed:', err);
-      setError(err as string || 'Sign in failed. Please check your credentials.');
+      // Turn err into json and extract message
+      let message = 'Sign in failed. Please check your credentials.';
+      try {
+        const errorObj = JSON.parse(err as string);
+        message = errorObj.message || message;
+      } catch(err) {}
+      setError(message);
     } finally {
       setIsLoading(false);
     }
@@ -91,7 +97,7 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
             {error && (
               <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
                 <AlertCircle className="h-4 w-4" />
@@ -101,65 +107,66 @@ export default function Login() {
 
             <GoogleLoginButton 
               onSignInSuccess={() => window.location.href = '/'}
-              className="w-full mb-6"
+              className="w-full"
             />
 
-          <Form {...form}>
-
-            <FormField
+            <Controller
               control={form.control}
               name="username"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Username or Email</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                      <Input
-                        className="pl-10 h-11"
-                        disabled={isLoading}
-                        {...field}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="login-username">Username or Email</FieldLabel>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="login-username"
+                      className="pl-10 h-11"
+                      placeholder="jane@example.com"
+                      autoComplete="username"
+                      disabled={isLoading}
+                      aria-invalid={fieldState.invalid}
+                      {...field}
+                    />
+                  </div>
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                </Field>
               )}
             />
 
-            <FormField
+            <Controller
               control={form.control}
               name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        className="pl-10 pr-10 h-11 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                        disabled={isLoading}
-                        {...field}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                        disabled={isLoading}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
-                      </Button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="login-password">Password</FieldLabel>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      className="pl-10 pr-10 h-11 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                      disabled={isLoading}
+                      autoComplete="current-password"
+                      aria-invalid={fieldState.invalid}
+                      {...field}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400" />
+                      )}
+                    </Button>
+                  </div>
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                </Field>
               )}
             />
 
@@ -177,7 +184,6 @@ export default function Login() {
                 'Sign In'
               )}
             </Button>
-          </Form>
           </form>
         </CardContent>
         <CardFooter>
