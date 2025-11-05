@@ -4,11 +4,14 @@ import { useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWindowsContext } from './WindowsProvider';
 import { useSettings } from '../settings/useSettings';
+import { usePathname } from 'next/navigation';
+import path from 'path';
 
 export function useWindows() {
     const { state, dispatch } = useWindowsContext();
     const { getHudDimensions } = useSettings();
     const lastHeightRef = useRef<number | null>(null);
+    const pathname = usePathname();
 
     // ============================================================
     // Effects
@@ -32,6 +35,7 @@ export function useWindows() {
             const dimensions = await getHudDimensions();
             const newHeight = await getWindowHeight();
 
+            console.log(newHeight);
             // Skip if height hasn't changed
             if (newHeight === lastHeightRef.current) return;
 
@@ -66,6 +70,34 @@ export function useWindows() {
         };
     }, [state.dynamicChatContentRef, state.resizeObserverRef]);
 
+    useEffect(() => {
+        // Set window size based on route
+        console.log(pathname);
+        (async () => {
+            const dimensions = await getHudDimensions();
+            if (pathname === '/hud/login' || pathname === '/hud/signup') {
+                try {
+                    await invoke('resize_hud', {
+                        width: dimensions.login_height,
+                        height: dimensions.login_height,
+                    });
+                } catch (error) {
+                    console.error('[useWindows] Failed to resize for login/signup:', error);
+                }
+            } else {
+                const height = await getWindowHeight();
+                try {
+                    await invoke('resize_hud', {
+                        width: dimensions.chat_width,
+                        height,
+                    });
+                } catch (error) {
+                    console.error('[useWindows] Failed to resize for main HUD:', error);
+                }
+            }
+        })();
+    }, [pathname]);
+
     // ============================================================
     // Helpers
     // ============================================================
@@ -73,6 +105,7 @@ export function useWindows() {
         // Returns the window height based on current state
         const dimensions = await getHudDimensions();
 
+        // Both refs must exist for hud only
         if (!state.dynamicChatContentRef.current || !state.featuresRef.current) {
             return dimensions.input_bar_height;
         }

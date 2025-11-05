@@ -10,6 +10,7 @@ import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+import Link from 'next/link';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
@@ -147,6 +148,13 @@ export function HUDInputBar({
             onDragStart={(e) => e.preventDefault()}
           />
         </button>
+        <Link 
+          href="/hud/login" 
+          title="Login Page" 
+          className="shrink-0 px-2 py-1 text-sm text-black hover:bg-white/40 rounded transition-colors"
+        >
+          Login
+        </Link>
 
         <div className="flex-1 min-w-32">
           <Input
