@@ -53,14 +53,6 @@ const step2Schema = z.object({
     }),
 });
 
-const confirmationSchema = z.object({
-  confirmationCode: z.string().min(6, {
-    message: "Please complete the verification code",
-  }).length(6, {
-    message: "Confirmation code must be 6 digits",
-  }),
-});
-
 export default function SignUp() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +61,10 @@ export default function SignUp() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
-  
-  
+  const [confirmationCode, setConfirmationCode] = useState("");
+  const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
+
+
   // Windows state
   const { 
     closeHUD
@@ -93,12 +87,11 @@ export default function SignUp() {
     },
   });
 
-  const confirmationForm = useForm<z.infer<typeof confirmationSchema>>({
-    resolver: zodResolver(confirmationSchema),
-    defaultValues: {
-      confirmationCode: "",
-    },
-  });
+  useEffect(() => {
+    if (confirmationCode) {
+      console.log('Confirmation code state:', confirmationCode);
+    }
+  }, [confirmationCode]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -152,7 +145,8 @@ export default function SignUp() {
         }, 2000);
       } else {
         // User needs to verify email/phone
-        confirmationForm.reset({ confirmationCode: "" });
+        setConfirmationCode("");
+        setHasTriedConfirm(false);
         setFormStep('verify');
       }
     } catch (err) {
@@ -163,9 +157,16 @@ export default function SignUp() {
     }
   };
   
-  const onConfirmationSubmit = async (values: z.infer<typeof confirmationSchema>) => {
+  const onConfirmationSubmit = async () => {
     if (!signUpResult) {
       setError('Sign up data not found');
+      return;
+    }
+
+    setHasTriedConfirm(true);
+
+    if (confirmationCode.length !== 6) {
+      setError('Please enter the 6-digit verification code');
       return;
     }
 
@@ -178,7 +179,7 @@ export default function SignUp() {
       // First confirm the signup
       await AuthService.confirmSignUp(
         step2Values.username,
-        values.confirmationCode,
+        confirmationCode,
         signUpResult.session
       );
       
@@ -272,46 +273,48 @@ export default function SignUp() {
             )}
             
             <form
-              onSubmit={confirmationForm.handleSubmit(onConfirmationSubmit)}
+              onSubmit={(event) => {
+                event.preventDefault();
+                onConfirmationSubmit();
+              }}
               className="space-y-6"
               noValidate
             >
-              <Controller
-                control={confirmationForm.control}
-                name="confirmationCode"
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="signup-confirmation-code">
-                      Verification Code
-                    </FieldLabel>
-                    <div className="flex justify-center">
-                      <InputOTP
-                        id="signup-confirmation-code"
-                        ref={field.ref}
-                        maxLength={6}
-                        pattern={REGEXP_ONLY_DIGITS}
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        disabled={isConfirming}
-                        aria-invalid={fieldState.invalid}
-                      >
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
-                        </InputOTPGroup>
-                      </InputOTP>
-                    </div>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
+              <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 6}>
+                <FieldLabel htmlFor="signup-confirmation-code">
+                  Verification Code
+                </FieldLabel>
+                <div className="flex justify-center">
+                  <InputOTP
+                    id="signup-confirmation-code"
+                    maxLength={6}
+                    pattern={REGEXP_ONLY_DIGITS}
+                    value={confirmationCode}
+                    onChange={(value) => {
+                      console.log("Confirmation code updated:", value);
+                      setError(null);
+                      setHasTriedConfirm(false);
+                      setConfirmationCode(value);
+                    }}
+                    disabled={isConfirming}
+                    aria-invalid={hasTriedConfirm && confirmationCode.length !== 6}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                {hasTriedConfirm && confirmationCode.length !== 6 && (
+                  <FieldError
+                    errors={[{ message: 'Enter the 6-digit code from your email.' }]}
+                  />
                 )}
-              />
+              </Field>
 
               <div className="space-y-3">
                 <Button
@@ -362,7 +365,7 @@ export default function SignUp() {
 
           <CardHeader className="text-center">
             <CardTitle className="text-3xl font-bold">
-              Create an Account
+              Create Your Account
             </CardTitle>
             <CardDescription>
               Step 1 of 2: Tell us about yourself
@@ -386,7 +389,7 @@ export default function SignUp() {
               className="space-y-6"
               noValidate
             >
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-4">
                 <Controller
                   control={step1Form.control}
                   name="given_name"
@@ -437,7 +440,7 @@ export default function SignUp() {
                 control={step1Form.control}
                 name="email"
                 render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
+                  <Field className="col-span-2" data-invalid={fieldState.invalid}>
                     <FieldLabel htmlFor="signup-email">Email</FieldLabel>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
