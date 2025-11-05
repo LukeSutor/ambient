@@ -1,62 +1,124 @@
 'use client';
 
-import React, { forwardRef, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, RefObject } from 'react';
 import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X } from 'lucide-react';
+import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
+import Link from 'next/link';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
   inputValue: string;
   setInputValue: (v: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  onLogoClick: () => void;
-  onExpandFeatures: () => void;
-  onCaptureArea: () => void;
+  dispatchOCRCapture: () => void;
+  deleteOCRResult: (index: number) => void;
   onNewChat: () => void;
-  onClose: () => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
   isDraggingWindow: boolean;
   isHoveringGroup: boolean;
   setIsHoveringGroup: (b: boolean) => void;
-  plusExpanded: boolean;
-  setPlusExpanded: (b: boolean) => void;
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
-  removeOcrAt: (i: number) => void;
-  messagesCount: number;
+  isStreaming: boolean;
+  isFeaturesExpanded: boolean;
+  featuresRef: RefObject<HTMLDivElement | null>;
+  setFeaturesMinimized: () => void;
+  toggleFeatures: (nextState?: boolean, skipDelay?: boolean) => Promise<void>;
+  toggleChatHistory: (nextState?: boolean) => Promise<void>;
+  closeHUD: () => Promise<void>;
+  openSettings: (destination?: string) => Promise<void>;
 }
 
 const logo = '/logo.png';
 
-export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function HUDInputBar({
+export function HUDInputBar({
   hudDimensions,
   inputValue,
   setInputValue,
   onKeyDown,
-  onLogoClick,
-  onExpandFeatures,
-  onCaptureArea,
+  dispatchOCRCapture,
+  deleteOCRResult,
   onNewChat,
-  onClose,
   onDragStart,
   onMouseLeave,
   isDraggingWindow,
   isHoveringGroup,
   setIsHoveringGroup,
-  plusExpanded,
-  setPlusExpanded,
   ocrLoading,
   ocrResults,
-  removeOcrAt,
-  messagesCount,
-}, ref) {
-  const toolboxDropdownRef = useRef<HTMLDivElement | null>(null);
+  isStreaming,
+  isFeaturesExpanded,
+  featuresRef: windowsFeaturesRef,
+  setFeaturesMinimized,
+  toggleFeatures,
+  toggleChatHistory,
+  closeHUD,
+  openSettings,
+}: HUDInputBarProps) {
+  // Button ref for outside-click checks
+  const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Ref for load animation
+  const inputRef = useRef<HTMLDivElement | null>(null);
+  // Dimensions ref to check for changes
+  const dimensionsRef = useRef<HudDimensions | null>(null);
+  
+  // Use callback ref to sync with windows manager ref
+  const featuresDropdownRef = useCallback((node: HTMLDivElement | null) => {
+    windowsFeaturesRef.current = node;
+  }, [windowsFeaturesRef]);
+
+  // Close the features dropdown when clicking outside of the dropdown or its toggle button
+  useEffect(() => {
+    if (!isFeaturesExpanded) return;
+
+    const handleDocumentMouseDown = (e: MouseEvent) => {
+      const dropdownEl = windowsFeaturesRef.current;
+      const buttonEl = featuresButtonRef.current;
+      const target = e.target as Node | null;
+
+      // If click is inside dropdown or toggle button, ignore
+      if ((dropdownEl && target && dropdownEl.contains(target)) ||
+          (buttonEl && target && buttonEl.contains(target))) {
+        return;
+      }
+
+      // Otherwise, close the dropdown
+      toggleFeatures(false);
+    };
+
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+    };
+  }, [isFeaturesExpanded, windowsFeaturesRef, toggleFeatures]);
+
+  // Animate input bar appearing
+  useGSAP(() => {
+    // Only animate if dimensions actually changed (deep comparison)
+    if (dimensionsRef.current && hudDimensions && 
+        JSON.stringify(dimensionsRef.current) === JSON.stringify(hudDimensions)) {
+      return;
+    }
+    
+    dimensionsRef.current = hudDimensions;
+    
+    if (hudDimensions && inputRef.current) {
+      gsap.fromTo(
+        inputRef.current,
+        { scale: 0, opacity: 0, transformOrigin: 'center center' },
+        { scale: 1, opacity: 1, duration: 0.25, ease: 'back.out(0.8)', delay: 0.1 }
+      );
+    }
+  }, [hudDimensions]);
+
 
   return (
     <div
@@ -64,10 +126,10 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
       id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
-      ref={ref}
+      ref={inputRef}
       style={{
-        height: hudDimensions ? `${hudDimensions.collapsed_height}px` : '60px',
-        width: hudDimensions ? `${hudDimensions.width}px` : '500px',
+        height: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
+        width: hudDimensions ? `${hudDimensions.chat_width}px` : '500px',
         opacity: hudDimensions ? 1 : 0,
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}
@@ -75,7 +137,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
       <div
         className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
       >
-        <button onClick={onLogoClick} title="Open Main Window" className="shrink-0">
+        <button onClick={() => openSettings()} title="Open Main Window" className="shrink-0">
           <Image
             src={logo}
             width={32}
@@ -100,15 +162,15 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
           />
         </div>
 
-        <OcrCaptures captures={ocrResults} onRemove={removeOcrAt} />
+        <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
 
         {/* Additional features expandable area */}
-        <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${plusExpanded ? 'bg-white/40' : ''} shrink-0`} ref={toolboxDropdownRef}>
-          <div className={`absolute mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-2 transition-all duration-250 ease-in-out overflow-hidden ${plusExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'} ${messagesCount === 0 ? 'top-full' : 'bottom-full'}`}>
+        <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${isFeaturesExpanded ? 'bg-white/40' : ''} shrink-0`}>
+          <div className={`absolute top-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-1 transition-all duration-100 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`} ref={featuresDropdownRef}>
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onCaptureArea(); setPlusExpanded(false); }}
+              onClick={() => { dispatchOCRCapture(); setFeaturesMinimized(); }}
               title="Capture Area"
             >
               <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
@@ -117,21 +179,31 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
             <Button
               variant="ghost"
               className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onNewChat(); setPlusExpanded(false); }}
+              onClick={() => { onNewChat(); setFeaturesMinimized(); }}
               title="New Chat"
             >
               <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
               <span className="text-black text-sm whitespace-nowrap">New Chat</span>
+            </Button>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
+              onClick={() => { toggleChatHistory(); setFeaturesMinimized(); }}
+              title="Previous Chats"
+            >
+              <History className="!w-4 !h-4 text-black shrink-0" />
+              <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
             </Button>
           </div>
           <Button
             variant="ghost"
             className="w-8 h-8 rounded-full"
             size="icon"
-            disabled={ocrLoading}
-            onClick={onExpandFeatures}
+            disabled={ocrLoading || isStreaming}
+            ref={featuresButtonRef}
+            onClick={() => toggleFeatures()}
           >
-            {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${plusExpanded ? 'rotate-45' : 'rotate-0'}`} />}
+            {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${isFeaturesExpanded ? 'rotate-45' : 'rotate-0'}`} />}
           </Button>
         </div>
       </div>
@@ -140,7 +212,7 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
       <button
         className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
           ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'}
-        onClick={onClose}
+        onClick={closeHUD}
         title="Close Window"
       >
         <X className="w-full h-full p-1 text-black pointer-events-none" />
@@ -160,6 +232,6 @@ export const HUDInputBar = forwardRef<HTMLDivElement, HUDInputBarProps>(function
       </div>
     </div>
   );
-});
+}
 
 export default HUDInputBar;

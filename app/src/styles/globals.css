@@ -145,16 +145,15 @@ body.screen-selector-transparent {
 .hud-scroll {
   /* Firefox */
   scrollbar-width: thin;
-  scrollbar-color: rgba(0,0,0,0.25) rgba(255,255,255,0.25);
+  scrollbar-color: rgba(0,0,0,0.25) transparent;
 }
 .hud-scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 .hud-scroll::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.25);
+  background: transparent;
   border-radius: 9999px;
-  backdrop-filter: blur(8px) saturate(140%);
 }
 .hud-scroll::-webkit-scrollbar-thumb {
   background: linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0.2));
@@ -162,5 +161,5 @@ body.screen-selector-transparent {
   border: 2px solid rgba(255,255,255,0.35);
 }
 .hud-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.3));
+  background: linear-gradient(to bottom, rgba(0,0,0,0.30), rgba(0,0,0,0.3));
 }

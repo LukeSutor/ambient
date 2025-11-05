@@ -304,7 +304,7 @@ pub async fn get_conversation(
 
 /// List all conversations
 #[tauri::command]
-pub async fn list_conversations(app_handle: AppHandle) -> Result<Vec<Conversation>, String> {
+pub async fn list_conversations(app_handle: AppHandle, limit: usize, offset: usize) -> Result<Vec<Conversation>, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
@@ -315,12 +315,13 @@ pub async fn list_conversations(app_handle: AppHandle) -> Result<Vec<Conversatio
     .prepare(
       "SELECT id, name, created_at, updated_at, message_count 
          FROM conversations 
-         ORDER BY updated_at DESC",
+         ORDER BY updated_at DESC
+         LIMIT ?1 OFFSET ?2",
     )
     .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
   let conversations = stmt
-    .query_map([], |row| {
+    .query_map(params![limit, offset], |row| {
       let created_at: String = row.get(2)?;
       let updated_at: String = row.get(3)?;
 
@@ -404,7 +405,7 @@ pub async fn delete_conversation(
   Ok(())
 }
 
-/// Update conversation name (optional utility)
+/// Update conversation name
 #[tauri::command]
 pub async fn update_conversation_name(
   app_handle: AppHandle,

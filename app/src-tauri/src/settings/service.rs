@@ -1,4 +1,4 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_store::{Store, StoreExt};
 use crate::constants::{SETTINGS_STORE_PATH, SETTINGS_KEY};
 use super::types::UserSettings;
@@ -47,4 +47,11 @@ pub async fn load_user_settings(app_handle: AppHandle) -> Result<UserSettings, S
 #[tauri::command] 
 pub async fn save_user_settings(app_handle: AppHandle, settings: UserSettings) -> Result<(), String> {
     save_settings_internal(&app_handle, &settings).await
+}
+
+#[tauri::command]
+pub async fn emit_settings_changed(app_handle: AppHandle) -> Result<(), String> {
+    app_handle
+        .emit("settings_changed", ())
+        .map_err(|e| format!("Failed to emit settings_changed event: {}", e))
 }

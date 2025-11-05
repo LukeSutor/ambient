@@ -4,8 +4,8 @@ import { AuthService, SignUpRequest, SignUpResult } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { CheckCircle, UserPlus, Loader2, Mail, User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { CheckCircle, UserPlus, Loader2, Mail, User, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,17 +13,25 @@ import { z } from 'zod';
 import { useState } from 'react';
 import { GoogleLoginButton } from '@/components/google-login-button';
 
+// Step 1: Personal Info (name and email)
+const step1Schema = z.object({
+  given_name: z.string().min(1, {
+    message: "First name is required",
+  }),
+  family_name: z.string().min(1, {
+    message: "Last name is required",
+  }),
+  email: z.string().email({
+    message: "Please enter a valid email address",
+  }),
+});
 
-const signUpSchema = z.object({
-  given_name: z.string().optional(),
-  family_name: z.string().optional(),
+// Step 2: Account Info (username and password)
+const step2Schema = z.object({
   username: z.string().min(3, {
     message: "Username must be at least 3 characters long",
   }).max(20, {
     message: "Username must be less than 20 characters",
-  }),
-  email: z.string().email({
-    message: "Please enter a valid email address",
   }),
   password: z.string()
     .min(8, {
@@ -55,15 +63,22 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [signUpResult, setSignUpResult] = useState<SignUpResult | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [step, setStep] = useState<'signup' | 'verify' | 'success'>('signup');
+  const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
+  const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
 
-  const signUpForm = useForm<z.infer<typeof signUpSchema>>({
-    resolver: zodResolver(signUpSchema),
+  const step1Form = useForm<z.infer<typeof step1Schema>>({
+    resolver: zodResolver(step1Schema),
     defaultValues: {
       given_name: "",
       family_name: "",
-      username: "",
       email: "",
+    },
+  });
+
+  const step2Form = useForm<z.infer<typeof step2Schema>>({
+    resolver: zodResolver(step2Schema),
+    defaultValues: {
+      username: "",
       password: "",
     },
   });
@@ -90,7 +105,19 @@ export default function SignUpPage() {
     checkAuth();
   }, []);
 
-  const onSignUpSubmit = async (values: z.infer<typeof signUpSchema>) => {
+  const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
+    setError(null);
+    setStep1Data(values);
+    setFormStep('step2');
+  };
+
+  const onStep2Submit = async (values: z.infer<typeof step2Schema>) => {
+    if (!step1Data) {
+      setError('Please complete step 1 first');
+      setFormStep('step1');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -98,9 +125,9 @@ export default function SignUpPage() {
       const formData: SignUpRequest = {
         username: values.username,
         password: values.password,
-        email: values.email,
-        given_name: values.given_name || '',
-        family_name: values.family_name || '',
+        email: step1Data.email,
+        given_name: step1Data.given_name,
+        family_name: step1Data.family_name,
       };
       
       const result = await AuthService.signUp(formData);
@@ -109,13 +136,14 @@ export default function SignUpPage() {
       if (result.user_confirmed) {
         // User is automatically confirmed, sign them in
         await AuthService.signIn(values.username, values.password);
-        setStep('success');
+        setFormStep('success');
         setTimeout(() => {
           window.location.href = '/';
         }, 2000);
       } else {
         // User needs to verify email/phone
-        setStep('verify');
+        confirmationForm.reset();
+        setFormStep('verify');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
@@ -134,19 +162,19 @@ export default function SignUpPage() {
       setIsConfirming(true);
       setError(null);
       
-      const signUpValues = signUpForm.getValues();
+      const step2Values = step2Form.getValues();
       
       // First confirm the signup
       await AuthService.confirmSignUp(
-        signUpValues.username,
+        step2Values.username,
         values.confirmationCode,
         signUpResult.session
       );
       
       // Then automatically sign in the user
-      await AuthService.signIn(signUpValues.username, signUpValues.password);
+      await AuthService.signIn(step2Values.username, step2Values.password);
       
-      setStep('success');
+      setFormStep('success');
       setTimeout(() => {
         window.location.href = '/';
       }, 2000);
@@ -160,8 +188,8 @@ export default function SignUpPage() {
   const handleResendCode = async () => {
     try {
       setError(null);
-      const signUpValues = signUpForm.getValues();
-      const result = await AuthService.resendConfirmationCode(signUpValues.username);
+      const step2Values = step2Form.getValues();
+      const result = await AuthService.resendConfirmationCode(step2Values.username);
       setSignUpResult(result);
       // Show success message or update UI to indicate code was resent
     } catch (err) {
@@ -169,7 +197,12 @@ export default function SignUpPage() {
     }
   };
 
-  if (step === 'success') {
+  const handleBackToStep1 = () => {
+    setError(null);
+    setFormStep('step1');
+  };
+
+  if (formStep === 'success') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
@@ -194,7 +227,7 @@ export default function SignUpPage() {
     );
   }
 
-  if (step === 'verify') {
+  if (formStep === 'verify') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
@@ -229,6 +262,8 @@ export default function SignUpPage() {
                             placeholder="Enter 6-digit code"
                             maxLength={6}
                             className="text-center text-lg tracking-widest h-11"
+                            autoComplete="off"
+                            autoFocus
                             {...field}
                           />
                         </FormControl>
@@ -274,178 +309,268 @@ export default function SignUpPage() {
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-lg w-full space-y-8">
-        {/* Sign Up Form */}
-        <Card className="w-full">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center text-3xl font-bold">
-              Sign Up
-            </CardTitle>
-            <CardDescription>
-              Welcome! Create an account to join Cortical today.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
-                <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                <span className="text-red-700 text-sm">{error}</span>
-              </div>
-            )}
-
-            <GoogleLoginButton 
-              onSignInSuccess={() => window.location.href = '/'}
-              className="w-full mb-6"
-            />
-            
-            <Form {...signUpForm}>
-              <form onSubmit={signUpForm.handleSubmit(onSignUpSubmit)} className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={signUpForm.control}
-                    name="given_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">First Name</FormLabel>
-                        <FormControl>
-                          <Input
-                            className="h-11"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={signUpForm.control}
-                    name="family_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Last Name</FormLabel>
-                        <FormControl>
-                          <Input
-                            className="h-11"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+  // Step 1: Personal Information
+  if (formStep === 'step1') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <Card className="w-full">
+            <CardHeader className="text-center">
+              <CardTitle className="text-3xl font-bold">
+                Create Your Account
+              </CardTitle>
+              <CardDescription>
+                Step 1 of 2: Tell us about yourself
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
+                  <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                  <span className="text-red-700 text-sm">{error}</span>
                 </div>
-              
-                <FormField
-                  control={signUpForm.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Username</FormLabel>
-                      <FormControl>
-                        <Input
-                          className="h-11"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={signUpForm.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="email"
-                          className="h-11"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={signUpForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Password</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                            {...field}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-0 top-0 h-full px-3"
-                            onClick={() => setShowPassword(!showPassword)}
-                          >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </FormControl>
-                      <div className="text-muted-foreground text-sm">
-                        Password must be at least 8 characters long and contain:
-                        <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
-                          <li>At least 1 uppercase letter</li>
-                          <li>At least 1 lowercase letter</li>
-                          <li>At least 1 number</li>
-                          <li>At least 1 special character</li>
-                        </ul>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              
-                <Button
-                  type="submit"
-                  className="w-full h-11 text-base font-medium"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating Account...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Create Account
-                    </>
-                  )}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+              )}
 
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link href="/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-              Sign in here
-            </Link>
-          </p>
+              <GoogleLoginButton 
+                onSignInSuccess={() => window.location.href = '/'}
+                className="w-full mb-6"
+              />
+
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with email
+                  </span>
+                </div>
+              </div>
+
+              <Form {...step1Form}>
+                <form onSubmit={step1Form.handleSubmit(onStep1Submit)} className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={step1Form.control}
+                      name="given_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">First Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              className="h-11"
+                              placeholder="John"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={step1Form.control}
+                      name="family_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">Last Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              className="h-11"
+                              placeholder="Doe"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  
+                  <FormField
+                    control={step1Form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Email</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                            <Input
+                              type="email"
+                              className="pl-10 h-11"
+                              placeholder="john.doe@example.com"
+                              {...field}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <Button
+                    type="submit"
+                    className="w-full h-11 text-base font-medium"
+                  >
+                    Continue
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          {/* Footer */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              Already have an account?{' '}
+              <Link href="/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                Sign in here
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Step 2: Account Information
+  if (formStep === 'step2') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <Card className="w-full">
+            <CardHeader className="text-center">
+              <CardTitle className="text-3xl font-bold">
+                Create Your Account
+              </CardTitle>
+              <CardDescription>
+                Step 2 of 2: Choose your credentials
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
+                  <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                  <span className="text-red-700 text-sm">{error}</span>
+                </div>
+              )}
+
+              <Form {...step2Form}>
+                <form onSubmit={step2Form.handleSubmit(onStep2Submit)} className="space-y-6">
+                  <FormField
+                    control={step2Form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Username</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                            <Input
+                              className="pl-10 h-11"
+                              placeholder="johndoe"
+                              disabled={isLoading}
+                              {...field}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={step2Form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Password</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? 'text' : 'password'}
+                              className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                              placeholder="Enter a secure password"
+                              disabled={isLoading}
+                              {...field}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3"
+                              onClick={() => setShowPassword(!showPassword)}
+                              disabled={isLoading}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </FormControl>
+                        <div className="text-muted-foreground text-sm mt-2">
+                          Password must contain:
+                          <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
+                            <li>At least 8 characters</li>
+                            <li>1 uppercase & 1 lowercase letter</li>
+                            <li>1 number & 1 special character</li>
+                          </ul>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 text-base font-medium"
+                      onClick={handleBackToStep1}
+                      disabled={isLoading}
+                    >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="flex-1 h-11 text-base font-medium"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Creating Account...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Create Account
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          {/* Footer */}
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              Already have an account?{' '}
+              <Link href="/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                Sign in here
+              </Link>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

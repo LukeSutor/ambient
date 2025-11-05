@@ -4,6 +4,7 @@ import * as React from "react";
 import { usePathname, redirect } from "next/navigation";
 import Link from "next/link";
 import { invoke } from "@tauri-apps/api/core";
+import { AppProvider } from "@/lib/providers";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -155,9 +156,10 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
+    <AppProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
@@ -202,5 +204,6 @@ export default function DashboardLayout({
         <Toaster richColors />
       </SidebarInset>
     </SidebarProvider>
+    </AppProvider>
   );
 }

@@ -156,7 +156,7 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
   // Save the user message to the database with the provided message_id
-  let user_message = match add_message_with_id(
+  let _user_message = match add_message_with_id(
     app_handle.clone(),
     event.conv_id.clone(),
     "user".to_string(),
