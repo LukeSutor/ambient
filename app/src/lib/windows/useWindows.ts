@@ -35,7 +35,6 @@ export function useWindows() {
             const dimensions = await getHudDimensions();
             const newHeight = await getWindowHeight();
 
-            console.log(newHeight);
             // Skip if height hasn't changed
             if (newHeight === lastHeightRef.current) return;
 
@@ -72,7 +71,6 @@ export function useWindows() {
 
     useEffect(() => {
         // Set window size based on route
-        console.log(pathname);
         (async () => {
             const dimensions = await getHudDimensions();
             if (pathname === '/hud/login' || pathname === '/hud/signup') {
