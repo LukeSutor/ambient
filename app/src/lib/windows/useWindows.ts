@@ -218,7 +218,7 @@ export function useWindows() {
 
     const closeHUD = useCallback(async () => {
         try {
-            await invoke('close_floating_window', { label: 'floating-hud' });
+            await invoke('close_floating_window', { label: 'main' });
         } catch (error) {
             console.error('Failed to close window:', error);
         }
@@ -227,9 +227,9 @@ export function useWindows() {
     const openSettings = useCallback(async (destination?: string) => {
         dispatch({ type: 'OPEN_SETTINGS', payload: destination });
         try {
-            await invoke('open_main_window');
+            await invoke('open_secondary_window');
         } catch (error) {
-            console.error('Failed to open main window:', error);
+            console.error('Failed to open secondary window:', error);
         }
     }, [dispatch]);
 

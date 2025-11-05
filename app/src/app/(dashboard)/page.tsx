@@ -370,9 +370,9 @@ export default function Home() {
 
   async function openFloatingWindow() {
     try {
-      const windowLabel = 'floating-hud';
+      const windowLabel = 'main';
       // Use backend command to open or focus the HUD window
-      await invoke('open_floating_window', { label: windowLabel });
+      await invoke('open_main_window');
       // Optionally get a handle to attach listeners
       let win = await WebviewWindow.getByLabel(windowLabel);
       if (!win) {
@@ -395,7 +395,7 @@ export default function Home() {
 
   async function closeFloatingWindow() {
     try {
-      await invoke('close_floating_window', { label: 'floating-hud' });
+      await invoke('close_floating_window', { label: 'main' });
       setFloatingWindow(null);
     } catch (error) {
       console.error('Failed to close floating window:', error);

@@ -25,8 +25,8 @@ impl HudSizeOption {
                 chat_width: 400.0,
                 input_bar_height: 50.0,
                 chat_max_height: 250.0,
-                login_width: 300.0,
-                login_height: 200.0,
+                login_width: 400.0,
+                login_height: 600.0,
             },
             Self::Normal => HudDimensions {
                 default_width: 200.0,
@@ -35,7 +35,7 @@ impl HudSizeOption {
                 input_bar_height: 60.0,
                 chat_max_height: 350.0,
                 login_width: 400.0,
-                login_height: 300.0,
+                login_height: 600.0,
             },
             Self::Large => HudDimensions {
                 default_width: 200.0,
@@ -43,8 +43,8 @@ impl HudSizeOption {
                 chat_width: 600.0,
                 input_bar_height: 70.0,
                 chat_max_height: 450.0,
-                login_width: 500.0,
-                login_height: 400.0,
+                login_width: 400.0,
+                login_height: 600.0,
             },
         }
     }

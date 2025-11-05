@@ -13,11 +13,17 @@
     "windows": [
       {
         "label": "main",
+        "url": "/hud",
         "title": "Cortical",
-        "width": 1200,
-        "height": 800,
-        "resizable": true,
-        "fullscreen": false
+        "width": 400,
+        "height": 400,
+        "resizable": false,
+        "fullscreen": false,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "shadow": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

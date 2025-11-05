@@ -213,7 +213,7 @@ export function useSettings() {
       // Refresh HUD window size
         try {
             await invoke('refresh_hud_window_size', { 
-            label: 'floating-hud', 
+            label: 'main', 
             isExpanded 
             });
         } catch (refreshError) {

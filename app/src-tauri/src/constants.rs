@@ -45,4 +45,4 @@ pub const MAX_HEALTH_CHECK_RETRIES: u8 = 30;
 pub const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(120);
 
 // HUD information
-pub const HUD_WINDOW_LABEL: &str = "floating-hud";
+pub const HUD_WINDOW_LABEL: &str = "main";
