@@ -28,6 +28,7 @@ export default function RootLayout({
       return this.toString();
     };
   }, []);
+
   return (
     <AppProvider>
       <html lang="en">

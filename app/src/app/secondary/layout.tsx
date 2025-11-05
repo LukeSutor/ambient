@@ -3,7 +3,7 @@
 import * as React from "react";
 import { usePathname } from "next/navigation";
 import { invoke } from "@tauri-apps/api/core";
-import { X } from "lucide-react";
+import { Minus, X } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -27,6 +27,10 @@ export default function DashboardLayout({
     await invoke("close_secondary_window");
   }
 
+  const handleMinimize = async () => {
+    await invoke("minimize_secondary_window");
+  }
+
   // Generate breadcrumbs
   const breadcrumbItems = React.useMemo(() => {
     const pathSegments = pathname.split('/').filter(Boolean);
@@ -48,21 +52,25 @@ export default function DashboardLayout({
             "html,body{background:transparent!important;background-color:transparent!important;}",
         }}
       />
-
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 border-b">
-            <div className="flex items-center gap-2 px-4 w-full">
+            <div className="flex items-center gap-2 px-4 w-full h-full">
               <SidebarTrigger className="-ml-1" />
-              <div data-tauri-drag-region className="w-full flex justify-end items-center">
+              <div data-tauri-drag-region className="w-full h-full flex justify-end items-center">
+                {/* Window minimize button */}
+                <Button variant="ghost" size="icon" onClick={handleMinimize}>
+                  <Minus className="!h-5 !w-5" />
+                </Button>
+                {/* Window close button */}
                 <Button variant="ghost" size="icon" onClick={handleClose}>
-                  <X className="!h-6 !w-6" />
+                  <X className="!h-5 !w-5" />
                 </Button>
               </div>
             </div>
           </header>
-          <main className="flex flex-1 flex-col p-4">
+          <main className="flex flex-1 flex-col p-4 overflow-y-auto min-h-0 max-h-[calc(800px-86px)]">
             {children}
           </main>
           <Toaster richColors />

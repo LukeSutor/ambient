@@ -147,6 +147,21 @@ pub async fn open_secondary_window(
   Ok(())
 }
 
+/// Minimize the secondary window
+#[tauri::command]
+pub async fn minimize_secondary_window(
+  app_handle: AppHandle,
+) -> Result<(), String> {
+  let window_label = "secondary".to_string();
+
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    window.minimize().map_err(|e| e.to_string())?;
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
+}
+
 /// Close the secondary window
 #[tauri::command]
 pub async fn close_secondary_window(

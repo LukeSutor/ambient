@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { ConversationProvider } from '@/lib/conversations';
 import { WindowsProvider } from '../windows/WindowsProvider';
 import { SettingsProvider } from '@/lib/settings';
+import { RoleAccessProvider } from '../role-access/RoleAccessProvider';
 
 interface AppProviderProps {
   children: ReactNode;
@@ -19,11 +20,13 @@ interface AppProviderProps {
 export function AppProvider({ children }: AppProviderProps) {
   return (
     <SettingsProvider>
+      <RoleAccessProvider>
         <ConversationProvider>
-            <WindowsProvider>
-                {children}
-            </WindowsProvider>
+          <WindowsProvider>
+            {children}
+          </WindowsProvider>
         </ConversationProvider>
+      </RoleAccessProvider>
     </SettingsProvider>
   );
 }

@@ -147,6 +147,7 @@ pub fn run() {
       windows::open_main_window,
       windows::close_main_window,
       windows::open_secondary_window,
+      windows::minimize_secondary_window,
       windows::close_secondary_window,
       windows::resize_hud,
       windows::refresh_hud_window_size,

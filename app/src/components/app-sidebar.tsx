@@ -48,11 +48,6 @@ const data = {
       ]
     },
     {
-      title: "Tasks",
-      url: "/secondary/tasks",
-      icon: CheckSquare
-    },
-    {
       title: "Memories",
       url: "/secondary/memories",
       icon: NotebookPen
@@ -102,7 +97,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (!hasDebug) {
        navItems.push({
         title: "Dev",
-        url: "/dev", // Point to your debug page route
+        url: "/secondary/dev", // Point to your debug page route
         icon: Code,   // Use the Code icon
       });
     }
