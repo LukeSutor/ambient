@@ -113,7 +113,6 @@ pub async fn close_main_window(
 }
 
 /// Open or focus the floating HUD window.
-/// If a window with the given label exists, it will be brought to front; otherwise it will be created.
 #[tauri::command]
 pub async fn open_secondary_window(
   app_handle: AppHandle,
@@ -134,7 +133,7 @@ pub async fn open_secondary_window(
   let _window = tauri::WebviewWindowBuilder::new(
     &app_handle,
     window_label,
-    tauri::WebviewUrl::App("/".into()),
+    tauri::WebviewUrl::App("/secondary".into()),
   )
   .title("Settings")
   .inner_size(800 as f64, 800 as f64)
@@ -146,4 +145,19 @@ pub async fn open_secondary_window(
   .map_err(|e| e.to_string())?;
 
   Ok(())
+}
+
+/// Close the secondary window
+#[tauri::command]
+pub async fn close_secondary_window(
+  app_handle: AppHandle,
+) -> Result<(), String> {
+  let window_label = "secondary".to_string();
+
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    window.close().map_err(|e| e.to_string())?;
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
 }

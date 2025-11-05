@@ -218,7 +218,7 @@ export function useWindows() {
 
     const closeHUD = useCallback(async () => {
         try {
-            await invoke('close_floating_window', { label: 'main' });
+            await invoke('close_main_window');
         } catch (error) {
             console.error('Failed to close window:', error);
         }

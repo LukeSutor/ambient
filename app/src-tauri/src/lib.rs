@@ -83,7 +83,7 @@ pub fn run() {
 
       // Initialize the database connection during setup
       let app_handle = app.handle().clone();
-  match db::core::initialize_database(&app_handle) {
+      match db::core::initialize_database(&app_handle) {
         Ok(conn) => {
           log::info!("[setup] Database initialized successfully.");
           // Store the connection in the managed state using the app_handle
@@ -145,8 +145,9 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
       windows::open_main_window,
-      windows::open_secondary_window,
       windows::close_main_window,
+      windows::open_secondary_window,
+      windows::close_secondary_window,
       windows::resize_hud,
       windows::refresh_hud_window_size,
       settings::load_user_settings,
@@ -168,7 +169,7 @@ pub fn run() {
       db::conversations::create_conversation,
       db::conversations::add_message,
       db::conversations::get_messages,
-  db::conversations::get_message,
+      db::conversations::get_message,
       db::conversations::get_conversation,
       db::conversations::list_conversations,
       db::conversations::reset_conversation,
@@ -198,9 +199,9 @@ pub fn run() {
       models::llm::server::generate,
       models::llm::handlers::handle_hud_chat,
       models::embedding::embedding::generate_embedding,
-  db::memory::get_memory_entries_with_message,
-  db::memory::delete_memory_entry,
-  db::memory::delete_all_memories,
+      db::memory::get_memory_entries_with_message,
+      db::memory::delete_memory_entry,
+      db::memory::delete_all_memories,
       auth::logout,
       auth::get_stored_token,
       auth::is_authenticated,

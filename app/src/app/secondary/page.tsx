@@ -395,7 +395,7 @@ export default function Home() {
 
   async function closeFloatingWindow() {
     try {
-      await invoke('close_floating_window', { label: 'main' });
+      await invoke('close_main_window');
       setFloatingWindow(null);
     } catch (error) {
       console.error('Failed to close floating window:', error);

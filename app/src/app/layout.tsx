@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppProvider } from "@/lib/providers";
 
 import "@/styles/globals.css";
 
@@ -28,12 +29,14 @@ export default function RootLayout({
     };
   }, []);
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
+    <html lang="en" className="bg-transparent rounded-xl overflow-hidden w-1/2">
+      <AppProvider>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          {children}
+        </body>
+      </AppProvider>
     </html>
   );
 }

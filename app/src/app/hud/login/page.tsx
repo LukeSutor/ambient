@@ -84,7 +84,7 @@ export default function Login() {
       {/* Sign In Form */}
       <Card className="relative w-full pt-12">
         {/* Drag area and close button */}
-        <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center bg-gray-10a0 rounded-lag border-b">
+        <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center rounded-lag border-b">
           <Button className="mr-4 hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
             <X className="!h-6 !w-6" />
           </Button>
