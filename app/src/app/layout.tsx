@@ -29,14 +29,14 @@ export default function RootLayout({
     };
   }, []);
   return (
-    <html lang="en" className="bg-transparent rounded-xl overflow-hidden w-1/2">
-      <AppProvider>
+    <AppProvider>
+      <html lang="en">
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           {children}
         </body>
-      </AppProvider>
-    </html>
+      </html>
+    </AppProvider>
   );
 }

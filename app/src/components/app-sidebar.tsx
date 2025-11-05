@@ -29,44 +29,44 @@ const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "/",
+      url: "/secondary",
       icon: House
     },
     {
       title: "Activity",
-      url: "/activity",
+      url: "/secondary/activity",
       icon: SquareTerminal,
       items: [
         {
           title: "Recent",
-          url: "/activity/recent",
+          url: "/secondary/activity/recent",
         },
         {
           title: "Recurring",
-          url: "/activity/recurring",
+          url: "/secondary/activity/recurring",
         }
       ]
     },
     {
       title: "Tasks",
-      url: "/tasks",
+      url: "/secondary/tasks",
       icon: CheckSquare
     },
     {
       title: "Memories",
-      url: "/memories",
+      url: "/secondary/memories",
       icon: NotebookPen
     }
   ],
   navSecondary: [
     {
       title: "Settings",
-      url: "/settings",
+      url: "/secondary/settings",
       icon: Settings2,
     },
     {
       title: "Support",
-      url: "/support",
+      url: "/secondary/support",
       icon: LifeBuoy,
     }
   ]

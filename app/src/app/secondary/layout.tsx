@@ -2,19 +2,9 @@
 
 import * as React from "react";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
@@ -49,52 +39,27 @@ export default function DashboardLayout({
   }, [pathname]);
 
   return (
-    <div className="relative h-full w-1/2 rounded-xl overflow-hidden bg-black">
-      {/* Top drag and close area */}
-      <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center bg-black rounded-lg border-b">
-        <Button className="mr-4 hover:bg-gray-200" variant="ghost" size="icon" onClick={handleClose}>
-          <X className="!h-6 !w-6" />
-        </Button>
-      </div>
+    <div className="relative h-full max-h-[800px] w-full rounded-xl overflow-hidden border">
+      {/* Force transparent background for this window on first paint */}
+      <style
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html:
+            "html,body{background:transparent!important;background-color:transparent!important;}",
+        }}
+      />
+
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 border-b">
-            <div className="flex items-center gap-2 px-4">
+            <div className="flex items-center gap-2 px-4 w-full">
               <SidebarTrigger className="-ml-1" />
-              <Separator
-                orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
-              />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  {/* Add Home breadcrumb */}
-                  <BreadcrumbItem>
-                    {breadcrumbItems.length > 0 ? (
-                      <BreadcrumbLink asChild>
-                        <Link href="/">Home</Link>
-                      </BreadcrumbLink>
-                    ) : (
-                      <BreadcrumbPage>Home</BreadcrumbPage>
-                    )}
-                  </BreadcrumbItem>
-                  {/* Render dynamic breadcrumbs */}
-                  {breadcrumbItems.map((item) => (
-                    <React.Fragment key={item.href}>
-                      <BreadcrumbSeparator />
-                      <BreadcrumbItem>
-                        {item.isLast ? (
-                          <BreadcrumbPage>{item.title}</BreadcrumbPage>
-                        ) : (
-                          <BreadcrumbLink asChild>
-                            <Link href={item.href}>{item.title}</Link>
-                          </BreadcrumbLink>
-                        )}
-                      </BreadcrumbItem>
-                    </React.Fragment>
-                  ))}
-                </BreadcrumbList>
-              </Breadcrumb>
+              <div data-tauri-drag-region className="w-full flex justify-end items-center">
+                <Button variant="ghost" size="icon" onClick={handleClose}>
+                  <X className="!h-6 !w-6" />
+                </Button>
+              </div>
             </div>
           </header>
           <main className="flex flex-1 flex-col p-4">
