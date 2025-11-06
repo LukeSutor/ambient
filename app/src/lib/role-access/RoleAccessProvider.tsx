@@ -2,16 +2,7 @@
 
 import React, { createContext, useContext, useReducer, ReactNode, MutableRefObject } from 'react';
 import { UserSettings, HudSizeOption, ModelSelection } from '@/types/settings';
-
-/**
- * Role access state
- */
-interface RoleAccessState {
-  isLoggedIn: boolean;
-  isSetupComplete: boolean;
-  isPremiumUser: boolean;
-}
-
+import { CognitoUserInfo, RoleAccessState } from './types';
 /**
  * Initial state
  */
@@ -19,6 +10,7 @@ const initialState: RoleAccessState = {
   isLoggedIn: false,
   isSetupComplete: false,
   isPremiumUser: false,
+  userInfo: null,
 };
 
 /**
@@ -27,7 +19,8 @@ const initialState: RoleAccessState = {
 type RoleAccessAction =
   | { type: 'SET_LOGGED_IN'; payload: boolean }
   | { type: 'SET_SETUP_COMPLETE'; payload: boolean }
-  | { type: 'SET_PREMIUM_USER'; payload: boolean };
+  | { type: 'SET_PREMIUM_USER'; payload: boolean }
+  | { type: 'SET_USER_INFO'; payload: CognitoUserInfo | null };
 
 /**
  * Role access reducer
@@ -50,6 +43,12 @@ function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): Ro
       return {
         ...state,
         isPremiumUser: action.payload,
+      };
+      
+    case 'SET_USER_INFO':
+      return {
+        ...state,
+        userInfo: action.payload,
       };
 
     default:
