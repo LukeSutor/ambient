@@ -115,7 +115,7 @@ export default function SetupPage() {
       toast.success("Setup completed successfully!");
 
       // Redirect to dashboard after successful setup
-      router.push('/');
+      router.push('/secondary');
 
     } catch (err) {
       console.error("[SetupPage] Setup failed:", err);

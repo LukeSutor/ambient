@@ -11,7 +11,6 @@ import {
   CheckSquare
 } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
-import { AuthService, CognitoUserInfo } from "@/lib/auth"
 
 import { Separator } from "@/components/ui/separator"
 import { NavMain } from "@/components/nav-main"
@@ -24,6 +23,7 @@ import {
   SidebarHeader,
   SidebarFooter
 } from "@/components/ui/sidebar"
+import { useRoleAccess } from "@/lib/role-access"
 
 const data = {
   navMain: [
@@ -68,24 +68,7 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [userInfo, setUserInfo] = React.useState<CognitoUserInfo | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = React.useState(true);
-
-  // Fetch user information on mount
-  React.useEffect(() => {
-    const fetchUserInfo = async () => {
-      try {
-        const user = await AuthService.getCurrentUser();
-        setUserInfo(user);
-      } catch (error) {
-        console.error('Failed to fetch user info:', error);
-      } finally {
-        setIsLoadingUser(false);
-      }
-    };
-
-    fetchUserInfo();
-  }, []);
+  const { userInfo } = useRoleAccess();
 
   // Create a mutable copy of the nav items for this render
   const navItems = [...data.navMain];

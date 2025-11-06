@@ -2,8 +2,10 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useRouter } from 'next/navigation';
 import { useRoleAccessContext } from './RoleAccessProvider';
 import { SignInResult, CognitoUserInfo, SignUpRequest, ConfirmSignUpRequest, SignUpResult, AuthToken } from './types';
+import { set } from 'react-hook-form';
 
 async function googleSignOut(): Promise<void> {
   return invoke<void>('google_sign_out');
@@ -13,16 +15,49 @@ async function logout(): Promise<string> {
   return invoke<string>('logout');
 }
 
+async function isAuthenticated(): Promise<boolean> {
+  return invoke<boolean>('is_authenticated');
+}
+
+async function isSetupComplete(): Promise<boolean> {
+  return invoke<boolean>('check_setup_complete');
+}
+
 export function useRoleAccess(location?: string) {
   const { state, dispatch } = useRoleAccessContext();
+  const router = useRouter();
 
   // ============================================================
   // Effects
   // ============================================================
+  
+  // Set initial auth and setup status on mount
+  useEffect(() => {
+    if (!location) return;
+    console.log('location:', location);
+    (async () => {
+      try {
+        const loggedIn = await isAuthenticated();
+        setLoggedIn(loggedIn);
+        const setupComplete = await isSetupComplete();
+        setSetupComplete(setupComplete);
+      } catch (error) {
+        console.error('Error during initial auth/setup check:', error);
+      }
+    })();
+  }, []);
 
   // Redirect based on location and login status
   useEffect(() => {
     if (!location) return;
+
+    if (state.isLoggedIn) {
+      // Redirect to location if logged in
+      router.push(location);
+    } else {
+      // Redirect to login if not logged in
+      router.push(location+'/signin');
+    }
     
     // Example effect: Log when user login status changes
     console.log('User logged in status changed:', state.isLoggedIn);
@@ -43,10 +78,12 @@ export function useRoleAccess(location?: string) {
   // Sign in with username and password using Cognito
   const signIn = useCallback(async (username: string, password: string): Promise<SignInResult> => {
     try {
-      return await invoke<SignInResult>('cognito_sign_in', {
+      const result = await invoke<SignInResult>('cognito_sign_in', {
       username,
       password,
       });
+      setLoggedIn(true);
+      return result;
     } catch (error) {
       console.error('Error during signIn:', error);
       throw error;
@@ -121,16 +158,6 @@ export function useRoleAccess(location?: string) {
     }
   }, []);
 
-  // Check if user is authenticated
-  const isAuthenticated = useCallback(async (): Promise<boolean> => {
-    try {
-      return await invoke<boolean>('is_authenticated');
-    } catch (error) {
-      console.error('Error during isAuthenticated:', error);
-      throw error;
-    }
-  }, []);
-
   // Get current user info
   const getCurrentUserInfo = useCallback(async (): Promise<CognitoUserInfo | null> => {
     try {
@@ -165,16 +192,6 @@ export function useRoleAccess(location?: string) {
   // Setup actions
   // ============================================================
 
-  // Check if setup is complete
-  const isSetupComplete = useCallback(async (): Promise<boolean> => {
-    try {
-      return await invoke<boolean>('check_setup_complete');
-    } catch (error) {
-      console.error('Error during isSetupComplete:', error);
-      throw error;
-    }
-  }, []);
-
   // ============================================================
   // Modifiers
   // ============================================================
@@ -190,7 +207,6 @@ export function useRoleAccess(location?: string) {
     confirmSignUp,
     resendConfirmationCode,
     signOut,
-    isAuthenticated,
     getCurrentUserInfo,
     getAuthMethod,
     isSetupComplete,

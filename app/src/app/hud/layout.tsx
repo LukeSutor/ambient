@@ -2,7 +2,7 @@
 
 import { AppProvider } from '@/lib/providers';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useRoleAccess } from '@/lib/role-access/useRoleAccess';
+import { useRoleAccess } from '@/lib/role-access';
 
 export default function HudLayout({
   children,
@@ -10,7 +10,7 @@ export default function HudLayout({
   children: React.ReactNode;
 }) {
   // Use role access
-  useRoleAccess('hud');
+  useRoleAccess('/hud');
   return (
     <AppProvider>
       <TooltipProvider>

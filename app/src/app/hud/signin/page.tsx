@@ -11,7 +11,7 @@ import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { AuthService } from '@/lib/auth';
+import { useRoleAccess } from '@/lib/role-access';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 
 const formSchema = z.object({
@@ -34,6 +34,19 @@ export default function Login() {
     closeHUD
   } = useWindows();
 
+  // Auth state
+  const {
+    isLoggedIn,
+    signIn
+  } = useRoleAccess();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      router.push('/hud');
+    }
+  }, [isLoggedIn, router]);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,27 +55,12 @@ export default function Login() {
     },
   });
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const isAuthenticated = await AuthService.isAuthenticated();
-        if (isAuthenticated) {
-          window.location.href = '/hud';
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-      }
-    };
-    
-    checkAuth();
-  }, []);
-
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setError(null);
     setIsLoading(true);
 
     try {
-      const result = await AuthService.signIn(values.username.trim(), values.password);
+      const result = await signIn(values.username.trim(), values.password);
       console.log('Sign in successful:', result.user_info);
       router.push('/hud');
     } catch (err) {
@@ -106,7 +104,7 @@ export default function Login() {
             )}
 
             <GoogleLoginButton 
-              onSignInSuccess={() => window.location.href = '/'}
+              onSignInSuccess={() => router.push('/hud')}
               className="w-full"
             />
 

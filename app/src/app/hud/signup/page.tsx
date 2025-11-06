@@ -11,9 +11,10 @@ import { CheckCircle, UserPlus, Loader2, Mail, Eye, EyeOff, AlertCircle, X, Arro
 import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { AuthService, SignUpRequest, SignUpResult } from '@/lib/auth';
+import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from '@/lib/role-access';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
+import { useRouter } from 'next/router';
 
 // Step 1: Personal Info (name and email)
 const step1Schema = z.object({
@@ -63,12 +64,21 @@ export default function SignUp() {
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
   const [confirmationCode, setConfirmationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
-
+  const router = useRouter();
 
   // Windows state
   const { 
     closeHUD
   } = useWindows();
+
+  // Auth state
+  const {
+    isLoggedIn,
+    signUp,
+    signIn,
+    confirmSignUp,
+    resendConfirmationCode,
+  } = useRoleAccess();
 
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
@@ -93,20 +103,12 @@ export default function SignUp() {
     }
   }, [confirmationCode]);
 
+  // Redirect if already logged in
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const isAuthenticated = await AuthService.isAuthenticated();
-        if (isAuthenticated) {
-        //   window.location.href = '/hud';
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-      }
-    };
-    
-    checkAuth();
-  }, []);
+    if (isLoggedIn) {
+      router.push('/hud');
+    }
+  }, [isLoggedIn, router]);
 
   const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
     setError(null);
@@ -133,12 +135,12 @@ export default function SignUp() {
         family_name: step1Data.family_name,
       };
       
-      const result = await AuthService.signUp(formData);
+      const result = await signUp(formData);
       setSignUpResult(result);
       
       if (result.user_confirmed) {
         // User is automatically confirmed, sign them in
-        await AuthService.signIn(values.username, values.password);
+        await signIn(values.username, values.password);
         setFormStep('success');
         setTimeout(() => {
           window.location.href = '/hud';
@@ -183,16 +185,18 @@ export default function SignUp() {
       setError(null);
       
       const step2Values = step2Form.getValues();
+
+      const confirmRequest: ConfirmSignUpRequest = {
+        username: step2Values.username,
+        confirmation_code: confirmationCode,
+        session: signUpResult.session,
+      };
       
       // First confirm the signup
-      await AuthService.confirmSignUp(
-        step2Values.username,
-        confirmationCode,
-        signUpResult.session
-      );
+      await confirmSignUp(confirmRequest);
       
       // Then automatically sign in the user
-      await AuthService.signIn(step2Values.username, step2Values.password);
+      await signIn(step2Values.username, step2Values.password);
       
       setFormStep('success');
       setTimeout(() => {
@@ -209,7 +213,7 @@ export default function SignUp() {
     try {
       setError(null);
       const step2Values = step2Form.getValues();
-      const result = await AuthService.resendConfirmationCode(step2Values.username);
+      const result = await resendConfirmationCode(step2Values.username);
       setSignUpResult(result);
       // Show success message or update UI to indicate code was resent
     } catch (err) {
@@ -481,7 +485,7 @@ export default function SignUp() {
           <CardFooter>
             <p className="text-sm text-gray-600 w-full text-center">
               Already have an account?{' '}
-              <Link href="/hud/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              <Link href="/hud/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                 Sign in here
               </Link>
             </p>
@@ -625,7 +629,7 @@ export default function SignUp() {
           <CardFooter>
             <p className="text-sm text-gray-600 w-full text-center">
               Already have an account?{' '}
-              <Link href="/hud/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              <Link href="/hud/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                 Sign in here
               </Link>
             </p>

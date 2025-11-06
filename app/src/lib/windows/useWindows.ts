@@ -73,7 +73,7 @@ export function useWindows() {
         // Set window size based on route
         (async () => {
             const dimensions = await getHudDimensions();
-            if (pathname === '/hud/login' || pathname === '/hud/signup') {
+            if (pathname === '/hud/signin' || pathname === '/hud/signup') {
                 try {
                     await invoke('resize_hud', {
                         width: dimensions.login_height,
