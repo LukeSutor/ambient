@@ -14,7 +14,7 @@ import { GoogleLoginButton } from '@/components/google-login-button';
 import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from '@/lib/role-access';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
 
 // Step 1: Personal Info (name and email)
 const step1Schema = z.object({
