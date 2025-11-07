@@ -39,31 +39,37 @@ export function useRoleAccess(location?: string) {
     const signInPath = `${normalizedLocation}/signin`;
     const signUpPath = `${normalizedLocation}/signup`;
     const isAuthRoute =
-      pathname === signInPath ||
-      pathname === signUpPath ||
-      pathname.startsWith(`${signInPath}/`) ||
-      pathname.startsWith(`${signUpPath}/`);
+    pathname === signInPath ||
+    pathname === signUpPath ||
+    pathname.startsWith(`${signInPath}/`) ||
+    pathname.startsWith(`${signUpPath}/`);
+    const setupPath = `${normalizedLocation}/setup`;
+    const isSetupRoute = pathname === setupPath || pathname.startsWith(`${setupPath}/`);
     const isWithinBase =
       pathname === normalizedLocation || pathname.startsWith(`${normalizedLocation}/`);
 
-    let redirectTimer: number | undefined;
-
+    // Go to sign in if not logged in
     if (!state.isLoggedIn && isWithinBase && !isAuthRoute) {
-      redirectTimer = window.setTimeout(() => {
-        router.replace(signInPath);
-      }, 200);
+      router.replace(signInPath);
+      return;
     }
 
+    // Go to setup if logged in but setup not complete
+    if (!state.isSetupComplete && isWithinBase && !isAuthRoute && !isSetupRoute) {
+      router.replace(setupPath);
+      return;
+    }
+
+    // Prevent going to auth routes if already logged in
     if (state.isLoggedIn && isAuthRoute) {
       router.replace(normalizedLocation);
     }
 
-    return () => {
-      if (redirectTimer) {
-        window.clearTimeout(redirectTimer);
-      }
-    };
-  }, [normalizedLocation, pathname, router, state.isHydrated, state.isLoggedIn]);
+    // Prevent going to setup routes if setup is complete
+    if (state.isSetupComplete && isSetupRoute) {
+      router.replace(normalizedLocation);
+    }
+  }, [normalizedLocation, pathname, router, state.isHydrated, state.isLoggedIn, state.isSetupComplete]);
 
   const signIn = useCallback(
     async (username: string, password: string): Promise<SignInResult> => {

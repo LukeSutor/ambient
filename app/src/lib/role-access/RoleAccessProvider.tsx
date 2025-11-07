@@ -85,6 +85,8 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
         invokeIsSetupComplete(),
       ]);
 
+      console.log({ isLoggedIn, isSetupComplete });
+
       dispatch({ type: "SET_LOGGED_IN", payload: isLoggedIn });
       dispatch({ type: "SET_SETUP_COMPLETE", payload: isSetupComplete });
 

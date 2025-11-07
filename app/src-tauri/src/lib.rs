@@ -41,7 +41,7 @@ pub fn run() {
         .target(Target::new(TargetKind::Stdout))
         .filter(|metadata| {
           let t = metadata.target();
-          !(t.starts_with("hyper") || t.starts_with("reqwest"))
+          !(t.starts_with("hyper") || t.starts_with("reqwest") || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
     )

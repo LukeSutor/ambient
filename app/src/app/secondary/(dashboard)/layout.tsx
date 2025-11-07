@@ -19,7 +19,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }>) {
   // Use role access
-  // useRoleAccess('/secondary');
+  useRoleAccess('/secondary');
 
   const handleClose = async () => {
     await invoke("close_secondary_window");
