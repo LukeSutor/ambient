@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+//TODO: make these automatically updated using ts-rs
+
 // AWS Cognito SignUp API structures
 #[derive(Debug, Serialize)]
 pub struct CognitoSignUpRequest {

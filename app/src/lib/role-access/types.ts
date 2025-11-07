@@ -2,6 +2,7 @@
  * Role access state
  */
 export interface RoleAccessState {
+  isHydrated: boolean;
   isLoggedIn: boolean;
   isSetupComplete: boolean;
   isPremiumUser: boolean;
