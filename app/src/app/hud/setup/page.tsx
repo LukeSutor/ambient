@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useRouter } from 'next/navigation';
@@ -13,11 +13,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
 import { Progress } from "@/components/ui/progress";
-import { toast } from "sonner"; // Import toast
-import { Toaster } from "@/components/ui/sonner"; // Import Toaster
-import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
+import { Loader2, X } from "lucide-react";
+import { useWindows } from "@/lib/windows/useWindows";
 
 // Define the structure of the event payloads based on Rust code
 interface DownloadStartedPayload {
@@ -34,7 +34,7 @@ interface DownloadFinishedPayload {
   id: number;
 }
 
-// Helper function for formatting bytes (remains the same)
+// Helper function for formatting bytes
 function formatBytes(bytes: number, decimals = 1): string {
   if (!+bytes) return '0 Bytes'
 
@@ -60,6 +60,9 @@ export default function SetupPage() {
   const [vlmDownloadId, setVlmDownloadId] = useState<number | null>(null);
   const [vlmTotalSize, setVlmTotalSize] = useState(0);
   const [vlmCurrentProgress, setVlmCurrentProgress] = useState(0);
+
+  // Windows state
+  const { closeHUD } = useWindows();
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {
@@ -108,44 +111,49 @@ export default function SetupPage() {
       setOverallStatus("Setup completed successfully!");
       toast.success("Setup completed successfully!");
 
-      // Redirect to dashboard after successful setup
-      router.push('/secondary');
+      // Redirect to HUD dashboard after successful setup
+      router.push('/hud');
 
     } catch (err) {
       console.error("[SetupPage] Setup failed:", err);
       const errorMsg = typeof err === 'string' ? err : (err instanceof Error ? err.message : 'An unknown error occurred');
-      // Use toast for error instead of Alert
       toast.error(`Setup failed: ${errorMsg}`);
       setOverallStatus("Setup process encountered an error.");
     } finally {
-      // Set isSettingUp false only on error or completion (handled by onSetupComplete call)
-      // If an error occurs, we might want the user to be able to retry
-      if (!overallStatus.includes("successfully")) { // Keep button disabled only if setup didn't succeed
+      if (!overallStatus.includes("successfully")) {
           setIsSettingUp(false);
       }
       listeners.forEach(unlisten => unlisten());
       console.log("[SetupPage] Event listeners cleaned up.");
     }
-  // Remove onSetupComplete from dependency array
   }, [router, overallStatus]);
 
   const progressPercent = vlmTotalSize > 0 ? (vlmCurrentProgress / vlmTotalSize) * 100 : 0;
 
-  // Render the setup card directly. The parent (RootLayout) handles centering/layout.
   return (
-    <div className="flex items-center justify-center w-screen h-screen bg-background"> {/* Use theme background */}
-       <Toaster richColors position="top-center" />
-      <Card className="w-[450px] shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Application Setup Required</CardTitle>
+    <div className="h-full w-full">
+      <Toaster richColors position="top-center" />
+      
+      {/* Setup Card */}
+      <Card className="relative w-full pt-12">
+        {/* Drag area and close button */}
+        <div data-tauri-drag-region className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b">
+          <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+            <X className="!h-6 !w-6" />
+          </Button>
+        </div>
+
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="text-2xl font-bold">Application Setup Required</CardTitle>
           <CardDescription>
             Essential models need to be downloaded before using the application.
             This might take some time depending on your internet connection. The total download size is approximately 0.7 GB.
           </CardDescription>
         </CardHeader>
+        
         <CardContent className="space-y-4">
           {overallStatus !== "" ? 
-          (<div className="text-sm text-muted-foreground"> {/* Use theme text color */}
+          (<div className="text-sm text-muted-foreground">
             {overallStatus}
           </div>) : (
             <div className="h-[20px]" />
@@ -154,7 +162,7 @@ export default function SetupPage() {
           {/* VLM Progress Display */}
           {isSettingUp && vlmDownloadId !== null && (
             <div className="space-y-2 pt-2">
-              <div className="flex justify-between text-xs font-medium text-foreground"> {/* Use theme text color */}
+              <div className="flex justify-between text-xs font-medium text-foreground">
                 <span>
                   {`Model ${vlmDownloadId}`} ({formatBytes(vlmCurrentProgress)} / {formatBytes(vlmTotalSize)})
                 </span>
@@ -163,6 +171,7 @@ export default function SetupPage() {
               <Progress value={progressPercent} className="w-full h-2" />
             </div>
           )}
+          
           {/* Embedding Model Status Display */}
            {isSettingUp && vlmDownloadId === null && overallStatus.includes("Finalizing") && (
              <div className="space-y-2 pt-2 flex flex-row items-center justify-center">
@@ -171,17 +180,16 @@ export default function SetupPage() {
                 </div>
              </div>
            )}
-
         </CardContent>
+        
         <CardFooter>
-          {/* Button logic remains similar, but no isSetupComplete check needed here */}
           {!isSettingUp && (
-            <Button onClick={handleStartSetup} className="w-full">
+            <Button onClick={handleStartSetup} className="w-full h-11 text-base font-medium">
               Start Setup
             </Button>
           )}
            {isSettingUp && (
-             <Button className="w-full" disabled={true}>
+             <Button className="w-full h-11 text-base font-medium" disabled={true}>
                Setting Up...
              </Button>
            )}
