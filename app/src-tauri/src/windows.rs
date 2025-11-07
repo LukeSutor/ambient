@@ -14,7 +14,7 @@ async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
         chat_width: 500.0,
         input_bar_height: 60.0,
         chat_max_height: 350.0,
-        login_width: 400.0,
+        login_width: 300.0,
         login_height: 600.0,
       }
     }

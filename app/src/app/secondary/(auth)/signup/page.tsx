@@ -5,14 +5,16 @@ import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { CheckCircle, UserPlus, Loader2, Mail, User, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
 import { GoogleLoginButton } from '@/components/google-login-button';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 
 // Step 1: Personal Info (name and email)
 const step1Schema = z.object({
@@ -52,12 +54,6 @@ const step2Schema = z.object({
     }),
 });
 
-const confirmationSchema = z.object({
-  confirmationCode: z.string().length(6, {
-    message: "Confirmation code must be 6 digits",
-  }),
-});
-
 export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +62,8 @@ export default function SignUpPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
+  const [confirmationCode, setConfirmationCode] = useState("");
+  const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
 
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
@@ -81,13 +79,6 @@ export default function SignUpPage() {
     defaultValues: {
       username: "",
       password: "",
-    },
-  });
-
-  const confirmationForm = useForm<z.infer<typeof confirmationSchema>>({
-    resolver: zodResolver(confirmationSchema),
-    defaultValues: {
-      confirmationCode: "",
     },
   });
 
@@ -133,7 +124,8 @@ export default function SignUpPage() {
         }, 2000);
       } else {
         // User needs to verify email/phone
-        confirmationForm.reset();
+        setConfirmationCode("");
+        setHasTriedConfirm(false);
         setFormStep('verify');
       }
     } catch (err) {
@@ -152,9 +144,16 @@ export default function SignUpPage() {
     }
   };
 
-  const onConfirmationSubmit = async (values: z.infer<typeof confirmationSchema>) => {
+  const onConfirmationSubmit = async () => {
     if (!signUpResult) {
       setError('Sign up data not found');
+      return;
+    }
+
+    setHasTriedConfirm(true);
+
+    if (confirmationCode.length !== 6) {
+      setError('Please enter the 6-digit verification code');
       return;
     }
 
@@ -166,7 +165,7 @@ export default function SignUpPage() {
 
       const confirmationData: ConfirmSignUpRequest = {
         username: step2Values.username,
-        confirmation_code: values.confirmationCode,
+        confirmation_code: confirmationCode,
         session: signUpResult.session,
       };
       
@@ -260,59 +259,79 @@ export default function SignUpPage() {
                 </div>
               )}
               
-              <Form {...confirmationForm}>
-                <form onSubmit={confirmationForm.handleSubmit(onConfirmationSubmit)} className="space-y-6">
-                  <FormField
-                    control={confirmationForm.control}
-                    name="confirmationCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Verification Code</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Enter 6-digit code"
-                            maxLength={6}
-                            className="text-center text-lg tracking-widest h-11"
-                            autoComplete="off"
-                            autoFocus
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="space-y-3">
-                    <Button
-                      type="submit"
-                      className="w-full h-11 text-base font-medium"
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  onConfirmationSubmit();
+                }}
+                className="space-y-6"
+                noValidate
+              >
+                <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 6}>
+                  <FieldLabel htmlFor="signup-confirmation-code">
+                    Verification Code
+                  </FieldLabel>
+                  <div className="flex justify-center">
+                    <InputOTP
+                      id="signup-confirmation-code"
+                      maxLength={6}
+                      pattern={REGEXP_ONLY_DIGITS}
+                      value={confirmationCode}
+                      onChange={(value) => {
+                        console.log("Confirmation code updated:", value);
+                        setError(null);
+                        setHasTriedConfirm(false);
+                        setConfirmationCode(value);
+                      }}
                       disabled={isConfirming}
+                      aria-invalid={hasTriedConfirm && confirmationCode.length !== 6}
                     >
-                      {isConfirming ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Verifying...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Verify Account
-                        </>
-                      )}
-                    </Button>
-                    
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full h-11"
-                      onClick={handleResendCode}
-                    >
-                      Resend Code
-                    </Button>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
                   </div>
-                </form>
-              </Form>
+                  {hasTriedConfirm && confirmationCode.length !== 6 && (
+                    <FieldError
+                      errors={[{ message: 'Enter the 6-digit code from your email.' }]}
+                    />
+                  )}
+                </Field>
+
+                <div className="space-y-3">
+                  <Button
+                    type="submit"
+                    className="w-full h-11 text-base font-medium"
+                    disabled={isConfirming}
+                  >
+                    {isConfirming ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Verify Account
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-11"
+                    onClick={handleResendCode}
+                  >
+                    Resend Code
+                  </Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
         </div>
@@ -358,76 +377,77 @@ export default function SignUpPage() {
                 </div>
               </div>
 
-              <Form {...step1Form}>
-                <form onSubmit={step1Form.handleSubmit(onStep1Submit)} className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={step1Form.control}
-                      name="given_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">First Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              className="h-11"
-                              placeholder="John"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={step1Form.control}
-                      name="family_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm font-medium">Last Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              className="h-11"
-                              placeholder="Doe"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <FormField
+              <form onSubmit={step1Form.handleSubmit(onStep1Submit)} className="space-y-6" noValidate>
+                <div className="grid grid-cols-2 gap-4">
+                  <Controller
                     control={step1Form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Email</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                            <Input
-                              type="email"
-                              className="pl-10 h-11"
-                              placeholder="john.doe@example.com"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    name="given_name"
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="signup-given-name">First Name</FieldLabel>
+                        <Input
+                          id="signup-given-name"
+                          className="h-11"
+                          placeholder="John"
+                          autoComplete="given-name"
+                          aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                      </Field>
                     )}
                   />
-                  
-                  <Button
-                    type="submit"
-                    className="w-full h-11 text-base font-medium"
-                  >
-                    Continue
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </form>
-              </Form>
+                  <Controller
+                    control={step1Form.control}
+                    name="family_name"
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="signup-family-name">Last Name</FieldLabel>
+                        <Input
+                          id="signup-family-name"
+                          className="h-11"
+                          placeholder="Doe"
+                          autoComplete="family-name"
+                          aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                      </Field>
+                    )}
+                  />
+                </div>
+                
+                <Controller
+                  control={step1Form.control}
+                  name="email"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="signup-email">Email</FieldLabel>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <Input
+                          id="signup-email"
+                          type="email"
+                          className="pl-10 h-11"
+                          placeholder="john.doe@example.com"
+                          autoComplete="email"
+                          aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                      </div>
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
+                
+                <Button
+                  type="submit"
+                  className="w-full h-11 text-base font-medium"
+                >
+                  Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
@@ -467,105 +487,105 @@ export default function SignUpPage() {
                 </div>
               )}
 
-              <Form {...step2Form}>
-                <form onSubmit={step2Form.handleSubmit(onStep2Submit)} className="space-y-6">
-                  <FormField
-                    control={step2Form.control}
-                    name="username"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Username</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                            <Input
-                              className="pl-10 h-11"
-                              placeholder="johndoe"
-                              disabled={isLoading}
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+              <form onSubmit={step2Form.handleSubmit(onStep2Submit)} className="space-y-6" noValidate>
+                <Controller
+                  control={step2Form.control}
+                  name="username"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="signup-username">Username</FieldLabel>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                        <Input
+                          id="signup-username"
+                          className="pl-10 h-11"
+                          placeholder="johndoe"
+                          autoComplete="username"
+                          disabled={isLoading}
+                          aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                      </div>
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
+                
+                <Controller
+                  control={step2Form.control}
+                  name="password"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                      <div className="relative">
+                        <Input
+                          id="signup-password"
+                          type={showPassword ? 'text' : 'password'}
+                          className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                          placeholder="Enter a secure password"
+                          autoComplete="new-password"
+                          disabled={isLoading}
+                          aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3"
+                          onClick={() => setShowPassword(!showPassword)}
+                          disabled={isLoading}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="text-muted-foreground text-sm mt-2">
+                        Password must contain:
+                        <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
+                          <li>At least 8 characters</li>
+                          <li>1 uppercase & 1 lowercase letter</li>
+                          <li>1 number & 1 special character</li>
+                        </ul>
+                      </div>
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
+                
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 text-base font-medium"
+                    onClick={handleBackToStep1}
+                    disabled={isLoading}
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1 h-11 text-base font-medium"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating Account...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Create Account
+                      </>
                     )}
-                  />
-                  
-                  <FormField
-                    control={step2Form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">Password</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <Input
-                              type={showPassword ? 'text' : 'password'}
-                              className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                              placeholder="Enter a secure password"
-                              disabled={isLoading}
-                              {...field}
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="absolute right-0 top-0 h-full px-3"
-                              onClick={() => setShowPassword(!showPassword)}
-                              disabled={isLoading}
-                            >
-                              {showPassword ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </FormControl>
-                        <div className="text-muted-foreground text-sm mt-2">
-                          Password must contain:
-                          <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
-                            <li>At least 8 characters</li>
-                            <li>1 uppercase & 1 lowercase letter</li>
-                            <li>1 number & 1 special character</li>
-                          </ul>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 text-base font-medium"
-                      onClick={handleBackToStep1}
-                      disabled={isLoading}
-                    >
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Back
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1 h-11 text-base font-medium"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Creating Account...
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Create Account
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
+                  </Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
 

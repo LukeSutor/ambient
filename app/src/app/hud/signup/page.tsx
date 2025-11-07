@@ -97,12 +97,6 @@ export default function SignUp() {
     },
   });
 
-  useEffect(() => {
-    if (confirmationCode) {
-      console.log('Confirmation code state:', confirmationCode);
-    }
-  }, [confirmationCode]);
-
   // Redirect if already logged in
   useEffect(() => {
     if (isLoggedIn) {

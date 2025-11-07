@@ -76,7 +76,7 @@ export function useWindows() {
             if (pathname === '/hud/signin' || pathname === '/hud/signup') {
                 try {
                     await invoke('resize_hud', {
-                        width: dimensions.login_height,
+                        width: dimensions.login_width,
                         height: dimensions.login_height,
                     });
                 } catch (error) {
