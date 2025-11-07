@@ -29,7 +29,7 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
-  const { isLoggedIn, signIn } = useRoleAccess();
+  const { signIn } = useRoleAccess();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -38,13 +38,6 @@ export default function SignInPage() {
       password: "",
     },
   });
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isLoggedIn) {
-      router.push('/secondary');
-    }
-  }, [isLoggedIn, router]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setError(null);

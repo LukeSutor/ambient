@@ -94,14 +94,7 @@ export default function SignUpPage() {
   const router = useRouter();
 
   // Auth state
-  const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isLoggedIn) {
-      router.push('/secondary');
-    }
-  }, [isLoggedIn, router]);
+  const { signUp, signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
 
   const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
     setError(null);

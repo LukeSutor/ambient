@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useRoleAccess } from "@/lib/role-access";
 import { Toaster } from "@/components/ui/sonner";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,8 @@ export default function AuthLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Use role access
+  useRoleAccess('/secondary');
 
   const handleClose = async () => {
     await invoke("close_secondary_window");

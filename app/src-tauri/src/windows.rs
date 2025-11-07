@@ -126,9 +126,6 @@ pub async fn open_secondary_window(
     return Ok(());
   }
 
-  // Get current dimensions from user settings
-  let dimensions = get_current_hud_dimensions(&app_handle).await;
-
   // Create the window with user-configured dimensions
   let _window = tauri::WebviewWindowBuilder::new(
     &app_handle,

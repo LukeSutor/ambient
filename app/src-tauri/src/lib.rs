@@ -214,6 +214,7 @@ pub fn run() {
       auth::get_access_token,
       auth::google_sign_in,
       auth::google_sign_out,
+      auth::emit_auth_changed,
       tasks::commands::create_task,
       tasks::commands::create_task_from_template,
       tasks::commands::get_task,

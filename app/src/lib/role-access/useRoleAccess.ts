@@ -2,10 +2,12 @@
 
 import { useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useRouter } from 'next/navigation';
 import { useRoleAccessContext } from './RoleAccessProvider';
 import { SignInResult, CognitoUserInfo, SignUpRequest, ConfirmSignUpRequest, SignUpResult, AuthToken } from './types';
 import { set } from 'react-hook-form';
+import { emit } from 'process';
 
 async function googleSignOut(): Promise<void> {
   return invoke<void>('google_sign_out');
@@ -23,53 +25,96 @@ async function isSetupComplete(): Promise<boolean> {
   return invoke<boolean>('check_setup_complete');
 }
 
+async function emitAuthChanged(): Promise<void> {
+  return invoke<void>('emit_auth_changed');
+}
+
+// Get current user info
+async function getCurrentUserInfo(): Promise<CognitoUserInfo | null> {
+  return invoke<CognitoUserInfo | null>('get_current_user');
+}
+
 export function useRoleAccess(location?: string) {
   const { state, dispatch } = useRoleAccessContext();
   const router = useRouter();
 
   // ============================================================
-  // Effects
+  // Helpers
   // ============================================================
-  
-  // Set initial auth and setup status on mount
-  useEffect(() => {
-    if (!location) return;
-    console.log('location:', location);
-    (async () => {
-      try {
-        const loggedIn = await isAuthenticated();
-        setLoggedIn(loggedIn);
-        const setupComplete = await isSetupComplete();
-        setSetupComplete(setupComplete);
-      } catch (error) {
-        console.error('Error during initial auth/setup check:', error);
+
+  const fetchInitialInfo = useCallback(async () => {
+    try {
+      // Auth state
+      const loggedIn = await isAuthenticated();
+      dispatch({ type: 'SET_LOGGED_IN', payload: loggedIn });
+      // Setup state
+      const setupComplete = await isSetupComplete();
+      dispatch({ type: 'SET_SETUP_COMPLETE', payload: setupComplete });
+      // User info if logged in
+      if (loggedIn) {
+        const userInfo = await getCurrentUserInfo();
+        dispatch({ type: 'SET_USER_INFO', payload: userInfo });
       }
-    })();
+    } catch (error) {
+      console.error('Error fetching initial info:', error);
+    }
   }, []);
 
-  // Redirect based on location and login status
-  useEffect(() => {
-    if (!location) return;
+  // ============================================================
+  // Effects - only use when location is provided
+  // ============================================================
+  
+  if (location) {
+    useEffect(() => {
+      // Fetch initial auth and setup status
+      if (!location) return;
+      let unlistenRef: UnlistenFn | null = null;
+      (async () => {
+        await fetchInitialInfo();
 
-    if (state.isLoggedIn) {
-      // Redirect to location if logged in
-      router.push(location);
-    } else {
-      // Redirect to login if not logged in
-      router.push(location+'/signin');
-    }
-    
-    // Example effect: Log when user login status changes
-    console.log('User logged in status changed:', state.isLoggedIn);
-  }, [state.isLoggedIn]);
+        // Set up auth changed event listener
+        const unlisten: UnlistenFn = await listen('auth_changed', async () => {
+          try {
+            await fetchInitialInfo();
+          } catch (error) {
+            console.error('Error during auth/setup check on auth_changed event:', error);
+          }
+        });
+        unlistenRef = unlisten;
+      })();
 
-  // Redirect based on setup completion
-  useEffect(() => {
-    if (!location) return;
-
-    // Example effect: Log when setup completion status changes
-    console.log('User setup completion status changed:', state.isSetupComplete);
-  }, [state.isSetupComplete]);
+      return () => {
+        // Clean up event listener on unmount
+        if (unlistenRef) {
+          unlistenRef();
+        }
+      };
+    }, []);
+  
+    // Redirect based on location and login status
+    useEffect(() => {
+      if (!location) return;
+  
+      if (state.isLoggedIn) {
+        // Redirect to location if logged in
+        router.push(location);
+      } else {
+        // Redirect to login if not logged in
+        router.push(location+'/signin');
+      }
+      
+      // Example effect: Log when user login status changes
+      console.log('User logged in status changed:', state.isLoggedIn);
+    }, [state.isLoggedIn]);
+  
+    // Redirect based on setup completion
+    useEffect(() => {
+      if (!location) return;
+  
+      // Example effect: Log when setup completion status changes
+      console.log('User setup completion status changed:', state.isSetupComplete);
+    }, [state.isSetupComplete]);
+  }
 
   // ============================================================
   // Auth Actions
@@ -82,7 +127,9 @@ export function useRoleAccess(location?: string) {
       username,
       password,
       });
-      setLoggedIn(true);
+      dispatch({ type: 'SET_LOGGED_IN', payload: true });
+      dispatch({ type: 'SET_USER_INFO', payload: result.user_info });
+      await emitAuthChanged();
       return result;
     } catch (error) {
       console.error('Error during signIn:', error);
@@ -94,7 +141,8 @@ export function useRoleAccess(location?: string) {
   const googleSignIn = useCallback(async (): Promise<SignInResult> => {
     try {
       const result = await invoke<SignInResult>('google_sign_in');
-      setLoggedIn(true);
+      dispatch({ type: 'SET_LOGGED_IN', payload: true });
+      await emitAuthChanged();
       return result;
     } catch (error) {
       console.error('Error during googleSignIn:', error);
@@ -150,20 +198,11 @@ export function useRoleAccess(location?: string) {
       // Perform google sign out then cognito logout
       await googleSignOut();
       await logout();
-      setLoggedIn(false);
+      dispatch({ type: 'SET_LOGGED_IN', payload: false });
+      await emitAuthChanged();
       console.log('User signed out successfully');
     } catch (error) {
       console.error('Error during signOut:', error);
-      throw error;
-    }
-  }, []);
-
-  // Get current user info
-  const getCurrentUserInfo = useCallback(async (): Promise<CognitoUserInfo | null> => {
-    try {
-      return await invoke<CognitoUserInfo | null>('get_current_user_info');
-    } catch (error) {
-      console.error('Error during getCurrentUserInfo:', error);
       throw error;
     }
   }, []);
@@ -188,17 +227,6 @@ export function useRoleAccess(location?: string) {
     }
   }, []);
 
-  // ============================================================
-  // Setup actions
-  // ============================================================
-
-  // ============================================================
-  // Modifiers
-  // ============================================================
-  const setLoggedIn = (value: boolean) => dispatch({ type: 'SET_LOGGED_IN', payload: value });
-  const setSetupComplete = (value: boolean) => dispatch({ type: 'SET_SETUP_COMPLETE', payload: value });
-  const setPremiumUser = (value: boolean) => dispatch({ type: 'SET_PREMIUM_USER', payload: value });
-
   return {
     ...state,
     signIn,
@@ -207,11 +235,7 @@ export function useRoleAccess(location?: string) {
     confirmSignUp,
     resendConfirmationCode,
     signOut,
-    getCurrentUserInfo,
     getAuthMethod,
     isSetupComplete,
-    setLoggedIn,
-    setSetupComplete,
-    setPremiumUser,
   };
 }
