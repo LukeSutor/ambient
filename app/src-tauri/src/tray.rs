@@ -56,7 +56,8 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
           "settings" => {
             log::info!("[tray] Opening secondary window");
             if let Err(e) = tauri::async_runtime::block_on(windows::open_secondary_window(
-              app_handle.clone()
+              app_handle.clone(),
+              None,
             )) {
               log::error!("[tray] Failed to open main window: {}", e);
             }

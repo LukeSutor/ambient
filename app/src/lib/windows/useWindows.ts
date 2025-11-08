@@ -78,7 +78,7 @@ export function useWindows(handleResizeOnMount: boolean = false) {
 
     const openSettings = useCallback(async (destination?: string) => {
         try {
-            await invoke('open_secondary_window');
+            await invoke('open_secondary_window', { destination: destination || null });
         } catch (error) {
             console.error('Failed to open secondary window:', error);
         }

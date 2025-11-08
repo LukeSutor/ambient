@@ -100,7 +100,7 @@ export function HUDInputBar({
       onMouseLeave={onMouseLeave}
       ref={inputRef}
       style={{
-        height: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
+        minHeight: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
         width: hudDimensions ? `${hudDimensions.chat_width}px` : '500px',
         opacity: hudDimensions ? 1 : 0,
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'

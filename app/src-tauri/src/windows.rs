@@ -116,10 +116,23 @@ pub async fn close_main_window(
 #[tauri::command]
 pub async fn open_secondary_window(
   app_handle: AppHandle,
+  destination: Option<String>,
 ) -> Result<(), String> {
   let window_label = "secondary".to_string();
 
+  // Build the URL path based on destination parameter
+  let path = if let Some(dest) = &destination {
+    format!("/secondary/{}", dest)
+  } else {
+    "/secondary".to_string()
+  };
+
   if let Some(win) = app_handle.get_webview_window(&window_label) {
+    // Navigate to the destination if provided
+    if destination.is_some() {
+      win.eval(&format!("window.location.href = '{}'", path))
+        .map_err(|e| e.to_string())?;
+    }
     // Focus and show existing window
     win.show().map_err(|e| e.to_string())?;
     win.set_focus().map_err(|e| e.to_string())?;
@@ -130,7 +143,7 @@ pub async fn open_secondary_window(
   let _window = tauri::WebviewWindowBuilder::new(
     &app_handle,
     window_label,
-    tauri::WebviewUrl::App("/secondary".into()),
+    tauri::WebviewUrl::App(path.into()),
   )
   .title("Settings")
   .inner_size(800 as f64, 800 as f64)
