@@ -12,7 +12,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GoogleLoginButton } from '@/components/google-login-button';
 import { useRoleAccess } from '@/lib/role-access';
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import AutoResizeContainer from '@/components/hud/auto-resize-container';
+import { HudDimensions } from '@/types/settings';
+import { useSettings } from '@/lib/settings/useSettings';
 
 const formSchema = z.object({
   username: z.string().min(1, {
@@ -32,20 +35,20 @@ export default function Login() {
   // Windows state
   const { 
     closeHUD
-  } = useWindows(true);
+  } = useWindows();
 
   // Auth state
-  const {
-    isLoggedIn,
-    signIn
-  } = useRoleAccess();
+  const { signIn } = useRoleAccess();
 
-  // Redirect if already logged in
+  // Settings state
+  const { settings, getHudDimensions } = useSettings();
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
   useEffect(() => {
-    if (isLoggedIn) {
-      router.push('/hud');
-    }
-  }, [isLoggedIn, router]);
+    (async () => {
+      const dimensions = await getHudDimensions();
+      setHudDimensions(dimensions);
+    })();
+  }, [settings]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -78,7 +81,7 @@ export default function Login() {
   };
 
   return (
-    <div className="h-full w-full">
+    <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
       {/* Sign In Form */}
       <Card className="relative w-full pt-12">
         {/* Drag area and close button */}
@@ -193,6 +196,6 @@ export default function Login() {
           </p>
         </CardFooter>
       </Card>
-    </div>
+    </AutoResizeContainer>
   );
 }

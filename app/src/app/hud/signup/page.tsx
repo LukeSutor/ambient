@@ -15,6 +15,9 @@ import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { useRouter } from 'next/navigation';
+import AutoResizeContainer from '@/components/hud/auto-resize-container';
+import { HudDimensions } from '@/types/settings';
+import { useSettings } from '@/lib/settings/useSettings';
 
 // Step 1: Personal Info (name and email)
 const step1Schema = z.object({
@@ -69,7 +72,7 @@ export default function SignUp() {
   // Windows state
   const { 
     closeHUD
-  } = useWindows(true);
+  } = useWindows();
 
   // Auth state
   const {
@@ -79,6 +82,16 @@ export default function SignUp() {
     confirmSignUp,
     resendConfirmationCode,
   } = useRoleAccess();
+
+  // Settings state
+  const { settings, getHudDimensions } = useSettings();
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  useEffect(() => {
+    (async () => {
+      const dimensions = await getHudDimensions();
+      setHudDimensions(dimensions);
+    })();
+  }, [settings]);
 
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
@@ -222,7 +235,7 @@ export default function SignUp() {
 
   if (formStep === 'success') {
     return (
-      <div className="relative h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-hidden">
           {/* Drag area and close button */}
           <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
@@ -246,13 +259,13 @@ export default function SignUp() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 
   if (formStep === 'verify') {
     return (
-      <div className="relative h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-hidden">
           {/* Drag area and close button */}
           <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
@@ -353,14 +366,14 @@ export default function SignUp() {
             </form>
           </CardContent>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 
   // Step 1: Personal Information
   if (formStep === 'step1') {
     return (
-      <div className="h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-auto">
           {/* Drag area and close button */}
           <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
@@ -485,14 +498,14 @@ export default function SignUp() {
             </p>
           </CardFooter>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 
   // Step 2: Account Information
   if (formStep === 'step2') {
     return (
-      <div className="relative h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-auto">
           {/* Drag area and close button */}
           <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
@@ -629,7 +642,7 @@ export default function SignUp() {
             </p>
           </CardFooter>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 

@@ -31,7 +31,7 @@ export function DynamicChatContent({
   const {
     isChatExpanded,
     isChatHistoryExpanded,
-  } = useWindows(true);
+  } = useWindows();
 
   const dynamicConversationsClass = useCallback(() => {
     if (!isChatHistoryExpanded) {

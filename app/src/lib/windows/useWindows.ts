@@ -1,45 +1,11 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useWindowsContext } from './WindowsProvider';
-import { useSettings } from '../settings/useSettings';
-import { usePathname } from 'next/navigation';
 
-export function useWindows(handleResizeOnMount: boolean = false) {
+export function useWindows() {
     const { state, dispatch } = useWindowsContext();
-    const { getHudDimensions } = useSettings();
-    const pathname = usePathname();
-
-    // ============================================================
-    // Effects
-    // ============================================================
-    useEffect(() => {
-        if (!handleResizeOnMount) return;
-        // Set initial window size based on route
-        (async () => {
-            const dimensions = await getHudDimensions();
-            if (pathname === '/hud/signin' || pathname === '/hud/signup' || pathname === '/hud/setup') {
-                try {
-                    await invoke('resize_hud', {
-                        width: dimensions.login_width,
-                        height: dimensions.login_height,
-                    });
-                } catch (error) {
-                    console.error('[useWindows] Failed to resize for login/signup:', error);
-                }
-            } else {
-                try {
-                    await invoke('resize_hud', {
-                        width: dimensions.chat_width,
-                        height: dimensions.input_bar_height,
-                    });
-                } catch (error) {
-                    console.error('[useWindows] Failed to resize for main HUD:', error);
-                }
-            }
-        })();
-    }, [pathname]);
 
     // ============================================================
     // Operations
@@ -76,7 +42,7 @@ export function useWindows(handleResizeOnMount: boolean = false) {
         }
     }, [dispatch]);
 
-    const openSettings = useCallback(async (destination?: string) => {
+    const openSecondary = useCallback(async (destination?: string) => {
         try {
             await invoke('open_secondary_window', { destination: destination || null });
         } catch (error) {
@@ -94,6 +60,6 @@ export function useWindows(handleResizeOnMount: boolean = false) {
         setChatExpanded,
         toggleChatHistory,
         closeHUD,
-        openSettings,
+        openSecondary,
     };
 }

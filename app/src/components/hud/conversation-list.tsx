@@ -59,7 +59,7 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
   const {
     setChatExpanded,
     toggleChatHistory,
-  } = useWindows(true);
+  } = useWindows();
 
   // Set editing conversation ID to null when escape key is pressed
   useEffect(() => {

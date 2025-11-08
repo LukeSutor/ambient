@@ -46,7 +46,7 @@ export function AutoResizeContainer({
 
       // Get the correct width
       let width = hudDimensions.chat_width;
-      if (widthType === "login") {
+      if (widthType === 'login') {
         width = hudDimensions.login_width;
       }
 

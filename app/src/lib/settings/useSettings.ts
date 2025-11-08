@@ -40,16 +40,17 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
 
 /**
  * Main settings hook - provides all settings functionality
- * 
+ * @param isRoot Whether this hook is used in the root context and should setup event listeners
  * @returns Settings state and operations
  */
-export function useSettings() {
+export function useSettings(isRoot: boolean = false) {
   const { state, dispatch } = useSettingsContext();
 
   // ============================================================
   // Event Listener Setup
   // ============================================================
   useEffect(() => {
+    if (!isRoot) return;
     let isMounted = true;
 
     const setupEvents = async () => {
@@ -100,6 +101,7 @@ export function useSettings() {
   // ============================================================
 
   useEffect(() => {
+    if (!isRoot) return;
     // Check shared initialization ref to prevent multiple initializations
     if (state.initializationRef.current || state.settings) {
       return;

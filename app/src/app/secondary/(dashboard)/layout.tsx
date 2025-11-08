@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
+import { useSettings } from "@/lib/settings";
 
 export default function DashboardLayout({
   children,
@@ -20,6 +21,8 @@ export default function DashboardLayout({
 }>) {
   // Use role access
   useRoleAccess('/secondary');
+  // Use root settings
+  useSettings(true);
 
   const handleClose = async () => {
     await invoke("close_secondary_window");

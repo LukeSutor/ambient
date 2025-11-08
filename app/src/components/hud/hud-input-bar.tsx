@@ -69,8 +69,8 @@ export function HUDInputBar({
   const {
     toggleChatHistory,
     closeHUD,
-    openSettings,
-  } = useWindows(true);
+    openSecondary,
+  } = useWindows();
 
   // Animate input bar appearing
   useGSAP(() => {
@@ -151,9 +151,9 @@ export function HUDInputBar({
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => { openSettings(); }}>
+                <DropdownMenuItem onClick={() => { openSecondary(); }}>
                   <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Settings</span>
+                  <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>

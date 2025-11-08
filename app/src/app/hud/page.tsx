@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HudDimensions } from '@/types/settings';
 import { useSettings } from '@/lib/settings';
 import HUDInputBar from '@/components/hud/hud-input-bar';
@@ -45,14 +45,9 @@ export default function HudPage() {
 
   // Window Manager
   const {
-    isChatExpanded,
-    isChatHistoryExpanded,
     setChatMinimized,
     setChatExpanded,
-    toggleChatHistory,
-    closeHUD,
-    openSettings,
-  } = useWindows(true);
+  } = useWindows();
 
   // Load HUD dimensions only once on mount or when settings change
   useEffect(() => {

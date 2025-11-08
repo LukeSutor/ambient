@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useRouter } from 'next/navigation';
@@ -18,6 +18,9 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Loader2, X } from "lucide-react";
 import { useWindows } from "@/lib/windows/useWindows";
+import AutoResizeContainer from "@/components/hud/auto-resize-container";
+import { HudDimensions } from "@/types/settings";
+import { useSettings } from "@/lib/settings/useSettings";
 
 // Define the structure of the event payloads based on Rust code
 interface DownloadStartedPayload {
@@ -61,8 +64,20 @@ export default function SetupPage() {
   const [vlmTotalSize, setVlmTotalSize] = useState(0);
   const [vlmCurrentProgress, setVlmCurrentProgress] = useState(0);
 
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+
   // Windows state
-  const { closeHUD } = useWindows(true);
+  const { closeHUD } = useWindows();
+
+  // Settings state
+  const { getHudDimensions } = useSettings();
+
+  useEffect(() => {
+    (async () => {
+      const dimensions = await getHudDimensions();
+      setHudDimensions(dimensions);
+    })();
+  }, [getHudDimensions]);
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {
@@ -131,7 +146,7 @@ export default function SetupPage() {
   const progressPercent = vlmTotalSize > 0 ? (vlmCurrentProgress / vlmTotalSize) * 100 : 0;
 
   return (
-    <div className="h-full w-full">
+    <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
       <Toaster richColors position="top-center" />
       
       {/* Setup Card */}
@@ -195,6 +210,6 @@ export default function SetupPage() {
            )}
         </CardFooter>
       </Card>
-    </div>
+    </AutoResizeContainer>
   );
 }
