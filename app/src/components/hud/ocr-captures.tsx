@@ -19,10 +19,10 @@ export function OcrCaptures({ captures, onRemove }: OcrCapturesProps) {
           className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0"
           title={capture.text.length > 15 ? capture.text.slice(0, 15) + '...' : capture.text}
         >
-          <SquareDashed className="!h-5 !w-5" />
+          <SquareDashed className="!h-4 !w-4" />
           <Button
             variant="ghost"
-            className="!h-5 !w-5 text-black shrink-0 hover:bg-transparent"
+            className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent"
             size="icon"
             onClick={() => onRemove(index)}
           >

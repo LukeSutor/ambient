@@ -7,6 +7,7 @@ import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useConversation } from '@/lib/conversations';
 import { useWindows } from '@/lib/windows/useWindows';
 import { DynamicChatContent } from '@/components/hud/dynamic-chat-content';
+import { AutoResizeContainer } from '@/components/hud/auto-resize-container';
 
 export default function HudPage() {
   // UI State
@@ -17,7 +18,6 @@ export default function HudPage() {
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Conversation Manager
   const {
@@ -82,7 +82,7 @@ export default function HudPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [settings]); // Only depend on settings, not the function
+  }, [settings]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -112,8 +112,10 @@ export default function HudPage() {
     };
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) {
+      e.preventDefault();
+    }
 
     const query = input.trim();
 
@@ -131,12 +133,12 @@ export default function HudPage() {
     } catch (error) {
       console.error('Error in handleSubmit:', error);
     }
-  }
+  };
 
   async function clearAndCollapse() {
     clear(250);
     await minimizeChat(300);
-  }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -154,12 +156,12 @@ export default function HudPage() {
       await clearAndCollapse();
       await resetConversation();
     }
-  }
+  };
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-500">
+    <AutoResizeContainer hudDimensions={hudDimensions} className="bg-blue-500">
       {/* Glass Container */}
-      <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
+      <div className="relative flex flex-col justify-start">
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Dynamic Chat Content Area */}
           <div ref={dynamicChatContentCallback}>
@@ -184,6 +186,7 @@ export default function HudPage() {
             hudDimensions={hudDimensions}
             inputValue={input}
             setInputValue={setInput}
+            handleSubmit={handleSubmit}
             onKeyDown={handleKeyDown}
             dispatchOCRCapture={dispatchOCRCapture}
             deleteOCRResult={deleteOCRResult}
@@ -206,6 +209,6 @@ export default function HudPage() {
           />
         </div>
       </div>
-    </div>
+    </AutoResizeContainer>
   );
 }

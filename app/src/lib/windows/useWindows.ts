@@ -17,59 +17,6 @@ export function useWindows() {
     // Effects
     // ============================================================
     useEffect(() => {
-        // Resize the window based on the height of the dynamic content
-        if (!state.dynamicChatContentRef.current) {
-            return;
-        }
-
-        const container = state.dynamicChatContentRef.current;
-
-        // Check if observer already exists and is observing
-        if (state.resizeObserverRef.current) {
-            return;
-        }
-
-        const handleResize = async () => {
-            if (!container) return;
-
-            const dimensions = await getHudDimensions();
-            const newHeight = await getWindowHeight();
-
-            // Skip if height hasn't changed
-            if (newHeight === lastHeightRef.current) return;
-
-            lastHeightRef.current = newHeight;
-
-            try {
-                await invoke('resize_hud', {
-                    width: dimensions.chat_width,
-                    height: newHeight
-                });
-            } catch (error) {
-                console.error('[useWindows] Failed to resize during tracking:', error);
-            }
-        };
-
-        // Set up ResizeObserver for real-time content height changes
-        const resizeObserver = new ResizeObserver(() => {
-            handleResize();
-        });
-
-        state.resizeObserverRef.current = resizeObserver;
-        resizeObserver.observe(container);
-
-        // Cleanup function
-        return () => {
-            console.log('[useWindows] Cleaning up ResizeObserver');
-            if (state.resizeObserverRef.current) {
-                state.resizeObserverRef.current.disconnect();
-                state.resizeObserverRef.current = null;
-            }
-            dispatch({ type: 'SET_MINIMIZED_CHAT' });
-        };
-    }, [state.dynamicChatContentRef, state.resizeObserverRef]);
-
-    useEffect(() => {
         // Set window size based on route
         (async () => {
             const dimensions = await getHudDimensions();

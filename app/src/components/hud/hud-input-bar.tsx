@@ -2,21 +2,39 @@
 
 import React, { useEffect, useCallback, useRef, RefObject } from 'react';
 import Image from 'next/image';
+import TextareaAutosize from "react-textarea-autosize";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupText,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History } from 'lucide-react';
+import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import Link from 'next/link';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
   inputValue: string;
   setInputValue: (v: string) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  handleSubmit: () => Promise<void>;
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   dispatchOCRCapture: () => void;
   deleteOCRResult: (index: number) => void;
   onNewChat: () => void;
@@ -43,6 +61,7 @@ export function HUDInputBar({
   hudDimensions,
   inputValue,
   setInputValue,
+  handleSubmit,
   onKeyDown,
   dispatchOCRCapture,
   deleteOCRResult,
@@ -134,79 +153,85 @@ export function HUDInputBar({
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}
     >
-      <div
-        className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
-      >
-        <button onClick={() => openSettings()} title="Open Main Window" className="shrink-0">
-          <Image
-            src={logo}
-            width={32}
-            height={32}
-            alt="Logo"
-            className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
-            draggable={false}
-            onDragStart={(e) => e.preventDefault()}
-          />
-        </button>
-
-        <div className="flex-1 min-w-32">
-          <Input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Ask anything"
-            className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0 w-full"
-            autoComplete="off"
-            autoFocus
-          />
-        </div>
-
-        <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
-
-        {/* Additional features expandable area */}
-        <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${isFeaturesExpanded ? 'bg-white/40' : ''} shrink-0`}>
-          <div className={`absolute top-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-1 transition-all duration-100 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`} ref={featuresDropdownRef}>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { dispatchOCRCapture(); setFeaturesMinimized(); }}
-              title="Capture Area"
+      <InputGroup className="bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20">
+        <TextareaAutosize
+          data-slot="input-group-control"
+          maxRows={4}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={onKeyDown}
+          className="flex field-sizing-content min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
+          placeholder="Ask anything"
+          autoComplete="off"
+          autoFocus
+        />
+        <InputGroupAddon align="block-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <InputGroupButton
+                variant="outline"
+                className="rounded-full bg-white/60 hover:bg-white/80"
+                size="icon-xs"
+                disabled={ocrLoading || isStreaming}
+              >
+                <Plus />
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="top"
+              align="start"
             >
-              <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
-              <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onNewChat(); setFeaturesMinimized(); }}
-              title="New Chat"
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => { dispatchOCRCapture(); setFeaturesMinimized(); }}>
+                  <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { onNewChat(); setFeaturesMinimized(); }}>
+                  <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">New Chat</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { toggleChatHistory(); setFeaturesMinimized(); }}>
+                  <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => { openSettings(); setFeaturesMinimized(); }}>
+                  <InputGroupText className="!w-4 !h-4 text-black shrink-0 mr-2">⚙️</InputGroupText>
+                  <span className="text-black text-sm whitespace-nowrap">Settings</span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <InputGroupButton variant="ghost">Auto</InputGroupButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                className="[--radius:0.95rem]"
+              >
+                <DropdownMenuItem>Local</DropdownMenuItem>
+                <DropdownMenuItem>GPT-OSS</DropdownMenuItem>
+                <DropdownMenuItem>GPT-5</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
+            <InputGroupButton
+              variant="default"
+              className="rounded-full ml-auto bg-black/80 hover:bg-black"
+              size="icon-xs"
+              type="submit"
+              onClick={handleSubmit}
+              disabled={ocrLoading || isStreaming}
             >
-              <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
-              <span className="text-black text-sm whitespace-nowrap">New Chat</span>
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { toggleChatHistory(); setFeaturesMinimized(); }}
-              title="Previous Chats"
-            >
-              <History className="!w-4 !h-4 text-black shrink-0" />
-              <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
-            </Button>
-          </div>
-          <Button
-            variant="ghost"
-            className="w-8 h-8 rounded-full"
-            size="icon"
-            disabled={ocrLoading || isStreaming}
-            ref={featuresButtonRef}
-            onClick={() => toggleFeatures()}
-          >
-            {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${isFeaturesExpanded ? 'rotate-45' : 'rotate-0'}`} />}
-          </Button>
-        </div>
-      </div>
+              <ArrowUpIcon />
+              <span className="sr-only">Send</span>
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
 
       {/* Close icon */}
       <button

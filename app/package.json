@@ -44,6 +44,7 @@
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.59.0",
     "react-markdown": "^10.1.0",
+    "react-textarea-autosize": "^8.5.9",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
