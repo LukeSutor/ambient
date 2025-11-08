@@ -22,6 +22,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { useWindows } from '@/lib/windows/useWindows';
 
 const SKELETON_COUNT = 3;
 
@@ -32,14 +33,12 @@ const conversationNameSchema = z.object({
 interface ConversationListProps {
   conversations: Conversation[];
   hasMoreConversations: boolean;
-  setChatExpanded: (expanded: boolean) => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   renameConversation: (conversationId: string, newName: string) => Promise<void>;
-  toggleChatHistory: (nextState?: boolean) => Promise<void>;
 }
 
-export function ConversationList({ conversations, hasMoreConversations, setChatExpanded, loadConversation, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
+export function ConversationList({ conversations, hasMoreConversations, loadConversation, loadMoreConversations, renameConversation }: ConversationListProps) {
   // State
   const [loadingMore, setLoadingMore] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
@@ -55,6 +54,12 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
   // Refs
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
+
+  // Window Manager
+  const {
+    setChatExpanded,
+    toggleChatHistory,
+  } = useWindows(true);
 
   // Set editing conversation ID to null when escape key is pressed
   useEffect(() => {
@@ -100,7 +105,7 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
 
   const handleLoadConversation = (id: string) => async () => {
     await loadConversation(id);
-    setChatExpanded(true);
+    setChatExpanded();
   };
 
   const handleUpdateConversationName = async (values: z.infer<typeof conversationNameSchema>) => {

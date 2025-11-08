@@ -62,7 +62,7 @@ export default function SetupPage() {
   const [vlmCurrentProgress, setVlmCurrentProgress] = useState(0);
 
   // Windows state
-  const { closeHUD } = useWindows();
+  const { closeHUD } = useWindows(true);
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {

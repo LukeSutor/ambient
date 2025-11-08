@@ -6,7 +6,7 @@ import { useWindowsContext } from './WindowsProvider';
 import { useSettings } from '../settings/useSettings';
 import { usePathname } from 'next/navigation';
 
-export function useWindows() {
+export function useWindows(handleResizeOnMount: boolean = false) {
     const { state, dispatch } = useWindowsContext();
     const { getHudDimensions } = useSettings();
     const pathname = usePathname();
@@ -15,6 +15,7 @@ export function useWindows() {
     // Effects
     // ============================================================
     useEffect(() => {
+        if (!handleResizeOnMount) return;
         // Set initial window size based on route
         (async () => {
             const dimensions = await getHudDimensions();

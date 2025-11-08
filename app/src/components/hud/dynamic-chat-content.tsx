@@ -4,36 +4,34 @@ import { MessageList } from '@/components/hud/message-list';
 import { ConversationList } from '@/components/hud/conversation-list';
 import { ChatMessage } from '@/lib/conversations/types';
 import { Conversation } from '@/types/conversations';
+import { useWindows } from '@/lib/windows/useWindows';
 
 interface DynamicChatContentProps {
     hudDimensions: HudDimensions | null;
-    isChatExpanded: boolean;
-    isChatHistoryExpanded: boolean;
     messages: ChatMessage[];
     messagesEndRef: React.RefObject<HTMLDivElement | null>;
     conversations: Conversation[];
     hasMoreConversations: boolean;
-    setChatExpanded: (expanded: boolean) => Promise<void>;
     loadConversation: (id: string) => Promise<void>;
     loadMoreConversations: () => Promise<void>;
     renameConversation: (conversationId: string, newName: string) => Promise<void>;
-    toggleChatHistory: (nextState?: boolean) => Promise<void>;
 };
 
 export function DynamicChatContent({ 
   hudDimensions, 
-  isChatExpanded, 
-  isChatHistoryExpanded,
   messages,
   messagesEndRef,
   conversations,
   hasMoreConversations,
-  setChatExpanded,
   loadConversation,
   loadMoreConversations,
   renameConversation,
-  toggleChatHistory,
 }: DynamicChatContentProps) {
+  // Window Manager
+  const {
+    isChatExpanded,
+    isChatHistoryExpanded,
+  } = useWindows(true);
 
   const dynamicConversationsClass = useCallback(() => {
     if (!isChatHistoryExpanded) {
@@ -65,11 +63,9 @@ export function DynamicChatContent({
           <ConversationList 
             conversations={conversations}
             hasMoreConversations={hasMoreConversations}
-            setChatExpanded={setChatExpanded}
             loadConversation={loadConversation}
             loadMoreConversations={loadMoreConversations}
             renameConversation={renameConversation}
-            toggleChatHistory={toggleChatHistory}
           />
         </div>
 

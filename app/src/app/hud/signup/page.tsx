@@ -69,7 +69,7 @@ export default function SignUp() {
   // Windows state
   const { 
     closeHUD
-  } = useWindows();
+  } = useWindows(true);
 
   // Auth state
   const {

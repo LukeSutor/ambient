@@ -32,7 +32,7 @@ export default function Login() {
   // Windows state
   const { 
     closeHUD
-  } = useWindows();
+  } = useWindows(true);
 
   // Auth state
   const {

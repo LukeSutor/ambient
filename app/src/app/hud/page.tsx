@@ -52,7 +52,7 @@ export default function HudPage() {
     toggleChatHistory,
     closeHUD,
     openSettings,
-  } = useWindows();
+  } = useWindows(true);
 
   // Load HUD dimensions only once on mount or when settings change
   useEffect(() => {
@@ -151,27 +151,20 @@ export default function HudPage() {
   return (
     <AutoResizeContainer hudDimensions={hudDimensions} className="bg-blue-500">
       {/* Glass Container */}
-      <div className="relative flex flex-col justify-start">
-        <div className="relative flex flex-col min-h-0 h-min">
+        <div className="flex flex-col">
           {/* Dynamic Chat Content Area */}
-          <div>
-            <DynamicChatContent 
-              hudDimensions={hudDimensions}
-              isChatExpanded={isChatExpanded}
-              isChatHistoryExpanded={isChatHistoryExpanded}
-              messages={messages}
-              messagesEndRef={messagesEndRef}
-              conversations={conversations}
-              hasMoreConversations={hasMoreConversations}
-              setChatExpanded={async (expanded: boolean) => { await setChatExpanded(); }}
-              loadConversation={loadConversation}
-              loadMoreConversations={loadMoreConversations}
-              renameConversation={renameConversation}
-              toggleChatHistory={toggleChatHistory}
-            />
-          </div>
+          <DynamicChatContent 
+            hudDimensions={hudDimensions}
+            messages={messages}
+            messagesEndRef={messagesEndRef}
+            conversations={conversations}
+            hasMoreConversations={hasMoreConversations}
+            loadConversation={loadConversation}
+            loadMoreConversations={loadMoreConversations}
+            renameConversation={renameConversation}
+          />
 
-          {/* Input Container - fixed height at bottom */}
+          {/* Input Container */}
           <HUDInputBar
             hudDimensions={hudDimensions}
             inputValue={input}
@@ -189,12 +182,8 @@ export default function HudPage() {
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
             isStreaming={isStreaming}
-            toggleChatHistory={toggleChatHistory}
-            closeHUD={closeHUD}
-            openSettings={openSettings}
           />
         </div>
-      </div>
     </AutoResizeContainer>
   );
 }

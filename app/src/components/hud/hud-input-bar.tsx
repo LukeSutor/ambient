@@ -1,15 +1,11 @@
 'use client';
 
-import React, { useEffect, useCallback, useRef, RefObject } from 'react';
-import Image from 'next/image';
+import React, { useRef } from 'react';
 import TextareaAutosize from "react-textarea-autosize";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupInput,
-  InputGroupText,
-  InputGroupTextarea,
 } from "@/components/ui/input-group";
 import {
   DropdownMenu,
@@ -19,15 +15,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from '@/components/ui/separator';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2 } from 'lucide-react';
+import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2 } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { useWindows } from '@/lib/windows/useWindows';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
@@ -46,12 +40,7 @@ interface HUDInputBarProps {
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
   isStreaming: boolean;
-  toggleChatHistory: (nextState?: boolean) => Promise<void>;
-  closeHUD: () => Promise<void>;
-  openSettings: (destination?: string) => Promise<void>;
 }
-
-const logo = '/logo.png';
 
 export function HUDInputBar({
   hudDimensions,
@@ -70,14 +59,18 @@ export function HUDInputBar({
   ocrLoading,
   ocrResults,
   isStreaming,
-  toggleChatHistory,
-  closeHUD,
-  openSettings,
 }: HUDInputBarProps) {
   // Ref for load animation
   const inputRef = useRef<HTMLDivElement | null>(null);
   // Dimensions ref to check for changes
   const dimensionsRef = useRef<HudDimensions | null>(null);
+
+  // Window Manager
+  const {
+    toggleChatHistory,
+    closeHUD,
+    openSettings,
+  } = useWindows(true);
 
   // Animate input bar appearing
   useGSAP(() => {
@@ -101,7 +94,7 @@ export function HUDInputBar({
 
   return (
     <div
-      className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
+      className='flex flex-col justify-center items-center relative p-2'
       id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
