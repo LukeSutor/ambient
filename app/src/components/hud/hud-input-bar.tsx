@@ -106,10 +106,11 @@ export function HUDInputBar({
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}
     >
-      <InputGroup className="bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20">
+      <InputGroup className="bg-white/60 border border-black/20 transition-all">
         <TextareaAutosize
           data-slot="input-group-control"
           maxRows={4}
+          minRows={2}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={onKeyDown}
@@ -159,7 +160,7 @@ export function HUDInputBar({
           </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <InputGroupButton variant="ghost">Auto</InputGroupButton>
+                <InputGroupButton variant="ghost">Local</InputGroupButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 side="top"

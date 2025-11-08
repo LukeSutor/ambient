@@ -13,31 +13,25 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
   switch (option) {
     case "Small":
       return {
-        default_width: 400,
-        default_height: 50,
         chat_width: 400,
-        input_bar_height: 100,
+        input_bar_height: 130,
         chat_max_height: 250,
         login_width: 450,
         login_height: 600,
       };
     case "Large":
       return {
-        default_width: 600,
-        default_height: 70,
-        chat_width: 600,
-        input_bar_height: 120,
-        chat_max_height: 450,
+        chat_width: 700,
+        input_bar_height: 130,
+        chat_max_height: 600,
         login_width: 450,
         login_height: 600,
       };
     default: // Normal
       return {
-        default_width: 500,
-        default_height: 60,
-        chat_width: 500,
-        input_bar_height: 120,
-        chat_max_height: 350,
+        chat_width: 600,
+        input_bar_height: 130,
+        chat_max_height: 450,
         login_width: 450,
         login_height: 600,
       };
@@ -55,7 +49,6 @@ export function useSettings() {
   // ============================================================
   // Event Listener Setup
   // ============================================================
-
   useEffect(() => {
     let isMounted = true;
 

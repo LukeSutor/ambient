@@ -7,6 +7,7 @@ import { HudDimensions } from '@/types/settings';
 interface AutoResizeContainerProps {
   children: ReactNode;
   hudDimensions: HudDimensions | null;
+  widthType: string;
   className?: string;
 }
 
@@ -17,6 +18,7 @@ interface AutoResizeContainerProps {
 export function AutoResizeContainer({ 
   children, 
   hudDimensions,
+  widthType,
   className = '' 
 }: AutoResizeContainerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -32,23 +34,26 @@ export function AutoResizeContainer({
     const resizeWindow = async () => {
       if (!container || !hudDimensions) return;
 
-      // Get the bounding rectangle for accurate sizing (Svelte approach)
+      // Get container height
       const rect = container.getBoundingClientRect();
-      
-      // Calculate the actual height in CSS pixels
       const contentHeight = Math.ceil(rect.height);
       
-      // Skip if height hasn't changed (avoid unnecessary backend calls)
+      // Skip if height hasn't changed
       if (contentHeight === lastHeightRef.current) {
         return;
       }
-      
       lastHeightRef.current = contentHeight;
+
+      // Get the correct width
+      let width = hudDimensions.chat_width;
+      if (widthType === "login") {
+        width = hudDimensions.login_width;
+      }
 
       try {
         // Call backend to resize the window
         await invoke('resize_hud', {
-          width: hudDimensions.chat_width,
+          width: width,
           height: contentHeight
         });
       } catch (error) {

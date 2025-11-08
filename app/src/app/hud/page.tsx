@@ -149,7 +149,7 @@ export default function HudPage() {
   };
 
   return (
-    <AutoResizeContainer hudDimensions={hudDimensions} className="bg-blue-500">
+    <AutoResizeContainer hudDimensions={hudDimensions} widthType="chat" className="bg-blue-500">
       {/* Glass Container */}
         <div className="flex flex-col">
           {/* Dynamic Chat Content Area */}

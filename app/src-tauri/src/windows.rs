@@ -9,12 +9,10 @@ async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
     Err(_) => {
       // Default fallback dimensions
       HudDimensions {
-        default_width: 200.0,
-        default_height: 200.0,
-        chat_width: 500.0,
-        input_bar_height: 120.0,
-        chat_max_height: 350.0,
-        login_width: 300.0,
+        chat_width: 600.0,
+        input_bar_height: 130.0,
+        chat_max_height: 450.0,
+        login_width: 450.0,
         login_height: 600.0,
       }
     }
@@ -31,16 +29,8 @@ pub async fn resize_hud(
   let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    // Check current size
-    let current_size = window.inner_size().map_err(|e| e.to_string())?;
     let requested_size = LogicalSize::new(width, height);
     
-    // Skip resize if size is already the same
-    if current_size.width as f64 == width && current_size.height as f64 == height {
-      log::debug!("HUD window already at requested size: {}x{}", width, height);
-      return Ok(());
-    }
-
     // Get position before resizing
     let position = window.outer_position().map_err(|e| e.to_string())?;
     window.set_size(requested_size).map_err(|e| e.to_string())?;
