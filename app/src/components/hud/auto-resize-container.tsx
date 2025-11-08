@@ -13,13 +13,6 @@ interface AutoResizeContainerProps {
 /**
  * AutoResizeContainer - A wrapper component that automatically resizes the Tauri window
  * based on its content size using ResizeObserver.
- * 
- * Inspired by the Svelte implementation, this component:
- * - Observes content size changes via ResizeObserver
- * - Uses getBoundingClientRect() for accurate measurements
- * - Considers devicePixelRatio for high-DPI displays
- * - Calls resize_hud backend command to update window size
- * - Respects maximum height constraints from settings
  */
 export function AutoResizeContainer({ 
   children, 
@@ -41,7 +34,6 @@ export function AutoResizeContainer({
 
       // Get the bounding rectangle for accurate sizing (Svelte approach)
       const rect = container.getBoundingClientRect();
-      const factor = window.devicePixelRatio;
       
       // Calculate the actual height in CSS pixels
       const contentHeight = Math.ceil(rect.height);

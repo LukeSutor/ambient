@@ -45,24 +45,14 @@ export default function HudPage() {
 
   // Window Manager
   const {
-    dynamicChatContentRef,
     isChatExpanded,
     isChatHistoryExpanded,
-    isFeaturesExpanded,
-    featuresRef,
+    setChatMinimized,
     setChatExpanded,
-    minimizeChat,
-    setFeaturesMinimized,
-    toggleFeatures,
     toggleChatHistory,
     closeHUD,
     openSettings,
   } = useWindows();
-
-  // Callback ref to sync both refs
-  const dynamicChatContentCallback = useCallback((node: HTMLDivElement | null) => {
-    dynamicChatContentRef.current = node;
-  }, [dynamicChatContentRef]);
 
   // Load HUD dimensions only once on mount or when settings change
   useEffect(() => {
@@ -137,7 +127,7 @@ export default function HudPage() {
 
   async function clearAndCollapse() {
     clear(250);
-    await minimizeChat(300);
+    await setChatMinimized(300);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -164,7 +154,7 @@ export default function HudPage() {
       <div className="relative flex flex-col justify-start">
         <div className="relative flex flex-col min-h-0 h-min">
           {/* Dynamic Chat Content Area */}
-          <div ref={dynamicChatContentCallback}>
+          <div>
             <DynamicChatContent 
               hudDimensions={hudDimensions}
               isChatExpanded={isChatExpanded}
@@ -199,10 +189,6 @@ export default function HudPage() {
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
             isStreaming={isStreaming}
-            isFeaturesExpanded={isFeaturesExpanded}
-            featuresRef={featuresRef}
-            setFeaturesMinimized={setFeaturesMinimized}
-            toggleFeatures={toggleFeatures}
             toggleChatHistory={toggleChatHistory}
             closeHUD={closeHUD}
             openSettings={openSettings}

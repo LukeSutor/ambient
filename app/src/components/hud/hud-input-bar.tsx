@@ -22,7 +22,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon } from 'lucide-react';
+import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2 } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions } from '@/types/settings';
@@ -46,10 +46,6 @@ interface HUDInputBarProps {
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
   isStreaming: boolean;
-  isFeaturesExpanded: boolean;
-  featuresRef: RefObject<HTMLDivElement | null>;
-  setFeaturesMinimized: () => void;
-  toggleFeatures: (nextState?: boolean, skipDelay?: boolean) => Promise<void>;
   toggleChatHistory: (nextState?: boolean) => Promise<void>;
   closeHUD: () => Promise<void>;
   openSettings: (destination?: string) => Promise<void>;
@@ -74,50 +70,14 @@ export function HUDInputBar({
   ocrLoading,
   ocrResults,
   isStreaming,
-  isFeaturesExpanded,
-  featuresRef: windowsFeaturesRef,
-  setFeaturesMinimized,
-  toggleFeatures,
   toggleChatHistory,
   closeHUD,
   openSettings,
 }: HUDInputBarProps) {
-  // Button ref for outside-click checks
-  const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
   // Ref for load animation
   const inputRef = useRef<HTMLDivElement | null>(null);
   // Dimensions ref to check for changes
   const dimensionsRef = useRef<HudDimensions | null>(null);
-  
-  // Use callback ref to sync with windows manager ref
-  const featuresDropdownRef = useCallback((node: HTMLDivElement | null) => {
-    windowsFeaturesRef.current = node;
-  }, [windowsFeaturesRef]);
-
-  // Close the features dropdown when clicking outside of the dropdown or its toggle button
-  useEffect(() => {
-    if (!isFeaturesExpanded) return;
-
-    const handleDocumentMouseDown = (e: MouseEvent) => {
-      const dropdownEl = windowsFeaturesRef.current;
-      const buttonEl = featuresButtonRef.current;
-      const target = e.target as Node | null;
-
-      // If click is inside dropdown or toggle button, ignore
-      if ((dropdownEl && target && dropdownEl.contains(target)) ||
-          (buttonEl && target && buttonEl.contains(target))) {
-        return;
-      }
-
-      // Otherwise, close the dropdown
-      toggleFeatures(false);
-    };
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentMouseDown);
-    };
-  }, [isFeaturesExpanded, windowsFeaturesRef, toggleFeatures]);
 
   // Animate input bar appearing
   useGSAP(() => {
@@ -182,23 +142,23 @@ export function HUDInputBar({
               align="start"
             >
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => { dispatchOCRCapture(); setFeaturesMinimized(); }}>
+                <DropdownMenuItem onClick={() => { dispatchOCRCapture(); }}>
                   <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { onNewChat(); setFeaturesMinimized(); }}>
+                <DropdownMenuItem onClick={() => { onNewChat(); }}>
                   <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">New Chat</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { toggleChatHistory(); setFeaturesMinimized(); }}>
+                <DropdownMenuItem onClick={() => { toggleChatHistory(); }}>
                   <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => { openSettings(); setFeaturesMinimized(); }}>
-                  <InputGroupText className="!w-4 !h-4 text-black shrink-0 mr-2">⚙️</InputGroupText>
+                <DropdownMenuItem onClick={() => { openSettings(); }}>
+                  <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">Settings</span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>

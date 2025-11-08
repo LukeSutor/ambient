@@ -7,28 +7,19 @@ import { WindowsState } from './types';
  * Initial state for windows
  */
 const initialState: WindowsState = {
-  isLogin: true,
   isChatExpanded: false,
   isFeaturesExpanded: false,
   isChatHistoryExpanded: false,
-  settingsDestination: '',
-  dynamicChatContentRef: createRef<null>(),
-  featuresRef: createRef<null>(),
-  resizeObserverRef: { current: null },
 };
 
 /**
  * Action types for the windows reducer
  */
 type WindowsAction =
-  | { type: 'SET_LOGIN'; }
   | { type: 'SET_MINIMIZED_CHAT'; }
   | { type: 'SET_EXPANDED_CHAT'; }
-  | { type: 'SET_FEATURES_EXPANDED'; }
-  | { type: 'SET_FEATURES_COLLAPSED'; }
   | { type: 'SET_CHAT_HISTORY_EXPANDED'; }
   | { type: 'SET_CHAT_HISTORY_COLLAPSED'; }
-  | { type: 'OPEN_SETTINGS'; payload?: string; };
 
 /**
  * Windows reducer - handles all state updates
@@ -38,38 +29,16 @@ function windowsReducer(
   action: WindowsAction
 ): WindowsState {
   switch (action.type) {
-    case 'SET_LOGIN':
-      return {
-        ...state,
-        isLogin: true,
-      };
-
     case 'SET_MINIMIZED_CHAT':
       return {
         ...state,
-        isLogin: false,
         isChatExpanded: false,
       };
 
     case 'SET_EXPANDED_CHAT':
       return {
         ...state,
-        isLogin: false,
         isChatExpanded: true,
-      };
-
-    case 'SET_FEATURES_EXPANDED':
-      return {
-        ...state,
-        isLogin: false,
-        isFeaturesExpanded: true,
-      };
-
-    case 'SET_FEATURES_COLLAPSED':
-      return {
-        ...state,
-        isLogin: false,
-        isFeaturesExpanded: false,
       };
 
     case 'SET_CHAT_HISTORY_EXPANDED':
@@ -83,12 +52,6 @@ function windowsReducer(
       return {
         ...state,
         isChatHistoryExpanded: false,
-      };
-
-    case 'OPEN_SETTINGS':
-      return {
-        ...state,
-        settingsDestination: action.payload || '',
       };
 
     default:
