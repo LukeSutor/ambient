@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import TextareaAutosize from "react-textarea-autosize";
 import {
   InputGroup,
@@ -64,9 +64,13 @@ export function HUDInputBar({
   const inputRef = useRef<HTMLDivElement | null>(null);
   // Dimensions ref to check for changes
   const dimensionsRef = useRef<HudDimensions | null>(null);
-
+  
+  // Track dropdown open states
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  
   // Window Manager
   const {
+    isChatExpanded,
     toggleChatHistory,
     closeHUD,
     openSecondary,
@@ -94,7 +98,7 @@ export function HUDInputBar({
 
   return (
     <div
-      className='flex flex-col justify-center items-center relative p-2'
+      className='flex flex-col justify-start items-center relative p-2'
       id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
@@ -120,7 +124,7 @@ export function HUDInputBar({
           autoFocus
         />
         <InputGroupAddon align="block-end">
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={setIsDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <InputGroupButton
                 variant="outline"
@@ -132,7 +136,7 @@ export function HUDInputBar({
               </InputGroupButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              side="top"
+              side="bottom"
               align="start"
             >
               <DropdownMenuGroup>
@@ -158,12 +162,12 @@ export function HUDInputBar({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-            <DropdownMenu>
+            <DropdownMenu onOpenChange={setIsDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <InputGroupButton variant="ghost">Local</InputGroupButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                side="top"
+                side="bottom"
                 align="start"
                 className="[--radius:0.95rem]"
               >
@@ -185,30 +189,38 @@ export function HUDInputBar({
               <span className="sr-only">Send</span>
             </InputGroupButton>
           </InputGroupAddon>
+          {/* Close icon */}
+          <button
+            className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
+              ' absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'}
+            onClick={closeHUD}
+            title="Close Window"
+          >
+            <X className="w-full h-full p-1 text-black pointer-events-none" />
+          </button>
+          {/* Move handle */}
+
+          <div
+            data-tauri-drag-region
+            id="drag-area"
+            className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
+              ' hover:cursor-grab select-none absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'}
+            onPointerDown={onDragStart}
+            draggable={false}
+            title="Drag Window"
+          >
+            <Move className="w-full h-full p-1 text-black pointer-events-none" />
+          </div>
         </InputGroup>
 
-      {/* Close icon */}
-      <button
-        className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-          ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'}
-        onClick={closeHUD}
-        title="Close Window"
-      >
-        <X className="w-full h-full p-1 text-black pointer-events-none" />
-      </button>
-
-      {/* Move handle */}
-      <div
-        data-tauri-drag-region
-        id="drag-area"
-        className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-          ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'}
-        onPointerDown={onDragStart}
-        draggable={false}
-        title="Drag Window"
-      >
-        <Move className="w-full h-full p-1 text-black pointer-events-none" />
-      </div>
+      {/* Hidden spacer to expand window when dropdowns are open */}
+      <div 
+        className={`pointer-events-none overflow-hidden ${
+          isDropdownOpen
+            ? 'h-[135px] transition-none' 
+            : 'h-0 transition-all duration-0 delay-[50ms]'
+        }`}
+      />
     </div>
   );
 }
