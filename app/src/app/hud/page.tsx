@@ -36,7 +36,6 @@ export default function HudPage() {
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
-    clearOCRResults,
     clear,
   } = useConversation(messagesEndRef);
 
@@ -110,19 +109,10 @@ export default function HudPage() {
     setInput('');
 
     try {
-      // Send message (will create conversation if needed)
       await sendMessage(conversationId, query);
-      
-      // Clear OCR results after sending
-      clearOCRResults();
     } catch (error) {
       console.error('Error in handleSubmit:', error);
     }
-  };
-
-  async function clearAndCollapse() {
-    clear(250);
-    await setChatMinimized(300);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -138,7 +128,7 @@ export default function HudPage() {
   const handleNewChat = async () => {
     // Don't create new conversation if there are no messages
     if (messages.length > 0) {
-      await clearAndCollapse();
+      await setChatMinimized();
       await resetConversation(500);
     }
   };

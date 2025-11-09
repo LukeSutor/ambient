@@ -54,7 +54,7 @@ export default function ScreenSelectorPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        closeSelector();
+        cancelSelector();
       }
     };
 
@@ -62,9 +62,17 @@ export default function ScreenSelectorPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const closeSelector = useCallback(async () => {
+  const cancelSelector = useCallback(async () => {
     try {
       await invoke('cancel_screen_selection');
+      await invoke('close_screen_selector');
+    } catch (error) {
+      console.error('Failed to cancel screen selector:', error);
+    }
+  }, []);
+
+  const closeSelector = useCallback(async () => {
+    try {
       await invoke('close_screen_selector');
     } catch (error) {
       console.error('Failed to close screen selector:', error);
