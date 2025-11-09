@@ -15,13 +15,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2 } from 'lucide-react';
+import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, Shield, Zap, Crown, ChevronDown } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
-import { HudDimensions } from '@/types/settings';
+import { HudDimensions, ModelSelection } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { useWindows } from '@/lib/windows/useWindows';
+import { useSettings } from '@/lib/settings';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
@@ -67,6 +70,11 @@ export function HUDInputBar({
   
   // Track dropdown open states
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  
+  // Settings hook for model selection
+  const { settings, setModelSelection } = useSettings();
+  const modelSelection = settings?.model_selection ?? 'Local';
   
   // Window Manager
   const {
@@ -75,6 +83,20 @@ export function HUDInputBar({
     closeHUD,
     openSecondary,
   } = useWindows();
+
+  // Handle model selection change
+  async function handleModelSelectionChange(value: string) {
+    const newModel = value as ModelSelection;
+    
+    try {
+      await setModelSelection(newModel);
+      const displayName = newModel === 'GptOss' ? 'GPT OSS' : newModel === 'Gpt5' ? 'GPT-5' : newModel;
+      toast.success(`Model changed to ${displayName}`);
+    } catch (error) {
+      console.error("Failed to save model selection setting:", error);
+      toast.error("Failed to save setting");
+    }
+  }
 
   // Animate input bar appearing
   useGSAP(() => {
@@ -138,44 +160,80 @@ export function HUDInputBar({
             <DropdownMenuContent
               side="bottom"
               align="start"
+              avoidCollisions={false}
+              sideOffset={12}
+              className="bg-white/60"
             >
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => { dispatchOCRCapture(); }}>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { dispatchOCRCapture(); }}>
                   <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { onNewChat(); }}>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { onNewChat(); }}>
                   <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">New Chat</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { toggleChatHistory(); }}>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
                   <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => { openSecondary(); }}>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
                   <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-            <DropdownMenu onOpenChange={setIsDropdownOpen}>
-              <DropdownMenuTrigger asChild>
-                <InputGroupButton variant="ghost">Local</InputGroupButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="bottom"
-                align="start"
-                className="[--radius:0.95rem]"
-              >
-                <DropdownMenuItem>Local</DropdownMenuItem>
-                <DropdownMenuItem>GPT-OSS</DropdownMenuItem>
-                <DropdownMenuItem>GPT-5</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <DropdownMenu onOpenChange={setIsModelDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <InputGroupButton variant="ghost" disabled={ocrLoading || isStreaming}>
+                {modelSelection === "Local" && "Local"}
+                {modelSelection === "GptOss" && "GPT OSS"}
+                {modelSelection === "Gpt5" && "GPT-5"}
+                <ChevronDown />
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="bottom"
+              align="start"
+              avoidCollisions={false}
+              sideOffset={12}
+              className="w-full bg-white/60"
+            >
+              <DropdownMenuGroup>
+                <DropdownMenuItem 
+                  onClick={() => handleModelSelectionChange('Local')}
+                  className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
+                >
+                  <span className="font-medium text-sm">Local</span>
+                  <span className="text-xs text-muted-foreground">
+                    Ultimate privacy. Runs on your device.
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleModelSelectionChange('GptOss')}
+                  className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
+                >
+                  <span className="font-medium text-sm">GPT OSS</span>
+                  <span className="text-xs text-muted-foreground">
+                    More powerful open-source model.
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleModelSelectionChange('Gpt5')}
+                  className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
+                >
+                  <span className="font-medium text-sm">GPT-5</span>
+                  <span className="text-xs text-muted-foreground">
+                    The latest and most advanced model.
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
             <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
             <InputGroupButton
               variant="default"
@@ -217,7 +275,9 @@ export function HUDInputBar({
       <div 
         className={`pointer-events-none overflow-hidden ${
           isDropdownOpen
-            ? 'h-[135px] transition-none' 
+            ? 'h-[140px] transition-none'
+            : isModelDropdownOpen
+            ? 'h-[155px] transition-none'
             : 'h-0 transition-all duration-0 delay-[50ms]'
         }`}
       />

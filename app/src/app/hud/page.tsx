@@ -41,7 +41,7 @@ export default function HudPage() {
   } = useConversation(messagesEndRef);
 
   // Settings Manager
-  const { settings, getHudDimensions } = useSettings();
+  const { settings, getHudDimensions } = useSettings(true);
 
   // Window Manager
   const {
@@ -144,7 +144,7 @@ export default function HudPage() {
   };
 
   return (
-    <AutoResizeContainer hudDimensions={hudDimensions} widthType="chat" className="bg-blue-500">
+    <AutoResizeContainer hudDimensions={hudDimensions} widthType="chat" className="bg-blaue-500">
       {/* Glass Container */}
         <div className="flex flex-col">
           {/* Dynamic Chat Content Area */}

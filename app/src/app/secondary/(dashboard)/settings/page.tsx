@@ -25,16 +25,14 @@ import { toast } from "sonner"
 import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "@/lib/settings";
 import { HudSizeOption, ModelSelection } from "@/types/settings";
-import { CheckCircle, Zap, Shield, Crown } from "lucide-react"
+import { Zap, Shield, Crown } from "lucide-react"
 
 export default function Settings() {
     const { 
         settings, 
-        isLoading: isLoadingSettings, 
-        setHudSize: updateHudSize,
-        setModelSelection: updateModelSelection,
-        getHudSize,
-        getModelSelection,
+        isLoading, 
+        setHudSize,
+        setModelSelection,
     } = useSettings();
 
     const hudSize = settings?.hud_size ?? 'Normal';
@@ -44,7 +42,7 @@ export default function Settings() {
         const newSize = value as HudSizeOption;
         
         try {
-            await updateHudSize(newSize, true);
+            await setHudSize(newSize, true);
             const displayName = newSize.charAt(0).toUpperCase() + newSize.slice(1);
             toast.success(`HUD size changed to ${displayName}`);
         } catch (error) {
@@ -57,7 +55,7 @@ export default function Settings() {
         const newModel = value as ModelSelection;
 
         try {
-            await updateModelSelection(newModel);
+            await setModelSelection(newModel);
             const displayName = newModel.charAt(0).toUpperCase() + newModel.slice(1);
             toast.success(`Model selection changed to ${displayName}`);
         } catch (error) {
@@ -93,7 +91,7 @@ export default function Settings() {
                     <Select 
                         value={modelSelection} 
                         onValueChange={handleModelSelectionChange}
-                        disabled={isLoadingSettings}
+                        disabled={isLoading}
                     >
                         <SelectTrigger className="">
                             <SelectValue placeholder="Select model">
@@ -215,7 +213,7 @@ export default function Settings() {
                     <Select 
                         value={hudSize} 
                         onValueChange={handleHudSizeChange}
-                        disabled={isLoadingSettings}
+                        disabled={isLoading}
                     >
                         <SelectTrigger className="w-32">
                             <SelectValue placeholder="Select size" />
