@@ -153,6 +153,25 @@ pub async fn process_screen_selection(
     Ok(())
 }
 
+/// Return an unsuccessful OCR result
+#[tauri::command]
+pub async fn cancel_screen_selection(
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    log::info!("Screen selection cancelled by user");
+
+    // Emit failed event
+    let result = OcrResponseEvent {
+        text: String::new(),
+        success: false,
+        timestamp: chrono::Utc::now().to_string(),
+    };
+    emit(OCR_RESPONSE, result)
+        .map_err(|e| format!("Failed to emit OCR response: {}", e))?;
+
+    Ok(())
+}
+
 /// Get screen dimensions for the overlay
 #[tauri::command]
 pub async fn get_screen_dimensions(app_handle: AppHandle) -> Result<(u32, u32), String> {

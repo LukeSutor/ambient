@@ -64,6 +64,7 @@ export default function ScreenSelectorPage() {
 
   const closeSelector = useCallback(async () => {
     try {
+      await invoke('cancel_screen_selection');
       await invoke('close_screen_selector');
     } catch (error) {
       console.error('Failed to close screen selector:', error);

@@ -144,11 +144,13 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
         // OCR Listener
         const ocrUnlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          // Add OCR result and stop loading state
+          // Add stop loading state and add successful OCR result
           const result = event.payload;
           dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
-          dispatch({ type: 'ADD_OCR_RESULT', payload: result });
           dispatch({ type: 'SET_OCR_LOADING', payload: false });
+          if (result.success) {
+            dispatch({ type: 'ADD_OCR_RESULT', payload: result });
+          }
         });
         unlisteners.push(ocrUnlisten);
 
@@ -291,7 +293,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch]);
 
   /**
-   * Sends a message with optional OCR context
+   * Sends a message
    */
   const sendMessage = useCallback(async (
     conversationId: string | null,

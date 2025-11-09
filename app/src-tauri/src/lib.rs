@@ -236,6 +236,7 @@ pub fn run() {
       screen_selection::open_screen_selector,
       screen_selection::close_screen_selector,
       screen_selection::process_screen_selection,
+      screen_selection::cancel_screen_selection,
       screen_selection::get_screen_dimensions,
       screen_selection::client_to_screen_coords
     ])

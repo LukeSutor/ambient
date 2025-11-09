@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, Shield, Zap, Crown, ChevronDown } from 'lucide-react';
+import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions, ModelSelection } from '@/types/settings';
@@ -23,8 +23,6 @@ import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { useWindows } from '@/lib/windows/useWindows';
 import { useSettings } from '@/lib/settings';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
@@ -230,7 +228,7 @@ export function HUDInputBar({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-            <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
+            <OcrCaptures captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
             <InputGroupButton
               variant="default"
               className="rounded-full ml-auto bg-black/80 hover:bg-black"
