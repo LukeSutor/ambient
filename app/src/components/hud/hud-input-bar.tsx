@@ -1,22 +1,36 @@
 'use client';
 
-import React, { useEffect, useCallback, useRef, RefObject } from 'react';
-import Image from 'next/image';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { LoaderCircle, MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import TextareaAutosize from "react-textarea-autosize";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+} from "@/components/ui/input-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
+import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
-import { HudDimensions } from '@/types/settings';
+import { HudDimensions, ModelSelection } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-import Link from 'next/link';
+import { useWindows } from '@/lib/windows/useWindows';
+import { useSettings } from '@/lib/settings';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
   inputValue: string;
   setInputValue: (v: string) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  handleSubmit: () => Promise<void>;
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   dispatchOCRCapture: () => void;
   deleteOCRResult: (index: number) => void;
   onNewChat: () => void;
@@ -28,21 +42,13 @@ interface HUDInputBarProps {
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
   isStreaming: boolean;
-  isFeaturesExpanded: boolean;
-  featuresRef: RefObject<HTMLDivElement | null>;
-  setFeaturesMinimized: () => void;
-  toggleFeatures: (nextState?: boolean, skipDelay?: boolean) => Promise<void>;
-  toggleChatHistory: (nextState?: boolean) => Promise<void>;
-  closeHUD: () => Promise<void>;
-  openSettings: (destination?: string) => Promise<void>;
 }
-
-const logo = '/logo.png';
 
 export function HUDInputBar({
   hudDimensions,
   inputValue,
   setInputValue,
+  handleSubmit,
   onKeyDown,
   dispatchOCRCapture,
   deleteOCRResult,
@@ -55,50 +61,37 @@ export function HUDInputBar({
   ocrLoading,
   ocrResults,
   isStreaming,
-  isFeaturesExpanded,
-  featuresRef: windowsFeaturesRef,
-  setFeaturesMinimized,
-  toggleFeatures,
-  toggleChatHistory,
-  closeHUD,
-  openSettings,
 }: HUDInputBarProps) {
-  // Button ref for outside-click checks
-  const featuresButtonRef = useRef<HTMLButtonElement | null>(null);
   // Ref for load animation
   const inputRef = useRef<HTMLDivElement | null>(null);
   // Dimensions ref to check for changes
   const dimensionsRef = useRef<HudDimensions | null>(null);
   
-  // Use callback ref to sync with windows manager ref
-  const featuresDropdownRef = useCallback((node: HTMLDivElement | null) => {
-    windowsFeaturesRef.current = node;
-  }, [windowsFeaturesRef]);
+  // Track dropdown open states
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  
+  // Settings hook for model selection
+  const { settings, setModelSelection } = useSettings();
+  const modelSelection = settings?.model_selection ?? 'Local';
+  
+  // Window Manager
+  const {
+    toggleChatHistory,
+    closeHUD,
+    openSecondary,
+  } = useWindows();
 
-  // Close the features dropdown when clicking outside of the dropdown or its toggle button
-  useEffect(() => {
-    if (!isFeaturesExpanded) return;
-
-    const handleDocumentMouseDown = (e: MouseEvent) => {
-      const dropdownEl = windowsFeaturesRef.current;
-      const buttonEl = featuresButtonRef.current;
-      const target = e.target as Node | null;
-
-      // If click is inside dropdown or toggle button, ignore
-      if ((dropdownEl && target && dropdownEl.contains(target)) ||
-          (buttonEl && target && buttonEl.contains(target))) {
-        return;
-      }
-
-      // Otherwise, close the dropdown
-      toggleFeatures(false);
-    };
-
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentMouseDown);
-    };
-  }, [isFeaturesExpanded, windowsFeaturesRef, toggleFeatures]);
+  // Handle model selection change
+  async function handleModelSelectionChange(value: string) {
+    const newModel = value as ModelSelection;
+    
+    try {
+      await setModelSelection(newModel);
+    } catch (error) {
+      console.error("Failed to save model selection setting:", error);
+    }
+  }
 
   // Animate input bar appearing
   useGSAP(() => {
@@ -122,114 +115,175 @@ export function HUDInputBar({
 
   return (
     <div
-      className='flex-shrink-0 flex flex-col justify-center items-center relative p-2'
+      className='flex flex-col justify-start items-center relative p-2'
       id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
       ref={inputRef}
       style={{
-        height: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
+        minHeight: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
         width: hudDimensions ? `${hudDimensions.chat_width}px` : '500px',
         opacity: hudDimensions ? 1 : 0,
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}
     >
-      <div
-        className='flex items-center gap-3 rounded-lg bg-white/60 border border-black/20 transition-all focus-within:outline-none focus-within:ring-0 focus-within:border-black/20 flex-1 w-full'
-      >
-        <button onClick={() => openSettings()} title="Open Main Window" className="shrink-0">
-          <Image
-            src={logo}
-            width={32}
-            height={32}
-            alt="Logo"
-            className="w-7 h-7 ml-2 select-none pointer-events-none shrink-0"
-            draggable={false}
-            onDragStart={(e) => e.preventDefault()}
-          />
-        </button>
-
-        <div className="flex-1 min-w-32">
-          <Input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Ask anything"
-            className="bg-transparent rounded-none border-none shadow-none p-0 text-black placeholder:text-black/75 transition-all outline-none ring-0 focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 min-w-0 w-full"
-            autoComplete="off"
-            autoFocus
-          />
-        </div>
-
-        <OcrCaptures captures={ocrResults} onRemove={deleteOCRResult} />
-
-        {/* Additional features expandable area */}
-        <div className={`relative flex flex-row justify-end items-center w-auto min-w-8 h-8 rounded-full hover:bg-white/60 mr-5 transition-all ${isFeaturesExpanded ? 'bg-white/40' : ''} shrink-0`}>
-          <div className={`absolute top-full mb-1 right-0 bg-white/40 border border-black/20 rounded-lg p-2 flex flex-col gap-1 transition-all duration-100 ease-in-out overflow-hidden ${isFeaturesExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`} ref={featuresDropdownRef}>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { dispatchOCRCapture(); setFeaturesMinimized(); }}
-              title="Capture Area"
+      <InputGroup className="bg-white/60 border border-black/20 transition-all">
+        <TextareaAutosize
+          data-slot="input-group-control"
+          maxRows={4}
+          minRows={2}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={onKeyDown}
+          className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
+          placeholder="Ask anything"
+          autoComplete="off"
+          autoFocus
+        />
+        <InputGroupAddon align="block-end" className="-mb-2">
+          <DropdownMenu onOpenChange={setIsDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <InputGroupButton
+                variant="outline"
+                className="rounded-full bg-white/60 hover:bg-white/80"
+                size="icon-xs"
+                disabled={ocrLoading || isStreaming}
+              >
+                <Plus />
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="bottom"
+              align="start"
+              avoidCollisions={false}
+              sideOffset={12}
+              className="bg-white/60"
             >
-              <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0" />
-              <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { onNewChat(); setFeaturesMinimized(); }}
-              title="New Chat"
+              <DropdownMenuGroup>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { dispatchOCRCapture(); }}>
+                  <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { onNewChat(); }}>
+                  <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">New Chat</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
+                  <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
+                  <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu onOpenChange={setIsModelDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <InputGroupButton variant="ghost" disabled={ocrLoading || isStreaming}>
+                {modelSelection === "Local" && "Local"}
+                {modelSelection === "GptOss" && "GPT OSS"}
+                {modelSelection === "Gpt5" && "GPT-5"}
+                <ChevronDown />
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="bottom"
+              align="start"
+              avoidCollisions={false}
+              sideOffset={12}
+              className="w-full bg-white/60"
             >
-              <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0" />
-              <span className="text-black text-sm whitespace-nowrap">New Chat</span>
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 h-8 px-3 rounded-md hover:bg-white/60 justify-start"
-              onClick={() => { toggleChatHistory(); setFeaturesMinimized(); }}
-              title="Previous Chats"
-            >
-              <History className="!w-4 !h-4 text-black shrink-0" />
-              <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
-            </Button>
-          </div>
-          <Button
-            variant="ghost"
-            className="w-8 h-8 rounded-full"
-            size="icon"
+              <DropdownMenuGroup>
+                <DropdownMenuItem 
+                  onClick={() => handleModelSelectionChange('Local')}
+                  className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
+                >
+                  <span className="font-medium text-sm">Local</span>
+                  <span className="text-xs text-muted-foreground">
+                    Ultimate privacy. Runs on your device.
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleModelSelectionChange('GptOss')}
+                  className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
+                >
+                  <span className="font-medium text-sm">GPT OSS</span>
+                  <span className="text-xs text-muted-foreground">
+                    More powerful open-source model.
+                  </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleModelSelectionChange('Gpt5')}
+                  className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
+                >
+                  <span className="font-medium text-sm">GPT-5</span>
+                  <span className="text-xs text-muted-foreground">
+                    The latest and most advanced model.
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Horizonal scrollable div with ocr captures */}
+          <ScrollArea className="min-w-0">
+            <div className="flex w-max space-x-2 py-2">
+              <OcrCaptures hud-scrolls captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
+              {/* Make sure the height stays constant */}
+              <div className="h-6" />
+            </div>
+            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
+          </ScrollArea>
+          <InputGroupButton
+            variant="default"
+            className="rounded-full ml-auto bg-black/80 hover:bg-black"
+            size="icon-xs"
+            type="submit"
+            onClick={handleSubmit}
             disabled={ocrLoading || isStreaming}
-            ref={featuresButtonRef}
-            onClick={() => toggleFeatures()}
           >
-            {ocrLoading ? <LoaderCircle className="!h-5 !w-5 animate-spin" /> : <Plus className={`!h-5 !w-5 text-black shrink-0 transition-transform duration-300 ${isFeaturesExpanded ? 'rotate-45' : 'rotate-0'}`} />}
-          </Button>
-        </div>
-      </div>
+            <ArrowUpIcon />
+            <span className="sr-only">Send</span>
+          </InputGroupButton>
+        </InputGroupAddon>
+          {/* Close icon */}
+          <button
+            className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
+              ' absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'}
+            onClick={closeHUD}
+            title="Close Window"
+          >
+            <X className="w-full h-full p-1 text-black pointer-events-none" />
+          </button>
+          {/* Move handle */}
 
-      {/* Close icon */}
-      <button
-        className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-          ' absolute top-0.5 right-0.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'}
-        onClick={closeHUD}
-        title="Close Window"
-      >
-        <X className="w-full h-full p-1 text-black pointer-events-none" />
-      </button>
+          <div
+            data-tauri-drag-region
+            id="drag-area"
+            className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
+              ' hover:cursor-grab select-none absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'}
+            onPointerDown={onDragStart}
+            draggable={false}
+            title="Drag Window"
+          >
+            <Move className="w-full h-full p-1 text-black pointer-events-none" />
+          </div>
+        </InputGroup>
 
-      {/* Move handle */}
-      <div
-        data-tauri-drag-region
-        id="drag-area"
-        className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-          ' hover:cursor-grab select-none absolute bottom-0.5 right-0.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'}
-        onPointerDown={onDragStart}
-        draggable={false}
-        title="Drag Window"
-      >
-        <Move className="w-full h-full p-1 text-black pointer-events-none" />
-      </div>
+      {/* Hidden spacer to expand window when dropdowns are open */}
+      <div 
+        className={`pointer-events-none overflow-hidden ${
+          isDropdownOpen
+            ? 'h-[140px] transition-none'
+            : isModelDropdownOpen
+            ? 'h-[155px] transition-none'
+            : 'h-0 transition-all duration-0 delay-[50ms]'
+        }`}
+      />
     </div>
   );
 }

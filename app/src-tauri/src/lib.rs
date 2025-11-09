@@ -41,7 +41,7 @@ pub fn run() {
         .target(Target::new(TargetKind::Stdout))
         .filter(|metadata| {
           let t = metadata.target();
-          !(t.starts_with("hyper") || t.starts_with("reqwest"))
+          !(t.starts_with("hyper") || t.starts_with("reqwest") || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
     )
@@ -83,7 +83,7 @@ pub fn run() {
 
       // Initialize the database connection during setup
       let app_handle = app.handle().clone();
-  match db::core::initialize_database(&app_handle) {
+      match db::core::initialize_database(&app_handle) {
         Ok(conn) => {
           log::info!("[setup] Database initialized successfully.");
           // Store the connection in the managed state using the app_handle
@@ -144,9 +144,11 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
-      windows::open_floating_window,
       windows::open_main_window,
-      windows::close_floating_window,
+      windows::close_main_window,
+      windows::open_secondary_window,
+      windows::minimize_secondary_window,
+      windows::close_secondary_window,
       windows::resize_hud,
       windows::refresh_hud_window_size,
       settings::load_user_settings,
@@ -168,7 +170,7 @@ pub fn run() {
       db::conversations::create_conversation,
       db::conversations::add_message,
       db::conversations::get_messages,
-  db::conversations::get_message,
+      db::conversations::get_message,
       db::conversations::get_conversation,
       db::conversations::list_conversations,
       db::conversations::reset_conversation,
@@ -198,9 +200,9 @@ pub fn run() {
       models::llm::server::generate,
       models::llm::handlers::handle_hud_chat,
       models::embedding::embedding::generate_embedding,
-  db::memory::get_memory_entries_with_message,
-  db::memory::delete_memory_entry,
-  db::memory::delete_all_memories,
+      db::memory::get_memory_entries_with_message,
+      db::memory::delete_memory_entry,
+      db::memory::delete_all_memories,
       auth::logout,
       auth::get_stored_token,
       auth::is_authenticated,
@@ -212,6 +214,7 @@ pub fn run() {
       auth::get_access_token,
       auth::google_sign_in,
       auth::google_sign_out,
+      auth::emit_auth_changed,
       tasks::commands::create_task,
       tasks::commands::create_task_from_template,
       tasks::commands::get_task,
@@ -233,6 +236,7 @@ pub fn run() {
       screen_selection::open_screen_selector,
       screen_selection::close_screen_selector,
       screen_selection::process_screen_selection,
+      screen_selection::cancel_screen_selection,
       screen_selection::get_screen_dimensions,
       screen_selection::client_to_screen_coords
     ])

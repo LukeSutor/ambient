@@ -11,7 +11,6 @@ import {
   CheckSquare
 } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
-import { AuthService, CognitoUserInfo } from "@/lib/auth"
 
 import { Separator } from "@/components/ui/separator"
 import { NavMain } from "@/components/nav-main"
@@ -24,73 +23,52 @@ import {
   SidebarHeader,
   SidebarFooter
 } from "@/components/ui/sidebar"
+import { useRoleAccess } from "@/lib/role-access"
 
 const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "/",
+      url: "/secondary",
       icon: House
     },
     {
       title: "Activity",
-      url: "/activity",
+      url: "/secondary/activity",
       icon: SquareTerminal,
       items: [
         {
           title: "Recent",
-          url: "/activity/recent",
+          url: "/secondary/activity/recent",
         },
         {
           title: "Recurring",
-          url: "/activity/recurring",
+          url: "/secondary/activity/recurring",
         }
       ]
     },
     {
-      title: "Tasks",
-      url: "/tasks",
-      icon: CheckSquare
-    },
-    {
       title: "Memories",
-      url: "/memories",
+      url: "/secondary/memories",
       icon: NotebookPen
     }
   ],
   navSecondary: [
     {
       title: "Settings",
-      url: "/settings",
+      url: "/secondary/settings",
       icon: Settings2,
     },
     {
       title: "Support",
-      url: "/support",
+      url: "/secondary/support",
       icon: LifeBuoy,
     }
   ]
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [userInfo, setUserInfo] = React.useState<CognitoUserInfo | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = React.useState(true);
-
-  // Fetch user information on mount
-  React.useEffect(() => {
-    const fetchUserInfo = async () => {
-      try {
-        const user = await AuthService.getCurrentUser();
-        setUserInfo(user);
-      } catch (error) {
-        console.error('Failed to fetch user info:', error);
-      } finally {
-        setIsLoadingUser(false);
-      }
-    };
-
-    fetchUserInfo();
-  }, []);
+  const { userInfo } = useRoleAccess();
 
   // Create a mutable copy of the nav items for this render
   const navItems = [...data.navMain];
@@ -102,7 +80,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     if (!hasDebug) {
        navItems.push({
         title: "Dev",
-        url: "/dev", // Point to your debug page route
+        url: "/secondary/dev", // Point to your debug page route
         icon: Code,   // Use the Code icon
       });
     }

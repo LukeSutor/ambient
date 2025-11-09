@@ -6,6 +6,7 @@ use crate::auth::storage::{
 };
 use crate::auth::types::{CognitoUserInfo, SignInResult, SignUpResult};
 use tauri_plugin_opener::OpenerExt;
+use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
 pub async fn logout() -> Result<String, String> {
@@ -91,27 +92,23 @@ pub async fn cognito_sign_in(username: String, password: String) -> Result<SignI
 #[tauri::command]
 pub async fn get_current_user() -> Result<Option<CognitoUserInfo>, String> {
   match retrieve_cognito_auth() {
-    Ok(Some(auth)) => {
-      // Check if token is still valid
-      match is_token_expired(&auth.access_token) {
-        Ok(true) => {
-          // Token is expired, clear auth and return None
-          let _ = clear_cognito_auth();
-          Ok(None)
-        }
-        Ok(false) => {
-          // Token is still valid, return user info
-          Ok(Some(auth.user_info))
-        }
-        Err(_) => {
-          // Error checking expiration, assume expired and clear
-          let _ = clear_cognito_auth();
-          Ok(None)
-        }
+    Ok(Some(auth)) => match is_token_expired(&auth.access_token) {
+      Ok(true) => {
+        let _ = clear_cognito_auth();
+        Ok(None)
       }
-    }
+      Ok(false) => Ok(Some(auth.user_info)),
+      Err(err) => {
+        log::error!("Failed to check token expiration: {}", err);
+        let _ = clear_cognito_auth();
+        Ok(None)
+      }
+    },
     Ok(None) => Ok(None),
-    Err(e) => Err(format!("Failed to retrieve user: {}", e)),
+    Err(err) => {
+      log::error!("Failed to retrieve user: {}", err);
+      Ok(None)
+    }
   }
 }
 
@@ -174,4 +171,11 @@ pub async fn google_handle_callback(code: String) -> Result<SignInResult, String
 #[tauri::command]
 pub async fn google_sign_out() -> Result<String, String> {
   google::google_sign_out().await
+}
+
+#[tauri::command]
+pub async fn emit_auth_changed(app_handle: AppHandle) -> Result<(), String> {
+    app_handle
+        .emit("auth_changed", ())
+        .map_err(|e| format!("Failed to emit auth_changed event: {}", e))
 }

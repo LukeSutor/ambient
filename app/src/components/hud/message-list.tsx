@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { NotebookPen } from 'lucide-react';
 import { ContentContainer } from '@/components/hud/content-container';
 import { ChatMessage } from '@/lib/conversations/types';
+import { useWindows } from '@/lib/windows/useWindows';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -16,6 +17,8 @@ interface MessageListProps {
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
 export function MessageList({ messages, messagesEndRef }: MessageListProps) {
+  // Window state
+  const { openSecondary } = useWindows();
 
   // Helper function to check if previous message has memory
   const hasPreviousMemory = (index: number) => {
@@ -67,7 +70,7 @@ export function MessageList({ messages, messagesEndRef }: MessageListProps) {
                               className="w-full bg-white/50"
                               onClick={(e) => {
                                 e.preventDefault();
-                                // TODO: Implement manage memories functionality
+                                openSecondary('memories');
                               }}
                             >
                               Manage Memories

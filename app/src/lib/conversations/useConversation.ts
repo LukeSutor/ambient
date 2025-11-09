@@ -71,8 +71,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const cleanupRef = useRef<(() => void) | null>(null);
   const isLoadingMoreRef = useRef(false);
 
-
-
   // ============================================================
   // Event Listeners Setup
   // ============================================================
@@ -144,11 +142,13 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
         // OCR Listener
         const ocrUnlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          // Add OCR result and stop loading state
+          // Add stop loading state and add successful OCR result
           const result = event.payload;
           dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
-          dispatch({ type: 'ADD_OCR_RESULT', payload: result });
           dispatch({ type: 'SET_OCR_LOADING', payload: false });
+          if (result.success) {
+            dispatch({ type: 'ADD_OCR_RESULT', payload: result });
+          }
         });
         unlisteners.push(ocrUnlisten);
 
@@ -211,7 +211,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
           limit: CONVERSATION_LIMIT, offset: 0
         });
         dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
-        console.log('[useConversation] Loaded conversations');
       } catch (error) {
         console.error('[useConversation] Failed to load conversations:', error);
       }
@@ -227,10 +226,16 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Resets the conversation state
    */
-  const resetConversation = useCallback(async (name?: string): Promise<string | null> => {
+  const resetConversation = useCallback(async (delay?: number): Promise<string | null> => {
     try {
       dispatch({ type: 'SET_CONVERSATION_ID', payload: null });
-      dispatch({ type: 'CLEAR_MESSAGES' });
+      if (delay && delay > 0) {
+        setTimeout(() => {
+          dispatch({ type: 'CLEAR_MESSAGES' });
+        }, delay);
+      } else {
+        dispatch({ type: 'CLEAR_MESSAGES' });
+      }
       return null;
     } catch (error) {
       console.error('[useConversation] Failed to create conversation:', error);
@@ -280,7 +285,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch]);
 
   /**
-   * Sends a message with optional OCR context
+   * Sends a message
    */
   const sendMessage = useCallback(async (
     conversationId: string | null,
@@ -351,22 +356,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch, state.conversationId, state.ocrResults]);
 
   /**
-   * Clears all messages in the current conversation
-   */
-  const clear = useCallback((delay?: number): void => {
-    if (delay) {
-      setTimeout(() => {
-        dispatch({ type: 'CLEAR_MESSAGES' });
-      }, delay);
-    } else {
-      dispatch({ type: 'CLEAR_MESSAGES' });
-    }
-  }, [dispatch]);
-
-  /**
    * Get all conversations
    */
-  const loadMoreConversations = useCallback(async (): Promise<void> => {
+  const loadMoreConversations = useCallback(async (): Promise<void> => {//TODO: fix this getting duplicate ids
     // Prevent concurrent calls
     if (isLoadingMoreRef.current || !state.hasMoreConversations) {
       return;
@@ -448,24 +440,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     dispatch({ type: 'DELETE_OCR_RESULT', payload: index });
   }, [dispatch]);
 
-  /**
-   * Clear OCR results
-   */
-  const clearOCRResults = useCallback((): void => {
-    dispatch({ type: 'CLEAR_OCR_RESULTS' });
-  }, [dispatch]);
-
-  /**
-   * Ensures the llama server is running
-   */
-  const ensureServer = useCallback(async (): Promise<void> => {
-    try {
-      await invoke<string>('spawn_llama_server');
-    } catch (error) {
-      console.warn('[useConversation] Failed to ensure server running:', error);
-    }
-  }, []);
-
   // ============================================================
   // Return API
   // ============================================================
@@ -480,12 +454,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     loadConversation,
     loadMessages,
     sendMessage,
-    clear,
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
-    clearOCRResults,
-    ensureServer,
   };
 }

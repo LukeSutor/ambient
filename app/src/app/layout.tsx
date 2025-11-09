@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppProvider } from "@/lib/providers";
 
 import "@/styles/globals.css";
 
@@ -27,13 +28,16 @@ export default function RootLayout({
       return this.toString();
     };
   }, []);
+
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
+    <AppProvider>
+      <html lang="en">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          {children}
+        </body>
+      </html>
+    </AppProvider>
   );
 }

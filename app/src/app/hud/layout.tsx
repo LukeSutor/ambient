@@ -2,13 +2,18 @@
 
 import { AppProvider } from '@/lib/providers';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useRoleAccess } from '@/lib/role-access';
+import { useSettings } from '@/lib/settings';
 
 export default function HudLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Nested layouts must not render <html> or <body>; keep this a client component now.
+  // Use role access
+  useRoleAccess('/hud');
+  // Use root settings
+  useSettings(true);
   return (
     <AppProvider>
       <TooltipProvider>

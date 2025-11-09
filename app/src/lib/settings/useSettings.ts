@@ -13,32 +13,26 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
   switch (option) {
     case "Small":
       return {
-        default_width: 400,
-        default_height: 50,
         chat_width: 400,
-        input_bar_height: 50,
+        input_bar_height: 130,
         chat_max_height: 250,
-        login_width: 400,
+        login_width: 450,
         login_height: 600,
       };
     case "Large":
       return {
-        default_width: 600,
-        default_height: 70,
-        chat_width: 600,
-        input_bar_height: 70,
-        chat_max_height: 450,
-        login_width: 400,
+        chat_width: 700,
+        input_bar_height: 130,
+        chat_max_height: 600,
+        login_width: 450,
         login_height: 600,
       };
     default: // Normal
       return {
-        default_width: 500,
-        default_height: 60,
-        chat_width: 500,
-        input_bar_height: 60,
-        chat_max_height: 350,
-        login_width: 400,
+        chat_width: 600,
+        input_bar_height: 130,
+        chat_max_height: 450,
+        login_width: 450,
         login_height: 600,
       };
   }
@@ -46,17 +40,17 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
 
 /**
  * Main settings hook - provides all settings functionality
- * 
+ * @param isRoot Whether this hook is used in the root context and should setup event listeners
  * @returns Settings state and operations
  */
-export function useSettings() {
+export function useSettings(isRoot: boolean = false) {
   const { state, dispatch } = useSettingsContext();
 
   // ============================================================
   // Event Listener Setup
   // ============================================================
-
   useEffect(() => {
+    if (!isRoot) return;
     let isMounted = true;
 
     const setupEvents = async () => {
@@ -107,6 +101,7 @@ export function useSettings() {
   // ============================================================
 
   useEffect(() => {
+    if (!isRoot) return;
     // Check shared initialization ref to prevent multiple initializations
     if (state.initializationRef.current || state.settings) {
       return;
@@ -168,8 +163,6 @@ export function useSettings() {
       
       // Emit settings changed event for other windows
       await invoke('emit_settings_changed');
-      
-      console.log('[useSettings] Settings saved successfully');
     } catch (error) {
       console.error('[useSettings] Failed to save settings:', error);
       
@@ -213,7 +206,7 @@ export function useSettings() {
       // Refresh HUD window size
         try {
             await invoke('refresh_hud_window_size', { 
-            label: 'floating-hud', 
+            label: 'main', 
             isExpanded 
             });
         } catch (refreshError) {
@@ -222,8 +215,6 @@ export function useSettings() {
 
       // Emit settings changed event
       await invoke('emit_settings_changed');
-      
-      console.log('[useSettings] HUD size updated to:', size);
     } catch (error) {
       console.error('[useSettings] Failed to set HUD size:', error);
       
@@ -274,8 +265,6 @@ export function useSettings() {
 
       // Emit settings changed event
       await invoke('emit_settings_changed');
-      
-      console.log('[useSettings] Model selection updated to:', selection);
     } catch (error) {
       console.error('[useSettings] Failed to set model selection:', error);
       
@@ -289,7 +278,6 @@ export function useSettings() {
    * Invalidates the cache and reloads from backend
    */
   const refreshCache = useCallback(async (): Promise<void> => {
-    console.log('[useSettings] Refreshing cache...');
     dispatch({ type: 'INVALIDATE_CACHE' });
     await loadSettings();
   }, [dispatch, loadSettings]);

@@ -10,8 +10,7 @@ import {
   User
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { AuthService } from "@/lib/auth"
-
+import { useRoleAccess } from "@/lib/role-access"
 import {
   Avatar,
   AvatarFallback,
@@ -45,15 +44,18 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const router = useRouter()
 
+  // Auth state
+  const { signOut } = useRoleAccess()
+
   const handleLogout = async () => {
     try {
-      await AuthService.logoutAll()
+      await signOut()
       // Redirect to signin page
-      router.push('/signin')
+      router.push('/secondary/signin')
     } catch (error) {
       console.error('Logout failed:', error)
       // Still redirect to signin page even if logout fails
-      router.push('/signin')
+      router.push('/secondary/signin')
     }
   }
 
@@ -104,7 +106,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push('/account')}>
+              <DropdownMenuItem onClick={() => router.push('/secondary/account')}>
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>

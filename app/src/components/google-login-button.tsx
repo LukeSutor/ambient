@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { AuthService } from '@/lib/auth';
+import { useRoleAccess } from '@/lib/role-access';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -12,7 +12,7 @@ const GoogleIcon = () => (
 );
 
 interface GoogleLoginButtonProps {
-  onSignInSuccess?: () => void;
+  onSignInSuccess: () => void;
   variant?: 'default' | 'outline' | 'secondary' | 'ghost';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
@@ -30,6 +30,9 @@ export function GoogleLoginButton({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // Auth state
+  const { googleSignIn } = useRoleAccess();
+
   useEffect(() => {
     // Listen for OAuth2 events from Tauri
     const listenToOAuth2Events = async () => {
@@ -37,15 +40,9 @@ export function GoogleLoginButton({
       
       // Listen for OAuth2 success
       const unlistenSuccess = await listen('oauth2-success', (event) => {
-        console.log('OAuth2 success:', event.payload);
         setIsLoading(false);
         setError(null);
-        
-        if (onSignInSuccess) {
-          onSignInSuccess();
-        } else {
-          router.push('/');
-        }
+        onSignInSuccess();
       });
 
       // Listen for OAuth2 errors
@@ -77,12 +74,7 @@ export function GoogleLoginButton({
     setIsLoading(true);
 
     try {
-      console.log('[auth] Starting Google sign-in via backend...');
-      
-      // Use the simplified backend method that handles everything
-      await AuthService.signInWithGoogle();
-      
-      console.log('[auth] Backend sign-in initiated successfully');
+      await googleSignIn();
       // Note: The actual authentication will be handled by the deep link callback
       // The loading state will be cleared by the event listeners above
     } catch (err) {

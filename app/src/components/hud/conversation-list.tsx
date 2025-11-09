@@ -22,6 +22,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { useWindows } from '@/lib/windows/useWindows';
 
 const SKELETON_COUNT = 3;
 
@@ -32,14 +33,13 @@ const conversationNameSchema = z.object({
 interface ConversationListProps {
   conversations: Conversation[];
   hasMoreConversations: boolean;
-  setChatExpanded: (expanded: boolean) => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
+  deleteConversation: (id: string) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   renameConversation: (conversationId: string, newName: string) => Promise<void>;
-  toggleChatHistory: (nextState?: boolean) => Promise<void>;
 }
 
-export function ConversationList({ conversations, hasMoreConversations, setChatExpanded, loadConversation, loadMoreConversations, renameConversation, toggleChatHistory }: ConversationListProps) {
+export function ConversationList({ conversations, hasMoreConversations, loadConversation, deleteConversation, loadMoreConversations, renameConversation }: ConversationListProps) {
   // State
   const [loadingMore, setLoadingMore] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
@@ -55,6 +55,12 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
   // Refs
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
+
+  // Window Manager
+  const {
+    setChatExpanded,
+    toggleChatHistory,
+  } = useWindows();
 
   // Set editing conversation ID to null when escape key is pressed
   useEffect(() => {
@@ -74,7 +80,6 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMoreConversations && !isLoadingRef.current) {
-          console.log("loading more conversations");
           isLoadingRef.current = true;
           setLoadingMore(true);
           loadMoreConversations().finally(() => {
@@ -100,7 +105,7 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
 
   const handleLoadConversation = (id: string) => async () => {
     await loadConversation(id);
-    setChatExpanded(true);
+    setChatExpanded();
   };
 
   const handleUpdateConversationName = async (values: z.infer<typeof conversationNameSchema>) => {
@@ -145,7 +150,7 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
                     <DropdownMenuContent>
                       <DropdownMenuGroup>
                         <DropdownMenuItem onClick={() => startEditing(conv)}><Pen className="mr-2" />Rename</DropdownMenuItem>
-                        <DropdownMenuItem variant="destructive" onClick={() => { }}><Trash2 className="mr-2" />Delete</DropdownMenuItem>
+                        <DropdownMenuItem variant="destructive" onClick={() => { deleteConversation(conv.id); }}><Trash2 className="mr-2" />Delete</DropdownMenuItem>
                       </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -193,7 +198,7 @@ export function ConversationList({ conversations, hasMoreConversations, setChatE
               <>
                 {Array.from({ length: SKELETON_COUNT }).map((_, idx) => (
                   <div key={`skeleton-${idx}`} className="flex flex-row items-center min-w-0 px-3 py-2 rounded-lg">
-                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="h-5 w-full max-w-36" />
                   </div>
                 ))}
                 <div ref={observerTarget} className="w-1 h-1"></div>

@@ -11,9 +11,13 @@ import { CheckCircle, UserPlus, Loader2, Mail, Eye, EyeOff, AlertCircle, X, Arro
 import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { AuthService, SignUpRequest, SignUpResult } from '@/lib/auth';
+import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from '@/lib/role-access';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
+import { useRouter } from 'next/navigation';
+import AutoResizeContainer from '@/components/hud/auto-resize-container';
+import { HudDimensions } from '@/types/settings';
+import { useSettings } from '@/lib/settings/useSettings';
 
 // Step 1: Personal Info (name and email)
 const step1Schema = z.object({
@@ -63,12 +67,31 @@ export default function SignUp() {
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
   const [confirmationCode, setConfirmationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
-
+  const router = useRouter();
 
   // Windows state
   const { 
     closeHUD
   } = useWindows();
+
+  // Auth state
+  const {
+    isLoggedIn,
+    signUp,
+    signIn,
+    confirmSignUp,
+    resendConfirmationCode,
+  } = useRoleAccess();
+
+  // Settings state
+  const { settings, getHudDimensions } = useSettings();
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  useEffect(() => {
+    (async () => {
+      const dimensions = await getHudDimensions();
+      setHudDimensions(dimensions);
+    })();
+  }, [settings]);
 
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
@@ -87,26 +110,12 @@ export default function SignUp() {
     },
   });
 
+  // Redirect if already logged in
   useEffect(() => {
-    if (confirmationCode) {
-      console.log('Confirmation code state:', confirmationCode);
+    if (isLoggedIn) {
+      router.push('/hud');
     }
-  }, [confirmationCode]);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const isAuthenticated = await AuthService.isAuthenticated();
-        if (isAuthenticated) {
-        //   window.location.href = '/hud';
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-      }
-    };
-    
-    checkAuth();
-  }, []);
+  }, [isLoggedIn, router]);
 
   const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
     setError(null);
@@ -133,12 +142,12 @@ export default function SignUp() {
         family_name: step1Data.family_name,
       };
       
-      const result = await AuthService.signUp(formData);
+      const result = await signUp(formData);
       setSignUpResult(result);
       
       if (result.user_confirmed) {
         // User is automatically confirmed, sign them in
-        await AuthService.signIn(values.username, values.password);
+        await signIn(values.username, values.password);
         setFormStep('success');
         setTimeout(() => {
           window.location.href = '/hud';
@@ -183,16 +192,18 @@ export default function SignUp() {
       setError(null);
       
       const step2Values = step2Form.getValues();
+
+      const confirmRequest: ConfirmSignUpRequest = {
+        username: step2Values.username,
+        confirmation_code: confirmationCode,
+        session: signUpResult.session,
+      };
       
       // First confirm the signup
-      await AuthService.confirmSignUp(
-        step2Values.username,
-        confirmationCode,
-        signUpResult.session
-      );
+      await confirmSignUp(confirmRequest);
       
       // Then automatically sign in the user
-      await AuthService.signIn(step2Values.username, step2Values.password);
+      await signIn(step2Values.username, step2Values.password);
       
       setFormStep('success');
       setTimeout(() => {
@@ -209,7 +220,7 @@ export default function SignUp() {
     try {
       setError(null);
       const step2Values = step2Form.getValues();
-      const result = await AuthService.resendConfirmationCode(step2Values.username);
+      const result = await resendConfirmationCode(step2Values.username);
       setSignUpResult(result);
       // Show success message or update UI to indicate code was resent
     } catch (err) {
@@ -224,16 +235,16 @@ export default function SignUp() {
 
   if (formStep === 'success') {
     return (
-      <div className="relative h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-hidden">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center bg-gray-10a0 rounded-lg border-b">
-            <Button className="mr-4 hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
+            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
               <X className="!h-6 !w-6" />
             </Button>
           </div>
 
-          <CardHeader className="text-center">
+          <CardHeader className="text-center pt-2">
             <CardTitle className="flex items-center justify-center text-green-600 text-2xl">
               <CheckCircle className="h-6 w-6 mr-2" />
               Account Created Successfully!
@@ -248,22 +259,22 @@ export default function SignUp() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 
   if (formStep === 'verify') {
     return (
-      <div className="relative h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-hidden">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center bg-gray-10a0 rounded-lg border-b">
-            <Button className="mr-4 hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
+            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
               <X className="!h-6 !w-6" />
             </Button>
           </div>
 
-          <CardHeader className="text-center">
+          <CardHeader className="text-center pt-2">
             <CardTitle className="flex items-center justify-center text-2xl">
               <Mail className="h-5 w-5 mr-2 text-3xl font-bold" />
               Verify Your Email
@@ -299,7 +310,6 @@ export default function SignUp() {
                     pattern={REGEXP_ONLY_DIGITS}
                     value={confirmationCode}
                     onChange={(value) => {
-                      console.log("Confirmation code updated:", value);
                       setError(null);
                       setHasTriedConfirm(false);
                       setConfirmationCode(value);
@@ -355,23 +365,23 @@ export default function SignUp() {
             </form>
           </CardContent>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 
   // Step 1: Personal Information
   if (formStep === 'step1') {
     return (
-      <div className="h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-auto">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center bg-gray-10a0 rounded-lg border-b">
-            <Button className="mr-4 hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
+            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
               <X className="!h-6 !w-6" />
             </Button>
           </div>
 
-          <CardHeader className="text-center">
+          <CardHeader className="text-center pt-2">
             <CardTitle className="text-3xl font-bold">
               Create Your Account
             </CardTitle>
@@ -481,29 +491,29 @@ export default function SignUp() {
           <CardFooter>
             <p className="text-sm text-gray-600 w-full text-center">
               Already have an account?{' '}
-              <Link href="/hud/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              <Link href="/hud/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                 Sign in here
               </Link>
             </p>
           </CardFooter>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 
   // Step 2: Account Information
   if (formStep === 'step2') {
     return (
-      <div className="relative h-full w-full">
+      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
         <Card className="relative w-full pt-12 overflow-auto">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center bg-gray-10a0 rounded-lg border-b">
-            <Button className="mr-4 hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
+            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
               <X className="!h-6 !w-6" />
             </Button>
           </div>
 
-          <CardHeader className="text-center">
+          <CardHeader className="text-center pt-2">
             <CardTitle className="text-3xl font-bold">
               Create Your Account
             </CardTitle>
@@ -625,13 +635,13 @@ export default function SignUp() {
           <CardFooter>
             <p className="text-sm text-gray-600 w-full text-center">
               Already have an account?{' '}
-              <Link href="/hud/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              <Link href="/hud/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                 Sign in here
               </Link>
             </p>
           </CardFooter>
         </Card>
-      </div>
+      </AutoResizeContainer>
     );
   }
 

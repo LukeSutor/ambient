@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HudDimensions } from '@/types/settings';
 import { useSettings } from '@/lib/settings';
 import HUDInputBar from '@/components/hud/hud-input-bar';
 import { useConversation } from '@/lib/conversations';
 import { useWindows } from '@/lib/windows/useWindows';
 import { DynamicChatContent } from '@/components/hud/dynamic-chat-content';
+import { AutoResizeContainer } from '@/components/hud/auto-resize-container';
 
 export default function HudPage() {
   // UI State
@@ -17,7 +18,6 @@ export default function HudPage() {
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Conversation Manager
   const {
@@ -32,37 +32,21 @@ export default function HudPage() {
     sendMessage,
     resetConversation,
     loadConversation,
+    deleteConversation,
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
-    clearOCRResults,
-    clear,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
-  const { settings, getHudDimensions } = useSettings();
+  const { settings, getHudDimensions } = useSettings(true);
 
   // Window Manager
   const {
-    dynamicChatContentRef,
-    isChatExpanded,
-    isChatHistoryExpanded,
-    isFeaturesExpanded,
-    featuresRef,
+    setChatMinimized,
     setChatExpanded,
-    minimizeChat,
-    setFeaturesMinimized,
-    toggleFeatures,
-    toggleChatHistory,
-    closeHUD,
-    openSettings,
   } = useWindows();
-
-  // Callback ref to sync both refs
-  const dynamicChatContentCallback = useCallback((node: HTMLDivElement | null) => {
-    dynamicChatContentRef.current = node;
-  }, [dynamicChatContentRef]);
 
   // Load HUD dimensions only once on mount or when settings change
   useEffect(() => {
@@ -82,7 +66,7 @@ export default function HudPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [settings]); // Only depend on settings, not the function
+  }, [settings]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
     setIsHoveringGroup(false);
@@ -112,8 +96,10 @@ export default function HudPage() {
     };
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) {
+      e.preventDefault();
+    }
 
     const query = input.trim();
 
@@ -123,20 +109,11 @@ export default function HudPage() {
     setInput('');
 
     try {
-      // Send message (will create conversation if needed)
       await sendMessage(conversationId, query);
-      
-      // Clear OCR results after sending
-      clearOCRResults();
     } catch (error) {
       console.error('Error in handleSubmit:', error);
     }
-  }
-
-  async function clearAndCollapse() {
-    clear(250);
-    await minimizeChat(300);
-  }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -151,39 +128,34 @@ export default function HudPage() {
   const handleNewChat = async () => {
     // Don't create new conversation if there are no messages
     if (messages.length > 0) {
-      await clearAndCollapse();
-      await resetConversation();
+      await setChatMinimized();
+      await resetConversation(500);
     }
-  }
+  };
 
   return (
-  <div ref={containerRef} className="w-full h-full bg-blue-500">
+    <AutoResizeContainer hudDimensions={hudDimensions} widthType="chat" className="bg-transparent">
       {/* Glass Container */}
-      <div className="relative w-full h-full flex flex-col justify-start overflow-hidden">
-        <div className="relative flex flex-col min-h-0 h-min">
+        <div className="flex flex-col">
           {/* Dynamic Chat Content Area */}
-          <div ref={dynamicChatContentCallback}>
-            <DynamicChatContent 
-              hudDimensions={hudDimensions}
-              isChatExpanded={isChatExpanded}
-              isChatHistoryExpanded={isChatHistoryExpanded}
-              messages={messages}
-              messagesEndRef={messagesEndRef}
-              conversations={conversations}
-              hasMoreConversations={hasMoreConversations}
-              setChatExpanded={async (expanded: boolean) => { await setChatExpanded(); }}
-              loadConversation={loadConversation}
-              loadMoreConversations={loadMoreConversations}
-              renameConversation={renameConversation}
-              toggleChatHistory={toggleChatHistory}
-            />
-          </div>
+          <DynamicChatContent 
+            hudDimensions={hudDimensions}
+            messages={messages}
+            messagesEndRef={messagesEndRef}
+            conversations={conversations}
+            hasMoreConversations={hasMoreConversations}
+            loadConversation={loadConversation}
+            deleteConversation={deleteConversation}
+            loadMoreConversations={loadMoreConversations}
+            renameConversation={renameConversation}
+          />
 
-          {/* Input Container - fixed height at bottom */}
+          {/* Input Container */}
           <HUDInputBar
             hudDimensions={hudDimensions}
             inputValue={input}
             setInputValue={setInput}
+            handleSubmit={handleSubmit}
             onKeyDown={handleKeyDown}
             dispatchOCRCapture={dispatchOCRCapture}
             deleteOCRResult={deleteOCRResult}
@@ -196,16 +168,8 @@ export default function HudPage() {
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
             isStreaming={isStreaming}
-            isFeaturesExpanded={isFeaturesExpanded}
-            featuresRef={featuresRef}
-            setFeaturesMinimized={setFeaturesMinimized}
-            toggleFeatures={toggleFeatures}
-            toggleChatHistory={toggleChatHistory}
-            closeHUD={closeHUD}
-            openSettings={openSettings}
           />
         </div>
-      </div>
-    </div>
+    </AutoResizeContainer>
   );
 }

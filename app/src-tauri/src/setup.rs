@@ -40,7 +40,10 @@ pub async fn setup(app_handle: tauri::AppHandle) -> Result<String, String> {
   }
   log::info!("[setup] VLM initialization successful.");
 
-  // FastEmbed setup removed
+  // Emit auth changed event
+  app_handle
+    .emit("auth_changed", {})
+    .map_err(|e| format!("Failed to emit auth-changed event: {}", e))?;
 
   Ok("Setup completed successfully.".to_string()) // More accurate success message
 }
