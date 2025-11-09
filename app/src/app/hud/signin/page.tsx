@@ -64,7 +64,6 @@ export default function Login() {
 
     try {
       const result = await signIn(values.username.trim(), values.password);
-      console.log('Sign in successful:', result.user_info);
       router.push('/hud');
     } catch (err) {
       console.error('Sign in failed:', err);

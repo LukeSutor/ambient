@@ -211,7 +211,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
           limit: CONVERSATION_LIMIT, offset: 0
         });
         dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
-        console.log('[useConversation] Loaded conversations');
       } catch (error) {
         console.error('[useConversation] Failed to load conversations:', error);
       }

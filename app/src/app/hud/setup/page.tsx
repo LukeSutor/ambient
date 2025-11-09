@@ -92,7 +92,6 @@ export default function SetupPage() {
     try {
       // Setup listeners
       listeners.push(await listen<DownloadStartedPayload>('download-started', (event) => {
-        console.log("Download Started:", event.payload);
         setVlmDownloadId(event.payload.id);
         setVlmTotalSize(event.payload.contentLength);
         setVlmCurrentProgress(0);
@@ -109,7 +108,6 @@ export default function SetupPage() {
       }));
 
       listeners.push(await listen<DownloadFinishedPayload>('download-finished', (event) => {
-        console.log("Download Finished:", event.payload);
         if (event.payload.id === 2) {
             setOverallStatus("Finalizing");
             setVlmDownloadId(null);

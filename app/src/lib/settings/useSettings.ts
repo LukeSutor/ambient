@@ -163,8 +163,6 @@ export function useSettings(isRoot: boolean = false) {
       
       // Emit settings changed event for other windows
       await invoke('emit_settings_changed');
-      
-      console.log('[useSettings] Settings saved successfully');
     } catch (error) {
       console.error('[useSettings] Failed to save settings:', error);
       
@@ -217,8 +215,6 @@ export function useSettings(isRoot: boolean = false) {
 
       // Emit settings changed event
       await invoke('emit_settings_changed');
-      
-      console.log('[useSettings] HUD size updated to:', size);
     } catch (error) {
       console.error('[useSettings] Failed to set HUD size:', error);
       
@@ -269,8 +265,6 @@ export function useSettings(isRoot: boolean = false) {
 
       // Emit settings changed event
       await invoke('emit_settings_changed');
-      
-      console.log('[useSettings] Model selection updated to:', selection);
     } catch (error) {
       console.error('[useSettings] Failed to set model selection:', error);
       
@@ -284,7 +278,6 @@ export function useSettings(isRoot: boolean = false) {
    * Invalidates the cache and reloads from backend
    */
   const refreshCache = useCallback(async (): Promise<void> => {
-    console.log('[useSettings] Refreshing cache...');
     dispatch({ type: 'INVALIDATE_CACHE' });
     await loadSettings();
   }, [dispatch, loadSettings]);

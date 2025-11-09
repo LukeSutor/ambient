@@ -40,7 +40,6 @@ export function GoogleLoginButton({
       
       // Listen for OAuth2 success
       const unlistenSuccess = await listen('oauth2-success', (event) => {
-        console.log('OAuth2 success:', event.payload);
         setIsLoading(false);
         setError(null);
         onSignInSuccess();
@@ -75,12 +74,7 @@ export function GoogleLoginButton({
     setIsLoading(true);
 
     try {
-      console.log('[auth] Starting Google sign-in via backend...');
-      
-      // Use the simplified backend method that handles everything
       await googleSignIn();
-      
-      console.log('[auth] Backend sign-in initiated successfully');
       // Note: The actual authentication will be handled by the deep link callback
       // The loading state will be cleared by the event listeners above
     } catch (err) {

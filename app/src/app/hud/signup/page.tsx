@@ -310,7 +310,6 @@ export default function SignUp() {
                     pattern={REGEXP_ONLY_DIGITS}
                     value={confirmationCode}
                     onChange={(value) => {
-                      console.log("Confirmation code updated:", value);
                       setError(null);
                       setHasTriedConfirm(false);
                       setConfirmationCode(value);

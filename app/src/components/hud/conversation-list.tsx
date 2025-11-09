@@ -80,7 +80,6 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMoreConversations && !isLoadingRef.current) {
-          console.log("loading more conversations");
           isLoadingRef.current = true;
           setLoadingMore(true);
           loadMoreConversations().finally(() => {
