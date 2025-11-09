@@ -155,9 +155,7 @@ pub async fn process_screen_selection(
 
 /// Return an unsuccessful OCR result
 #[tauri::command]
-pub async fn cancel_screen_selection(
-    app_handle: AppHandle,
-) -> Result<(), String> {
+pub async fn cancel_screen_selection() -> Result<(), String> {
     log::info!("Screen selection cancelled by user");
 
     // Emit failed event
