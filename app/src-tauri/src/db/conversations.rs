@@ -3,8 +3,8 @@ use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
-use uuid::Uuid;
 use ts_rs::TS;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[ts(rename_all = "lowercase")]
@@ -159,7 +159,13 @@ pub async fn add_message_with_id(
     .execute(
       "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![message_id, conversation_id, Role::from_str(&role).as_str(), content, now.to_rfc3339()],
+      params![
+        message_id,
+        conversation_id,
+        Role::from_str(&role).as_str(),
+        content,
+        now.to_rfc3339()
+      ],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
 
@@ -236,10 +242,7 @@ pub async fn get_messages(
 
 /// Get a message by its id
 #[tauri::command]
-pub async fn get_message(
-  app_handle: AppHandle,
-  message_id: String,
-) -> Result<Message, String> {
+pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
@@ -304,7 +307,11 @@ pub async fn get_conversation(
 
 /// List all conversations
 #[tauri::command]
-pub async fn list_conversations(app_handle: AppHandle, limit: usize, offset: usize) -> Result<Vec<Conversation>, String> {
+pub async fn list_conversations(
+  app_handle: AppHandle,
+  limit: usize,
+  offset: usize,
+) -> Result<Vec<Conversation>, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard

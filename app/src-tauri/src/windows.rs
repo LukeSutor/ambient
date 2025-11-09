@@ -1,6 +1,6 @@
-use tauri::{AppHandle, LogicalSize, Manager};
-use crate::settings::{HudDimensions, load_user_settings};
 use crate::constants::HUD_WINDOW_LABEL;
+use crate::settings::{load_user_settings, HudDimensions};
+use tauri::{AppHandle, LogicalSize, Manager};
 
 /// Get current HUD dimensions from user settings
 async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
@@ -21,22 +21,20 @@ async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
 
 // Resize the HUD to the input size, keeping top aligned and ensuring the window doesn't overflow the bottom of the screen
 #[tauri::command]
-pub async fn resize_hud(
-  app_handle: AppHandle,
-  width: f64,
-  height: f64,
-) -> Result<(), String> {
+pub async fn resize_hud(app_handle: AppHandle, width: f64, height: f64) -> Result<(), String> {
   let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     let requested_size = LogicalSize::new(width, height);
-    
+
     // Get position before resizing
     let position = window.outer_position().map_err(|e| e.to_string())?;
     window.set_size(requested_size).map_err(|e| e.to_string())?;
 
     // Adjust position to keep top aligned
-    window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
+    window
+      .set_position(tauri::PhysicalPosition::new(position.x, position.y))
+      .map_err(|e| e.to_string())?;
     log::info!("HUD window resized to: {}x{}", width, height);
     Ok(())
   } else {
@@ -63,7 +61,12 @@ pub async fn refresh_hud_window_size(
 
     let size = LogicalSize::new(dimensions.chat_width, height);
     window.set_size(size).map_err(|e| e.to_string())?;
-    log::info!("HUD window size refreshed: {}x{} (expanded: {})", dimensions.chat_width, height, is_expanded);
+    log::info!(
+      "HUD window size refreshed: {}x{} (expanded: {})",
+      dimensions.chat_width,
+      height,
+      is_expanded
+    );
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -72,9 +75,7 @@ pub async fn refresh_hud_window_size(
 
 // Reopen the main window
 #[tauri::command]
-pub async fn open_main_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
+pub async fn open_main_window(app_handle: AppHandle) -> Result<(), String> {
   let window_label = "main".to_string();
 
   if let Some(win) = app_handle.get_webview_window(&window_label) {
@@ -89,9 +90,7 @@ pub async fn open_main_window(
 
 /// Close the floating HUD window by label (defaults to 'main').
 #[tauri::command]
-pub async fn close_main_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
+pub async fn close_main_window(app_handle: AppHandle) -> Result<(), String> {
   let window_label = "main".to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
@@ -120,7 +119,8 @@ pub async fn open_secondary_window(
   if let Some(win) = app_handle.get_webview_window(&window_label) {
     // Navigate to the destination if provided
     if destination.is_some() {
-      win.eval(&format!("window.location.href = '{}'", path))
+      win
+        .eval(&format!("window.location.href = '{}'", path))
         .map_err(|e| e.to_string())?;
     }
     // Focus and show existing window
@@ -149,9 +149,7 @@ pub async fn open_secondary_window(
 
 /// Minimize the secondary window
 #[tauri::command]
-pub async fn minimize_secondary_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
+pub async fn minimize_secondary_window(app_handle: AppHandle) -> Result<(), String> {
   let window_label = "secondary".to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
@@ -164,9 +162,7 @@ pub async fn minimize_secondary_window(
 
 /// Close the secondary window
 #[tauri::command]
-pub async fn close_secondary_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
+pub async fn close_secondary_window(app_handle: AppHandle) -> Result<(), String> {
   let window_label = "secondary".to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {

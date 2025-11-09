@@ -1,5 +1,5 @@
-use crate::os_utils::windows::window::ApplicationTextData;
 use crate::memory::types::MemoryEntry;
+use crate::os_utils::windows::window::ApplicationTextData;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 

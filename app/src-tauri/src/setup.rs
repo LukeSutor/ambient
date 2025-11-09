@@ -203,7 +203,9 @@ pub fn get_ocr_text_detection_model_path(app_handle: tauri::AppHandle) -> Result
 
 /// Gets the path of the OCR text recognition model file
 #[tauri::command]
-pub fn get_ocr_text_recognition_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn get_ocr_text_recognition_model_path(
+  app_handle: tauri::AppHandle,
+) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
@@ -214,11 +216,16 @@ pub fn get_ocr_text_recognition_model_path(app_handle: tauri::AppHandle) -> Resu
 
 /// Checks if the OCR text detection model file exists
 #[tauri::command]
-pub fn check_ocr_text_detection_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+pub fn check_ocr_text_detection_model_download(
+  app_handle: tauri::AppHandle,
+) -> Result<bool, String> {
   match get_ocr_text_detection_model_path(app_handle) {
     Ok(path) => Ok(path.exists()),
     Err(e) => {
-      log::error!("[check_setup] Failed to get OCR text detection model path: {}", e);
+      log::error!(
+        "[check_setup] Failed to get OCR text detection model path: {}",
+        e
+      );
       Ok(false)
     }
   }
@@ -226,11 +233,16 @@ pub fn check_ocr_text_detection_model_download(app_handle: tauri::AppHandle) -> 
 
 /// Checks if the OCR text recognition model file exists
 #[tauri::command]
-pub fn check_ocr_text_recognition_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
+pub fn check_ocr_text_recognition_model_download(
+  app_handle: tauri::AppHandle,
+) -> Result<bool, String> {
   match get_ocr_text_recognition_model_path(app_handle) {
     Ok(path) => Ok(path.exists()),
     Err(e) => {
-      log::error!("[check_setup] Failed to get OCR text recognition model path: {}", e);
+      log::error!(
+        "[check_setup] Failed to get OCR text recognition model path: {}",
+        e
+      );
       Ok(false)
     }
   }

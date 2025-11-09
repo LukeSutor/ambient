@@ -1,9 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod auth;
 pub mod constants;
-pub mod images;
 pub mod db; // new modular database (core, events, workflows, activity)
 pub mod events;
+pub mod images;
 pub mod memory;
 pub mod models;
 pub mod os_utils;
@@ -34,6 +34,7 @@ pub fn run() {
   setup_signal_handlers();
 
   tauri::Builder::default()
+    .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(
       tauri_plugin_log::Builder::new()
@@ -41,7 +42,9 @@ pub fn run() {
         .target(Target::new(TargetKind::Stdout))
         .filter(|metadata| {
           let t = metadata.target();
-          !(t.starts_with("hyper") || t.starts_with("reqwest") || t == "tao::platform_impl::platform::event_loop::runner")
+          !(t.starts_with("hyper")
+            || t.starts_with("reqwest")
+            || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
     )

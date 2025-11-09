@@ -73,6 +73,9 @@ tauri-plugin-store = "2"
 ocrs = "0.10.4"
 rten = "0.21.0"
 
+enigo = "0.6.1"
+tauri-plugin-os = "2"
+
 [profile.dev]
 debug = true
 opt-level = 0

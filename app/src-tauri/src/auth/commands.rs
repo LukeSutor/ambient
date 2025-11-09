@@ -5,8 +5,8 @@ use crate::auth::storage::{
   clear_cognito_auth, clear_stored_token, retrieve_cognito_auth, retrieve_token,
 };
 use crate::auth::types::{CognitoUserInfo, SignInResult, SignUpResult};
-use tauri_plugin_opener::OpenerExt;
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
 pub async fn logout() -> Result<String, String> {
@@ -175,7 +175,7 @@ pub async fn google_sign_out() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn emit_auth_changed(app_handle: AppHandle) -> Result<(), String> {
-    app_handle
-        .emit("auth_changed", ())
-        .map_err(|e| format!("Failed to emit auth_changed event: {}", e))
+  app_handle
+    .emit("auth_changed", ())
+    .map_err(|e| format!("Failed to emit auth_changed event: {}", e))
 }

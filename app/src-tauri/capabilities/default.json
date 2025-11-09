@@ -164,10 +164,19 @@
         }
       ]
     },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://google.com"
+        }
+      ]
+    },
     "fs:default",
     "core:event:default",
     "deep-link:default",
     "log:default",
-    "store:default"
+    "store:default",
+    "os:default"
   ]
 }

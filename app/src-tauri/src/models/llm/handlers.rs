@@ -1,9 +1,9 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
-use crate::db::core::DbState;
 use crate::db::conversations::{add_message, add_message_with_id};
+use crate::db::core::DbState;
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
-use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
+use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema};
 use crate::tasks::{TaskService, TaskWithSteps};
 use tauri::{AppHandle, Manager};
 
@@ -162,7 +162,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     timestamp: chrono::Utc::now().to_string(),
   };
   let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
-  
+
   // Create prompt
   let system_prompt_template = match get_prompt("hud_chat") {
     Some(template) => template,
@@ -175,19 +175,19 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   // Get the current date time YYYY-MM-DD format
   let current_date_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-  let system_prompt = system_prompt_template
-    .replace("{currentDateTime}", &current_date_time);
+  let system_prompt = system_prompt_template.replace("{currentDateTime}", &current_date_time);
 
   log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
 
   // Get 3 most relevant memories
-  let relevant_memories = match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
-    Ok(memories) => memories,
-    Err(e) => {
-      log::warn!("[hud_chat] Failed to find similar memories: {}", e);
-      Vec::new()
-    }
-  };
+  let relevant_memories =
+    match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
+      Ok(memories) => memories,
+      Err(e) => {
+        log::warn!("[hud_chat] Failed to find similar memories: {}", e);
+        Vec::new()
+      }
+    };
 
   // Create memory context string
   let mut memory_context = String::new();
@@ -206,15 +206,26 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
       ocr_text.push_str(&format!("{}\n", ocr_response.text));
     }
     if !ocr_text.is_empty() {
-      ocr_text = format!("\nHere's text captured from my screen as context:\n{}\n", ocr_text);
+      ocr_text = format!(
+        "\nHere's text captured from my screen as context:\n{}\n",
+        ocr_text
+      );
     }
   }
 
   // Create user prompt with ocr data and memory context
   let user_prompt = format!(
     "{}{}Task: {}",
-    if memory_context.is_empty() { "" } else { &format!("{}\n", memory_context) },
-    if ocr_text.is_empty() { "" } else { &format!("{}\n", ocr_text) },
+    if memory_context.is_empty() {
+      ""
+    } else {
+      &format!("{}\n", memory_context)
+    },
+    if ocr_text.is_empty() {
+      ""
+    } else {
+      &format!("{}\n", ocr_text)
+    },
     event.text
   );
 
@@ -250,7 +261,9 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     "user".to_string(),
     event.text.clone(),
     Some(event.message_id.clone()),
-  ).await {
+  )
+  .await
+  {
     Ok(message) => Some(message),
     Err(e) => {
       log::error!("[hud_chat] Failed to save user message: {}", e);
@@ -264,7 +277,9 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     event.conv_id.clone(),
     "assistant".to_string(),
     response.clone(),
-  ).await {
+  )
+  .await
+  {
     log::error!("[hud_chat] Failed to save assistant message: {}", e);
   }
 
@@ -272,11 +287,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   Ok(response)
 }
 
-
-
 // Helper functions
-
-
 
 /// Formats tasks with their steps for use in prompts
 pub fn format_tasks(tasks: &[TaskWithSteps]) -> String {
