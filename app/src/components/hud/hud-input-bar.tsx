@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
@@ -134,12 +135,12 @@ export function HUDInputBar({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={onKeyDown}
-          className="flex field-sizing-content min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
+          className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
           placeholder="Ask anything"
           autoComplete="off"
           autoFocus
         />
-        <InputGroupAddon align="block-end">
+        <InputGroupAddon align="block-end" className="-mb-2">
           <DropdownMenu onOpenChange={setIsDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <InputGroupButton
@@ -228,19 +229,27 @@ export function HUDInputBar({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-            <OcrCaptures captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
-            <InputGroupButton
-              variant="default"
-              className="rounded-full ml-auto bg-black/80 hover:bg-black"
-              size="icon-xs"
-              type="submit"
-              onClick={handleSubmit}
-              disabled={ocrLoading || isStreaming}
-            >
-              <ArrowUpIcon />
-              <span className="sr-only">Send</span>
-            </InputGroupButton>
-          </InputGroupAddon>
+          {/* Horizonal scrollable div with ocr captures */}
+          <ScrollArea className="min-w-0">
+            <div className="flex w-max space-x-2 py-2">
+              <OcrCaptures hud-scrolls captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
+              {/* Make sure the height stays constant */}
+              <div className="h-6" />
+            </div>
+            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
+          </ScrollArea>
+          <InputGroupButton
+            variant="default"
+            className="rounded-full ml-auto bg-black/80 hover:bg-black"
+            size="icon-xs"
+            type="submit"
+            onClick={handleSubmit}
+            disabled={ocrLoading || isStreaming}
+          >
+            <ArrowUpIcon />
+            <span className="sr-only">Send</span>
+          </InputGroupButton>
+        </InputGroupAddon>
           {/* Close icon */}
           <button
             className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +

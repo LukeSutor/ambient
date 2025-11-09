@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { SquareDashed, X } from 'lucide-react';
+import { SquareDashed, X, Loader2Icon } from 'lucide-react';
 import { OcrResponseEvent } from '@/types/events';
 
 interface OcrCapturesProps {
@@ -13,7 +13,7 @@ interface OcrCapturesProps {
 
 export function OcrCaptures({ captures, ocrLoading, onRemove }: OcrCapturesProps) {
   return (
-    <div className="flex items-center gap-1 overflow-hidden whitespace-nowrap shrink min-w-0">
+    <>
       {captures.map((capture, index) => (
         <div
           key={index}
@@ -41,11 +41,11 @@ export function OcrCaptures({ captures, ocrLoading, onRemove }: OcrCapturesProps
             size="icon"
             disabled
             >
-            <X className="!h-3 !w-3 text-black shrink-0" />
+            <Loader2Icon className="!h-3 !w-3 text-black shrink-0 animate-spin" />
           </Button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

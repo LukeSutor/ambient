@@ -16,7 +16,7 @@ export const customUrlTransform = (url: string, key: string, node: any) => {
   if (safeUrl.startsWith('http') && !url.includes('utm_source')) {
     try {
       const urlObj = new URL(safeUrl);
-      urlObj.searchParams.set('utm_source', 'your-app');
+      urlObj.searchParams.set('utm_source', 'cortical');
       return urlObj.toString();
     } catch {
       return safeUrl;
