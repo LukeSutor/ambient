@@ -18,7 +18,7 @@ interface MessageListProps {
 // Container element forwards ref to the tail sentinel to support scrollIntoView
 export function MessageList({ messages, messagesEndRef }: MessageListProps) {
   // Window state
-  const { openSettings } = useWindows();
+  const { openSecondary } = useWindows();
 
   // Helper function to check if previous message has memory
   const hasPreviousMemory = (index: number) => {
@@ -70,7 +70,7 @@ export function MessageList({ messages, messagesEndRef }: MessageListProps) {
                               className="w-full bg-white/50"
                               onClick={(e) => {
                                 e.preventDefault();
-                                openSettings('memories');
+                                openSecondary('memories');
                               }}
                             >
                               Manage Memories

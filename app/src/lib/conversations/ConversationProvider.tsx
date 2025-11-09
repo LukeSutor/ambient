@@ -87,11 +87,82 @@ function conversationReducer(
         conversations: action.payload,
       };
 
-    case 'ADD_CONVERSATIONS':
-      return {
-        ...state,
-        conversations: [...state.conversations, ...action.payload],
+    case 'ADD_CONVERSATIONS': {
+      // Efficiently deduplicate and sort by updated_at
+      //TODO: this needs to be fixed in a more elegant way with realtime conversation list updates, but thats an issue for future me
+      const existing = state.conversations;
+      const incoming = action.payload;
+      const previousLength = existing.length;
+
+      const merged: Conversation[] = [];
+      const seenIds = new Set<string>();
+      let i = 0;
+      let j = 0;
+
+      const compare = (a: Conversation, b: Conversation) => {
+      if (a.updated_at === b.updated_at) return 0;
+      return a.updated_at > b.updated_at ? -1 : 1;
       };
+
+      while (i < existing.length && j < incoming.length) {
+      const currentExisting = existing[i];
+      const currentIncoming = incoming[j];
+
+      if (currentExisting.id === currentIncoming.id) {
+        const chosen =
+        currentExisting.updated_at >= currentIncoming.updated_at
+          ? currentExisting
+          : currentIncoming;
+
+        if (!seenIds.has(chosen.id)) {
+        merged.push(chosen);
+        seenIds.add(chosen.id);
+        }
+
+        i++;
+        j++;
+        continue;
+      }
+
+      if (compare(currentExisting, currentIncoming) <= 0) {
+        if (!seenIds.has(currentExisting.id)) {
+        merged.push(currentExisting);
+        seenIds.add(currentExisting.id);
+        }
+        i++;
+      } else {
+        if (!seenIds.has(currentIncoming.id)) {
+        merged.push(currentIncoming);
+        seenIds.add(currentIncoming.id);
+        }
+        j++;
+      }
+      }
+
+      while (i < existing.length) {
+      const current = existing[i];
+      if (!seenIds.has(current.id)) {
+        merged.push(current);
+        seenIds.add(current.id);
+      }
+      i++;
+      }
+
+      while (j < incoming.length) {
+      const current = incoming[j];
+      if (!seenIds.has(current.id)) {
+        merged.push(current);
+        seenIds.add(current.id);
+      }
+      j++;
+      }
+
+      return {
+      ...state,
+      conversations: merged,
+      hasMoreConversations: merged.length === previousLength ? false : state.hasMoreConversations,
+      };
+    }
 
     case 'SET_NO_MORE_CONVERSATIONS':
       return {

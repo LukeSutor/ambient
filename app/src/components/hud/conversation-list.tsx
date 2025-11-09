@@ -34,11 +34,12 @@ interface ConversationListProps {
   conversations: Conversation[];
   hasMoreConversations: boolean;
   loadConversation: (id: string) => Promise<void>;
+  deleteConversation: (id: string) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   renameConversation: (conversationId: string, newName: string) => Promise<void>;
 }
 
-export function ConversationList({ conversations, hasMoreConversations, loadConversation, loadMoreConversations, renameConversation }: ConversationListProps) {
+export function ConversationList({ conversations, hasMoreConversations, loadConversation, deleteConversation, loadMoreConversations, renameConversation }: ConversationListProps) {
   // State
   const [loadingMore, setLoadingMore] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
@@ -150,7 +151,7 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
                     <DropdownMenuContent>
                       <DropdownMenuGroup>
                         <DropdownMenuItem onClick={() => startEditing(conv)}><Pen className="mr-2" />Rename</DropdownMenuItem>
-                        <DropdownMenuItem variant="destructive" onClick={() => { }}><Trash2 className="mr-2" />Delete</DropdownMenuItem>
+                        <DropdownMenuItem variant="destructive" onClick={() => { deleteConversation(conv.id); }}><Trash2 className="mr-2" />Delete</DropdownMenuItem>
                       </DropdownMenuGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -198,7 +199,7 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
               <>
                 {Array.from({ length: SKELETON_COUNT }).map((_, idx) => (
                   <div key={`skeleton-${idx}`} className="flex flex-row items-center min-w-0 px-3 py-2 rounded-lg">
-                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="h-5 w-full max-w-36" />
                   </div>
                 ))}
                 <div ref={observerTarget} className="w-1 h-1"></div>

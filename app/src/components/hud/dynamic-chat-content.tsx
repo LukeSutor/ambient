@@ -13,6 +13,7 @@ interface DynamicChatContentProps {
     conversations: Conversation[];
     hasMoreConversations: boolean;
     loadConversation: (id: string) => Promise<void>;
+    deleteConversation: (id: string) => Promise<void>;
     loadMoreConversations: () => Promise<void>;
     renameConversation: (conversationId: string, newName: string) => Promise<void>;
 };
@@ -24,6 +25,7 @@ export function DynamicChatContent({
   conversations,
   hasMoreConversations,
   loadConversation,
+  deleteConversation,
   loadMoreConversations,
   renameConversation,
 }: DynamicChatContentProps) {
@@ -65,6 +67,7 @@ export function DynamicChatContent({
             conversations={conversations}
             hasMoreConversations={hasMoreConversations}
             loadConversation={loadConversation}
+            deleteConversation={deleteConversation}
             loadMoreConversations={loadMoreConversations}
             renameConversation={renameConversation}
           />

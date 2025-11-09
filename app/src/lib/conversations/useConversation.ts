@@ -71,8 +71,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const cleanupRef = useRef<(() => void) | null>(null);
   const isLoadingMoreRef = useRef(false);
 
-
-
   // ============================================================
   // Event Listeners Setup
   // ============================================================
@@ -229,11 +227,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Resets the conversation state
    */
-  type ResetOptions = {
-    clearMessages?: boolean;
-    clearDelay?: number;
-  };
-
   const resetConversation = useCallback(async (delay?: number): Promise<string | null> => {
     try {
       dispatch({ type: 'SET_CONVERSATION_ID', payload: null });
@@ -364,22 +357,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch, state.conversationId, state.ocrResults]);
 
   /**
-   * Clears all messages in the current conversation
-   */
-  const clear = useCallback((delay?: number): void => {
-    if (delay) {
-      setTimeout(() => {
-        dispatch({ type: 'CLEAR_MESSAGES' });
-      }, delay);
-    } else {
-      dispatch({ type: 'CLEAR_MESSAGES' });
-    }
-  }, [dispatch]);
-
-  /**
    * Get all conversations
    */
-  const loadMoreConversations = useCallback(async (): Promise<void> => {
+  const loadMoreConversations = useCallback(async (): Promise<void> => {//TODO: fix this getting duplicate ids
     // Prevent concurrent calls
     if (isLoadingMoreRef.current || !state.hasMoreConversations) {
       return;
@@ -461,24 +441,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     dispatch({ type: 'DELETE_OCR_RESULT', payload: index });
   }, [dispatch]);
 
-  /**
-   * Clear OCR results
-   */
-  const clearOCRResults = useCallback((): void => {
-    dispatch({ type: 'CLEAR_OCR_RESULTS' });
-  }, [dispatch]);
-
-  /**
-   * Ensures the llama server is running
-   */
-  const ensureServer = useCallback(async (): Promise<void> => {
-    try {
-      await invoke<string>('spawn_llama_server');
-    } catch (error) {
-      console.warn('[useConversation] Failed to ensure server running:', error);
-    }
-  }, []);
-
   // ============================================================
   // Return API
   // ============================================================
@@ -493,12 +455,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     loadConversation,
     loadMessages,
     sendMessage,
-    clear,
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
-    clearOCRResults,
-    ensureServer,
   };
 }

@@ -32,11 +32,11 @@ export default function HudPage() {
     sendMessage,
     resetConversation,
     loadConversation,
+    deleteConversation,
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
-    clear,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
@@ -145,6 +145,7 @@ export default function HudPage() {
             conversations={conversations}
             hasMoreConversations={hasMoreConversations}
             loadConversation={loadConversation}
+            deleteConversation={deleteConversation}
             loadMoreConversations={loadMoreConversations}
             renameConversation={renameConversation}
           />
