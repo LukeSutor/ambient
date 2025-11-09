@@ -44,7 +44,6 @@ function windowsReducer(
     case 'SET_CHAT_HISTORY_EXPANDED':
       return {
         ...state,
-        isChatExpanded: true,
         isChatHistoryExpanded: true,
       };
 

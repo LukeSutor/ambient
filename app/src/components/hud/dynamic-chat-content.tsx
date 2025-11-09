@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { HudDimensions } from '@/types/settings';
 import { MessageList } from '@/components/hud/message-list';
 import { ConversationList } from '@/components/hud/conversation-list';
@@ -35,27 +35,28 @@ export function DynamicChatContent({
 
   const dynamicConversationsClass = useCallback(() => {
     if (!isChatHistoryExpanded) {
-      return "w-0 max-h-0 opacity-0";
+      return "w-0 max-h-0 opacity-0 pointer-events-none";
     } else if (!isChatExpanded) {
-      return "w-full max-h-full opacity-100";
+      return "w-full max-h-96 opacity-100";
     }
-    return "w-[60%] max-h-full opacity-100"
-  }, [isChatExpanded, isChatHistoryExpanded])
+    return "w-[60%] min-h-32 max-h-full opacity-100";
+  }, [isChatExpanded, isChatHistoryExpanded]);
 
   const dynamicMessagesClass = useCallback(() => {
     if (!isChatExpanded) {
-      return "w-0 max-h-0 opacity-0";
-    } else if (!isChatHistoryExpanded) {
-      return "w-full max-h-full opacity-100";
+      return "w-0 max-h-0 opacity-0 pointer-events-none";
     }
     return "w-full max-h-full opacity-100";
-  }, [isChatExpanded, isChatHistoryExpanded])
+  }, [isChatExpanded]);
 
-  const maxHeight = hudDimensions ? `${hudDimensions.chat_max_height}px` : '500px';
+  const maxHeight = useMemo(() => hudDimensions ? `${hudDimensions.chat_max_height}px` : '500px', [hudDimensions]);
+  const isVisible = isChatExpanded || isChatHistoryExpanded;
+  const containerClasses = useMemo(() => `flex flex-col mx-2 transition-[max-height,opacity] duration-300 ease-in-out overflow-hidden ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`, [isVisible]);
+  const containerStyle = useMemo<React.CSSProperties>(() => ({ maxHeight: isVisible ? maxHeight : '0px' }), [isVisible, maxHeight]);
 
   return (
-    <div className={`flex flex-col mx-2 ${(isChatExpanded || isChatHistoryExpanded) ? "" : "w-0 h-0"}`}
-      style={{maxHeight}}
+    <div className={containerClasses}
+      style={containerStyle}
       >
       <div className={`flex flex-row justify-center min-h-0 ${isChatExpanded && isChatHistoryExpanded ? "space-x-2" : ""}`}>
         {/* Conversation list */}

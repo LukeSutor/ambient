@@ -227,10 +227,21 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Resets the conversation state
    */
-  const resetConversation = useCallback(async (name?: string): Promise<string | null> => {
+  type ResetOptions = {
+    clearMessages?: boolean;
+    clearDelay?: number;
+  };
+
+  const resetConversation = useCallback(async (delay?: number): Promise<string | null> => {
     try {
       dispatch({ type: 'SET_CONVERSATION_ID', payload: null });
-      dispatch({ type: 'CLEAR_MESSAGES' });
+      if (delay && delay > 0) {
+        setTimeout(() => {
+          dispatch({ type: 'CLEAR_MESSAGES' });
+        }, delay);
+      } else {
+        dispatch({ type: 'CLEAR_MESSAGES' });
+      }
       return null;
     } catch (error) {
       console.error('[useConversation] Failed to create conversation:', error);

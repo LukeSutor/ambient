@@ -78,7 +78,6 @@ export function HUDInputBar({
   
   // Window Manager
   const {
-    isChatExpanded,
     toggleChatHistory,
     closeHUD,
     openSecondary,
@@ -90,11 +89,8 @@ export function HUDInputBar({
     
     try {
       await setModelSelection(newModel);
-      const displayName = newModel === 'GptOss' ? 'GPT OSS' : newModel === 'Gpt5' ? 'GPT-5' : newModel;
-      toast.success(`Model changed to ${displayName}`);
     } catch (error) {
       console.error("Failed to save model selection setting:", error);
-      toast.error("Failed to save setting");
     }
   }
 

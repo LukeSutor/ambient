@@ -139,12 +139,12 @@ export default function HudPage() {
     // Don't create new conversation if there are no messages
     if (messages.length > 0) {
       await clearAndCollapse();
-      await resetConversation();
+      await resetConversation(500);
     }
   };
 
   return (
-    <AutoResizeContainer hudDimensions={hudDimensions} widthType="chat" className="bg-blaue-500">
+    <AutoResizeContainer hudDimensions={hudDimensions} widthType="chat" className="bg-transparent">
       {/* Glass Container */}
         <div className="flex flex-col">
           {/* Dynamic Chat Content Area */}

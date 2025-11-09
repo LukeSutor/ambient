@@ -32,7 +32,7 @@ export function useWindows() {
         } else {
             dispatch({ type: 'SET_CHAT_HISTORY_COLLAPSED' });
         }
-    }, [state.isChatHistoryExpanded, state.isChatExpanded, state.isFeaturesExpanded, dispatch]);
+    }, [state.isChatHistoryExpanded, state.isFeaturesExpanded, dispatch]);
 
     const closeHUD = useCallback(async () => {
         try {
