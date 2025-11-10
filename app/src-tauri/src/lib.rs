@@ -236,6 +236,7 @@ pub fn run() {
       tasks::commands::get_task_progress_history,
       models::ocr::ocr::process_image,
       models::ocr::ocr::check_ocr_models_available,
+      models::computer_use::commands::test_computer_use,
       screen_selection::open_screen_selector,
       screen_selection::close_screen_selector,
       screen_selection::process_screen_selection,

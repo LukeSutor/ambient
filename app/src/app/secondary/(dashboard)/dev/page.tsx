@@ -103,6 +103,12 @@ export default function Dev() {
   const [embeddingLoading, setEmbeddingLoading] = useState<boolean>(false);
   const [embeddingError, setEmbeddingError] = useState<string | null>(null);
 
+  // --- Computer Use Test ---
+  const [computerUsePrompt, setComputerUsePrompt] = useState<string>("What is the capital of France?");
+  const [computerUseResult, setComputerUseResult] = useState<string | null>(null);
+  const [computerUseLoading, setComputerUseLoading] = useState<boolean>(false);
+  const [computerUseError, setComputerUseError] = useState<string | null>(null);
+
   const handleGenerateEmbedding = async () => {
     if (!embeddingInput.trim()) return;
     setEmbeddingLoading(true);
@@ -115,6 +121,23 @@ export default function Dev() {
       setEmbeddingError(typeof err === 'string' ? err : JSON.stringify(err));
     } finally {
       setEmbeddingLoading(false);
+    }
+  };
+
+  const handleTestComputerUse = async () => {
+    if (!computerUsePrompt.trim()) return;
+    setComputerUseLoading(true);
+    setComputerUseError(null);
+    setComputerUseResult(null);
+    try {
+      const result = await invoke<string>("test_computer_use", { prompt: computerUsePrompt });
+      setComputerUseResult(result);
+      console.log("Computer Use Result:", result);
+    } catch (err: any) {
+      setComputerUseError(typeof err === 'string' ? err : JSON.stringify(err));
+      console.error("Error testing computer use:", err);
+    } finally {
+      setComputerUseLoading(false);
     }
   };
 
@@ -433,6 +456,38 @@ export default function Dev() {
           <pre className="p-2 bg-white border rounded text-[10px] leading-tight max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
             {embeddingArray.slice(0, 64).map(n => n.toFixed(4)).join(', ')}{embeddingArray.length > 64 ? ' ...' : ''}
           </pre>
+        )}
+      </div>
+
+      {/* Computer Use Test Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-green-50">
+        <h2 className="text-lg font-semibold">Computer Use Engine Test</h2>
+        <p className="text-sm text-gray-600">Test the Gemini Computer Use API with a custom prompt.</p>
+        <Textarea
+          value={computerUsePrompt}
+          onChange={(e) => setComputerUsePrompt(e.target.value)}
+          rows={3}
+          placeholder="Enter a prompt for the computer use engine..."
+        />
+        <Button
+          onClick={handleTestComputerUse}
+          disabled={computerUseLoading || !computerUsePrompt.trim()}
+          variant="default"
+        >
+          {computerUseLoading ? "Testing..." : "Test Computer Use"}
+        </Button>
+        {computerUseError && (
+          <div className="p-2 bg-red-100 border border-red-300 rounded text-xs font-mono overflow-x-auto">
+            Error: {computerUseError}
+          </div>
+        )}
+        {computerUseResult && !computerUseError && (
+          <div className="space-y-2">
+            <Label>API Response:</Label>
+            <pre className="p-3 bg-white border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+              {computerUseResult}
+            </pre>
+          </div>
         )}
       </div>
 
