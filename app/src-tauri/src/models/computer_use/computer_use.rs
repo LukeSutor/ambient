@@ -20,10 +20,6 @@ impl ComputerUseEngine {
                 let physical_size = monitor.size();
                 width = physical_size.width as i32;
                 height = physical_size.height as i32;
-                
-                // // Convert from 1000x1000 coordinate space to actual screen pixels
-                // let actual_x = (x as f64 / 1000.0) * physical_size.width as f64;
-                // let actual_y = (y as f64 / 1000.0) * physical_size.height as f64;
             }
         }
         if width == 0 || height == 0 {
@@ -39,7 +35,7 @@ impl ComputerUseEngine {
 
 
 
-    fn normalize_coordinates(&self, x: i32, y: i32) -> (i32, i32) {
+    fn denormalize_coordinates(&self, x: i32, y: i32) -> (i32, i32) {
         let actual_x = (x as f64 / 1000.0) * self.width as f64;
         let actual_y = (y as f64 / 1000.0) * self.height as f64;
         (actual_x as i32, actual_y as i32)

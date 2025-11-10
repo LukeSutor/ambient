@@ -63,16 +63,18 @@ fn map_key(key_str: &str) -> Option<Key> {
 
 /// Computer use actions
 
-pub fn open_web_browser(app_handle: AppHandle) {
-    navigate(app_handle, "https://google.com");
+pub fn open_web_browser(app_handle: AppHandle) -> Result<(), String> {
+    navigate(app_handle, "https://google.com").unwrap();
+    Ok(())
 }
 
-pub async fn wait_5_seconds() {
+pub async fn wait_5_seconds() -> Result<(), String> {
     let five_seconds = time::Duration::from_secs(5);
     thread::sleep(five_seconds);
+    Ok(())
 }
 
-pub fn go_back() {
+pub fn go_back() -> Result<(), String> {
     let platform: &str = tauri_plugin_os::platform();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     let mut key = Key::Alt;
@@ -82,9 +84,10 @@ pub fn go_back() {
     enigo.key(key, Press).unwrap();
     enigo.key(Key::LeftArrow, Click).unwrap();
     enigo.key(key, Release).unwrap();
+    Ok(())
 }
 
-pub fn go_forward() {
+pub fn go_forward() -> Result<(), String> {
     let platform: &str = tauri_plugin_os::platform();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     let mut key = Key::Alt;
@@ -94,33 +97,38 @@ pub fn go_forward() {
     enigo.key(key, Press).unwrap();
     enigo.key(Key::RightArrow, Click).unwrap();
     enigo.key(key, Release).unwrap();
+    Ok(())
 }
 
-pub fn search(app_handle: AppHandle) {
-    open_web_browser(app_handle);
+pub fn search(app_handle: AppHandle) -> Result<(), String> {
+    open_web_browser(app_handle).unwrap();
+    Ok(())
 }
 
-pub fn navigate(app_handle: AppHandle, url: &str) {
-    app_handle.opener().open_url(url, None::<&str>);
+pub fn navigate(app_handle: AppHandle, url: &str) -> Result<(), String> {
+    app_handle.opener().open_url(url, None::<&str>).unwrap();
+    Ok(())
 }
 
-pub fn click_at(x: i32, y: i32) {
-    hover_at(x, y);
+pub fn click_at(x: i32, y: i32) -> Result<(), String> {
+    hover_at(x, y).unwrap();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     enigo.button(Button::Left, Click).unwrap();
+    Ok(())
 }
 
-pub fn hover_at(x: i32, y: i32) {
+pub fn hover_at(x: i32, y: i32) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     enigo.move_mouse(x, y, Coordinate::Abs).unwrap();
+    Ok(())
 }
 
-pub fn type_text_at(x: i32, y: i32, text: &str, press_enter: Option<bool>, clear_before_typing: Option<bool>) {
+pub fn type_text_at(x: i32, y: i32, text: &str, press_enter: Option<bool>, clear_before_typing: Option<bool>) -> Result<(), String> {
     let press_enter = press_enter.unwrap_or(true);
     let clear_before_typing = clear_before_typing.unwrap_or(true);
 
     // Select the text box
-    click_at(x, y);
+    click_at(x, y).unwrap();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
 
     // Optionally clear the text
@@ -143,9 +151,10 @@ pub fn type_text_at(x: i32, y: i32, text: &str, press_enter: Option<bool>, clear
     if press_enter {
         enigo.key(Key::Return, Click).unwrap();
     }
+    Ok(())
 }
 
-pub fn key_combination(keys: &str) {
+pub fn key_combination(keys: &str) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
         
     // Parse the key combination string
@@ -170,9 +179,10 @@ pub fn key_combination(keys: &str) {
             enigo.key(key, Release).ok();
         }
     }
+    Ok(())
 }
 
-pub fn scroll_document(direction: &str) {
+pub fn scroll_document(direction: &str) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     // Scroll 6 clicks by default
     let mut scroll_axis = Axis::Vertical;
@@ -184,14 +194,15 @@ pub fn scroll_document(direction: &str) {
         direction_multiplier = -1;
     }
     enigo.scroll(direction_multiplier * 6, scroll_axis).unwrap();
+    Ok(())
 }
 
-pub fn scroll_at(x: i32, y: i32, direction: &str, magnitude: Option<i32>) {
+pub fn scroll_at(x: i32, y: i32, direction: &str, magnitude: Option<i32>) -> Result<(), String> {
     let magnitude = magnitude.unwrap_or(800);
     // Normalize magnitude with 800 being 6 scrolls
     let normalized_magnitude = (magnitude as f64 / 800.0 * 6.0).round() as i32;
 
-    hover_at(x, y);
+    hover_at(x, y).unwrap();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     let mut scroll_axis = Axis::Vertical;
     if direction == "left" || direction == "right" {
@@ -202,9 +213,10 @@ pub fn scroll_at(x: i32, y: i32, direction: &str, magnitude: Option<i32>) {
         direction_multiplier = -1;
     }
     enigo.scroll(direction_multiplier * normalized_magnitude, scroll_axis).unwrap();
+    Ok(())
 }
 
-pub fn drag_and_drop(x: i32, y: i32, destination_x: i32, destination_y: i32) {
+pub fn drag_and_drop(x: i32, y: i32, destination_x: i32, destination_y: i32) -> Result<(), String> {
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     
     // Move to start position
@@ -218,4 +230,5 @@ pub fn drag_and_drop(x: i32, y: i32, destination_x: i32, destination_y: i32) {
     
     // Release mouse button
     enigo.button(Button::Left, Release).unwrap();
+    Ok(())
 }
