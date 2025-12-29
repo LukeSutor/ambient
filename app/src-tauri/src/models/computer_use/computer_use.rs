@@ -1,19 +1,23 @@
 use tauri::{AppHandle, Manager};
 use super::actions::*;
 use serde_json::json;
-
-/// Helpers
+use crate::images::take_screenshot;
+use crate::events::{emitter::emit, types::*};
+use chrono;
 
 
 pub struct ComputerUseEngine {
     app_handle: AppHandle,
     width: i32,
     height: i32,
+    prompt: String,
+    final_response: String,
+    contents: Vec<serde_json::Value>,
     cancel_loop: bool
 }
 
 impl ComputerUseEngine {
-    pub fn new(app_handle: AppHandle) -> Self {
+    pub fn new(app_handle: AppHandle, prompt: String) -> Self {
         // Get the screen's physical size to store it
         let mut width: i32 = 0;
         let mut height: i32 = 0;
@@ -27,15 +31,25 @@ impl ComputerUseEngine {
         if width == 0 || height == 0 {
             log::warn!("Failed to get screen dimensions, using defaults");
         }
+        // Build the initial contents with the prompt
+        let initial_content = json!({
+            "role": "user",
+            "parts": [{
+                "text": prompt
+            }]
+        });
         Self {
             app_handle: app_handle.clone(),
             width: width as i32,
             height: height as i32,
+            prompt,
+            final_response: String::new(),
+            contents: Vec::new(),
             cancel_loop: false
         }
     }
 
-    pub async fn get_model_response(&self, prompt: &str) -> Result<serde_json::Value, String> {
+    pub async fn get_model_response(&self) -> Result<serde_json::Value, String> {
         let api_key = std::env::var("GEMINI_API_KEY")
             .map_err(|_| "Missing GEMINI_API_KEY environment variable".to_string())?;
         
@@ -45,24 +59,20 @@ impl ComputerUseEngine {
             model, api_key
         );
 
-        // Build the parts array
-        let parts = vec![
-            json!({
-                "text": prompt
-            })
-        ];
-
         // Build request body
         let request_body = json!({
-            "contents": [{
-                "role": "user",
-                "parts": parts
-            }],
+            "contents": self.contents,
             "tools": [{
                 "computer_use": {
                     "environment": "ENVIRONMENT_BROWSER"
                 }
-            }]
+            }],
+            "generationConfig": {
+                "temperature": 1,
+                "topP": 0.95,
+                "topK": 40,
+                "maxOutputTokens": 8192,
+            }
         });
 
         // Make the HTTP request (async)
@@ -131,7 +141,8 @@ impl ComputerUseEngine {
         function_calls
     }
 
-    pub async fn handle_action(&self, function_call: &serde_json::Value) -> Result<(), String> {
+    // Returns base64 png data of screen after action
+    pub async fn handle_action(&self, function_call: &serde_json::Value) -> Result<String, String> {
         // Log the function call for debugging
         println!("Handling function call: {}", function_call);
         let name = function_call.get("name")
@@ -144,44 +155,36 @@ impl ComputerUseEngine {
             "open_web_browser" => {
                 open_web_browser(self.app_handle.clone())
                     .map_err(|_| format!("Failed to open web browser"))?;
-                Ok(())
             }
             "wait_5_seconds" => {
                 wait_5_seconds().await.map_err(|_| format!("Failed to wait"))?;
-                Ok(())
             }
             "go_back" => {
                 go_back().map_err(|_| format!("Failed to go back"))?;
-                Ok(())
             }
             "go_forward" => {
                 go_forward().map_err(|_| format!("Failed to go forward"))?;
-                Ok(())
             }
             "search" => {
                 search(self.app_handle.clone())
                     .map_err(|_| format!("Failed to perform search"))?;
-                Ok(())
             }
             "navigate" => {
                 let url = args.get("url").and_then(|u| u.as_str()).ok_or("Missing 'url' argument")?;
                 navigate(self.app_handle.clone(), url)
                     .map_err(|_| format!("Failed to navigate to URL"))?;
-                Ok(())
             }
             "click_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
                 let y = args.get("y").and_then(|y| y.as_i64()).ok_or("Missing 'y' argument")? as i32;
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 click_at(actual_x, actual_y).map_err(|_| format!("Failed to click at coordinates"))?;
-                Ok(())
             }
             "hover_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
                 let y = args.get("y").and_then(|y| y.as_i64()).ok_or("Missing 'y' argument")? as i32;
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 hover_at(actual_x, actual_y).map_err(|_| format!("Failed to hover at coordinates"))?;
-                Ok(())
             }
             "type_text_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
@@ -192,19 +195,16 @@ impl ComputerUseEngine {
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 type_text_at(actual_x, actual_y, text, press_enter, clear_before_typing)
                     .map_err(|_| format!("Failed to type text at coordinates"))?;
-                Ok(())
             }
             "key_combination" => {
                 let keys = args.get("keys").and_then(|k| k.as_str()).ok_or("Missing 'keys' argument")?;
                 key_combination(keys)
                     .map_err(|_| format!("Failed to perform key combination"))?;
-                Ok(())
             }
             "scroll_document" => {
                 let direction = args.get("direction").and_then(|d| d.as_str()).ok_or("Missing 'direction' argument")?;
                 scroll_document(direction)
                     .map_err(|_| format!("Failed to scroll document"))?;
-                Ok(())
             }
             "scroll_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
@@ -214,7 +214,6 @@ impl ComputerUseEngine {
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 scroll_at(actual_x, actual_y, direction, magnitude)
                     .map_err(|_| format!("Failed to scroll at coordinates"))?;
-                Ok(())
             }
             "drag_and_drop" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
@@ -225,17 +224,167 @@ impl ComputerUseEngine {
                 let (actual_dest_x, actual_dest_y) = self.denormalize_coordinates(destination_x, destination_y);
                 drag_and_drop(actual_x, actual_y, actual_dest_x, actual_dest_y)
                     .map_err(|_| format!("Failed to drag and drop"))?;
-                Ok(())
             }
             _ => {
                 Err(format!("Unknown function: {}", name))
             }
         }
+
+        // Wait two seconds and return base64 screenshot
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let screenshot_data = take_screenshot();
+        Ok(base64::encode(&screenshot_data))
     }
 
     fn denormalize_coordinates(&self, x: i32, y: i32) -> (i32, i32) {
         let actual_x = (x as f64 / 1000.0) * self.width as f64;
         let actual_y = (y as f64 / 1000.0) * self.height as f64;
         (actual_x as i32, actual_y as i32)
+    }
+
+    fn get_safety_confirmation(&self, safety: &serde_json::Value) -> Result<bool, String> {
+        let safety_confirmation_event = SafetyConfirmationEvent {
+            reason: safety.get("explanation").and_then(|e| e.as_str()).unwrap_or("No explanation provided").to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _ = emit(GET_SAFETY_CONFIRMATION, safety_confirmation_event);
+
+        // Wait for response
+        let (tx, rx) = tauri::async_runtime::oneshot::channel();
+        self.app_handle.once(SAFETY_CONFIRMATION_RESPONSE, move |event| {
+            if let Some(payload) = event.payload() {
+            if let Ok(res) = serde_json::from_str::<SafetyConfirmationResponseEvent>(payload) {
+                let _ = tx.send(res.user_confirmed);
+            }
+            }
+        });
+
+        match rx.await {
+            Ok(true) => Ok(true),
+            Ok(false) => Ok(false),
+            Err(_) => Err("Safety confirmation failed or timed out".to_string()),
+        }
+    }
+
+    // Returns true if iteration is done, false to continue
+    fn run_one_iteration(&self) -> Result<bool, String> {
+        log::info!("[computer_use] Running one iteration of computer use engine");
+
+        // Get model response
+        let response = self.get_model_response(&self.prompt).await?;
+
+        log::info!("[computer_use] Model response: {}", response);
+
+        // Extract the candidate and append it to the contents
+        let mut first_candidate_opt = None;
+        let mut reasoning = String::new();
+        let mut function_calls = Vec::new();
+        if let Some(candidates) = response.get("candidates").and_then(|c| c.as_array()) {
+            if let Some(first_candidate) = candidates.first() {
+                first_candidate_opt = Some(first_candidate);
+                if let Some(text) = self.get_text(first_candidate) {
+                    reasoning = text;
+                }
+                function_calls = self.extract_function_calls(first_candidate);
+                self.contents.push(first_candidate.clone());
+            }
+        } else {
+            return Ok(false);
+        }
+
+        // Check for malformed function calls and retry if necessary
+        if function_calls.is_empty() && reasoning.is_empty() {
+            log::warn!("[computer_use] No function calls or final text extracted, retrying iteration");
+            return Ok(false);
+        }
+
+        // Check for final response
+        if function_calls.is_empty() {
+            log::info!("[computer_use] No function calls found, treating as final response");
+            self.final_response = reasoning;
+            return Ok(true);
+        }
+
+        // Handle function calls
+        let mut parts = Vec::new();
+        for function_call in function_calls {
+            log::info!("[computer_use] Handling function call: {}", function_call);
+
+            // Check for safety
+            let mut safety_required = false;
+            if let Some(safety) = function_call.get("safety_confirmation") {
+                if safety.get("decision").and_then(|d| d.as_str()) == Some("require_confirmation") {
+                    safety_required = true;
+                    let user_confirmed = self.get_safety_confirmation(safety)?;
+                    if !user_confirmed {
+                        log::warn!("[computer_use] Safety confirmation denied by user, stopping execution");
+                        return Ok(true);
+                    }
+                }
+            }
+            let action_result = self.handle_action(&function_call).await;
+            if action_result.is_err() {
+                log::error!("[computer_use] Error handling action: {}", action_result.err().unwrap());
+                return Ok(false);
+            }
+            let screenshot_data = action_result.unwrap();
+            // Create part with function call result
+            let mut func_result = json!({
+                "function_response": {
+                    "function_name": function_call.get("name").and_then(|n| n.as_str()).unwrap_or("unknown"),
+                    "response": {
+                        "url": "current_url"
+                    }
+                },
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": "image/png",
+                            "data_base64": screenshot_data
+                        }
+                    }
+                ]
+            });
+
+            // Add safety confirmation info if applicable
+            if safety_required {
+                func_result["function_response"]["response"]["safety_aknowledgement"] = json!(true);
+            }
+
+            parts.push(func_result);
+        }
+
+        // Create new content entry with function results
+        let new_content = json!({
+            "role": "user",
+            "parts": parts
+        });
+        self.contents.push(new_content);
+
+        // Only keep screenshots from the last 3 turns
+        let mut screenshot_count = 0;
+        for content in self.contents.iter().rev() {
+            if content.get("role").and_then(|r| r.as_str()) == Some("user") && content.get("parts").is_some() {
+                let mut has_screenshot = false;
+                for part in content.get("parts").and_then(|p| p.as_array()).unwrap() {
+                    if part.get("inline_data").is_some() {
+                        has_screenshot = true;
+                        break;
+                    }
+                }
+                if has_screenshot {
+                    screenshot_count += 1;
+                    if screenshot_count > 3 {
+                        for part in content.get("parts").and_then(|p| p.as_array()).unwrap() {
+                            if part.get("inline_data").is_some() {
+                                part.as_object_mut().unwrap().remove("inline_data");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        log::info!("[computer_use] Completed iteration. New contents: {:?}", self.contents);
+        Ok(false)
     }
 }

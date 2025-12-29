@@ -7,8 +7,7 @@ pub async fn test_computer_use(
     app_handle: AppHandle,
     prompt: String,
 ) -> Result<String, String> {
-    let engine = ComputerUseEngine::new(app_handle);
-    let response = engine.get_model_response(&prompt).await?;
+    let engine = ComputerUseEngine::new(app_handle, prompt.clone());
 
     // Log response
     log::info!("[test_computer_use] Model response: {:?}", response);

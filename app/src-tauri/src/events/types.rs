@@ -91,3 +91,19 @@ pub struct MemoryExtractedEvent {
   pub memory: MemoryEntry,
   pub timestamp: String,
 }
+
+pub const GET_SAFETY_CONFIRMATION: &str = "get_safety_confirmation";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct SafetyConfirmationEvent {
+  pub reason: String,
+  pub timestamp: String,
+}
+
+pub const SAFETY_CONFIRMATION_RESPONSE: &str = "safety_confirmation_response";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct SafetyConfirmationResponseEvent {
+  pub user_confirmed: bool,
+  pub timestamp: String,
+}

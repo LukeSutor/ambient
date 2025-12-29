@@ -2,7 +2,7 @@ use crate::events::{
   emitter::emit,
   types::{OcrResponseEvent, OCR_RESPONSE},
 };
-use crate::images::{crop_image_selection, take_screenshot};
+use crate::images::{crop_image_selection, save_screenshot};
 use crate::models::ocr::ocr::{process_image_from_file, OcrResult};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -123,7 +123,7 @@ pub async fn process_screen_selection(
 
   // Take screenshot and crop
   let filename = Uuid::new_v4().to_string() + ".png";
-  let screenshot_path = take_screenshot(app_handle.clone(), filename.clone());
+  let screenshot_path = save_screenshot(app_handle.clone(), filename.clone());
   let pathbuf = std::path::PathBuf::from(screenshot_path.clone());
   crop_image_selection(pathbuf.clone(), bounds);
   log::info!("Cropped screenshot saved to: {}", screenshot_path);

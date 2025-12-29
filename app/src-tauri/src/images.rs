@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 #[tauri::command]
-pub fn take_screenshot(app_handle: tauri::AppHandle, filename: String) -> String {
+pub fn save_screenshot(app_handle: tauri::AppHandle, filename: String) -> String {
   let screens = Screen::all().unwrap();
   let screen = &screens[0]; // Assuming single screen for simplicity
   let image = screen.capture().unwrap();
@@ -22,6 +22,15 @@ pub fn take_screenshot(app_handle: tauri::AppHandle, filename: String) -> String
   image.save(screenshot_path.clone()).unwrap();
   log::info!("Screenshot saved to: {:?}", screenshots_dir);
   screenshot_path.to_str().unwrap().to_string()
+}
+
+// Returns png data for screenshot
+pub fn take_screenshot() -> Vec<u8> {
+  let screens = Screen::all().unwrap();
+  let screen = &screens[0]; // Assuming single screen for simplicity
+  let image = screen.capture().unwrap();
+  let png_data = image.to_png().unwrap();
+  png_data
 }
 
 pub fn crop_image_selection(path: PathBuf, selection: SelectionBounds) {

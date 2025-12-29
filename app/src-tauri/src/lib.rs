@@ -157,7 +157,7 @@ pub fn run() {
       settings::load_user_settings,
       settings::save_user_settings,
       settings::emit_settings_changed,
-      images::take_screenshot,
+      images::save_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
