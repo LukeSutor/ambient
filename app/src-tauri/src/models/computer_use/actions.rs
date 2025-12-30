@@ -64,17 +64,20 @@ fn map_key(key_str: &str) -> Option<Key> {
 /// Computer use actions
 
 pub fn open_web_browser(app_handle: AppHandle) -> Result<(), String> {
+    log::info!("[computer_use::actions] Opening web browser");
     navigate(app_handle, "https://google.com").unwrap();
     Ok(())
 }
 
 pub async fn wait_5_seconds() -> Result<(), String> {
+    log::info!("[computer_use::actions] Waiting for 5 seconds");
     let five_seconds = time::Duration::from_secs(5);
     thread::sleep(five_seconds);
     Ok(())
 }
 
 pub fn go_back() -> Result<(), String> {
+    log::info!("[computer_use::actions] Navigating back in browser");
     let platform: &str = tauri_plugin_os::platform();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     let mut key = Key::Alt;
@@ -88,6 +91,7 @@ pub fn go_back() -> Result<(), String> {
 }
 
 pub fn go_forward() -> Result<(), String> {
+    log::info!("[computer_use::actions] Navigating forward in browser");
     let platform: &str = tauri_plugin_os::platform();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     let mut key = Key::Alt;
@@ -101,16 +105,19 @@ pub fn go_forward() -> Result<(), String> {
 }
 
 pub fn search(app_handle: AppHandle) -> Result<(), String> {
+    log::info!("[computer_use::actions] Searching in web browser");
     open_web_browser(app_handle).unwrap();
     Ok(())
 }
 
 pub fn navigate(app_handle: AppHandle, url: &str) -> Result<(), String> {
+    log::info!("[computer_use::actions] Navigating to URL: {}", url);
     app_handle.opener().open_url(url, None::<&str>).unwrap();
     Ok(())
 }
 
 pub fn click_at(x: i32, y: i32) -> Result<(), String> {
+    log::info!("[computer_use::actions] Clicking at coordinates: ({}, {})", x, y);
     hover_at(x, y).unwrap();
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     enigo.button(Button::Left, Click).unwrap();
@@ -118,12 +125,14 @@ pub fn click_at(x: i32, y: i32) -> Result<(), String> {
 }
 
 pub fn hover_at(x: i32, y: i32) -> Result<(), String> {
+    log::info!("[computer_use::actions] Hovering at coordinates: ({}, {})", x, y);
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     enigo.move_mouse(x, y, Coordinate::Abs).unwrap();
     Ok(())
 }
 
 pub fn type_text_at(x: i32, y: i32, text: &str, press_enter: Option<bool>, clear_before_typing: Option<bool>) -> Result<(), String> {
+    log::info!("[computer_use::actions] Typing text at coordinates: ({}, {})", x, y);
     let press_enter = press_enter.unwrap_or(true);
     let clear_before_typing = clear_before_typing.unwrap_or(true);
 
@@ -155,6 +164,7 @@ pub fn type_text_at(x: i32, y: i32, text: &str, press_enter: Option<bool>, clear
 }
 
 pub fn key_combination(keys: &str) -> Result<(), String> {
+    log::info!("[computer_use::actions] Performing key combination: {}", keys);
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
         
     // Parse the key combination string
@@ -183,6 +193,7 @@ pub fn key_combination(keys: &str) -> Result<(), String> {
 }
 
 pub fn scroll_document(direction: &str) -> Result<(), String> {
+    log::info!("[computer_use::actions] Scrolling document {}", direction);
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     // Scroll 6 clicks by default
     let mut scroll_axis = Axis::Vertical;
@@ -198,6 +209,7 @@ pub fn scroll_document(direction: &str) -> Result<(), String> {
 }
 
 pub fn scroll_at(x: i32, y: i32, direction: &str, magnitude: Option<i32>) -> Result<(), String> {
+    log::info!("[computer_use::actions] Scrolling at ({}, {}) {} with magnitude {:?}", x, y, direction, magnitude);
     let magnitude = magnitude.unwrap_or(800);
     // Normalize magnitude with 800 being 6 scrolls
     let normalized_magnitude = (magnitude as f64 / 800.0 * 6.0).round() as i32;
@@ -217,6 +229,7 @@ pub fn scroll_at(x: i32, y: i32, direction: &str, magnitude: Option<i32>) -> Res
 }
 
 pub fn drag_and_drop(x: i32, y: i32, destination_x: i32, destination_y: i32) -> Result<(), String> {
+    log::info!("[computer_use::actions] Dragging from ({}, {}) to ({}, {})", x, y, destination_x, destination_y);
     let mut enigo = Enigo::new(&Settings::default()).unwrap();
     
     // Move to start position

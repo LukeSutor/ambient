@@ -389,24 +389,24 @@ impl ComputerUseEngine {
             }
         }
         // Print contents besides png data for debugging
-        let debug_contents: Vec<_> = self.contents.iter().map(|content| {
-            let mut debug_content = content.clone();
-            if let Some(parts) = debug_content.get_mut("parts").and_then(|p| p.as_array_mut()) {
-                for part in parts.iter_mut() {
-                    if let Some(fr) = part.get_mut("functionResponse") {
-                        if let Some(fr_parts) = fr.get_mut("parts").and_then(|p| p.as_array_mut()) {
-                            for fr_part in fr_parts.iter_mut() {
-                                if let Some(inline_data) = fr_part.get_mut("inlineData") {
-                                    *inline_data = json!("[PNG data omitted]");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            debug_content
-        }).collect();
-        log::info!("[computer_use] Completed iteration. New contents: {:?}", debug_contents);
+        // let debug_contents: Vec<_> = self.contents.iter().map(|content| {
+        //     let mut debug_content = content.clone();
+        //     if let Some(parts) = debug_content.get_mut("parts").and_then(|p| p.as_array_mut()) {
+        //         for part in parts.iter_mut() {
+        //             if let Some(fr) = part.get_mut("functionResponse") {
+        //                 if let Some(fr_parts) = fr.get_mut("parts").and_then(|p| p.as_array_mut()) {
+        //                     for fr_part in fr_parts.iter_mut() {
+        //                         if let Some(inline_data) = fr_part.get_mut("inlineData") {
+        //                             *inline_data = json!("[PNG data omitted]");
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     debug_content
+        // }).collect();
+        // log::info!("[computer_use] Completed iteration. New contents: {:?}", debug_contents);
         Ok(false)
     }
 
