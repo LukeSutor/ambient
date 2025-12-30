@@ -3,7 +3,7 @@
 /**
  * Conversation structure
  */
-export type Conversation = { id: string, name: string, created_at: string, updated_at: string, message_count: number, };
+export type Conversation = { id: string, name: string, conv_type: string, created_at: string, updated_at: string, message_count: number, };
 
 /**
  * Message structure

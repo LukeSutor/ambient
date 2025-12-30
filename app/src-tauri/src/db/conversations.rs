@@ -103,7 +103,7 @@ pub async fn create_conversation(
 
   conn
     .execute(
-      "INSERT INTO conversations (id, name, type, created_at, updated_at, message_count)
+      "INSERT INTO conversations (id, name, conv_type, created_at, updated_at, message_count)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
       params![
         conversation_id,
@@ -290,7 +290,7 @@ pub async fn get_conversation(
 
   let conversation = conn
     .query_row(
-      "SELECT id, name, type, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
+      "SELECT id, name, conv_type, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
       params![conversation_id],
       |row| {
         let created_at: String = row.get(3)?;
@@ -302,7 +302,7 @@ pub async fn get_conversation(
           conv_type: row.get(2)?,
           created_at,
           updated_at,
-          message_count: row.get(4)?,
+          message_count: row.get(5)?,
         })
       },
     )
@@ -326,7 +326,7 @@ pub async fn list_conversations(
 
   let mut stmt = conn
     .prepare(
-      "SELECT id, name, type, created_at, updated_at, message_count 
+      "SELECT id, name, conv_type, created_at, updated_at, message_count 
          FROM conversations 
          ORDER BY updated_at DESC
          LIMIT ?1 OFFSET ?2",
@@ -344,7 +344,7 @@ pub async fn list_conversations(
         conv_type: row.get(2)?,
         created_at,
         updated_at,
-        message_count: row.get(4)?,
+        message_count: row.get(5)?,
       })
     })
     .map_err(|e| format!("Failed to query conversations: {}", e))?
