@@ -130,7 +130,7 @@ export default function Dev() {
     setComputerUseError(null);
     setComputerUseResult(null);
     try {
-      const result = await invoke<string>("test_computer_use", { prompt: computerUsePrompt });
+      const result = await invoke<string>("start_computer_use", { prompt: computerUsePrompt });
       setComputerUseResult(result);
       console.log("Computer Use Result:", result);
     } catch (err: any) {

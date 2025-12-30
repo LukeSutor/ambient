@@ -1,19 +1,18 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Listener};
+use tokio::sync::oneshot;
+use base64::{Engine as _, engine::general_purpose};
 use super::actions::*;
 use serde_json::json;
 use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
 use chrono;
 
-
 pub struct ComputerUseEngine {
     app_handle: AppHandle,
     width: i32,
     height: i32,
-    prompt: String,
     final_response: String,
     contents: Vec<serde_json::Value>,
-    cancel_loop: bool
 }
 
 impl ComputerUseEngine {
@@ -31,6 +30,7 @@ impl ComputerUseEngine {
         if width == 0 || height == 0 {
             log::warn!("Failed to get screen dimensions, using defaults");
         }
+
         // Build the initial contents with the prompt
         let initial_content = json!({
             "role": "user",
@@ -38,18 +38,17 @@ impl ComputerUseEngine {
                 "text": prompt
             }]
         });
+        let contents = vec![initial_content];
         Self {
             app_handle: app_handle.clone(),
             width: width as i32,
             height: height as i32,
-            prompt,
             final_response: String::new(),
-            contents: Vec::new(),
-            cancel_loop: false
+            contents
         }
     }
 
-    pub async fn get_model_response(&self) -> Result<serde_json::Value, String> {
+    async fn get_model_response(&self) -> Result<serde_json::Value, String> {
         let api_key = std::env::var("GEMINI_API_KEY")
             .map_err(|_| "Missing GEMINI_API_KEY environment variable".to_string())?;
         
@@ -121,7 +120,7 @@ impl ComputerUseEngine {
         }
     }
 
-    pub fn extract_function_calls(&self, candidate: &serde_json::Value) -> Vec<serde_json::Value> {
+    fn extract_function_calls(&self, candidate: &serde_json::Value) -> Vec<serde_json::Value> {
         let content = match candidate.get("content") {
             Some(c) => c,
             None => return Vec::new(),
@@ -142,7 +141,7 @@ impl ComputerUseEngine {
     }
 
     // Returns base64 png data of screen after action
-    pub async fn handle_action(&self, function_call: &serde_json::Value) -> Result<String, String> {
+    async fn handle_action(&self, function_call: &serde_json::Value) -> Result<String, String> {
         // Log the function call for debugging
         println!("Handling function call: {}", function_call);
         let name = function_call.get("name")
@@ -226,14 +225,14 @@ impl ComputerUseEngine {
                     .map_err(|_| format!("Failed to drag and drop"))?;
             }
             _ => {
-                Err(format!("Unknown function: {}", name))
+                return Err(format!("Unknown function: {}", name))
             }
         }
 
         // Wait two seconds and return base64 screenshot
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         let screenshot_data = take_screenshot();
-        Ok(base64::encode(&screenshot_data))
+        Ok(general_purpose::STANDARD.encode(&screenshot_data))
     }
 
     fn denormalize_coordinates(&self, x: i32, y: i32) -> (i32, i32) {
@@ -242,7 +241,7 @@ impl ComputerUseEngine {
         (actual_x as i32, actual_y as i32)
     }
 
-    fn get_safety_confirmation(&self, safety: &serde_json::Value) -> Result<bool, String> {
+    async fn get_safety_confirmation(&self, safety: &serde_json::Value) -> Result<bool, String> {
         let safety_confirmation_event = SafetyConfirmationEvent {
             reason: safety.get("explanation").and_then(|e| e.as_str()).unwrap_or("No explanation provided").to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -250,12 +249,11 @@ impl ComputerUseEngine {
         let _ = emit(GET_SAFETY_CONFIRMATION, safety_confirmation_event);
 
         // Wait for response
-        let (tx, rx) = tauri::async_runtime::oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         self.app_handle.once(SAFETY_CONFIRMATION_RESPONSE, move |event| {
-            if let Some(payload) = event.payload() {
+            let payload = event.payload();
             if let Ok(res) = serde_json::from_str::<SafetyConfirmationResponseEvent>(payload) {
                 let _ = tx.send(res.user_confirmed);
-            }
             }
         });
 
@@ -267,21 +265,18 @@ impl ComputerUseEngine {
     }
 
     // Returns true if iteration is done, false to continue
-    fn run_one_iteration(&self) -> Result<bool, String> {
+    async fn run_one_iteration(&mut self) -> Result<bool, String> {
         log::info!("[computer_use] Running one iteration of computer use engine");
 
         // Get model response
-        let response = self.get_model_response(&self.prompt).await?;
-
+        let response = self.get_model_response().await?;
         log::info!("[computer_use] Model response: {}", response);
 
         // Extract the candidate and append it to the contents
-        let mut first_candidate_opt = None;
         let mut reasoning = String::new();
         let mut function_calls = Vec::new();
         if let Some(candidates) = response.get("candidates").and_then(|c| c.as_array()) {
             if let Some(first_candidate) = candidates.first() {
-                first_candidate_opt = Some(first_candidate);
                 if let Some(text) = self.get_text(first_candidate) {
                     reasoning = text;
                 }
@@ -315,7 +310,7 @@ impl ComputerUseEngine {
             if let Some(safety) = function_call.get("safety_confirmation") {
                 if safety.get("decision").and_then(|d| d.as_str()) == Some("require_confirmation") {
                     safety_required = true;
-                    let user_confirmed = self.get_safety_confirmation(safety)?;
+                    let user_confirmed = self.get_safety_confirmation(safety).await?;
                     if !user_confirmed {
                         log::warn!("[computer_use] Safety confirmation denied by user, stopping execution");
                         return Ok(true);
@@ -363,21 +358,23 @@ impl ComputerUseEngine {
 
         // Only keep screenshots from the last 3 turns
         let mut screenshot_count = 0;
-        for content in self.contents.iter().rev() {
+        for content in self.contents.iter_mut().rev() {
             if content.get("role").and_then(|r| r.as_str()) == Some("user") && content.get("parts").is_some() {
                 let mut has_screenshot = false;
-                for part in content.get("parts").and_then(|p| p.as_array()).unwrap() {
-                    if part.get("inline_data").is_some() {
-                        has_screenshot = true;
-                        break;
+                if let Some(parts) = content.get_mut("parts").and_then(|p| p.as_array_mut()) {
+                    for part in parts.iter() {
+                        if part.get("inline_data").is_some() {
+                            has_screenshot = true;
+                            break;
+                        }
                     }
-                }
-                if has_screenshot {
-                    screenshot_count += 1;
-                    if screenshot_count > 3 {
-                        for part in content.get("parts").and_then(|p| p.as_array()).unwrap() {
-                            if part.get("inline_data").is_some() {
-                                part.as_object_mut().unwrap().remove("inline_data");
+                    if has_screenshot {
+                        screenshot_count += 1;
+                        if screenshot_count > 3 {
+                            for part in parts.iter_mut() {
+                                if let Some(obj) = part.as_object_mut() {
+                                    obj.remove("inline_data");
+                                }
                             }
                         }
                     }
@@ -386,5 +383,15 @@ impl ComputerUseEngine {
         }
         log::info!("[computer_use] Completed iteration. New contents: {:?}", self.contents);
         Ok(false)
+    }
+
+    pub async fn run(&mut self) -> Result<(), String> {
+        loop {
+            let done = self.run_one_iteration().await?;
+            if done {
+                break;
+            }
+        }
+        Ok(())
     }
 }

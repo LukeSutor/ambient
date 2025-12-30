@@ -29,8 +29,9 @@ pub fn take_screenshot() -> Vec<u8> {
   let screens = Screen::all().unwrap();
   let screen = &screens[0]; // Assuming single screen for simplicity
   let image = screen.capture().unwrap();
-  let png_data = image.to_png().unwrap();
-  png_data
+  let mut buffer = std::io::Cursor::new(Vec::new());
+  image.write_to(&mut buffer, screenshots::image::ImageFormat::Png).unwrap();
+  buffer.into_inner()
 }
 
 pub fn crop_image_selection(path: PathBuf, selection: SelectionBounds) {
