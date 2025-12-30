@@ -23,6 +23,7 @@ export default function HudPage() {
   const {
     messages,
     conversations,
+    conversationType,
     hasMoreConversations,
     conversationId,
     ocrResults,
@@ -37,6 +38,7 @@ export default function HudPage() {
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
+    toggleComputerUse,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
@@ -165,9 +167,11 @@ export default function HudPage() {
             isDraggingWindow={isDraggingWindow}
             isHoveringGroup={isHoveringGroup}
             setIsHoveringGroup={setIsHoveringGroup}
+            toggleComputerUse={toggleComputerUse}
             ocrLoading={ocrLoading}
             ocrResults={ocrResults}
             isStreaming={isStreaming}
+            conversationType={conversationType}
           />
         </div>
     </AutoResizeContainer>

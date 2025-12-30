@@ -441,6 +441,18 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     dispatch({ type: 'DELETE_OCR_RESULT', payload: index });
   }, [dispatch]);
 
+  /**
+   * Toggle Computer Use mode
+   */
+  const toggleComputerUse = useCallback((): void => {
+    if (state.conversationType === "chat") {
+      dispatch({ type: 'SET_CONVERSATION_TYPE', payload: "computer_use" })
+    } else {
+      dispatch({ type: 'SET_CONVERSATION_TYPE', payload: "chat" })
+    }
+    console.log(state.conversationType)
+  }, [dispatch, state.conversationType])
+
   // ============================================================
   // Return API
   // ============================================================
@@ -459,5 +471,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     renameConversation,
     dispatchOCRCapture,
     deleteOCRResult,
+    toggleComputerUse,
   };
 }

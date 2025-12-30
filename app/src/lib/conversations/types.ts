@@ -24,6 +24,7 @@ export interface ChatMessage {
 export interface Conversation {
   id: string;
   name: string;
+  conv_type: string;
   created_at: string;
   updated_at: string;
   message_count: number;
