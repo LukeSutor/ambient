@@ -92,6 +92,17 @@ pub struct MemoryExtractedEvent {
   pub timestamp: String,
 }
 
+pub const COMPUTER_USE_UPDATE: &str = "computer_use_update";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct ComputerUseUpdateEvent {
+  pub status: String,
+  pub reasoning: String,
+  pub function_names: Vec<String>,
+  pub args: Vec<Vec<String>>,
+  pub timestamp: String,
+}
+
 pub const GET_SAFETY_CONFIRMATION: &str = "get_safety_confirmation";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]

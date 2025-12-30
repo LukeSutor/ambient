@@ -2,6 +2,7 @@ use tauri::{AppHandle, Manager, Listener};
 use tokio::sync::oneshot;
 use base64::{Engine as _, engine::general_purpose};
 use super::actions::*;
+use super::types::ActionResponse;
 use serde_json::json;
 use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
@@ -142,7 +143,7 @@ impl ComputerUseEngine {
     }
 
     // Returns base64 png data of screen after action
-    async fn handle_action(&self, function_call: &serde_json::Value) -> Result<String, String> {
+    async fn handle_action(&self, function_call: &serde_json::Value) -> Result<ActionResponse, String> {
         // Log the function call for debugging
         println!("Handling function call: {}", function_call);
         let name = function_call.get("name")
@@ -151,40 +152,40 @@ impl ComputerUseEngine {
         let args = function_call.get("args")
             .ok_or("Missing function arguments")?;
         
-        match name {
+        let response = match name {
             "open_web_browser" => {
                 open_web_browser(self.app_handle.clone())
-                    .map_err(|_| format!("Failed to open web browser"))?;
+                    .map_err(|_| format!("Failed to open web browser"))?
             }
             "wait_5_seconds" => {
-                wait_5_seconds().await.map_err(|_| format!("Failed to wait"))?;
+                wait_5_seconds().await.map_err(|_| format!("Failed to wait"))?
             }
             "go_back" => {
-                go_back().map_err(|_| format!("Failed to go back"))?;
+                go_back().map_err(|_| format!("Failed to go back"))?
             }
             "go_forward" => {
-                go_forward().map_err(|_| format!("Failed to go forward"))?;
+                go_forward().map_err(|_| format!("Failed to go forward"))?
             }
             "search" => {
                 search(self.app_handle.clone())
-                    .map_err(|_| format!("Failed to perform search"))?;
+                    .map_err(|_| format!("Failed to perform search"))?
             }
             "navigate" => {
                 let url = args.get("url").and_then(|u| u.as_str()).ok_or("Missing 'url' argument")?;
                 navigate(self.app_handle.clone(), url)
-                    .map_err(|_| format!("Failed to navigate to URL"))?;
+                    .map_err(|_| format!("Failed to navigate to URL"))?
             }
             "click_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
                 let y = args.get("y").and_then(|y| y.as_i64()).ok_or("Missing 'y' argument")? as i32;
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
-                click_at(actual_x, actual_y).map_err(|_| format!("Failed to click at coordinates"))?;
+                click_at(actual_x, actual_y).map_err(|_| format!("Failed to click at coordinates"))?
             }
             "hover_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
                 let y = args.get("y").and_then(|y| y.as_i64()).ok_or("Missing 'y' argument")? as i32;
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
-                hover_at(actual_x, actual_y).map_err(|_| format!("Failed to hover at coordinates"))?;
+                hover_at(actual_x, actual_y).map_err(|_| format!("Failed to hover at coordinates"))?
             }
             "type_text_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
@@ -194,17 +195,17 @@ impl ComputerUseEngine {
                 let clear_before_typing = args.get("clear_before_typing").and_then(|c| c.as_bool());
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 type_text_at(actual_x, actual_y, text, press_enter, clear_before_typing)
-                    .map_err(|_| format!("Failed to type text at coordinates"))?;
+                    .map_err(|_| format!("Failed to type text at coordinates"))?
             }
             "key_combination" => {
                 let keys = args.get("keys").and_then(|k| k.as_str()).ok_or("Missing 'keys' argument")?;
                 key_combination(keys)
-                    .map_err(|_| format!("Failed to perform key combination"))?;
+                    .map_err(|_| format!("Failed to perform key combination"))?
             }
             "scroll_document" => {
                 let direction = args.get("direction").and_then(|d| d.as_str()).ok_or("Missing 'direction' argument")?;
                 scroll_document(direction)
-                    .map_err(|_| format!("Failed to scroll document"))?;
+                    .map_err(|_| format!("Failed to scroll document"))?
             }
             "scroll_at" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
@@ -213,7 +214,7 @@ impl ComputerUseEngine {
                 let magnitude = args.get("magnitude").and_then(|m| m.as_i64()).map(|m| m as i32);
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 scroll_at(actual_x, actual_y, direction, magnitude)
-                    .map_err(|_| format!("Failed to scroll at coordinates"))?;
+                    .map_err(|_| format!("Failed to scroll at coordinates"))?
             }
             "drag_and_drop" => {
                 let x = args.get("x").and_then(|x| x.as_i64()).ok_or("Missing 'x' argument")? as i32;
@@ -223,17 +224,13 @@ impl ComputerUseEngine {
                 let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
                 let (actual_dest_x, actual_dest_y) = self.denormalize_coordinates(destination_x, destination_y);
                 drag_and_drop(actual_x, actual_y, actual_dest_x, actual_dest_y)
-                    .map_err(|_| format!("Failed to drag and drop"))?;
+                    .map_err(|_| format!("Failed to drag and drop"))?
             }
             _ => {
                 return Err(format!("Unknown function: {}", name))
             }
-        }
-
-        // Wait two seconds and return base64 screenshot
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        let screenshot_data = take_screenshot();
-        Ok(general_purpose::STANDARD.encode(&screenshot_data))
+        };
+        Ok(response)
     }
 
     fn denormalize_coordinates(&self, x: i32, y: i32) -> (i32, i32) {
@@ -305,6 +302,8 @@ impl ComputerUseEngine {
 
         // Handle function calls
         let mut parts = Vec::new();
+        let mut function_names = Vec::new();
+        let mut args = Vec::new();
         for function_call in function_calls {
             log::info!("[computer_use] Handling function call: {}", function_call);
 
@@ -325,7 +324,15 @@ impl ComputerUseEngine {
                 log::error!("[computer_use] Error handling action: {}", action_result.err().unwrap());
                 return Ok(false);
             }
-            let screenshot_data = action_result.unwrap();
+            let action_response = action_result.unwrap();
+            function_names.push(action_response.function_name.clone());
+            args.push(action_response.args.clone());
+
+            // Wait two seconds and return base64 screenshot
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let screenshot_vec = take_screenshot();
+            let screenshot_data = general_purpose::STANDARD.encode(&screenshot_vec);
+
             // Create part with function call result
             let mut func_result = json!({
                 "functionResponse": {
@@ -388,6 +395,17 @@ impl ComputerUseEngine {
                 }
             }
         }
+
+        // Emit update event
+        let computer_use_update_event = ComputerUseUpdateEvent {
+            status: "in_progress".to_string(),
+            reasoning: reasoning,
+            function_names: function_names,
+            args: args,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _ = emit(COMPUTER_USE_UPDATE, computer_use_update_event);
+
         // Print contents besides png data for debugging
         // let debug_contents: Vec<_> = self.contents.iter().map(|content| {
         //     let mut debug_content = content.clone();
@@ -418,6 +436,17 @@ impl ComputerUseEngine {
                 break;
             }
         }
+
+        // Emit final update event
+        let computer_use_update_event = ComputerUseUpdateEvent {
+            status: "completed".to_string(),
+            reasoning: self.final_response.clone(),
+            function_names: Vec::new(),
+            args: Vec::new(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _ = emit(COMPUTER_USE_UPDATE, computer_use_update_event);
+
         Ok(())
     }
 }

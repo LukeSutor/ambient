@@ -7,6 +7,8 @@ export type CaptureScreenEvent = { timestamp: string, };
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, };
 
+export type ComputerUseUpdateEvent = { status: string, reasoning: string, function_names: Array<string>, args: Array<Array<string>>, timestamp: string, };
+
 export type DetectTasksEvent = { text: string, active_url: string | null, timestamp: string, };
 
 export type ExtractInteractiveMemoryEvent = { message: string, message_id: string, timestamp: string, };
@@ -18,6 +20,10 @@ export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 
 export type OcrResponseEvent = { text: string, success: boolean, timestamp: string, };
+
+export type SafetyConfirmationEvent = { reason: string, timestamp: string, };
+
+export type SafetyConfirmationResponseEvent = { user_confirmed: boolean, timestamp: string, };
 
 export type SummarizeScreenEvent = { text: string, data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 

@@ -1,5 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ActionResponse {
+    pub function_name: String,
+    pub args: Vec<String>,
+}
+
 /// Response types for Gemini API
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GeminiResponse {
