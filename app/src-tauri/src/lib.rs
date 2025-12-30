@@ -180,6 +180,7 @@ pub fn run() {
       db::conversations::delete_conversation,
       db::conversations::update_conversation_name,
       setup::setup,
+      setup::is_online,
       setup::get_vlm_text_model_path,
       setup::get_vlm_mmproj_model_path,
       setup::check_vlm_text_model_download,

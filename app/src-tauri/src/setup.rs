@@ -1,5 +1,6 @@
 use crate::constants::*;
 use reqwest::Client;
+use tokio::time::Duration;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
@@ -26,6 +27,25 @@ struct DownloadProgress {
 #[serde(rename_all = "camelCase")]
 struct DownloadFinished {
   id: u64,
+}
+
+/// Check if the user is online
+#[tauri::command]
+pub async fn is_online() -> bool {
+  let client = Client::builder()
+    .timeout(Duration::from_secs(5))
+    .build()
+    .expect("Failed to build request client");
+
+  match client.get("www.google.com").send().await {
+    Ok(response) => {
+      response.status().is_success()
+    }
+    Err(_) => {
+      false
+    }
+  }
+
 }
 
 /// Setup function to download vlm and fastembed models

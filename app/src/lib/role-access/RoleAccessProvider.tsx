@@ -12,12 +12,14 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   invokeGetCurrentUser,
   invokeIsAuthenticated,
+  invokeIsOnline,
   invokeIsSetupComplete,
 } from "./commands";
 import type { CognitoUserInfo, RoleAccessState } from "./types";
 
 const initialState: RoleAccessState = {
   isHydrated: false,
+  isOnline: false,
   isLoggedIn: false,
   isSetupComplete: false,
   isPremiumUser: false,
@@ -25,6 +27,7 @@ const initialState: RoleAccessState = {
 };
 
 type RoleAccessAction =
+  | { type: "SET_IS_ONLINE"; payload: boolean }
   | { type: "SET_LOGGED_IN"; payload: boolean }
   | { type: "SET_SETUP_COMPLETE"; payload: boolean }
   | { type: "SET_PREMIUM_USER"; payload: boolean }
@@ -33,6 +36,11 @@ type RoleAccessAction =
 
 function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): RoleAccessState {
   switch (action.type) {
+    case "SET_IS_ONLINE":
+      return {
+        ...state,
+        isOnline: action.payload,
+      };
     case "SET_LOGGED_IN":
       return {
         ...state,
@@ -80,11 +88,13 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
 
   const refresh = useCallback(async () => {
     try {
-      const [isLoggedIn, isSetupComplete] = await Promise.all([
+      const [isOnline, isLoggedIn, isSetupComplete] = await Promise.all([
+        invokeIsOnline(),
         invokeIsAuthenticated(),
         invokeIsSetupComplete(),
       ]);
 
+      dispatch({ type: "SET_IS_ONLINE", payload: isOnline });
       dispatch({ type: "SET_LOGGED_IN", payload: isLoggedIn });
       dispatch({ type: "SET_SETUP_COMPLETE", payload: isSetupComplete });
 

@@ -447,6 +447,8 @@ impl ComputerUseEngine {
         };
         let _ = emit(COMPUTER_USE_UPDATE, computer_use_update_event);
 
+        //TODO: responses are emitted, now figure out how to work this into the chat flow
+
         Ok(())
     }
 }
