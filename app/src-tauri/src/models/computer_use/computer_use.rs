@@ -94,6 +94,7 @@ impl ComputerUseEngine {
         if let Some(error) = json_response.get("error") {
             let code = error.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
             let message = error.get("message").and_then(|m| m.as_str()).unwrap_or("Unknown error");
+            log::error!("[computer_use] API Error {}: {}", code, message);
             return Err(format!("API Error {}: {}", code, message));
         }
 
@@ -281,7 +282,9 @@ impl ComputerUseEngine {
                     reasoning = text;
                 }
                 function_calls = self.extract_function_calls(first_candidate);
-                self.contents.push(first_candidate.clone());
+                if let Some(content) = first_candidate.get("content") {
+                    self.contents.push(content.clone());
+                }
             }
         } else {
             return Ok(false);
@@ -307,7 +310,7 @@ impl ComputerUseEngine {
 
             // Check for safety
             let mut safety_required = false;
-            if let Some(safety) = function_call.get("safety_confirmation") {
+            if let Some(safety) = function_call.get("args").and_then(|a| a.get("safety_decision")) {
                 if safety.get("decision").and_then(|d| d.as_str()) == Some("require_confirmation") {
                     safety_required = true;
                     let user_confirmed = self.get_safety_confirmation(safety).await?;
@@ -325,25 +328,25 @@ impl ComputerUseEngine {
             let screenshot_data = action_result.unwrap();
             // Create part with function call result
             let mut func_result = json!({
-                "function_response": {
-                    "function_name": function_call.get("name").and_then(|n| n.as_str()).unwrap_or("unknown"),
+                "functionResponse": {
+                    "name": function_call.get("name").and_then(|n| n.as_str()).unwrap_or("unknown"),
                     "response": {
                         "url": "current_url"
-                    }
-                },
-                "parts": [
-                    {
-                        "inline_data": {
-                            "mime_type": "image/png",
-                            "data_base64": screenshot_data
+                    },
+                    "parts": [
+                        {
+                            "inlineData": {
+                                "mimeType": "image/png",
+                                "data": screenshot_data
+                            }
                         }
-                    }
-                ]
+                    ]
+                }
             });
 
             // Add safety confirmation info if applicable
             if safety_required {
-                func_result["function_response"]["response"]["safety_aknowledgement"] = json!(true);
+                func_result["functionResponse"]["response"]["safety_acknowledgement"] = json!(true);
             }
 
             parts.push(func_result);
@@ -363,17 +366,21 @@ impl ComputerUseEngine {
                 let mut has_screenshot = false;
                 if let Some(parts) = content.get_mut("parts").and_then(|p| p.as_array_mut()) {
                     for part in parts.iter() {
-                        if part.get("inline_data").is_some() {
-                            has_screenshot = true;
-                            break;
+                        if let Some(fr) = part.get("functionResponse") {
+                            if fr.get("parts").is_some() {
+                                has_screenshot = true;
+                                break;
+                            }
                         }
                     }
                     if has_screenshot {
                         screenshot_count += 1;
                         if screenshot_count > 3 {
                             for part in parts.iter_mut() {
-                                if let Some(obj) = part.as_object_mut() {
-                                    obj.remove("inline_data");
+                                if let Some(fr) = part.get_mut("functionResponse") {
+                                    if let Some(fr_obj) = fr.as_object_mut() {
+                                        fr_obj.remove("parts");
+                                    }
                                 }
                             }
                         }
@@ -381,13 +388,32 @@ impl ComputerUseEngine {
                 }
             }
         }
-        log::info!("[computer_use] Completed iteration. New contents: {:?}", self.contents);
+        // Print contents besides png data for debugging
+        let debug_contents: Vec<_> = self.contents.iter().map(|content| {
+            let mut debug_content = content.clone();
+            if let Some(parts) = debug_content.get_mut("parts").and_then(|p| p.as_array_mut()) {
+                for part in parts.iter_mut() {
+                    if let Some(fr) = part.get_mut("functionResponse") {
+                        if let Some(fr_parts) = fr.get_mut("parts").and_then(|p| p.as_array_mut()) {
+                            for fr_part in fr_parts.iter_mut() {
+                                if let Some(inline_data) = fr_part.get_mut("inlineData") {
+                                    *inline_data = json!("[PNG data omitted]");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            debug_content
+        }).collect();
+        log::info!("[computer_use] Completed iteration. New contents: {:?}", debug_contents);
         Ok(false)
     }
 
     pub async fn run(&mut self) -> Result<(), String> {
         loop {
             let done = self.run_one_iteration().await?;
+            log::info!("[computer_use] Iteration complete. Done: {}", done);
             if done {
                 break;
             }
