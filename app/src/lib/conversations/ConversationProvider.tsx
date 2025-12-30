@@ -11,6 +11,7 @@ import { OcrResponseEvent } from '@/types/events';
  */
 const initialState: ConversationState = {
   conversationId: null,
+  conversationType: 'chat',
   messages: [],
   isStreaming: false,
   isLoading: false,
@@ -29,6 +30,7 @@ const initialState: ConversationState = {
  */
 type ConversationAction =
   | { type: 'SET_CONVERSATION_ID'; payload: string | null }
+  | { type: 'SET_CONVERSATION_TYPE'; payload: string }
   | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'ADD_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
@@ -66,6 +68,12 @@ function conversationReducer(
         ...state,
         conversationId: action.payload,
       };
+
+    case 'SET_CONVERSATION_TYPE':
+      return {
+        ...state,
+        conversationType: action.payload,
+      }
 
     case 'RENAME_CONVERSATION':
       return {

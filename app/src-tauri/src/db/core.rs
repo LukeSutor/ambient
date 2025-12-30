@@ -23,6 +23,7 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'chat',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           message_count INTEGER NOT NULL DEFAULT 0

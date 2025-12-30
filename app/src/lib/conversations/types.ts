@@ -34,6 +34,7 @@ export interface Conversation {
  */
 export interface ConversationState {
   conversationId: string | null;
+  conversationType: string;
   messages: ChatMessage[];
   isStreaming: boolean;
   isLoading: boolean;

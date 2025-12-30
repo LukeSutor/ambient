@@ -10,7 +10,8 @@ import { OcrResponseEvent, HudChatEvent } from '@/types/events';
 export async function createConversation(name?: string): Promise<Conversation> {
   try {
     const conversation = await invoke<Conversation>('create_conversation', { 
-      name: name || null 
+      name: name || null,
+      type: null
     });
     return conversation;
   } catch (error) {

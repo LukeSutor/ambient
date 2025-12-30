@@ -51,6 +51,7 @@ pub struct Message {
 pub struct Conversation {
   pub id: String,
   pub name: String,
+  conv_type: String,
   pub created_at: String,
   pub updated_at: String,
   pub message_count: i32,
@@ -78,6 +79,7 @@ fn generate_conversation_name(first_message: Option<&str>) -> String {
 pub async fn create_conversation(
   app_handle: AppHandle,
   name: Option<String>,
+  conv_type: Option<String>,
 ) -> Result<Conversation, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
@@ -88,10 +90,12 @@ pub async fn create_conversation(
   let conversation_id = Uuid::new_v4().to_string();
   let now = Utc::now();
   let conversation_name = name.unwrap_or_else(|| format!("New Chat {}", now.format("%m/%d %H:%M")));
+  let conversation_type = conv_type.unwrap_or_else(|| "chat".to_string());
 
   let conversation = Conversation {
     id: conversation_id.clone(),
     name: conversation_name.clone(),
+    conv_type: conversation_type.clone(),
     created_at: now.to_rfc3339(),
     updated_at: now.to_rfc3339(),
     message_count: 0,
@@ -99,11 +103,12 @@ pub async fn create_conversation(
 
   conn
     .execute(
-      "INSERT INTO conversations (id, name, created_at, updated_at, message_count)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+      "INSERT INTO conversations (id, name, type, created_at, updated_at, message_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
       params![
         conversation_id,
         conversation_name,
+        conversation_type,
         now.to_rfc3339(),
         now.to_rfc3339(),
         0
@@ -285,15 +290,16 @@ pub async fn get_conversation(
 
   let conversation = conn
     .query_row(
-      "SELECT id, name, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
+      "SELECT id, name, type, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
       params![conversation_id],
       |row| {
-        let created_at: String = row.get(2)?;
-        let updated_at: String = row.get(3)?;
+        let created_at: String = row.get(3)?;
+        let updated_at: String = row.get(4)?;
 
         Ok(Conversation {
           id: row.get(0)?,
           name: row.get(1)?,
+          conv_type: row.get(2)?,
           created_at,
           updated_at,
           message_count: row.get(4)?,
@@ -320,7 +326,7 @@ pub async fn list_conversations(
 
   let mut stmt = conn
     .prepare(
-      "SELECT id, name, created_at, updated_at, message_count 
+      "SELECT id, name, type, created_at, updated_at, message_count 
          FROM conversations 
          ORDER BY updated_at DESC
          LIMIT ?1 OFFSET ?2",
@@ -329,12 +335,13 @@ pub async fn list_conversations(
 
   let conversations = stmt
     .query_map(params![limit, offset], |row| {
-      let created_at: String = row.get(2)?;
-      let updated_at: String = row.get(3)?;
+      let created_at: String = row.get(3)?;
+      let updated_at: String = row.get(4)?;
 
       Ok(Conversation {
         id: row.get(0)?,
         name: row.get(1)?,
+        conv_type: row.get(2)?,
         created_at,
         updated_at,
         message_count: row.get(4)?,

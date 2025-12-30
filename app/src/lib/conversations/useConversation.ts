@@ -303,7 +303,8 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       if (!activeConversationId) {
         console.log('[useConversation] Creating conversation for first message');
         const conversation = await invoke<Conversation>('create_conversation', { 
-          name: null 
+          name: null,
+          conv_type: null 
         });
         activeConversationId = conversation.id;
         dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
@@ -353,7 +354,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_STREAMING', payload: false });
     }
-  }, [dispatch, state.conversationId, state.ocrResults]);
+  }, [dispatch, state.conversationId, state.conversationType, state.ocrResults]);
 
   /**
    * Get all conversations
