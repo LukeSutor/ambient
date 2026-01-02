@@ -55,6 +55,19 @@ export async function sendMessage(
 }
 
 /**
+ * Starts a computer use session
+ * @param prompt - The prompt to initiate computer use
+ */
+export async function startComputerUseSession(prompt: string): Promise<void> {  
+  try {
+    await invoke('start_computer_use', { prompt });
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to start computer use session:', error);
+    throw new Error('Failed to start computer use session');
+  }
+}
+
+/**
  * Deletes a conversation and all its messages
  * @param conversationId - ID of the conversation to delete
  */
