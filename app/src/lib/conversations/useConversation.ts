@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
 import { Conversation } from '@/types/conversations';
 import { ChatMessage } from './types';
-import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent } from '@/types/events';
+import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent, ComputerUseUpdateEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
 
 const CONVERSATION_LIMIT = 20;
@@ -126,6 +126,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         });
         unlisteners.push(streamUnlisten);
 
+        // Computer Use Listener
+        const computerUseUnlisten = await listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
+          console.log(event);
+        });
+        unlisteners.push(computerUseUnlisten);
+
         // Memory Listener
         const memoryUnlisten = await listen<MemoryExtractedEvent>('memory_extracted', (event) => {
           const { memory } = event.payload;
@@ -229,6 +235,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const resetConversation = useCallback(async (delay?: number): Promise<string | null> => {
     try {
       dispatch({ type: 'SET_CONVERSATION_ID', payload: null });
+      dispatch({ type: 'SET_CONVERSATION_TYPE', payload: 'chat' });
       if (delay && delay > 0) {
         setTimeout(() => {
           dispatch({ type: 'CLEAR_MESSAGES' });

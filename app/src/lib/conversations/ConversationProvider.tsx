@@ -182,6 +182,7 @@ function conversationReducer(
       return {
         ...state,
         conversationId: action.payload.id,
+        conversationType: action.payload.conv_type,
       };
 
     case 'LOAD_MESSAGES':
