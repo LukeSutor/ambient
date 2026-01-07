@@ -6,10 +6,44 @@ use super::types::ActionResponse;
 use serde_json::json;
 use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
+use crate::db::conversations::add_message;
 use chrono;
+
+fn transform_function_call(function_name: String, args: Vec<String>) -> String {
+    let mut content = String::new();
+    content.push_str(&format!("Calling function {}", function_name));
+    if !args.is_empty() {
+        match function_name.as_str() {
+            "navigate" => {
+                content.push_str(&format!("to url '{}'", args[0]));
+            },
+            "click_at" | "hover_at" => {
+                content.push_str(&format!("at coordinates ({}, {}) ", args[0], args[1]));
+            },
+            "type_text_at" => {
+                content.push_str(&format!("at coordinates ({}, {}) with text '{}'", args[0], args[1], args[2]));
+            },
+            "key_combination" => {
+                content.push_str(&format!("with keys '{}'", args[0]));
+            },
+            "scroll_document" => {
+                content.push_str(&format!("in direction '{}'", args[0]));
+            },
+            "scroll_at" => {
+                content.push_str(&format!("at coordinates ({}, {}) in direction '{}'", args[0], args[1], args[2]));
+            },
+            "drag_and_drop" => {
+                content.push_str(&format!("from ({}, {}) to ({}, {})", args[0], args[1], args[2], args[3]));
+            },
+            _ => {}
+        }
+    }
+    content
+}
 
 pub struct ComputerUseEngine {
     app_handle: AppHandle,
+    conversation_id: String,
     width: i32,
     height: i32,
     final_response: String,
@@ -17,7 +51,7 @@ pub struct ComputerUseEngine {
 }
 
 impl ComputerUseEngine {
-    pub fn new(app_handle: AppHandle, prompt: String) -> Self {
+    pub fn new(app_handle: AppHandle, conversation_id: String, prompt: String) -> Self {
         // Get the screen's physical size to store it
         let mut width: i32 = 0;
         let mut height: i32 = 0;
@@ -45,7 +79,8 @@ impl ComputerUseEngine {
             width: width as i32,
             height: height as i32,
             final_response: String::new(),
-            contents
+            contents,
+            conversation_id,
         }
     }
 
@@ -262,6 +297,58 @@ impl ComputerUseEngine {
         }
     }
 
+    async fn save_and_emit_reasoning_message(&self, reasoning: String) -> Result<(), String> {
+        if reasoning.is_empty() {
+            return Ok(());
+        }
+
+        let reasoning_message = add_message(
+            self.app_handle.clone(),
+            self.conversation_id.clone(),
+            "assistant".to_string(),
+            reasoning.clone(),
+        ).await;
+
+        match reasoning_message {
+            Ok(msg) => {
+                let reasoning_update = ComputerUseUpdateEvent {
+                    status: "in_progress".to_string(),
+                    message: msg,
+                };
+                let _ = emit(COMPUTER_USE_UPDATE, reasoning_update);
+            },
+            Err(e) => {
+                log::error!("[computer_use] Failed to save reasoning message: {}", e);
+            }
+        }
+        Ok(())
+    }
+
+    async fn save_and_emit_function_message(&self, function_name: String, args: Vec<String>) -> Result<(), String> {
+        let function_call_message = transform_function_call(function_name.clone(), args.clone());
+
+        let func_message = add_message(
+            self.app_handle.clone(),
+            self.conversation_id.clone(),
+            "functioncall".to_string(),
+            function_call_message.clone(),
+        ).await;
+
+        match func_message {
+            Ok(msg) => {
+                let func_update = ComputerUseUpdateEvent {
+                    status: "in_progress".to_string(),
+                    message: msg,
+                };
+                let _ = emit(COMPUTER_USE_UPDATE, func_update);
+            },
+            Err(e) => {
+                log::error!("[computer_use] Failed to save function call message: {}", e);
+            }
+        }
+        Ok(())
+    }
+
     // Returns true if iteration is done, false to continue
     async fn run_one_iteration(&mut self) -> Result<bool, String> {
         log::info!("[computer_use] Running one iteration of computer use engine");
@@ -299,11 +386,14 @@ impl ComputerUseEngine {
             self.final_response = reasoning;
             return Ok(true);
         }
-
+        
+        // Emit reasoning and save to db
+        let _ = self.save_and_emit_reasoning_message(reasoning.clone()).await;
+        
         // Handle function calls
-        let mut parts = Vec::new();
         let mut function_names = Vec::new();
         let mut args = Vec::new();
+        let mut parts = Vec::new();
         for function_call in function_calls {
             log::info!("[computer_use] Handling function call: {}", function_call);
 
@@ -328,7 +418,13 @@ impl ComputerUseEngine {
             function_names.push(action_response.function_name.clone());
             args.push(action_response.args.clone());
 
-            // Wait two seconds and return base64 screenshot
+            // Emit and save function call message
+            let _ = self.save_and_emit_function_message(
+                action_response.function_name.clone(),
+                action_response.args.clone()
+            ).await;
+
+            // Wait two seconds and get base64 screenshot
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             let screenshot_vec = take_screenshot();
             let screenshot_data = general_purpose::STANDARD.encode(&screenshot_vec);
@@ -396,16 +492,6 @@ impl ComputerUseEngine {
             }
         }
 
-        // Emit update event
-        let computer_use_update_event = ComputerUseUpdateEvent {
-            status: "in_progress".to_string(),
-            reasoning: reasoning,
-            function_names: function_names,
-            args: args,
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        };
-        let _ = emit(COMPUTER_USE_UPDATE, computer_use_update_event);
-
         // Print contents besides png data for debugging
         // let debug_contents: Vec<_> = self.contents.iter().map(|content| {
         //     let mut debug_content = content.clone();
@@ -438,16 +524,27 @@ impl ComputerUseEngine {
         }
 
         // Emit final update event
-        let computer_use_update_event = ComputerUseUpdateEvent {
-            status: "completed".to_string(),
-            reasoning: self.final_response.clone(),
-            function_names: Vec::new(),
-            args: Vec::new(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-        };
-        let _ = emit(COMPUTER_USE_UPDATE, computer_use_update_event);
+        let final_message = add_message(
+            self.app_handle.clone(),
+            self.conversation_id.clone(),
+            "assistant".to_string(),
+            self.final_response.clone(),
+        ).await;
 
-        //TODO: responses are emitted, now figure out how to work this into the chat flow
+        match final_message {
+            Ok(msg) => {
+                let final_update = ComputerUseUpdateEvent {
+                    status: "completed".to_string(),
+                    message: msg,
+                };
+                let _ = emit(COMPUTER_USE_UPDATE, final_update);
+            },
+            Err(e) => {
+                log::error!("[computer_use] Failed to save final message: {}", e);
+            }
+        }
+
+        
 
         Ok(())
     }

@@ -1,5 +1,6 @@
 use crate::memory::types::MemoryEntry;
 use crate::os_utils::windows::window::ApplicationTextData;
+use crate::db::conversations::Message;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -97,10 +98,7 @@ pub const COMPUTER_USE_UPDATE: &str = "computer_use_update";
 #[ts(export, export_to = "events.ts")]
 pub struct ComputerUseUpdateEvent {
   pub status: String,
-  pub reasoning: String,
-  pub function_names: Vec<String>,
-  pub args: Vec<Vec<String>>,
-  pub timestamp: String,
+  pub message: Message,
 }
 
 pub const GET_SAFETY_CONFIRMATION: &str = "get_safety_confirmation";

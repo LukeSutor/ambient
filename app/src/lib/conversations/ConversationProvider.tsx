@@ -45,7 +45,6 @@ type ConversationAction =
   | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
   | { type: 'FINALIZE_STREAM'; payload: string }
   | { type: 'ADD_COMPUTER_USE_MESSAGE'; payload: ChatMessage }
-  | { type: 'FINALIZE_COMPUTER_USE_TURN'}
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
   | { type: 'ADD_OCR_RESULT'; payload: OcrResponseEvent }
   | { type: 'DELETE_OCR_RESULT'; payload: number }
@@ -300,13 +299,6 @@ function conversationReducer(
         ...state,
         messages: [...state.messages, action.payload],
       };
-
-    case 'FINALIZE_COMPUTER_USE_TURN': {
-      return {
-        ...state,
-        isStreaming: false,
-      };
-    }
 
     case 'ATTACH_MEMORY': {
       // Find user message by ID and attach memory

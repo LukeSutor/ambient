@@ -13,6 +13,7 @@ pub enum Role {
   System,
   User,
   Assistant,
+  FunctionCall,
 }
 
 impl Role {
@@ -21,6 +22,7 @@ impl Role {
       Role::System => "system",
       Role::User => "user",
       Role::Assistant => "assistant",
+      Role::FunctionCall => "functioncall",
     }
   }
 
@@ -29,6 +31,7 @@ impl Role {
       "system" => Role::System,
       "user" => Role::User,
       "assistant" => Role::Assistant,
+      "functioncall" => Role::FunctionCall,
       _ => Role::User,
     }
   }

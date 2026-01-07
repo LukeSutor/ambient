@@ -10,4 +10,4 @@ export type Conversation = { id: string, name: string, conv_type: string, create
  */
 export type Message = { id: string, conversation_id: string, role: Role, content: string, timestamp: string, };
 
-export type Role = "system" | "user" | "assistant";
+export type Role = "system" | "user" | "assistant" | "functioncall";

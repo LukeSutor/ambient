@@ -1,33 +1,17 @@
 import { MemoryEntry } from '@/types/memory';
 import { OcrResponseEvent } from '@/types/events';
 import { RefObject } from 'react';
-
-/**
- * Message role type
- */
-export type MessageRole = 'user' | 'assistant';
+import { Conversation, Role } from '@/types/conversations';
 
 /**
  * Chat message structure with optional memory attachment
  */
 export interface ChatMessage {
   id: string;
-  role: MessageRole;
+  role: Role;
   content: string;
   memory: MemoryEntry | null;
   timestamp: string;
-}
-
-/**
- * Conversation metadata
- */
-export interface Conversation {
-  id: string;
-  name: string;
-  conv_type: string;
-  created_at: string;
-  updated_at: string;
-  message_count: number;
 }
 
 /**

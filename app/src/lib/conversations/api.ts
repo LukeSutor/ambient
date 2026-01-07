@@ -56,11 +56,12 @@ export async function sendMessage(
 
 /**
  * Starts a computer use session
+ * @param conversationId - ID of the conversation
  * @param prompt - The prompt to initiate computer use
  */
-export async function startComputerUseSession(prompt: string): Promise<void> {  
+export async function startComputerUseSession(conversationId: string, prompt: string): Promise<void> {  
   try {
-    await invoke('start_computer_use', { prompt });
+    await invoke('start_computer_use', { conversationId, prompt });
   } catch (error) {
     console.error('[ConversationAPI] Failed to start computer use session:', error);
     throw new Error('Failed to start computer use session');

@@ -4,11 +4,10 @@ import { useEffect, useRef, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
-import { Conversation } from '@/types/conversations';
+import { Conversation, Role } from '@/types/conversations';
 import { ChatMessage } from './types';
 import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent, ComputerUseUpdateEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
-import { match } from 'assert';
 import { startComputerUseSession } from './api';
 
 const CONVERSATION_LIMIT = 20;
@@ -42,80 +41,10 @@ function extractThinkingContent(text: string): string {
 function transformBackendMessage(backendMessage: any): ChatMessage {
   return {
     id: backendMessage.id,
-    role: backendMessage.role.toLowerCase() === 'user' ? 'user' : 'assistant',
+    role: backendMessage.role.toLowerCase(),
     content: extractThinkingContent(backendMessage.content),
     memory: backendMessage.memory ? (backendMessage.memory as MemoryEntry) : null,
     timestamp: backendMessage.timestamp,
-  };
-}
-
-/**
- * Transforms a computer use function call to a readable string
- */
-function transformFunctionCalls(functions: string[], args: string[][]): string {
-  if (!functions) return '';
-
-  let results: string[] = [];
-  for (let i = 0; i < functions.length; i++) {
-    const funcName = functions[i];
-    const funcArgs = args[i];
-    switch (funcName) {
-      case 'open_web_browser':
-        results.push('Open Web Browser');
-        break;
-      case 'wait_5_seconds':
-        results.push('Wait 5 Seconds');
-        break;
-      case 'go_back':
-        results.push('Go Back');
-        break;
-      case 'go_forward':
-        results.push('Go Forward');
-        break;
-      case 'search':
-        results.push(`Search`);
-        break;
-      case 'navigate':
-        results.push(`Navigate to URL: ${funcArgs[0]}`);
-        break;
-      case 'click_at':
-        results.push(`Click at coordinates (${funcArgs[0]}, ${funcArgs[1]})`);
-        break;
-      case 'hover_at':
-        results.push(`Hover at coordinates (${funcArgs[0]}, ${funcArgs[1]})`);
-        break;
-      case 'type_text_at':
-        results.push(`Type text "${funcArgs[2]}" at coordinates (${funcArgs[0]}, ${funcArgs[1]})`);
-        break;
-      case 'key_combination':
-        results.push(`Press key combination: ${funcArgs[0]}`);
-        break;
-      case 'scroll_document':
-        results.push(`Scroll document ${funcArgs[0]} direction`);
-        break;
-      case 'scroll_at':
-        results.push(`Scroll at coordinates (${funcArgs[0]}, ${funcArgs[1]}) ${funcArgs[2]} direction`);
-        break;
-      case 'drag_and_drop':
-        results.push(`Drag from (${funcArgs[0]}, ${funcArgs[1]}) to (${funcArgs[2]}, ${funcArgs[3]})`);
-        break;
-    }
-  }
-
-  return "```\n" + results.join('\n') + "\n```";
-}
-
-/**
- * Transforms a computer use update event to a ChatMessage
- */
-function transformComputerUseUpdate(event: ComputerUseUpdateEvent): ChatMessage {
-  let content = event.reasoning + transformFunctionCalls(event.function_names, event.args);
-  return {
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: content,
-    memory: null,
-    timestamp: event.timestamp,
   };
 }
 
@@ -200,13 +129,23 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
         // Computer Use Listener
         const computerUseUnlisten = await listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
-          let message = transformComputerUseUpdate(event.payload);
-          console.log({event, message});
+          console.log({event});
+          const updateMessage = event.payload.message;
+          // Create message from event
+          const message: ChatMessage = {
+            id: updateMessage.id,
+            role: updateMessage.role,
+            content: updateMessage.content,
+            memory: null,
+            timestamp: updateMessage.timestamp,
+          };
           dispatch({ type: 'ADD_COMPUTER_USE_MESSAGE', payload: message });
 
           if (event.payload.status === 'completed') {
-            dispatch({ type: 'FINALIZE_COMPUTER_USE_TURN' });
+            dispatch({ type: 'SET_STREAMING', payload: false });
+            dispatch({ type: 'SET_LOADING', payload: false });
           }
+
         });
         unlisteners.push(computerUseUnlisten);
 
@@ -421,7 +360,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
       // Send hud chat or computer use event
       if (state.conversationType === 'computer_use') {
-        startComputerUseSession(content);
+        startComputerUseSession(activeConversationId, content);
       } else {
         const hudChatEvent: HudChatEvent = {
           text: content,
