@@ -167,15 +167,15 @@ export const markdownComponents: Components = {
   
   // Code with enhanced language detection
   code: ({ className, children, ...props }: any) => {
-    const inline = props.inline;
     const match = /language-(\w+)/.exec(className || '');
     const language = match ? match[1] : '';
+    const isInline = !className?.includes('language-') && !String(children).includes('\n');
     
-    if (inline) {
+    if (isInline) {
       return (
         <code
           className={cn(
-            "relative rounded bg-gray-100/20 px-[0.3rem] py-[0.2rem] font-mono text-sm font-medium text-black border border-gray-200/50",
+            "relative rounded bg-white/20 px-[0.2rem] font-mono text-sm font-medium text-black border border-white/30",
             className
           )}
           {...props}
@@ -188,12 +188,12 @@ export const markdownComponents: Components = {
     // Block code with language indicator
     return (
       <div className="flex flex-col">
-        <div className="w-min whitespace-nowrap text-xs text-black/80 rounded font-mono mb-4">
+        <div className="w-min whitespace-nowrap text-xs text-black/80 rounded font-mono mb-1">
           {language || 'text'}
         </div>
         <code
           className={cn(
-            "block text-sm font-mono text-black/80 p-0",
+            "block text-sm font-mono text-black/80",
             className
           )}
           {...props}
@@ -207,7 +207,7 @@ export const markdownComponents: Components = {
   pre: ({ className, children, ...props }) => (
     <pre
       className={cn(
-        "mt-4 mb-4 overflow-x-auto rounded-lg bg-white/60 p-2 border relative",
+        "mt-4 mb-4 overflow-x-auto rounded-lg bg-white/20 p-2 border border-white/30 relative",
         className
       )}
       {...props}
@@ -393,11 +393,11 @@ export const darkMarkdownComponents: Components = {
   ),
   
   code: ({ className, children, ...props }: any) => {
-    const inline = props.inline;
     const match = /language-(\w+)/.exec(className || '');
     const language = match ? match[1] : '';
+    const isInline = !className?.includes('language-') && !String(children).includes('\n');
     
-    if (inline) {
+    if (isInline) {
       return (
         <code
           className={cn(
