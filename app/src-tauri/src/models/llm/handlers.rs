@@ -155,6 +155,23 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
 
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
+  // Save the user message to the database
+  let _user_message = match add_message_with_id(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "user".to_string(),
+    event.text.clone(),
+    Some(event.message_id.clone()),
+  )
+  .await
+  {
+    Ok(message) => Some(message),
+    Err(e) => {
+      log::error!("[hud_chat] Failed to save user message: {}", e);
+      None
+    }
+  };
+
   // Emit extract memory event
   let extract_event = ExtractInteractiveMemoryEvent {
     message: event.text.clone(),
@@ -251,23 +268,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     Err(e) => {
       log::error!("[hud_chat] Failed to generate response: {}", e);
       return Err("Failed to generate response".into());
-    }
-  };
-
-  // Save the user message
-  let _user_message = match add_message_with_id(
-    app_handle.clone(),
-    event.conv_id.clone(),
-    "user".to_string(),
-    event.text.clone(),
-    Some(event.message_id.clone()),
-  )
-  .await
-  {
-    Ok(message) => Some(message),
-    Err(e) => {
-      log::error!("[hud_chat] Failed to save user message: {}", e);
-      None
     }
   };
 
