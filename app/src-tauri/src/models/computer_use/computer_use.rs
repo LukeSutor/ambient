@@ -450,13 +450,9 @@ impl ComputerUseEngine {
                 action_response.args.clone()
             ).await;
 
-            // Wait two seconds for action to complete
+            // Wait two seconds for action to finish loading
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            
-            // Close window before screenshot and open again after
-            let _ = close_main_window(self.app_handle.clone()).await;
             let screenshot_vec = take_screenshot();
-            let _ = open_main_window(self.app_handle.clone()).await;
             let screenshot_data = general_purpose::STANDARD.encode(&screenshot_vec);
 
             // Create part with function call result
@@ -548,6 +544,9 @@ impl ComputerUseEngine {
         // Save user message
         let _ = self.save_user_message(self.prompt.clone()).await;
 
+        // Close window before starting
+        let _ = close_main_window(self.app_handle.clone()).await;
+
         loop {
             let done = self.run_one_iteration().await?;
             log::info!("[computer_use] Iteration complete. Done: {}", done);
@@ -555,6 +554,9 @@ impl ComputerUseEngine {
                 break;
             }
         }
+
+        // Reopen window once finished
+        let _ = open_main_window(self.app_handle.clone()).await;
 
         // Emit final update event
         let final_message = add_message(
