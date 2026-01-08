@@ -7,6 +7,7 @@ use serde_json::json;
 use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
 use crate::db::conversations::add_message;
+use crate::windows::{open_main_window, close_main_window};
 use chrono;
 
 fn transform_function_call(function_name: String, args: Vec<String>) -> String {
@@ -451,7 +452,11 @@ impl ComputerUseEngine {
 
             // Wait two seconds for action to complete
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            
+            // Close window before screenshot and open again after
+            let _ = close_main_window(self.app_handle.clone()).await;
             let screenshot_vec = take_screenshot();
+            let _ = open_main_window(self.app_handle.clone()).await;
             let screenshot_data = general_purpose::STANDARD.encode(&screenshot_vec);
 
             // Create part with function call result
