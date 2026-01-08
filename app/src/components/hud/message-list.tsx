@@ -22,7 +22,7 @@ const hasPreviousMemory = (messages: ChatMessage[], index: number) => {
 
 function UserMessage({ message }: { message: ChatMessage }) {
   return (
-    <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 max-w-[85%] ml-auto">
+    <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto">
       <div className="whitespace-pre-wrap">{message.content}</div>
     </div>
   );

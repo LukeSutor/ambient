@@ -25,17 +25,30 @@ pub async fn resize_hud(app_handle: AppHandle, width: f64, height: f64) -> Resul
   let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let requested_size = LogicalSize::new(width, height);
-
-    // Get position before resizing
+    // Get position before resizing to calculate bottom overflow
     let position = window.outer_position().map_err(|e| e.to_string())?;
-    window.set_size(requested_size).map_err(|e| e.to_string())?;
+    let mut new_y = position.y;
 
-    // Adjust position to keep top aligned
+    // Ensure resizing doesn't push the window off the bottom of the screen
+    // We do this by calculating the physical height and checking against the monitor's work area
+    if let (Ok(Some(monitor)), Ok(scale_factor)) = (window.current_monitor(), window.scale_factor()) {
+      let work_area = monitor.work_area();
+      let physical_height = (height * scale_factor) as i32;
+      let monitor_bottom = work_area.position.y + work_area.size.height as i32;
+
+      if new_y + physical_height > monitor_bottom {
+        new_y = (monitor_bottom - physical_height).max(work_area.position.y);
+      }
+    }
+
     window
-      .set_position(tauri::PhysicalPosition::new(position.x, position.y))
+      .set_size(LogicalSize::new(width, height))
       .map_err(|e| e.to_string())?;
-    log::info!("HUD window resized to: {}x{}", width, height);
+
+    window
+      .set_position(tauri::PhysicalPosition::new(position.x, new_y))
+      .map_err(|e| e.to_string())?;
+
     Ok(())
   } else {
     Err("Window not found".to_string())
