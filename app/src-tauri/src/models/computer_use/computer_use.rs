@@ -43,6 +43,7 @@ fn transform_function_call(function_name: String, args: Vec<String>) -> String {
 
 pub struct ComputerUseEngine {
     app_handle: AppHandle,
+    prompt: String,
     conversation_id: String,
     width: i32,
     height: i32,
@@ -76,6 +77,7 @@ impl ComputerUseEngine {
         let contents = vec![initial_content];
         Self {
             app_handle: app_handle.clone(),
+            prompt,
             width: width as i32,
             height: height as i32,
             final_response: String::new(),
@@ -297,6 +299,20 @@ impl ComputerUseEngine {
         }
     }
 
+    async fn save_user_message(&self, content: String) -> Result<(), String> {
+        let user_message = add_message(
+            self.app_handle.clone(),
+            self.conversation_id.clone(),
+            "user".to_string(),
+            content,
+        ).await;
+
+        match user_message {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("Failed to save user message: {}", e)),
+        }
+    }
+
     async fn save_and_emit_reasoning_message(&self, reasoning: String) -> Result<(), String> {
         if reasoning.is_empty() {
             return Ok(());
@@ -356,6 +372,15 @@ impl ComputerUseEngine {
         // Get model response
         let response = self.get_model_response().await?;
         log::info!("[computer_use] Model response: {}", response);
+
+        // Check for blocked response
+        if let Some(prompt_feedback) = response.get("promptFeedback") {
+            if let Some(block_reason) = prompt_feedback.get("blockReason") {
+                log::warn!("[computer_use] Model response blocked due to: {}", block_reason);
+                self.final_response = "For safety reasons, the model is unable to complete this request.".to_string();
+                return Ok(true);
+            }
+        }
 
         // Extract the candidate and append it to the contents
         let mut reasoning = String::new();
@@ -424,7 +449,7 @@ impl ComputerUseEngine {
                 action_response.args.clone()
             ).await;
 
-            // Wait two seconds and get base64 screenshot
+            // Wait two seconds for action to complete
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             let screenshot_vec = take_screenshot();
             let screenshot_data = general_purpose::STANDARD.encode(&screenshot_vec);
@@ -515,6 +540,9 @@ impl ComputerUseEngine {
     }
 
     pub async fn run(&mut self) -> Result<(), String> {
+        // Save user message
+        let _ = self.save_user_message(self.prompt.clone()).await;
+
         loop {
             let done = self.run_one_iteration().await?;
             log::info!("[computer_use] Iteration complete. Done: {}", done);
