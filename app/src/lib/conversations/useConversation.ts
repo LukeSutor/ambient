@@ -4,11 +4,17 @@ import { useEffect, useRef, useCallback } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
-import { Conversation, Role } from '@/types/conversations';
+import { Conversation, Message, Role } from '@/types/conversations';
 import { ChatMessage } from './types';
 import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent, ComputerUseUpdateEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
-import { startComputerUseSession } from './api';
+import { 
+  startComputerUseSession, 
+  createConversation, 
+  sendMessage as sendChatApiMessage, 
+  deleteConversation as deleteApiConversation,
+  ensureLlamaServerRunning
+} from './api';
 
 const CONVERSATION_LIMIT = 20;
 const OCR_TIMEOUT_MS = 10000;
@@ -38,26 +44,29 @@ function extractThinkingContent(text: string): string {
 /**
  * Transforms a backend message format to frontend ChatMessage format
  */
-function transformBackendMessage(backendMessage: any): ChatMessage {
+function transformBackendMessage(backendMessage: Message): ChatMessage {
   return {
-    id: backendMessage.id,
-    role: backendMessage.role.toLowerCase(),
-    content: extractThinkingContent(backendMessage.content),
-    memory: backendMessage.memory ? (backendMessage.memory as MemoryEntry) : null,
-    timestamp: backendMessage.timestamp,
+    message: backendMessage,
+    reasoningMessages: [],
+    memory: null,
   };
 }
 
 /**
  * Creates a new user message
  */
-function createUserMessage(content: string, memory: MemoryEntry | null = null): ChatMessage {
-  return {
+function createUserMessage(content: string, conversationId: string, memory: MemoryEntry | null = null): ChatMessage {
+  const message: Message = {
     id: crypto.randomUUID(),
-    role: 'user',
+    conversation_id: conversationId,
+    role: 'user' as Role,
     content,
-    memory,
     timestamp: new Date().toISOString(),
+  };
+  return {
+    message,
+    reasoningMessages: [],
+    memory,
   };
 }
 
@@ -129,21 +138,19 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
         // Computer Use Listener
         const computerUseUnlisten = await listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
-          console.log({event});
-          const updateMessage = event.payload.message;
           // Create message from event
-          const message: ChatMessage = {
-            id: updateMessage.id,
-            role: updateMessage.role,
-            content: updateMessage.content,
+          const chatMessage: ChatMessage = {
+            message: event.payload.message,
+            reasoningMessages: [],
             memory: null,
-            timestamp: updateMessage.timestamp,
           };
-          dispatch({ type: 'ADD_COMPUTER_USE_MESSAGE', payload: message });
-
+          
           if (event.payload.status === 'completed') {
+            dispatch({ type: 'ADD_CHAT_MESSAGE', payload: chatMessage });
             dispatch({ type: 'SET_STREAMING', payload: false });
             dispatch({ type: 'SET_LOADING', payload: false });
+          } else {
+            dispatch({ type: 'ADD_REASONING_MESSAGE', payload: chatMessage });
           }
 
         });
@@ -224,9 +231,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       console.log('[useConversation] Initializing...');
       
       // Ensure llama server is running
-      try {
-        await invoke<string>('spawn_llama_server');
-      } catch (error) {}
+      await ensureLlamaServerRunning();
 
       // Load the conversations list
       try {
@@ -272,7 +277,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
    */
   const deleteConversation = useCallback(async (id: string): Promise<void> => {
     try {
-      await invoke('delete_conversation', { conversationId: id });
+      await deleteApiConversation(id);
       dispatch({ type: 'DELETE_CONVERSATION', payload: { id } });
     } catch (error) {
       console.error('[useConversation] Failed to delete conversation:', error);
@@ -286,7 +291,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     try {
       const conversation = await invoke<Conversation>('get_conversation', { conversationId: id });
       dispatch({ type: 'LOAD_CONVERSATION', payload: conversation });
-      await loadMessages(id);
+      await loadMessages(conversation);
     } catch (error) {
       console.error('[useConversation] Failed to load conversation:', error);
     }
@@ -295,18 +300,27 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Loads messages for a specific conversation
    */
-  const loadMessages = useCallback(async (conversationId: string): Promise<void> => {
+  const loadMessages = useCallback(async (conversation: Conversation): Promise<void> => {
+    console.log('[useConversation] Loading messages for conversation:', conversation.id);
     try {
-      const backendMessages = await invoke<any[]>('get_messages', { 
-        conversationId 
+      const backendMessages = await invoke<Message[]>('get_messages', { 
+        conversationId: conversation.id
       });
-      
       const messages = backendMessages.map(transformBackendMessage);
-      dispatch({ type: 'LOAD_MESSAGES', payload: messages });
+      // Load messages depending on conversation type
+      if (state.conversationType === 'computer_use') {
+        // Load all but the final assistant message as reasoning messages
+        const reasoningMessages = messages.slice(0, -1);
+        const finalMessage = messages[messages.length - 1];
+        dispatch({ type: 'LOAD_REASONING_MESSAGES', payload: reasoningMessages });
+        dispatch({ type: 'LOAD_MESSAGES', payload: finalMessage ? [finalMessage] : [] });
+      } else {
+        dispatch({ type: 'LOAD_MESSAGES', payload: messages });
+      }
     } catch (error) {
       console.error('[useConversation] Failed to load messages:', error);
     }
-  }, [dispatch]);
+  }, [dispatch, state.conversationType]);
 
   /**
    * Sends a message
@@ -326,22 +340,19 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         console.log('[useConversation] Creating conversation for first message');
-        const conversation = await invoke<Conversation>('create_conversation', { 
-          name: null,
-          conv_type: null 
-        });
+        const conversation = await createConversation(undefined, state.conversationType);
         activeConversationId = conversation.id;
         dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
-        console.log('[useConversation] Created conversation:', conversation.id);
+        console.log('[useConversation] Created conversation:', conversation);
       }
 
       // Create user message with ID and timestamp
-      const userMessage = createUserMessage(content);
+      const userMessage = createUserMessage(content, activeConversationId);
 
       // Start user message with empty content (for animation)
       dispatch({ 
         type: 'START_USER_MESSAGE', 
-        payload: { id: userMessage.id, timestamp: userMessage.timestamp } 
+        payload: { id: userMessage.message.id, conversationId: activeConversationId, timestamp: userMessage.message.timestamp } 
       });
 
       // Use requestAnimationFrame to ensure the empty state is rendered first
@@ -349,30 +360,24 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         // Then fill in the content to trigger the grid animation
         dispatch({ 
           type: 'FINALIZE_USER_MESSAGE', 
-          payload: { id: userMessage.id, content: userMessage.content } 
+          payload: { id: userMessage.message.id, content: userMessage.message.content } 
         });
       });
 
-      // Start assistant message placeholder
-      dispatch({ type: 'START_ASSISTANT_MESSAGE' });
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_STREAMING', payload: true });
-
+      
       // Send hud chat or computer use event
       if (state.conversationType === 'computer_use') {
         startComputerUseSession(activeConversationId, content);
       } else {
-        const hudChatEvent: HudChatEvent = {
-          text: content,
-          ocr_responses: state.ocrResults,
-          conv_id: activeConversationId,
-          timestamp: Date.now().toString(),
-          message_id: userMessage.id,
-        };
-
-        await invoke<string>('handle_hud_chat', {
-          event: hudChatEvent,
-        });
+        dispatch({ type: 'START_ASSISTANT_MESSAGE', payload: { conversationId: activeConversationId } });
+        await sendChatApiMessage(
+          activeConversationId,
+          content,
+          state.ocrResults,
+          userMessage.message.id
+        );
       }
     } catch (error) {
       console.error('[useConversation] Failed to send message:', error);

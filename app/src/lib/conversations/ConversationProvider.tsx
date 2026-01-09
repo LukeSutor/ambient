@@ -38,13 +38,14 @@ type ConversationAction =
   | { type: 'SET_NO_MORE_CONVERSATIONS' }
   | { type: 'LOAD_CONVERSATION'; payload: Conversation }
   | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
-  | { type: 'ADD_USER_MESSAGE'; payload: ChatMessage }
-  | { type: 'START_USER_MESSAGE'; payload: { id: string; timestamp: string } }
+  | { type: 'LOAD_REASONING_MESSAGES'; payload: ChatMessage[] }
+  | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }
+  | { type: 'ADD_REASONING_MESSAGE'; payload: ChatMessage }
+  | { type: 'START_USER_MESSAGE'; payload: { id: string; conversationId: string; timestamp: string } }
   | { type: 'FINALIZE_USER_MESSAGE'; payload: { id: string; content: string } }
-  | { type: 'START_ASSISTANT_MESSAGE' }
+  | { type: 'START_ASSISTANT_MESSAGE'; payload: { conversationId: string } }
   | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
   | { type: 'FINALIZE_STREAM'; payload: string }
-  | { type: 'ADD_COMPUTER_USE_MESSAGE'; payload: ChatMessage }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
   | { type: 'ADD_OCR_RESULT'; payload: OcrResponseEvent }
   | { type: 'DELETE_OCR_RESULT'; payload: number }
@@ -192,34 +193,42 @@ function conversationReducer(
         messages: action.payload,
       };
 
-    case 'ADD_USER_MESSAGE':
+    case 'ADD_CHAT_MESSAGE':
       return {
         ...state,
         messages: [...state.messages, action.payload],
       };
 
     case 'START_USER_MESSAGE':
+      const newUserMessage: ChatMessage = {
+        message: {
+          id: action.payload.id,
+          conversation_id: action.payload.conversationId,
+          role: 'user',
+          content: '',
+          timestamp: action.payload.timestamp,
+        },
+        reasoningMessages: [],
+        memory: null,
+      };
       return {
         ...state,
         messages: [
           ...state.messages,
-          {
-            id: action.payload.id,
-            role: 'user',
-            content: '',
-            memory: null,
-            timestamp: action.payload.timestamp,
-          },
+          newUserMessage,
         ],
       };
 
     case 'FINALIZE_USER_MESSAGE': {
       // Find user message by ID and update its content
       const updatedMessages = state.messages.map((msg) => {
-        if (msg.id === action.payload.id && msg.role === 'user') {
+        if (msg.message.id === action.payload.id && msg.message.role === 'user') {
           return {
             ...msg,
-            content: action.payload.content,
+            message: {
+              ...msg.message,
+              content: action.payload.content,
+            },
           };
         }
         return msg;
@@ -232,17 +241,22 @@ function conversationReducer(
     }
 
     case 'START_ASSISTANT_MESSAGE':
+      const newMessage: ChatMessage = {
+        message: {
+          id: crypto.randomUUID(),
+          conversation_id: action.payload.conversationId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+        },
+        reasoningMessages: [],
+        memory: null,
+      };
       return {
         ...state,
         messages: [
           ...state.messages,
-          {
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            content: '',
-            memory: null,
-            timestamp: new Date().toISOString(),
-          },
+          newMessage
         ],
         isStreaming: true,
         streamingContent: '',
@@ -253,13 +267,16 @@ function conversationReducer(
       const updatedMessages = [...state.messages];
       const lastAssistantIndex = [...updatedMessages]
         .reverse()
-        .findIndex((m) => m.role === 'assistant');
+        .findIndex((m) => m.message.role === 'assistant');
       
       if (lastAssistantIndex !== -1) {
         const actualIndex = updatedMessages.length - 1 - lastAssistantIndex;
         updatedMessages[actualIndex] = {
           ...updatedMessages[actualIndex],
-          content: action.payload,
+          message: {
+            ...updatedMessages[actualIndex].message,
+            content: action.payload,
+          },
         };
       }
 
@@ -275,13 +292,16 @@ function conversationReducer(
       const finalizedMessages = [...state.messages];
       const lastAssistIdx = [...finalizedMessages]
         .reverse()
-        .findIndex((m) => m.role === 'assistant');
+        .findIndex((m) => m.message.role === 'assistant');
       
       if (lastAssistIdx !== -1) {
         const actualIdx = finalizedMessages.length - 1 - lastAssistIdx;
         finalizedMessages[actualIdx] = {
           ...finalizedMessages[actualIdx],
-          content: action.payload,
+          message: {
+            ...finalizedMessages[actualIdx].message,
+            content: action.payload,
+          },
         };
       }
 
@@ -294,16 +314,10 @@ function conversationReducer(
       };
     }
 
-    case 'ADD_COMPUTER_USE_MESSAGE':
-      return {
-        ...state,
-        messages: [...state.messages, action.payload],
-      };
-
     case 'ATTACH_MEMORY': {
       // Find user message by ID and attach memory
       const messagesWithMemory = state.messages.map((msg) => {
-        if (msg.id === action.payload.messageId && msg.role === 'user') {
+        if (msg.message.id === action.payload.messageId && msg.message.role === 'user') {
           return {
             ...msg,
             memory: action.payload.memory,

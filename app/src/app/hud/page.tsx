@@ -22,6 +22,7 @@ export default function HudPage() {
   // Conversation Manager
   const {
     messages,
+    reasoningMessages,
     conversations,
     conversationType,
     hasMoreConversations,
@@ -143,6 +144,7 @@ export default function HudPage() {
           <DynamicChatContent 
             hudDimensions={hudDimensions}
             messages={messages}
+            reasoningMessages={reasoningMessages}
             messagesEndRef={messagesEndRef}
             conversations={conversations}
             hasMoreConversations={hasMoreConversations}

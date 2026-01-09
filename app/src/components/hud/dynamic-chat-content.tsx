@@ -9,6 +9,7 @@ import { useWindows } from '@/lib/windows/useWindows';
 interface DynamicChatContentProps {
     hudDimensions: HudDimensions | null;
     messages: ChatMessage[];
+    reasoningMessages: ChatMessage[];
     messagesEndRef: React.RefObject<HTMLDivElement | null>;
     conversations: Conversation[];
     hasMoreConversations: boolean;
@@ -21,6 +22,7 @@ interface DynamicChatContentProps {
 export function DynamicChatContent({ 
   hudDimensions, 
   messages,
+  reasoningMessages,
   messagesEndRef,
   conversations,
   hasMoreConversations,
@@ -77,6 +79,7 @@ export function DynamicChatContent({
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicMessagesClass()}`}>
           <MessageList 
             messages={messages}
+            reasoningMessages={reasoningMessages}
             messagesEndRef={messagesEndRef}
           />
         </div>

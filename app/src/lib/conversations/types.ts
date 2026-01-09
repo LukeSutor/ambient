@@ -1,17 +1,15 @@
 import { MemoryEntry } from '@/types/memory';
 import { OcrResponseEvent } from '@/types/events';
 import { RefObject } from 'react';
-import { Conversation, Role } from '@/types/conversations';
+import { Conversation, Message, Role } from '@/types/conversations';
 
 /**
  * Chat message structure with optional memory attachment
  */
 export interface ChatMessage {
-  id: string;
-  role: Role;
-  content: string;
+  message: Message;
+  reasoningMessages: ChatMessage[];
   memory: MemoryEntry | null;
-  timestamp: string;
 }
 
 /**

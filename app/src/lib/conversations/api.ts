@@ -1,17 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Conversation } from './types';
 import { OcrResponseEvent, HudChatEvent } from '@/types/events';
+import { Conversation } from '@/types/conversations';
 
 /**
  * Creates a new conversation
  * @param name - Optional conversation name
  * @returns Promise resolving to the created Conversation
  */
-export async function createConversation(name?: string): Promise<Conversation> {
+export async function createConversation(name?: string, convType?: string | null): Promise<Conversation> {
   try {
     const conversation = await invoke<Conversation>('create_conversation', { 
       name: name || null,
-      type: null
+      convType: convType || null
     });
     return conversation;
   } catch (error) {

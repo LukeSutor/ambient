@@ -450,6 +450,8 @@ impl ComputerUseEngine {
                 action_response.args.clone()
             ).await;
 
+            // Wait 1 second for UI to update
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let screenshot_vec = take_screenshot();
             let screenshot_data = general_purpose::STANDARD.encode(&screenshot_vec);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import Markdown from 'react-markdown';
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
@@ -12,23 +12,24 @@ import { useWindows } from '@/lib/windows/useWindows';
 
 interface MessageListProps {
   messages: ChatMessage[];
+  reasoningMessages: ChatMessage[];
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 // Helper function to check if previous message has memory
 const hasPreviousMemory = (messages: ChatMessage[], index: number) => {
-  return index > 0 && messages[index - 1]?.role === 'user' && messages[index - 1]?.memory !== null;
+  return index > 0 && messages[index - 1]?.message.role === 'user' && messages[index - 1]?.memory !== null;
 };
 
-function UserMessage({ message }: { message: ChatMessage }) {
+function UserMessage({ m }: { m: ChatMessage }) {
   return (
     <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto">
-      <div className="whitespace-pre-wrap">{message.content}</div>
+      <div className="whitespace-pre-wrap">{m.message.content}</div>
     </div>
   );
 }
 
-function AssistantMessage({ messages, message, i, openSecondary }: { messages: ChatMessage[]; message: ChatMessage ; i: number; openSecondary: (dest: string) => void }) {
+function AssistantMessage({ messages, m, i, openSecondary }: { messages: ChatMessage[]; m: ChatMessage ; i: number; openSecondary: (dest: string) => void }) {
   return (
     <div className="overflow-hidden">
       <div className="h-4 flex items-center justify-start -mb-2">
@@ -65,21 +66,23 @@ function AssistantMessage({ messages, message, i, openSecondary }: { messages: C
           <div className="h-4 w-4" />
         )}
       </div>
-      <Markdown {...llmMarkdownConfig}>{message.content}</Markdown>
+      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
     </div>
   );
 }
 
-function FunctionMessage({ message }: { message: ChatMessage }) {
+function FunctionMessage({ m }: { m: ChatMessage }) {
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
-      <Markdown {...llmMarkdownConfig}>{message.content}</Markdown>
+      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
     </div>
   );
 }
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
-export function MessageList({ messages, messagesEndRef }: MessageListProps) {
+export function MessageList({ messages, reasoningMessages, messagesEndRef }: MessageListProps) {
+  const [showReasoning, setShowReasoning] = useState(false);
+  
   // Window state
   const { openSecondary } = useWindows();
 
@@ -91,20 +94,20 @@ export function MessageList({ messages, messagesEndRef }: MessageListProps) {
             <div
               key={`m-${i}`}
               className={
-                m.role.toLowerCase() === 'user'
+                m.message.role.toLowerCase() === 'user'
                   ? 'max-w-[85%] ml-auto grid transition-[grid-template-rows] duration-300 ease-out'
                   : 'max-w-[95%] w-full text-left ml-2 mb-0 grid transition-[grid-template-rows] duration-300 ease-out'
               }
               style={{
-                gridTemplateRows: m.content ? '1fr' : '0fr'
+                gridTemplateRows: m.message.content ? '1fr' : '0fr'
               }}
             >
-              {m.role.toLowerCase() === 'user' ? (
-                <UserMessage message={m} />
-              ) : m.role.toLowerCase() === 'assistant' ? (
-                <AssistantMessage messages={messages} message={m} i={i} openSecondary={openSecondary} />
+              {m.message.role.toLowerCase() === 'user' ? (
+                <UserMessage m={m} />
+              ) : m.message.role.toLowerCase() === 'assistant' ? (
+                <AssistantMessage messages={messages} m={m} i={i} openSecondary={openSecondary} />
               ) : (
-                <FunctionMessage message={m} />
+                <FunctionMessage m={m} />
               )}
             </div>
           ))}
