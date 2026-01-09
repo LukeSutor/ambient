@@ -163,7 +163,7 @@ export function HUDInputBar({
               side="bottom"
               align="start"
               avoidCollisions={false}
-              sideOffset={12}
+              sideOffset={10}
               alignOffset={-12}
               className="bg-white/60"
             >
@@ -190,7 +190,6 @@ export function HUDInputBar({
           <DropdownMenu onOpenChange={setIsToolsDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <InputGroupButton
-                className="ml-2"
                 variant="ghost"
                 disabled={ocrLoading || isStreaming}
               >
@@ -202,7 +201,7 @@ export function HUDInputBar({
               side="bottom"
               align="start"
               avoidCollisions={false}
-              sideOffset={12}
+              sideOffset={10}
               alignOffset={-12}
               className="bg-white/60"
             >
@@ -228,7 +227,7 @@ export function HUDInputBar({
                   ${conversationType === "computer_use" ? "px-2 py-1" : "p-0 w-0"}`}
               >
                 <MousePointerClick className="!h-4 !w-4 text-black" />
-                <p className="mx-1 text-black">Computer Use</p>
+                <p className="mx-1 text-black text-xs">Computer Use</p>
                 <Button
                   variant="ghost"
                   className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent"
@@ -257,7 +256,7 @@ export function HUDInputBar({
               side="bottom"
               align="start"
               avoidCollisions={false}
-              sideOffset={12}
+              sideOffset={10}
               alignOffset={-115}
               className="w-full bg-white/60"
             >
