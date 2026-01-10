@@ -6,7 +6,7 @@ import { markdownComponents, darkMarkdownComponents, customUrlTransform } from '
 
 // Basic configuration for LLM-generated content
 export const basicMarkdownConfig: Options = {
-  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath]],
+  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath, { singleDollarTextMath: false }]],
   rehypePlugins: [[rehypeKatex]],
   components: markdownComponents,
   urlTransform: customUrlTransform,
@@ -14,7 +14,7 @@ export const basicMarkdownConfig: Options = {
 
 // Dark theme configuration
 export const darkMarkdownConfig: Options = {
-  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath]],
+  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath, { singleDollarTextMath: false }]],
   rehypePlugins: [[rehypeKatex]],
   components: darkMarkdownComponents,
   urlTransform: customUrlTransform,
@@ -22,7 +22,7 @@ export const darkMarkdownConfig: Options = {
 
 // Strict security configuration (for untrusted content)
 export const strictSecureMarkdownConfig: Options = {
-  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath]],
+  remarkPlugins: [[remarkGfm, { singleTilde: false }], [remarkMath, { singleDollarTextMath: false }]],
   rehypePlugins: [[rehypeKatex]],
   components: markdownComponents,
   urlTransform: customUrlTransform,
