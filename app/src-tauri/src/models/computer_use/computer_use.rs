@@ -7,39 +7,65 @@ use serde_json::json;
 use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
 use crate::db::conversations::add_message;
-use crate::windows::{open_main_window, close_main_window};
+use crate::windows::{open_main_window, close_main_window, open_computer_use_window, close_computer_use_window};
 use chrono;
 
-fn transform_function_call(function_name: String, args: Vec<String>) -> String {
-    let mut content = String::new();
-    content.push_str(&format!("Calling function {}", function_name));
-    if !args.is_empty() {
-        match function_name.as_str() {
-            "navigate" => {
-                content.push_str(&format!("to url '{}'", args[0]));
-            },
-            "click_at" | "hover_at" => {
-                content.push_str(&format!("at coordinates ({}, {}) ", args[0], args[1]));
-            },
-            "type_text_at" => {
-                content.push_str(&format!("at coordinates ({}, {}) with text '{}'", args[0], args[1], args[2]));
-            },
-            "key_combination" => {
-                content.push_str(&format!("with keys '{}'", args[0]));
-            },
-            "scroll_document" => {
-                content.push_str(&format!("in direction '{}'", args[0]));
-            },
-            "scroll_at" => {
-                content.push_str(&format!("at coordinates ({}, {}) in direction '{}'", args[0], args[1], args[2]));
-            },
-            "drag_and_drop" => {
-                content.push_str(&format!("from ({}, {}) to ({}, {})", args[0], args[1], args[2], args[3]));
-            },
-            _ => {}
-        }
+fn transform_function_call(function_name: String, args: Vec<String>) -> (String, String) {
+    let mut message_content = String::new();
+    let mut toast_content = String::new();
+    match function_name.as_str() {
+        "open_web_browser" | "search" => {
+            message_content = "Opening web browser".to_string();
+            toast_content = message_content.clone();
+        },
+        "wait_5_seconds" => {
+            message_content = "Waiting for 5 seconds".to_string();
+            toast_content = message_content.clone();
+        },
+        "go_back" => {
+            message_content = "Going back".to_string();
+            toast_content = message_content.clone();
+        },
+        "go_forward" => {
+            message_content = "Going forward".to_string();
+            toast_content = message_content.clone();
+        },
+        "navigate" => {
+            message_content = format!("Navigating to {}", args[0]);
+            toast_content = "Navigating to new URL".to_string();
+        },
+        "click_at" => {
+            message_content = format!("Clicking at ({}, {})", args[0], args[1]);
+            toast_content = message_content.clone();
+        },
+        "hover_at" => {
+            message_content = format!("Hovering at ({}, {})", args[0], args[1]);
+            toast_content = message_content.clone();
+        },
+        "type_text_at" => {
+            message_content = format!("Typing '{}' at ({}, {})", args[2], args[0], args[1]);
+            toast_content = "Typing text".to_string();
+        },
+        "key_combination" => {
+            message_content = format!("Pressing keys '{}'", args[0]);
+            toast_content = message_content.clone();
+        },
+        "scroll_document" => {
+            message_content = format!("Scrolling {}", args[0]);
+            toast_content = message_content.clone();
+        },
+        "scroll_at" => {
+            message_content = format!("Scrolling {} at ({}, {})", args[2], args[0], args[1]);
+            toast_content = format!("Scrolling {}", args[2]);
+        },
+        "drag_and_drop" => {
+            message_content = format!("Dragging and dropping from ({}, {}) to ({}, {})", args[0], args[1], args[2], args[3]);
+            toast_content = "Dragging and dropping".to_string();
+        },
+        _ => {}
     }
-    content
+    log::info!("[computer_use] Transformed function call '{}' with args {:?} into message '{}' and toast '{}'", function_name, args, message_content, toast_content);
+    (message_content, toast_content)
 }
 
 pub struct ComputerUseEngine {
@@ -342,7 +368,14 @@ impl ComputerUseEngine {
     }
 
     async fn save_and_emit_function_message(&self, function_name: String, args: Vec<String>) -> Result<(), String> {
-        let function_call_message = transform_function_call(function_name.clone(), args.clone());
+        let (function_call_message, function_call_toast) = transform_function_call(function_name.clone(), args.clone());
+
+        // Emit toast event
+        let toast_event = ComputerUseToastEvent {
+            message: function_call_toast,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _ = emit(COMPUTER_USE_TOAST, toast_event);
 
         let func_message = add_message(
             self.app_handle.clone(),
@@ -481,6 +514,13 @@ impl ComputerUseEngine {
             parts.push(func_result);
         }
 
+        // Emit thinking toast
+        let toast_event = ComputerUseToastEvent {
+            message: "Thinking".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _ = emit(COMPUTER_USE_TOAST, toast_event);
+
         // Create new content entry with function results
         let new_content = json!({
             "role": "user",
@@ -544,8 +584,9 @@ impl ComputerUseEngine {
         // Save user message
         let _ = self.save_user_message(self.prompt.clone()).await;
 
-        // Close window before starting
+        // Close main window and open computer use toast before starting
         let _ = close_main_window(self.app_handle.clone()).await;
+        let _ = open_computer_use_window(self.app_handle.clone()).await;
 
         loop {
             let done = self.run_one_iteration().await?;
@@ -555,7 +596,8 @@ impl ComputerUseEngine {
             }
         }
 
-        // Reopen window once finished
+        // Reopen main window and close computer use toast once finished
+        let _ = close_computer_use_window(self.app_handle.clone()).await;
         let _ = open_main_window(self.app_handle.clone()).await;
 
         // Emit final update event
@@ -578,8 +620,6 @@ impl ComputerUseEngine {
                 log::error!("[computer_use] Failed to save final message: {}", e);
             }
         }
-
-        
 
         Ok(())
     }

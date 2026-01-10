@@ -300,6 +300,22 @@ export default function Dev() {
         </Button>
       </div>
 
+      {/* Open and close computer use window */}
+      <div className="flex gap-4 justify-center">
+        <Button 
+          onClick={async () => { await invoke("open_computer_use_window"); }}
+          variant="default"
+        >
+          Open Computer Use Window
+        </Button>
+        <Button 
+          onClick={async () => { await invoke("close_computer_use_window"); }}
+          variant="destructive"
+        >
+          Close Computer Use Window
+        </Button>
+      </div>  
+
       {/* Screen Selection Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
         <h2 className="text-lg font-semibold">Screen Selection Tool</h2>

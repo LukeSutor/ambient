@@ -193,8 +193,8 @@ export function HUDInputBar({
                 variant="ghost"
                 disabled={ocrLoading || isStreaming}
               >
-                <Wrench className="mr-1" />
-                Tools
+                <Wrench className={`${conversationType === "chat" ? "mr-1" : ""}`} />
+                {conversationType === "chat" && "Tools"}
               </InputGroupButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent

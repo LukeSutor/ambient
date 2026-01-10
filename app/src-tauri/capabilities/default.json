@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "secondary",
-    "screen-selector"
+    "screen-selector",
+    "computer-use"
   ],
   "permissions": [
     "core:default",

@@ -101,6 +101,14 @@ pub struct ComputerUseUpdateEvent {
   pub message: Message,
 }
 
+pub const COMPUTER_USE_TOAST: &str = "computer_use_toast";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct ComputerUseToastEvent {
+  pub message: String,
+  pub timestamp: String,
+}
+
 pub const GET_SAFETY_CONFIRMATION: &str = "get_safety_confirmation";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]

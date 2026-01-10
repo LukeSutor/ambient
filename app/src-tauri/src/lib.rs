@@ -1,7 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod auth;
 pub mod constants;
-pub mod db; // new modular database (core, events, workflows, activity)
+pub mod db;
 pub mod events;
 pub mod images;
 pub mod memory;
@@ -152,6 +152,8 @@ pub fn run() {
       windows::open_secondary_window,
       windows::minimize_secondary_window,
       windows::close_secondary_window,
+      windows::open_computer_use_window,
+      windows::close_computer_use_window,
       windows::resize_hud,
       windows::refresh_hud_window_size,
       settings::load_user_settings,

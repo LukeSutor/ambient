@@ -8,6 +8,8 @@ export type CaptureScreenEvent = { timestamp: string, };
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, };
 
+export type ComputerUseToastEvent = { message: string, timestamp: string, };
+
 export type ComputerUseUpdateEvent = { status: string, message: Message, };
 
 export type DetectTasksEvent = { text: string, active_url: string | null, timestamp: string, };

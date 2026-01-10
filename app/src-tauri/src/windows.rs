@@ -185,3 +185,66 @@ pub async fn close_secondary_window(app_handle: AppHandle) -> Result<(), String>
     Err("Window not found".to_string())
   }
 }
+
+
+/// Open computer use window
+#[tauri::command]
+pub async fn open_computer_use_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = "computer-use".to_string();
+
+  if let Some(win) = app_handle.get_webview_window(&window_label) {
+    // Focus and show existing window
+    win.show().map_err(|e| e.to_string())?;
+    win.set_focus().map_err(|e| e.to_string())?;
+    return Ok(());
+  }
+
+  // Get monitor dimensions to calculate position
+  let monitor = app_handle
+    .primary_monitor()
+    .map_err(|e| e.to_string())?
+    .ok_or("Primary monitor not found")?;
+  
+  let scale_factor = monitor.scale_factor();
+  let work_area = monitor.work_area().size.to_logical::<f64>(scale_factor);
+  
+  let width = 300.0;
+  let height = 40.0;
+  let margin = 50.0;
+
+  // Calculate coordinates (50 pixels from left and bottom)
+  let x = margin;
+  let y = work_area.height - margin;
+
+  // Create the window
+  let _window = tauri::WebviewWindowBuilder::new(
+    &app_handle,
+    window_label,
+    tauri::WebviewUrl::App("/computer-use".into()),
+  )
+  .title("Computer Use")
+  .inner_size(width, height)
+  .position(x, y)
+  .resizable(false)
+  .transparent(true)
+  .decorations(false)
+  .shadow(false)
+  .always_on_top(true)
+  .skip_taskbar(true)
+  .build()
+  .map_err(|e| e.to_string())?;
+  Ok(())
+}
+
+/// Close the computer use window
+#[tauri::command]
+pub async fn close_computer_use_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = "computer-use".to_string();
+
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    window.close().map_err(|e| e.to_string())?;
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
+}

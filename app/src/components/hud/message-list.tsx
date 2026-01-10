@@ -57,7 +57,7 @@ function ReasoningMessages({ reasoningMessages, i, toggleReasoning, showReasonin
         <div className="overflow-hidden">
           <div className="flex flex-row mt-2">
             <div className="w-[1px] bg-black/40 rounded-full ml-6 mr-4 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
+            <div className="flex-1 space-y-4">
               {reasoningMessages.map((rm, idx) => (
                 <div key={`rm-${idx}`}>
               {rm.message.role.toLowerCase() === 'assistant' ? (
