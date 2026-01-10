@@ -46,7 +46,10 @@ function extractThinkingContent(text: string): string {
  */
 function transformBackendMessage(backendMessage: Message): ChatMessage {
   return {
-    message: backendMessage,
+    message: {
+      ...backendMessage,
+      role: backendMessage.role.toLowerCase() as Role,
+    },
     reasoningMessages: [],
     memory: null,
   };
@@ -146,9 +149,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
           };
           
           if (event.payload.status === 'completed') {
-            dispatch({ type: 'ADD_CHAT_MESSAGE', payload: chatMessage });
-            dispatch({ type: 'SET_STREAMING', payload: false });
-            dispatch({ type: 'SET_LOADING', payload: false });
+            dispatch({ type: 'FINALIZE_STREAM', payload: event.payload.message.content });
           } else {
             dispatch({ type: 'ADD_REASONING_MESSAGE', payload: chatMessage });
           }
@@ -301,26 +302,55 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
    * Loads messages for a specific conversation
    */
   const loadMessages = useCallback(async (conversation: Conversation): Promise<void> => {
-    console.log('[useConversation] Loading messages for conversation:', conversation.id);
+    console.log('[useConversation] Loading messages for conversation:', conversation);
     try {
       const backendMessages = await invoke<Message[]>('get_messages', { 
         conversationId: conversation.id
       });
-      const messages = backendMessages.map(transformBackendMessage);
+      let messages = backendMessages.map(transformBackendMessage);
+      console.log({messages});
       // Load messages depending on conversation type
-      if (state.conversationType === 'computer_use') {
-        // Load all but the final assistant message as reasoning messages
-        const reasoningMessages = messages.slice(0, -1);
-        const finalMessage = messages[messages.length - 1];
-        dispatch({ type: 'LOAD_REASONING_MESSAGES', payload: reasoningMessages });
-        dispatch({ type: 'LOAD_MESSAGES', payload: finalMessage ? [finalMessage] : [] });
-      } else {
-        dispatch({ type: 'LOAD_MESSAGES', payload: messages });
+      if (conversation.conv_type === 'computer_use') {
+        console.log('Loading computer use messages with reasoning grouping');
+        // Collect all assistant/function messages into the last assistant message's reasoningMessages
+        let finalizedMessages: ChatMessage[] = [];
+        let currentAssistantMessage: ChatMessage | null = null;
+        // Loop reverse through the messages to group reasoning by each final assistant message
+        messages.reverse().forEach((msg) => {
+          if (msg.message.role === 'functioncall') {
+            // Add function reasoning if current assistant message
+            if (currentAssistantMessage) {
+              currentAssistantMessage.reasoningMessages.unshift(msg);
+            }
+          }
+          else if (msg.message.role === 'user') {
+            // Add current assistant message to finalized and reset
+            if (currentAssistantMessage) {
+              finalizedMessages.unshift(currentAssistantMessage);
+              finalizedMessages.unshift(msg);
+              currentAssistantMessage = null;
+            }
+          } else if (msg.message.role === 'assistant') {
+            // If there is a current assistant message, add this as reasoning
+            if (currentAssistantMessage) {
+              currentAssistantMessage.reasoningMessages.unshift(msg);
+            }
+            else {
+              currentAssistantMessage = msg;
+            }
+          }
+        });
+        // If there is a remaining assistant message, add it
+        if (currentAssistantMessage) {
+          finalizedMessages.unshift(currentAssistantMessage);
+        }
+        messages = finalizedMessages;
       }
+      dispatch({ type: 'LOAD_MESSAGES', payload: messages });
     } catch (error) {
       console.error('[useConversation] Failed to load messages:', error);
     }
-  }, [dispatch, state.conversationType]);
+  }, [dispatch]);
 
   /**
    * Sends a message
@@ -364,6 +394,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         });
       });
 
+      dispatch({ type: 'START_ASSISTANT_MESSAGE', payload: { conversationId: activeConversationId } });
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_STREAMING', payload: true });
       
@@ -371,7 +402,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       if (state.conversationType === 'computer_use') {
         startComputerUseSession(activeConversationId, content);
       } else {
-        dispatch({ type: 'START_ASSISTANT_MESSAGE', payload: { conversationId: activeConversationId } });
         await sendChatApiMessage(
           activeConversationId,
           content,

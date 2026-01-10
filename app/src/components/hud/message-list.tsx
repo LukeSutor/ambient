@@ -5,16 +5,15 @@ import Markdown from 'react-markdown';
 import { llmMarkdownConfig } from '@/components/ui/markdown-config';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Button } from '@/components/ui/button';
-import { NotebookPen } from 'lucide-react';
+import { ChevronDown, NotebookPen } from 'lucide-react';
 import { ContentContainer } from '@/components/hud/content-container';
 import { ChatMessage } from '@/lib/conversations/types';
 import { useWindows } from '@/lib/windows/useWindows';
 
 interface MessageListProps {
   messages: ChatMessage[];
-  reasoningMessages: ChatMessage[];
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
-}
+};
 
 // Helper function to check if previous message has memory
 const hasPreviousMemory = (messages: ChatMessage[], index: number) => {
@@ -27,11 +26,60 @@ function UserMessage({ m }: { m: ChatMessage }) {
       <div className="whitespace-pre-wrap">{m.message.content}</div>
     </div>
   );
-}
+};
 
-function AssistantMessage({ messages, m, i, openSecondary }: { messages: ChatMessage[]; m: ChatMessage ; i: number; openSecondary: (dest: string) => void }) {
+function ReasoningAssistantMessage({ m }: { m: ChatMessage }) {
   return (
     <div className="overflow-hidden">
+      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
+    </div>
+  );
+};
+
+function ReasoningFunctionMessage({ m }: { m: ChatMessage }) {
+  return (
+    <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left">
+      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
+    </div>
+  );
+}
+
+function ReasoningMessages({ reasoningMessages, i, toggleReasoning, showReasoning }: { reasoningMessages: ChatMessage[], i: number, toggleReasoning: (index: number) => void, showReasoning: boolean }) {
+  if (reasoningMessages.length === 0) return null;
+
+  return (
+    <div className="mt-4 -mb-4">
+      <Button variant="ghost" onClick={() => toggleReasoning(i)}>
+        {showReasoning ? 'Hide' : 'Show'} Thinking
+        <ChevronDown className={`${showReasoning ? 'rotate-180' : ''} transition-transform`} />
+      </Button>
+      <div className={`grid transition-[grid-template-rows] duration-500 ${showReasoning ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <div className="flex flex-row mt-2">
+            <div className="w-[1px] bg-black/40 rounded-full ml-6 mr-4 flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              {reasoningMessages.map((rm, idx) => (
+                <div key={`rm-${idx}`}>
+              {rm.message.role.toLowerCase() === 'assistant' ? (
+                <ReasoningAssistantMessage m={rm} />
+              ) : (
+                <ReasoningFunctionMessage m={rm} />
+              )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function AssistantMessage({ messages, m, i, openSecondary, toggleReasoning, showReasoning }: { messages: ChatMessage[]; m: ChatMessage ; i: number; openSecondary: (dest: string) => void; toggleReasoning: (index: number) => void; showReasoning: boolean }) {
+  return (
+    <div className="overflow-hidden">
+      {/* Reasoning Messages */}
+      <ReasoningMessages reasoningMessages={m.reasoningMessages} i={i} toggleReasoning={toggleReasoning} showReasoning={showReasoning} />
       <div className="h-4 flex items-center justify-start -mb-2">
         {hasPreviousMemory(messages, i) ? (
           <HoverCard>
@@ -69,7 +117,7 @@ function AssistantMessage({ messages, m, i, openSecondary }: { messages: ChatMes
       <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
     </div>
   );
-}
+};
 
 function FunctionMessage({ m }: { m: ChatMessage }) {
   return (
@@ -77,14 +125,26 @@ function FunctionMessage({ m }: { m: ChatMessage }) {
       <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
     </div>
   );
-}
+};
 
 // Container element forwards ref to the tail sentinel to support scrollIntoView
-export function MessageList({ messages, reasoningMessages, messagesEndRef }: MessageListProps) {
-  const [showReasoning, setShowReasoning] = useState(false);
+export function MessageList({ messages, messagesEndRef }: MessageListProps) {
+  const [showReasoning, setShowReasoning] = useState(new Set<number>([]));
   
   // Window state
   const { openSecondary } = useWindows();
+
+  const toggleReasoning = (index: number) => {
+    setShowReasoning((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
 
   return (
     <ContentContainer>
@@ -105,7 +165,14 @@ export function MessageList({ messages, reasoningMessages, messagesEndRef }: Mes
               {m.message.role.toLowerCase() === 'user' ? (
                 <UserMessage m={m} />
               ) : m.message.role.toLowerCase() === 'assistant' ? (
-                <AssistantMessage messages={messages} m={m} i={i} openSecondary={openSecondary} />
+                <AssistantMessage 
+                  messages={messages}
+                  m={m}
+                  i={i}
+                  openSecondary={openSecondary}
+                  toggleReasoning={toggleReasoning}
+                  showReasoning={showReasoning.has(i)}
+                />
               ) : (
                 <FunctionMessage m={m} />
               )}
@@ -116,7 +183,7 @@ export function MessageList({ messages, reasoningMessages, messagesEndRef }: Mes
       </div>
     </ContentContainer>
   );
-}
+};
 
 MessageList.displayName = 'MessageList';
 

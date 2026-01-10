@@ -38,7 +38,6 @@ type ConversationAction =
   | { type: 'SET_NO_MORE_CONVERSATIONS' }
   | { type: 'LOAD_CONVERSATION'; payload: Conversation }
   | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
-  | { type: 'LOAD_REASONING_MESSAGES'; payload: ChatMessage[] }
   | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }
   | { type: 'ADD_REASONING_MESSAGE'; payload: ChatMessage }
   | { type: 'START_USER_MESSAGE'; payload: { id: string; conversationId: string; timestamp: string } }
@@ -286,6 +285,29 @@ function conversationReducer(
         streamingContent: action.payload,
       };
     }
+
+    case 'ADD_REASONING_MESSAGE':
+      // Find the last assistant message and add reasoning message to it
+      const updatedMessages = [...state.messages];
+      const lastAssistantIdx = [...updatedMessages]
+        .reverse()
+        .findIndex((m) => m.message.role === 'assistant');
+
+      if (lastAssistantIdx !== -1) {
+        const actualIdx = updatedMessages.length - 1 - lastAssistantIdx;
+        const updatedReasoning = [
+          ...updatedMessages[actualIdx].reasoningMessages,
+          action.payload,
+        ];
+        updatedMessages[actualIdx] = {
+          ...updatedMessages[actualIdx],
+          reasoningMessages: updatedReasoning,
+        };
+      }
+      return {
+        ...state,
+        messages: updatedMessages,
+      };
 
     case 'FINALIZE_STREAM': {
       // Update the last assistant message with final content
