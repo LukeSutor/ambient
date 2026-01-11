@@ -7,7 +7,7 @@ import { listen, UnlistenFn, emit } from '@tauri-apps/api/event';
 import { ContentContainer } from '@/components/hud/content-container';
 import { ComputerUseToastEvent, SafetyConfirmationEvent, SafetyConfirmationResponseEvent } from '@/types/events';
 import { Button } from '@/components/ui/button';
-import { ArrowUpRight, ShieldAlert, X } from 'lucide-react';
+import { ArrowUpRight, X } from 'lucide-react';
 import {
   Empty,
   EmptyContent,
@@ -16,7 +16,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { set } from 'react-hook-form';
 
 const startupToasts = [
 	"Dusting off the keyboard",
@@ -132,7 +131,7 @@ function ComputerUsePage() {
 				// eslint-disable-next-line react/no-danger
 				dangerouslySetInnerHTML={{
 					__html:
-					"html,body{background:transparent!important;background-color:transparent!important;}}",
+					"html,body{background:transparent!important;background-color:transparent!important;overflow:hidden!important;}}",
 				}}
 			/>
 			<ContentContainer className="flex flex-col items-center min-w-[300px] whitespace-nowrap overflow-hidden">

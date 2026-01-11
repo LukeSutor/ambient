@@ -113,8 +113,8 @@ impl ComputerUseEngine {
                 log::info!("[computer_use] No previous session found or session loading panicked, starting fresh session");
             }
         }
-
-        // Build the initial request with the prompt
+        
+        // Build the initial request with the prompt and screenshot
         let initial_content = json!({
             "role": "user",
             "parts": [{
@@ -597,6 +597,7 @@ impl ComputerUseEngine {
                             for part in parts.iter_mut() {
                                 if let Some(fr) = part.get_mut("functionResponse") {
                                     if let Some(fr_obj) = fr.as_object_mut() {
+                                        log::info!("[computer_use] Removing old screenshot from contents to save space");
                                         fr_obj.remove("parts");
                                     }
                                 }

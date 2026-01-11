@@ -1,6 +1,5 @@
 use crate::db::core::DbState;
 use chrono::Utc;
-use serde_json::json;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -20,12 +19,8 @@ fn remove_screenshots(data: &mut Vec<serde_json::Value>) -> Vec<serde_json::Valu
     if let Some(parts) = content.get_mut("parts").and_then(|p| p.as_array_mut()) {
       for part in parts.iter_mut() {
         if let Some(fr) = part.get_mut("functionResponse") {
-          if let Some(fr_parts) = fr.get_mut("parts").and_then(|p| p.as_array_mut()) {
-            for fr_part in fr_parts.iter_mut() {
-              if let Some(inline_data) = fr_part.get_mut("inlineData") {
-                *inline_data = json!("[PNG data omitted]");
-              }
-            }
+          if let Some(fr_obj) = fr.as_object_mut() {
+            fr_obj.remove("parts");
           }
         }
       }
@@ -81,7 +76,9 @@ pub async fn get_computer_use_session(
 
   let mut session_iter = stmt.query_map(params![conversation_id], |row| {
     let data_str: String = row.get(2)?;
-    let data: Vec<serde_json::Value> = serde_json::from_str(&data_str).unwrap();
+    let data: Vec<serde_json::Value> = serde_json::from_str(&data_str).map_err(|e| {
+      rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+    })?;
 
     Ok(ComputerUseSession {
       id: row.get(0)?,
@@ -92,5 +89,8 @@ pub async fn get_computer_use_session(
     })
   }).map_err(|e| format!("Failed to get computer use session: {}", e))?;
 
-  session_iter.next().expect("No session found").map_err(|e| format!("Failed to retrieve session: {}", e))
+  session_iter
+    .next()
+    .ok_or_else(|| "No session found".to_string())?
+    .map_err(|e| format!("Failed to retrieve session: {}", e))
 }
