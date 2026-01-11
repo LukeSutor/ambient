@@ -64,7 +64,6 @@ fn transform_function_call(function_name: String, args: Vec<String>) -> (String,
         },
         _ => {}
     }
-    log::info!("[computer_use] Transformed function call '{}' with args {:?} into message '{}' and toast '{}'", function_name, args, message_content, toast_content);
     (message_content, toast_content)
 }
 

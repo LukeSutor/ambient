@@ -44,6 +44,7 @@ pub fn run() {
           let t = metadata.target();
           !(t.starts_with("hyper")
             || t.starts_with("reqwest")
+            || t.starts_with("enigo")
             || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
@@ -240,6 +241,7 @@ pub fn run() {
       models::ocr::ocr::process_image,
       models::ocr::ocr::check_ocr_models_available,
       models::computer_use::commands::start_computer_use,
+      models::computer_use::commands::execute_computer_action,
       screen_selection::open_screen_selector,
       screen_selection::close_screen_selector,
       screen_selection::process_screen_selection,

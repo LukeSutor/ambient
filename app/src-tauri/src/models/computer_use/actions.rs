@@ -232,7 +232,7 @@ pub fn scroll_document(direction: &str) -> Result<ActionResponse, String> {
         scroll_axis = Axis::Horizontal;
     }
     let mut direction_multiplier = 1;
-    if direction == "left" || direction == "down" {
+    if direction == "left" || direction == "up" {
         direction_multiplier = -1;
     }
     enigo.scroll(direction_multiplier * 6, scroll_axis).unwrap();
@@ -255,7 +255,7 @@ pub fn scroll_at(x: i32, y: i32, direction: &str, magnitude: Option<i32>) -> Res
         scroll_axis = Axis::Horizontal;
     }
     let mut direction_multiplier = 1;
-    if direction == "left" || direction == "down" {
+    if direction == "left" || direction == "up" {
         direction_multiplier = -1;
     }
     enigo.scroll(direction_multiplier * normalized_magnitude, scroll_axis).unwrap();
@@ -275,11 +275,19 @@ pub fn drag_and_drop(x: i32, y: i32, destination_x: i32, destination_y: i32) -> 
     // Press and hold left mouse button
     enigo.button(Button::Left, Press).unwrap();
     
-    // Move to destination
-    enigo.move_mouse(destination_x, destination_y, Coordinate::Abs).unwrap();
+    // Smooth move to destination
+    let steps = 20;
+    for i in 1..=steps {
+        let current_x = x + (destination_x - x) * i / steps;
+        let current_y = y + (destination_y - y) * i / steps;
+        enigo.move_mouse(current_x, current_y, Coordinate::Abs).unwrap();
+        // Short delay between steps
+        thread::sleep(time::Duration::from_millis(15));
+    }
     
     // Release mouse button
     enigo.button(Button::Left, Release).unwrap();
+    
     Ok(ActionResponse {
         function_name: "drag_and_drop".to_string(),
         args: vec![x.to_string(), y.to_string(), destination_x.to_string(), destination_y.to_string()],
