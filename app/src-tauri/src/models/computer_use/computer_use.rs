@@ -8,6 +8,7 @@ use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
 use crate::db::conversations::add_message;
 use crate::windows::{open_main_window, close_main_window, open_computer_use_window, close_computer_use_window};
+use crate::db::computer_use::{get_computer_use_session, save_computer_use_session};
 use chrono;
 
 fn transform_function_call(function_name: String, args: Vec<String>) -> (String, String) {
@@ -78,7 +79,7 @@ pub struct ComputerUseEngine {
 }
 
 impl ComputerUseEngine {
-    pub fn new(app_handle: AppHandle, conversation_id: String, prompt: String) -> Self {
+    pub async fn new(app_handle: AppHandle, conversation_id: String, prompt: String) -> Self {
         // Get the screen's physical size to store it
         let mut width: i32 = 0;
         let mut height: i32 = 0;
@@ -93,14 +94,35 @@ impl ComputerUseEngine {
             log::warn!("Failed to get screen dimensions, using defaults");
         }
 
-        // Build the initial contents with the prompt
+        // Try to load previous session data
+        let mut contents = Vec::new();
+        let app_handle_clone = app_handle.clone();
+        let conversation_id_clone = conversation_id.clone();
+
+        // Wrap the session load in a spawned task to catch panics from the database layer
+        let session_task = tokio::spawn(async move {
+            get_computer_use_session(app_handle_clone, conversation_id_clone).await
+        });
+
+        match session_task.await {
+            Ok(Ok(previous_session)) => {
+                log::info!("[computer_use] Loaded previous session data");
+                contents = previous_session.data;
+            }
+            _ => {
+                log::info!("[computer_use] No previous session found or session loading panicked, starting fresh session");
+            }
+        }
+
+        // Build the initial request with the prompt
         let initial_content = json!({
             "role": "user",
             "parts": [{
                 "text": prompt
             }]
         });
-        let contents = vec![initial_content];
+        contents.push(initial_content);
+        log::info!("[computer_use] Starting new computer use session with data: {:?}", contents);
         Self {
             app_handle: app_handle.clone(),
             prompt,
@@ -405,6 +427,23 @@ impl ComputerUseEngine {
         Ok(())
     }
 
+    async fn save_contents_to_db(&mut self, final_response: serde_json::Value) -> Result<(), String> {
+        // Add final candidate response to contents
+        if let Some(candidates) = final_response.get("candidates").and_then(|c| c.as_array()) {
+            if let Some(first_candidate) = candidates.first() {
+                if let Some(content) = first_candidate.get("content") {
+                    self.contents.push(content.clone());
+                }
+            }
+        }
+        
+        save_computer_use_session(
+            self.app_handle.clone(),
+            self.conversation_id.clone(),
+            self.contents.clone(),
+        ).await
+    }
+
     // Returns true if iteration is done, false to continue
     async fn run_one_iteration(&mut self) -> Result<bool, String> {
         log::info!("[computer_use] Running one iteration of computer use engine");
@@ -449,6 +488,10 @@ impl ComputerUseEngine {
         if function_calls.is_empty() {
             log::info!("[computer_use] No function calls found, treating as final response");
             self.final_response = reasoning;
+
+            // Save final contents to db
+            let _ = self.save_contents_to_db(response.clone()).await;
+
             return Ok(true);
         }
         

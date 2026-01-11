@@ -142,6 +142,16 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE INDEX IF NOT EXISTS idx_memory_entries_timestamp ON memory_entries(timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_message_id ON memory_entries(message_id);
+
+        -- Computer use sessions
+        CREATE TABLE IF NOT EXISTS computer_use_sessions (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL UNIQUE,
+          data TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
+        );
       "#,
   )])
 });
@@ -313,7 +323,10 @@ pub fn reset_database(
     .map_err(|_| "Failed to acquire DB lock".to_string())?;
   let old_conn = conn_guard.take();
   drop(conn_guard);
-  if old_conn.is_some() {
+  if let Some(conn) = old_conn {
+    if let Err((_, e)) = conn.close() {
+      log::warn!("[db] Error closing database connection: {}", e);
+    }
     log::info!("[db] Closed existing database connection.");
   }
 

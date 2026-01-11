@@ -10,7 +10,7 @@ pub async fn start_computer_use(
     conversation_id: String,
     prompt: String,
 ) -> Result<String, String> {
-    let mut engine = ComputerUseEngine::new(app_handle, conversation_id, prompt.clone());
+    let mut engine = ComputerUseEngine::new(app_handle, conversation_id, prompt.clone()).await;
 
     match engine.run().await {
         Ok(_) => Ok("Computer use engine ran successfully.".to_string()),
