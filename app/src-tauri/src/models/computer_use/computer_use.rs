@@ -122,7 +122,6 @@ impl ComputerUseEngine {
             }]
         });
         contents.push(initial_content);
-        log::info!("[computer_use] Starting new computer use session with data: {:?}", contents);
         Self {
             app_handle: app_handle.clone(),
             prompt,
@@ -427,16 +426,7 @@ impl ComputerUseEngine {
         Ok(())
     }
 
-    async fn save_contents_to_db(&mut self, final_response: serde_json::Value) -> Result<(), String> {
-        // Add final candidate response to contents
-        if let Some(candidates) = final_response.get("candidates").and_then(|c| c.as_array()) {
-            if let Some(first_candidate) = candidates.first() {
-                if let Some(content) = first_candidate.get("content") {
-                    self.contents.push(content.clone());
-                }
-            }
-        }
-        
+    async fn save_contents_to_db(&mut self) -> Result<(), String> {
         save_computer_use_session(
             self.app_handle.clone(),
             self.conversation_id.clone(),
@@ -450,13 +440,13 @@ impl ComputerUseEngine {
 
         // Get model response
         let response = self.get_model_response().await?;
-        log::info!("[computer_use] Model response: {}", response);
 
         // Check for blocked response
         if let Some(prompt_feedback) = response.get("promptFeedback") {
             if let Some(block_reason) = prompt_feedback.get("blockReason") {
                 log::warn!("[computer_use] Model response blocked due to: {}", block_reason);
                 self.final_response = "For safety reasons, the model is unable to complete this request.".to_string();
+                let _ = self.save_contents_to_db().await;
                 return Ok(true);
             }
         }
@@ -490,7 +480,7 @@ impl ComputerUseEngine {
             self.final_response = reasoning;
 
             // Save final contents to db
-            let _ = self.save_contents_to_db(response.clone()).await;
+            let _ = self.save_contents_to_db().await;
 
             return Ok(true);
         }
@@ -513,6 +503,7 @@ impl ComputerUseEngine {
                     let user_confirmed = self.get_safety_confirmation(safety).await?;
                     if !user_confirmed {
                         log::warn!("[computer_use] Safety confirmation denied by user, stopping execution");
+                        let _ = self.save_contents_to_db().await;
                         return Ok(true);
                     }
                 }
@@ -597,7 +588,6 @@ impl ComputerUseEngine {
                             for part in parts.iter_mut() {
                                 if let Some(fr) = part.get_mut("functionResponse") {
                                     if let Some(fr_obj) = fr.as_object_mut() {
-                                        log::info!("[computer_use] Removing old screenshot from contents to save space");
                                         fr_obj.remove("parts");
                                     }
                                 }
@@ -607,26 +597,7 @@ impl ComputerUseEngine {
                 }
             }
         }
-
-        // Print contents besides png data for debugging
-        // let debug_contents: Vec<_> = self.contents.iter().map(|content| {
-        //     let mut debug_content = content.clone();
-        //     if let Some(parts) = debug_content.get_mut("parts").and_then(|p| p.as_array_mut()) {
-        //         for part in parts.iter_mut() {
-        //             if let Some(fr) = part.get_mut("functionResponse") {
-        //                 if let Some(fr_parts) = fr.get_mut("parts").and_then(|p| p.as_array_mut()) {
-        //                     for fr_part in fr_parts.iter_mut() {
-        //                         if let Some(inline_data) = fr_part.get_mut("inlineData") {
-        //                             *inline_data = json!("[PNG data omitted]");
-        //                         }
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     debug_content
-        // }).collect();
-        // log::info!("[computer_use] Completed iteration. New contents: {:?}", debug_contents);
+        let _ = self.save_contents_to_db().await;
         Ok(false)
     }
 
@@ -640,7 +611,6 @@ impl ComputerUseEngine {
 
         loop {
             let done = self.run_one_iteration().await?;
-            log::info!("[computer_use] Iteration complete. Done: {}", done);
             if done {
                 break;
             }

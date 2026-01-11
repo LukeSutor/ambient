@@ -47,7 +47,11 @@ pub async fn save_computer_use_session(
   let data = remove_screenshots(&mut data.clone());
 
   conn.execute(
-    "INSERT INTO computer_use_sessions (id, conversation_id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+    "INSERT INTO computer_use_sessions (id, conversation_id, data, created_at, updated_at) 
+     VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT(conversation_id) DO UPDATE SET 
+       data = excluded.data, 
+       updated_at = excluded.updated_at",
     params![
       id,
       conversation_id,
