@@ -157,6 +157,7 @@ pub fn run() {
       windows::close_computer_use_window,
       windows::resize_hud,
       windows::refresh_hud_window_size,
+      windows::resize_computer_use_window,
       settings::load_user_settings,
       settings::save_user_settings,
       settings::emit_settings_changed,

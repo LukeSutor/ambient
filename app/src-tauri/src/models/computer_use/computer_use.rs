@@ -303,6 +303,10 @@ impl ComputerUseEngine {
     }
 
     async fn get_safety_confirmation(&self, safety: &serde_json::Value) -> Result<bool, String> {
+        log::info!("[computer_use] Safety confirmation required");
+        // Ensure the toast window is open
+        let _ = open_computer_use_window(self.app_handle.clone()).await;
+
         let safety_confirmation_event = SafetyConfirmationEvent {
             reason: safety.get("explanation").and_then(|e| e.as_str()).unwrap_or("No explanation provided").to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
@@ -317,6 +321,9 @@ impl ComputerUseEngine {
                 let _ = tx.send(res.user_confirmed);
             }
         });
+
+        // Re-close main window and continue
+        let _ = close_main_window(self.app_handle.clone()).await;
 
         match rx.await {
             Ok(true) => Ok(true),
@@ -584,8 +591,8 @@ impl ComputerUseEngine {
         let _ = self.save_user_message(self.prompt.clone()).await;
 
         // Close main window and open computer use toast before starting
-        let _ = close_main_window(self.app_handle.clone()).await;
         let _ = open_computer_use_window(self.app_handle.clone()).await;
+        let _ = close_main_window(self.app_handle.clone()).await;
 
         loop {
             let done = self.run_one_iteration().await?;
@@ -596,8 +603,8 @@ impl ComputerUseEngine {
         }
 
         // Reopen main window and close computer use toast once finished
-        let _ = close_computer_use_window(self.app_handle.clone()).await;
         let _ = open_main_window(self.app_handle.clone()).await;
+        let _ = close_computer_use_window(self.app_handle.clone()).await;
 
         // Emit final update event
         let final_message = add_message(

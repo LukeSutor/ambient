@@ -46,3 +46,13 @@ pub const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(120);
 
 // HUD information
 pub const HUD_WINDOW_LABEL: &str = "main";
+
+// Dashboard information
+pub const DASHBOARD_WINDOW_LABEL: &str = "secondary";
+pub const DASHBOARD_PATH: &str = "/secondary";
+
+// Computer use toast window information
+pub const COMPUTER_USE_WINDOW_LABEL: &str = "computer-use";
+pub const COMPUTER_USE_PATH: &str = "/computer-use";
+pub const MARGIN_LEFT: u32 = 50;
+pub const MARGIN_BOTTOM: u32 = 20;

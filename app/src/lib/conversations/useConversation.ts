@@ -258,7 +258,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const resetConversation = useCallback(async (delay?: number): Promise<string | null> => {
     try {
       dispatch({ type: 'SET_CONVERSATION_ID', payload: null });
-      dispatch({ type: 'SET_CONVERSATION_TYPE', payload: 'chat' });
       if (delay && delay > 0) {
         setTimeout(() => {
           dispatch({ type: 'CLEAR_MESSAGES' });
