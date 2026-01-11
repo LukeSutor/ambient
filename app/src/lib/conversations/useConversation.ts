@@ -372,6 +372,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         const conversation = await createConversation(undefined, state.conversationType);
         activeConversationId = conversation.id;
         dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
+        dispatch({ type: 'PREPEND_CONVERSATION', payload: conversation });
         console.log('[useConversation] Created conversation:', conversation);
       }
 

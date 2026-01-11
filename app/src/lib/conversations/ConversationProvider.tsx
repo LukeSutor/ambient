@@ -33,6 +33,7 @@ type ConversationAction =
   | { type: 'SET_CONVERSATION_TYPE'; payload: string }
   | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'ADD_CONVERSATIONS'; payload: Conversation[] }
+  | { type: 'PREPEND_CONVERSATION'; payload: Conversation }
   | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
   | { type: 'DELETE_CONVERSATION'; payload: { id: string } }
   | { type: 'SET_NO_MORE_CONVERSATIONS' }
@@ -172,6 +173,12 @@ function conversationReducer(
       hasMoreConversations: merged.length === previousLength ? false : state.hasMoreConversations,
       };
     }
+
+    case 'PREPEND_CONVERSATION':
+      return {
+        ...state,
+        conversations: [action.payload, ...state.conversations],
+      };
 
     case 'SET_NO_MORE_CONVERSATIONS':
       return {
