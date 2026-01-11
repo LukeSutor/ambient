@@ -4,7 +4,7 @@ Local‑first AI assistant that lives on your PC and helps automate everyday tas
 
 ## Overview
 
-Cortical is a Windows desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs quietly in the background and prioritizes privacy by default.
+Cortical is a desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs efficiently in the background and prioritizes privacy and speed by default.
 
 Built with Tauri (Rust + Next.js).
 
@@ -12,10 +12,11 @@ Built with Tauri (Rust + Next.js).
 
 - Local‑first inference with llama.cpp
   - Ships with a built‑in model downloader
-  - Defaults to Qwen3 1.7B (others can be added)
 - Floating chat window
   - Chat locally with Qwen3 1.7B
-  - Optional GPT‑OSS‑20B via OpenRouter
+  - Optional GPT‑OSS‑20B and GPT-5 via OpenRouter
+- Gemini-powered computer use
+  - Let Gemini take control of your computer to complete tasks on your behalf
 - Screen region context with OCR
   - Snipping‑tool‑style region capture
   - Extracts text with OCR and injects it into the conversation
@@ -26,7 +27,7 @@ Built with Tauri (Rust + Next.js).
 - The Tauri/Rust backend manages windowing, screen capture, OCR, and model orchestration
 - llama.cpp runs locally; the app communicates with it through a local http server
 - When you choose, OpenRouter can be used as the model provider
-- All local artifacts (models, database, caches) are stored in your Windows AppData folder
+- All local artifacts (models, database, caches) never leave your computer
 
 ## Roadmap (vision)
 
