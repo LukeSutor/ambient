@@ -1,4 +1,5 @@
 pub mod cognito;
+pub mod supabase;
 pub mod commands;
 pub mod deep_link;
 pub mod jwt;
