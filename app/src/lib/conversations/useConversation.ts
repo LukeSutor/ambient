@@ -185,7 +185,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         unlisteners.push(ocrUnlisten);
 
         // Rename conversation listener
-        const renameUnlisten = await listen<RenameConversationEvent>('conversation_renamed', (event) => {
+        const renameUnlisten = await listen<RenameConversationEvent>('rename_conversation', (event) => {
           const { conv_id, new_name } = event.payload;
           dispatch({ type: 'RENAME_CONVERSATION', payload: { id: conv_id, newName: new_name } });
         });

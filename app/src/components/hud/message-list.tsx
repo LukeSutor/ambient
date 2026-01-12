@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Markdown from 'react-markdown';
-import { llmMarkdownConfig } from '@/components/ui/markdown-config';
+import { llmMarkdownConfig, preprocessMarkdownCurrency } from '@/components/ui/markdown-config';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, NotebookPen } from 'lucide-react';
@@ -31,7 +31,7 @@ function UserMessage({ m }: { m: ChatMessage }) {
 function ReasoningAssistantMessage({ m }: { m: ChatMessage }) {
   return (
     <div className="overflow-hidden">
-      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
+      <Markdown {...llmMarkdownConfig}>{preprocessMarkdownCurrency(m.message.content)}</Markdown>
     </div>
   );
 };
@@ -39,7 +39,7 @@ function ReasoningAssistantMessage({ m }: { m: ChatMessage }) {
 function ReasoningFunctionMessage({ m }: { m: ChatMessage }) {
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left">
-      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
+      <Markdown {...llmMarkdownConfig}>{preprocessMarkdownCurrency(m.message.content)}</Markdown>
     </div>
   );
 }
@@ -114,7 +114,7 @@ function AssistantMessage({ messages, m, i, openSecondary, toggleReasoning, show
           <div className="h-4 w-4" />
         )}
       </div>
-      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
+      <Markdown {...llmMarkdownConfig}>{preprocessMarkdownCurrency(m.message.content)}</Markdown>
     </div>
   );
 };
@@ -122,7 +122,7 @@ function AssistantMessage({ messages, m, i, openSecondary, toggleReasoning, show
 function FunctionMessage({ m }: { m: ChatMessage }) {
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
-      <Markdown {...llmMarkdownConfig}>{m.message.content}</Markdown>
+      <Markdown {...llmMarkdownConfig}>{preprocessMarkdownCurrency(m.message.content)}</Markdown>
     </div>
   );
 };

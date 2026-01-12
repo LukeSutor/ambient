@@ -154,7 +154,7 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
               editingConversationId !== conv.id ? (
                 <div key={conv.id} className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg">
                   <Button onClick={handleLoadConversation(conv.id)} variant="ghost" className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent">
-                    <span className="truncate">{conv.name || 'Untitled Conversation'}</span>
+                    <span title={conv.name || 'Untitled Conversation'} className="truncate">{conv.name || 'Untitled Conversation'}</span>
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

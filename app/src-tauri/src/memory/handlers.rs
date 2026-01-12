@@ -80,9 +80,13 @@ pub async fn handle_extract_interactive_memory(
     }
   };
 
-  // Skip if extracted memory is empty
-  if extracted_memory.trim().is_empty() {
-    log::info!("[memory] Extracted memory is empty, skipping save");
+  // Skip if extracted memory is empty or one of the ignored responses
+  const IGNORED_RESPONSES: [&str; 2] = [
+    "User has a dog named Max",
+    "User is learning Spanish",
+  ];
+  if extracted_memory.trim().is_empty() || IGNORED_RESPONSES.contains(&extracted_memory.trim()) {
+    log::info!("[memory] Extracted memory is empty or ignored, skipping save");
     return Ok(());
   }
 
