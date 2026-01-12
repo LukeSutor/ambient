@@ -9,13 +9,13 @@ use tauri::{AppHandle, Manager};
 
 /// Handle screen summarization event
 pub async fn handle_extract_interactive_memory(
-  event: ExtractInteractiveMemoryEvent,
   app_handle: &AppHandle,
-) {
+  event: ExtractInteractiveMemoryEvent,
+) -> Result<(), String> {
   // Return an error if message id is empty
   if event.message_id.is_empty() {
     log::error!("[memory] Missing message ID for interactive memory extraction");
-    return;
+    return Err("Missing message ID for interactive memory extraction".into());
   }
 
   // Load system prompt
@@ -23,7 +23,7 @@ pub async fn handle_extract_interactive_memory(
     Some(p) => p.to_string(),
     None => {
       log::error!("[memory] Missing system prompt: extract_interactive_memory");
-      return;
+      return Err("Missing system prompt: extract_interactive_memory".into());
     }
   };
 
@@ -32,7 +32,7 @@ pub async fn handle_extract_interactive_memory(
     Some(s) => Some(s.to_string()),
     None => {
       log::error!("[memory] Missing schema: extract_interactive_memory");
-      return;
+      return Err("Missing schema: extract_interactive_memory".into());
     }
   };
 
@@ -55,7 +55,7 @@ pub async fn handle_extract_interactive_memory(
     }
     Err(e) => {
       log::error!("[memory] Failed to extract interactive memory: {}", e);
-      return;
+      return Err("Failed to extract interactive memory".into());
     }
   };
 
@@ -66,24 +66,24 @@ pub async fn handle_extract_interactive_memory(
         Some(memory_text) => memory_text.to_string(),
         None => {
           log::error!("[memory] Memory field is not a string");
-          return;
+          return Err("Memory field is not a string".into());
         }
       },
       None => {
         log::error!("[memory] No 'memory' field found in JSON response");
-        return;
+        return Err("No 'memory' field found in JSON response".into());
       }
     },
     Err(e) => {
       log::error!("[memory] Failed to parse JSON response: {}", e);
-      return;
+      return Err("Failed to parse JSON response".into());
     }
   };
 
   // Skip if extracted memory is empty
   if extracted_memory.trim().is_empty() {
     log::info!("[memory] Extracted memory is empty, skipping save");
-    return;
+    return Ok(());
   }
 
   // Generate memory embedding
@@ -91,7 +91,7 @@ pub async fn handle_extract_interactive_memory(
     Ok(emb) => emb,
     Err(e) => {
       log::error!("[memory] Failed to generate embedding: {}", e);
-      return;
+      return Err("Failed to generate embedding".into());
     }
   };
 
@@ -109,7 +109,7 @@ pub async fn handle_extract_interactive_memory(
   let db_state = app_handle.state::<DbState>();
   if let Err(e) = insert_memory_entry(db_state, memory.clone()) {
     log::error!("[memory] Failed to save memory entry: {}", e);
-    return;
+    return Err("Failed to save memory entry".into());
   }
 
   // Emit event that memory was extracted and saved
@@ -118,4 +118,5 @@ pub async fn handle_extract_interactive_memory(
     timestamp: chrono::Utc::now().to_rfc3339(),
   };
   let _ = emit(MEMORY_EXTRACTED, memory_extracted_event);
+  Ok(())
 }

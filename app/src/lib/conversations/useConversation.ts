@@ -6,14 +6,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
 import { Conversation, Message, Role } from '@/types/conversations';
 import { ChatMessage } from './types';
-import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, HudChatEvent, ComputerUseUpdateEvent } from '@/types/events';
+import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
 import { 
   startComputerUseSession, 
   createConversation, 
   sendMessage as sendChatApiMessage, 
   deleteConversation as deleteApiConversation,
-  ensureLlamaServerRunning
+  ensureLlamaServerRunning,
+  emitGenerateConversationName
 } from './api';
 
 const CONVERSATION_LIMIT = 20;
@@ -183,6 +184,13 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         });
         unlisteners.push(ocrUnlisten);
 
+        // Rename conversation listener
+        const renameUnlisten = await listen<RenameConversationEvent>('conversation_renamed', (event) => {
+          const { conv_id, new_name } = event.payload;
+          dispatch({ type: 'RENAME_CONVERSATION', payload: { id: conv_id, newName: new_name } });
+        });
+        unlisteners.push(renameUnlisten);
+
         console.log('[useConversation] Event listeners initialized');
       } catch (error) {
         console.error('[useConversation] Failed to setup events:', error);
@@ -239,6 +247,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         const conversations = await invoke<Conversation[]>('list_conversations', { 
           limit: CONVERSATION_LIMIT, offset: 0
         });
+        if (conversations.length < CONVERSATION_LIMIT) {
+          dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
+        }
         dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
       } catch (error) {
         console.error('[useConversation] Failed to load conversations:', error);
@@ -365,7 +376,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         return;
       }
 
-      // Create conversation if it doesn't exist yet (first message)
+      // Create conversation and generate name if first message
       let activeConversationId = conversationId;
       if (!activeConversationId) {
         console.log('[useConversation] Creating conversation for first message');
@@ -374,6 +385,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
         dispatch({ type: 'PREPEND_CONVERSATION', payload: conversation });
         console.log('[useConversation] Created conversation:', conversation);
+        await emitGenerateConversationName(conversation.id, content);
       }
 
       // Create user message with ID and timestamp
@@ -437,6 +449,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         limit: CONVERSATION_LIMIT, 
         offset 
       });
+      console.log('[useConversation] Loaded more conversations:', conversations);
       if (conversations.length < CONVERSATION_LIMIT) {
         // No more conversations to load
         dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
@@ -455,6 +468,9 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const refreshConversations = useCallback(async (): Promise<void> => {
     try {
       const conversations = await invoke<Conversation[]>('list_conversations', { limit: CONVERSATION_LIMIT * (state.conversationPage + 1), offset: 0 });
+      if (conversations.length < CONVERSATION_LIMIT * (state.conversationPage + 1)) {
+        dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
+      }
       dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
     } catch (error) {
       console.error('[useConversation] Failed to refresh conversations:', error);

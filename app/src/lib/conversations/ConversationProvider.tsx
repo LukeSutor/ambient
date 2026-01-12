@@ -75,7 +75,7 @@ function conversationReducer(
       return {
         ...state,
         conversationType: action.payload,
-      }
+      };
 
     case 'RENAME_CONVERSATION':
       return {

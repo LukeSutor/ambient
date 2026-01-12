@@ -93,6 +93,24 @@ pub struct MemoryExtractedEvent {
   pub timestamp: String,
 }
 
+pub const GENERATE_CONVERSATION_NAME: &str = "generate_conversation_name";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct GenerateConversationNameEvent {
+  pub conv_id: String,
+  pub message: String,
+  pub timestamp: String,
+}
+
+pub const RENAME_CONVERSATION: &str = "rename_conversation";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct RenameConversationEvent {
+  pub conv_id: String,
+  pub new_name: String,
+  pub timestamp: String,
+}
+
 pub const COMPUTER_USE_UPDATE: &str = "computer_use_update";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import { OcrResponseEvent, HudChatEvent } from '@/types/events';
+import { emit } from '@tauri-apps/api/event';
+import { OcrResponseEvent, HudChatEvent, GenerateConversationNameEvent } from '@/types/events';
 import { Conversation } from '@/types/conversations';
 
 /**
@@ -65,6 +66,26 @@ export async function startComputerUseSession(conversationId: string, prompt: st
   } catch (error) {
     console.error('[ConversationAPI] Failed to start computer use session:', error);
     throw new Error('Failed to start computer use session');
+  }
+}
+
+/**
+ * Emits an event to generate a conversation name
+ * @param conversationId - ID of the conversation
+ * @param message - The message content to base the name on
+ */
+export async function emitGenerateConversationName(conversationId: string, message: string): Promise<void> {
+  const generateConversationNameEvent: GenerateConversationNameEvent = {
+    conv_id: conversationId,
+    message: message,
+    timestamp: Date.now().toString(),
+  };
+  
+  try {
+    await emit('generate_conversation_name', generateConversationNameEvent);
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to generate conversation name:', error);
+    throw new Error('Failed to generate conversation name');
   }
 }
 

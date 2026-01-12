@@ -16,6 +16,8 @@ export type DetectTasksEvent = { text: string, active_url: string | null, timest
 
 export type ExtractInteractiveMemoryEvent = { message: string, message_id: string, timestamp: string, };
 
+export type GenerateConversationNameEvent = { conv_id: string, message: string, timestamp: string, };
+
 export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
 export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string, message_id: string, };
@@ -23,6 +25,8 @@ export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 
 export type OcrResponseEvent = { text: string, success: boolean, timestamp: string, };
+
+export type RenameConversationEvent = { conv_id: string, new_name: string, timestamp: string, };
 
 export type SafetyConfirmationEvent = { reason: string, timestamp: string, };
 
