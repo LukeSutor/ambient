@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
-use tokio::time::{sleep, Duration};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 /// Global state to track the running server process and port
@@ -65,7 +65,8 @@ impl From<ServerError> for String {
 pub struct ServerConfig {
   pub port: u16,
   pub api_key: String,
-  pub model_path: String,
+  pub text_model_path: String,
+  pub mmproj_model_path: String,
 }
 
 impl ServerConfig {
@@ -82,29 +83,38 @@ impl ServerConfig {
       new_key
     });
 
-    // Get model path
-    let model_path =
-      setup::get_llm_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+    // Get model and mmproj path
+    let text_model_path =
+      setup::get_vlm_text_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+    let mmproj_model_path =
+      setup::get_vlm_mmproj_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
 
-    // Check if model file exists
-    if !model_path.exists() {
+    // Check if model files exist
+    if !text_model_path.exists() || !mmproj_model_path.exists() {
       return Err(ServerError::ModelNotFound(format!(
-        "Model file does not exist: {:?}",
-        model_path
+        "Model files do not exist: {:?} or {:?}",
+        text_model_path, mmproj_model_path
       )));
     }
 
-    let model_path_str = model_path
+    let text_model_path_str = text_model_path
       .to_str()
       .ok_or_else(|| {
-        ServerError::ConfigError(format!("Model path is not valid UTF-8: {:?}", model_path))
+        ServerError::ConfigError(format!("Model path is not valid UTF-8: {:?}", text_model_path))
+      })?
+      .to_string();
+    let mmproj_model_path_str = mmproj_model_path
+      .to_str()
+      .ok_or_else(|| {
+        ServerError::ConfigError(format!("MMProj path is not valid UTF-8: {:?}", mmproj_model_path))
       })?
       .to_string();
 
     Ok(ServerConfig {
       port,
       api_key,
-      model_path: model_path_str,
+      text_model_path: text_model_path_str,
+      mmproj_model_path: mmproj_model_path_str,
     })
   }
 
@@ -165,20 +175,29 @@ fn get_current_server_config(app_handle: &AppHandle) -> Result<ServerConfig, Ser
   let api_key = api_key.ok_or_else(|| ServerError::ServerNotRunning)?;
 
   // Get model path
-  let model_path =
-    setup::get_llm_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+  let text_model_path =
+    setup::get_vlm_text_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+  let mmproj_model_path =
+    setup::get_vlm_mmproj_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
 
-  let model_path_str = model_path
+  let text_model_path_str = text_model_path
     .to_str()
     .ok_or_else(|| {
-      ServerError::ConfigError(format!("Model path is not valid UTF-8: {:?}", model_path))
+      ServerError::ConfigError(format!("Model path is not valid UTF-8: {:?}", text_model_path))
+    })?
+    .to_string();
+  let mmproj_model_path_str = mmproj_model_path
+    .to_str()
+    .ok_or_else(|| {
+      ServerError::ConfigError(format!("MMProj path is not valid UTF-8: {:?}", mmproj_model_path))
     })?
     .to_string();
 
   Ok(ServerConfig {
     port,
     api_key,
-    model_path: model_path_str,
+    text_model_path: text_model_path_str,
+    mmproj_model_path: mmproj_model_path_str,
   })
 }
 
@@ -210,7 +229,9 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
     .map_err(|e| format!("Failed to get sidecar command: {}", e))?
     .args([
       "-m",
-      &config.model_path,
+      &config.text_model_path,
+      "-mm",
+      &config.mmproj_model_path,
       "--port",
       &config.port.to_string(),
       "--api-key",
@@ -230,6 +251,7 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
       "on",
       "--no-webui",
       "--log-disable",
+      "--offline",
       "--jinja",
     ]);
 
@@ -280,58 +302,6 @@ pub async fn stop_llama_server() -> Result<String, String> {
       Ok("Server stopped successfully".to_string())
     }
     None => Err(ServerError::ServerNotRunning.into()),
-  }
-}
-
-#[tauri::command]
-pub async fn check_server_health(app_handle: AppHandle) -> Result<Value, String> {
-  // Get the current server config
-  let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
-
-  match perform_health_check(&config).await {
-    Ok(response) => Ok(response),
-    Err(e) => Err(format!("Health check failed: {}", e)),
-  }
-}
-
-#[tauri::command]
-pub async fn get_server_status(app_handle: AppHandle) -> Result<Value, String> {
-  // Check if process is running and get port
-  let process_running = {
-    let server_state = SERVER_STATE.lock().unwrap();
-    server_state.child.is_some()
-  };
-
-  if !process_running {
-    return Ok(json!({
-        "status": "stopped",
-        "process_running": false,
-        "health_check": null,
-        "port": null,
-        "base_url": null
-    }));
-  }
-
-  let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
-
-  // Perform health check
-  let health_result = perform_health_check(&config).await;
-
-  match health_result {
-    Ok(health_response) => Ok(json!({
-        "status": "running",
-        "process_running": true,
-        "health_check": health_response,
-        "port": config.port,
-        "base_url": config.base_url()
-    })),
-    Err(_) => Ok(json!({
-        "status": "unhealthy",
-        "process_running": true,
-        "health_check": null,
-        "port": config.port,
-        "base_url": config.base_url()
-    })),
   }
 }
 
@@ -402,84 +372,6 @@ async fn wait_for_server_ready(config: &ServerConfig) -> Result<(), ServerError>
   ))
 }
 
-#[tauri::command]
-pub async fn make_completion_request(
-  app_handle: AppHandle,
-  prompt: String,
-  max_tokens: Option<u32>,
-  temperature: Option<f32>,
-  top_p: Option<f32>,
-) -> Result<Value, String> {
-  let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
-
-  // Check if server is healthy first
-  match perform_health_check(&config).await {
-    Ok(health) => {
-      if health.get("status") != Some(&json!("healthy")) {
-        return Err("Server is not healthy".to_string());
-      }
-    }
-    Err(e) => return Err(format!("Server health check failed: {}", e)),
-  }
-
-  let client = reqwest::Client::new();
-  let completion_url = format!("{}/completion", config.base_url());
-
-  let mut request_body = json!({
-      "prompt": prompt,
-      "stream": false
-  });
-
-  // Add optional parameters
-  if let Some(tokens) = max_tokens {
-    request_body["n_predict"] = json!(tokens);
-  }
-  if let Some(temp) = temperature {
-    request_body["temperature"] = json!(temp);
-  }
-  if let Some(p) = top_p {
-    request_body["top_p"] = json!(p);
-  }
-
-  let response = client
-    .post(&completion_url)
-    .header("Authorization", format!("Bearer {}", config.api_key))
-    .header("Content-Type", "application/json")
-    .json(&request_body)
-    .send()
-    .await
-    .map_err(|e| format!("Failed to send completion request: {}", e))?;
-
-  if !response.status().is_success() {
-    return Err(format!(
-      "Completion request failed with status: {}",
-      response.status()
-    ));
-  }
-
-  let result: Value = response
-    .json()
-    .await
-    .map_err(|e| format!("Failed to parse completion response: {}", e))?;
-
-  Ok(result)
-}
-
-/// Restart the llama.cpp server
-#[tauri::command]
-pub async fn restart_llama_server(app_handle: AppHandle) -> Result<String, String> {
-  log::info!("[llama_server] Restarting llama.cpp server...");
-
-  // Stop the server if it's running
-  let _ = stop_llama_server().await;
-
-  // Wait a moment for cleanup
-  sleep(Duration::from_secs(1)).await;
-
-  // Start the server again
-  spawn_llama_server(app_handle).await
-}
-
 /// Generate chat completion using OpenAI-compatible endpoint
 #[tauri::command]
 pub async fn generate(
@@ -541,7 +433,7 @@ pub async fn generate(
 
   // Build request body
   let mut request_body = json!({
-      "model": "gpt-6",
+      "model": "gemini-7",
       "messages": messages,
       "stream": should_stream
   });

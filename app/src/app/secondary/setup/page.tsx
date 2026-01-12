@@ -138,7 +138,7 @@ export default function SetupPage() {
           <CardTitle className="text-2xl">Application Setup Required</CardTitle>
           <CardDescription>
             Essential models need to be downloaded before using the application.
-            This might take some time depending on your internet connection. The total download size is approximately 0.7 GB.
+            This might take some time depending on your internet connection. The total download size is approximately 1.5 GB.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

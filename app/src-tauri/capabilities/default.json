@@ -60,6 +60,10 @@
             {
               "validator": ".*"
             },
+            "-mm",
+            {
+              "validator": ".*"
+            },
             "--port",
             {
               "validator": "\\d+"
@@ -83,6 +87,7 @@
             "on",
             "--no-webui",
             "--log-disable",
+            "--offline",
             "--jinja"
           ],
           "name": "binaries/server",
@@ -131,6 +136,36 @@
         {
           "args": true,
           "name": "binaries/ggml-cpu-x64.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-zen4.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-piledriver.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-ivybridge.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-cooperlake.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-cascadelake.dll",
+          "sidecar": true
+        },
+        {
+          "args": true,
+          "name": "binaries/ggml-cpu-cannonlake.dll",
           "sidecar": true
         },
         {
