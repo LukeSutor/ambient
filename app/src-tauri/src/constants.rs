@@ -8,8 +8,8 @@ pub const OCR_DIR: &str = "models/ocr";
 pub const EMBEDDING_DIR: &str = "models/embedding";
 
 // VLM model filenames
-pub const TEXT_FILE: &str = "text-model.gguf";
-pub const MMPROJ_FILE: &str = "mmproj-model.gguf";
+pub const TEXT_FILE: &str = "Qwen3VL-2B-Instruct-Q4_K_M.gguf";
+pub const MMPROJ_FILE: &str = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 
 // LLM model filename
 pub const LLM_FILE: &str = "Qwen3-1.7B-Q4_K_M.gguf";
@@ -21,13 +21,9 @@ pub const TEXT_RECOGNITION_FILE: &str = "text-recognition.rten";
 // Embedding model filename
 pub const EMBEDDING_FILE: &str = "embeddinggemma-300m-Q4_0.gguf";
 
-// LLM model download link (example - update with actual model)
-pub const LLM_LINK: &str =
-  "https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q6_K.gguf";
-
 // VLM model download links
-pub const TEXT_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/SmolVLM2-2.2B-Instruct-Q4_K_M.gguf";
-pub const MMPROJ_LINK: &str = "https://huggingface.co/ggml-org/SmolVLM2-2.2B-Instruct-GGUF/resolve/main/mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf";
+pub const TEXT_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf";
+pub const MMPROJ_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 
 // Chat template for VLM
 pub const VLM_CHAT_TEMPLATE: &str = "smolvlm";

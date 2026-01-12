@@ -163,17 +163,6 @@ pub fn get_vlm_mmproj_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf
   Ok(vlm_models_dir.join(MMPROJ_FILE))
 }
 
-/// Gets the path of the LLM model file
-#[tauri::command]
-pub fn get_llm_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
-  let app_data_path = app_handle
-    .path()
-    .app_data_dir()
-    .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
-  let llm_models_dir = app_data_path.join(LLM_DIR);
-  Ok(llm_models_dir.join(LLM_FILE))
-}
-
 /// Checks if the VLM text model file is downloaded
 #[tauri::command]
 pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
@@ -197,16 +186,6 @@ pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<b
       // If we can't get the path, treat it as not downloaded, but don't error out the check itself
       Ok(false)
     }
-  }
-}
-
-/// Checks if the LLM model file is downloaded
-
-#[tauri::command]
-pub fn check_llm_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
-  match get_llm_model_path(app_handle) {
-    Ok(path) => Ok(path.exists() && path.is_file()),
-    Err(e) => Err(e),
   }
 }
 
@@ -291,8 +270,6 @@ pub fn check_embedding_model_download(app_handle: tauri::AppHandle) -> Result<bo
 /// General function to check if all required models (VLM and FastEmbed) are downloaded.
 #[tauri::command]
 pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String> {
-  log::info!("[check_setup] Checking overall setup completeness...");
-
   // Check VLM text model
   let vlm_text_downloaded = match check_vlm_text_model_download(app_handle.clone()) {
     Ok(downloaded) => downloaded,
@@ -310,7 +287,6 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
     log::warn!("[check_setup] VLM text model not downloaded. Setup incomplete.");
     return Ok(false);
   }
-  log::info!("[check_setup] VLM text model appears to be downloaded.");
 
   // Check VLM mmproj model
   let vlm_mmproj_downloaded = match check_vlm_mmproj_model_download(app_handle.clone()) {
@@ -328,9 +304,6 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
     log::warn!("[check_setup] VLM mmproj model not downloaded. Setup incomplete.");
     return Ok(false);
   }
-  log::info!("[check_setup] VLM mmproj model appears to be downloaded.");
 
-  // If all checks passed for VLM models
-  log::info!("[check_setup] VLM models appear to be downloaded. Setup complete.");
   Ok(true)
 }

@@ -113,14 +113,14 @@ Examples:
   );
   map.insert(
     "hud_chat",
-    r#"You are Cortical, an AI assistant created by Luke Sutor. Today is {currentDateTime}.
+    r#"You are Cortical, a helpful AI assistant. Today is {currentDateTime}.
 
 You may receive:
 - Memories: Past facts about the user
 - OCR: Text from user's screen
 - Task: The user's current request
 
-Be helpful and use the memories and OCR when relevant. Use markdown for formatting."#,
+Be helpful and use the memories and OCR when relevant. Use markdown for formatting. You are responding directly to the user."#,
   );
   map
 });
