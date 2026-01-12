@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import TextareaAutosize from "react-textarea-autosize";
+import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -16,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown } from 'lucide-react';
+import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions, ModelSelection } from '@/types/settings';
@@ -39,9 +40,11 @@ interface HUDInputBarProps {
   isDraggingWindow: boolean;
   isHoveringGroup: boolean;
   setIsHoveringGroup: (b: boolean) => void;
+  toggleComputerUse: () => void;
   ocrLoading: boolean;
   ocrResults: OcrResponseEvent[];
   isStreaming: boolean;
+  conversationType: string;
 }
 
 export function HUDInputBar({
@@ -58,9 +61,11 @@ export function HUDInputBar({
   isDraggingWindow,
   isHoveringGroup,
   setIsHoveringGroup,
+  toggleComputerUse,
   ocrLoading,
   ocrResults,
   isStreaming,
+  conversationType,
 }: HUDInputBarProps) {
   // Ref for load animation
   const inputRef = useRef<HTMLDivElement | null>(null);
@@ -68,7 +73,8 @@ export function HUDInputBar({
   const dimensionsRef = useRef<HudDimensions | null>(null);
   
   // Track dropdown open states
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
+  const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   
   // Settings hook for model selection
@@ -141,7 +147,8 @@ export function HUDInputBar({
           autoFocus
         />
         <InputGroupAddon align="block-end" className="-mb-2">
-          <DropdownMenu onOpenChange={setIsDropdownOpen}>
+          {/* Plus dropdown menu */}
+          <DropdownMenu onOpenChange={setIsPlusDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <InputGroupButton
                 variant="outline"
@@ -156,14 +163,11 @@ export function HUDInputBar({
               side="bottom"
               align="start"
               avoidCollisions={false}
-              sideOffset={12}
+              sideOffset={10}
+              alignOffset={-12}
               className="bg-white/60"
             >
               <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { dispatchOCRCapture(); }}>
-                  <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem className="hover:bg-white/60" onClick={() => { onNewChat(); }}>
                   <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
                   <span className="text-black text-sm whitespace-nowrap">New Chat</span>
@@ -182,9 +186,66 @@ export function HUDInputBar({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Tools dropdown */}
+          <DropdownMenu onOpenChange={setIsToolsDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <InputGroupButton
+                variant="ghost"
+                disabled={ocrLoading || isStreaming}
+              >
+                <Wrench className={`${conversationType === "chat" ? "mr-1" : ""}`} />
+                {conversationType === "chat" && "Tools"}
+              </InputGroupButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              side="bottom"
+              align="start"
+              avoidCollisions={false}
+              sideOffset={10}
+              alignOffset={-12}
+              className="bg-white/60"
+            >
+              <DropdownMenuGroup>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { dispatchOCRCapture(); }}>
+                  <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleComputerUse(); }}>
+                  <MousePointerClick className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                  <span className="text-black text-sm whitespace-nowrap">Computer Use</span>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Computer Use Icon */}
+
+          {/* Horizonal scrollable div with computer use icon and ocr captures */}
+          <ScrollArea className="min-w-0">
+            <div className="flex w-max space-x-2 py-1">
+              <div
+                className={`flex items-center justify-center bg-yellow-500/30 rounded-xl shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150
+                  ${conversationType === "computer_use" ? "px-2 py-1" : "p-0 w-0"}`}
+              >
+                <MousePointerClick className="!h-4 !w-4 text-black" />
+                <p className="mx-1 text-black text-xs">Computer Use</p>
+                <Button
+                  variant="ghost"
+                  className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent"
+                  size="icon"
+                  onClick={() => toggleComputerUse()}
+                >
+                  <X className="!h-3 !w-3 text-black shrink-0" />
+                </Button>
+              </div>
+              <OcrCaptures hud-scrolls captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
+              {/* Make sure the height stays constant */}
+              <div className="h-6" />
+            </div>
+            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
+          </ScrollArea>
           <DropdownMenu onOpenChange={setIsModelDropdownOpen}>
             <DropdownMenuTrigger asChild>
-              <InputGroupButton variant="ghost" disabled={ocrLoading || isStreaming}>
+              <InputGroupButton className="ml-auto" variant="ghost" disabled={ocrLoading || isStreaming}>
                 {modelSelection === "Local" && "Local"}
                 {modelSelection === "GptOss" && "GPT OSS"}
                 {modelSelection === "Gpt5" && "GPT-5"}
@@ -195,7 +256,8 @@ export function HUDInputBar({
               side="bottom"
               align="start"
               avoidCollisions={false}
-              sideOffset={12}
+              sideOffset={10}
+              alignOffset={-115}
               className="w-full bg-white/60"
             >
               <DropdownMenuGroup>
@@ -229,18 +291,9 @@ export function HUDInputBar({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Horizonal scrollable div with ocr captures */}
-          <ScrollArea className="min-w-0">
-            <div className="flex w-max space-x-2 py-2">
-              <OcrCaptures hud-scrolls captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
-              {/* Make sure the height stays constant */}
-              <div className="h-6" />
-            </div>
-            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
-          </ScrollArea>
           <InputGroupButton
             variant="default"
-            className="rounded-full ml-auto bg-black/80 hover:bg-black"
+            className="rounded-full bg-black/80 hover:bg-black"
             size="icon-xs"
             type="submit"
             onClick={handleSubmit}
@@ -277,8 +330,10 @@ export function HUDInputBar({
       {/* Hidden spacer to expand window when dropdowns are open */}
       <div 
         className={`pointer-events-none overflow-hidden ${
-          isDropdownOpen
-            ? 'h-[140px] transition-none'
+          isPlusDropdownOpen
+            ? 'h-[110px] transition-none'
+            : isToolsDropdownOpen
+            ? 'h-[70px] transition-none'
             : isModelDropdownOpen
             ? 'h-[155px] transition-none'
             : 'h-0 transition-all duration-0 delay-[50ms]'

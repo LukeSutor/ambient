@@ -95,6 +95,23 @@ User: "I'm studying Spanish" → {"memory":"User is learning Spanish"}
 User: "Can you help me code?" → {"memory":""}"#,
   );
   map.insert(
+    "generate_conversation_name",
+    r#"Generate a 2-5 word title for this conversation based on the user's message.
+
+{"name":"<short title>"}
+
+Rules:
+- Use 2-5 words maximum
+- Capture the main topic/intent
+- No punctuation or quotes
+- Be specific, not generic
+
+Examples:
+"How do I sort a list in Python?" → {"name":"Python List Sorting"}
+"What's the capital of France?" → {"name":"France Capital Question"}
+"Help me write a resume" → {"name":"Resume Writing Help"}"#,
+  );
+  map.insert(
     "hud_chat",
     r#"You are Cortical, an AI assistant created by Luke Sutor. Today is {currentDateTime}.
 

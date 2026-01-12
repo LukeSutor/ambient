@@ -48,8 +48,8 @@ export function useRoleAccess(location?: string) {
     const isWithinBase =
       pathname === normalizedLocation || pathname.startsWith(`${normalizedLocation}/`);
 
-    // Go to sign in if not logged in
-    if (!state.isLoggedIn && isWithinBase && !isAuthRoute) {
+    // Go to sign in if online and not logged in
+    if (state.isOnline && !state.isLoggedIn && isWithinBase && !isAuthRoute) {
       router.replace(signInPath);
       return;
     }
@@ -60,8 +60,8 @@ export function useRoleAccess(location?: string) {
       return;
     }
 
-    // Prevent going to auth routes if already logged in
-    if (state.isLoggedIn && isAuthRoute) {
+    // Prevent going to auth routes if not online or already logged in
+    if ((!state.isOnline || state.isLoggedIn) && isAuthRoute) {
       router.replace(normalizedLocation);
     }
 
@@ -69,7 +69,7 @@ export function useRoleAccess(location?: string) {
     if (state.isSetupComplete && isSetupRoute) {
       router.replace(normalizedLocation);
     }
-  }, [normalizedLocation, pathname, router, state.isHydrated, state.isLoggedIn, state.isSetupComplete]);
+  }, [normalizedLocation, pathname, router, state.isHydrated, state.isOnline, state.isLoggedIn, state.isSetupComplete]);
 
   const signIn = useCallback(
     async (username: string, password: string): Promise<SignInResult> => {

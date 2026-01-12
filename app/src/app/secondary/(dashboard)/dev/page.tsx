@@ -103,6 +103,31 @@ export default function Dev() {
   const [embeddingLoading, setEmbeddingLoading] = useState<boolean>(false);
   const [embeddingError, setEmbeddingError] = useState<string | null>(null);
 
+  // --- Computer Use Test ---
+  const [computerUsePrompt, setComputerUsePrompt] = useState<string>("What is the capital of France?");
+  const [computerUseResult, setComputerUseResult] = useState<string | null>(null);
+  const [computerUseLoading, setComputerUseLoading] = useState<boolean>(false);
+  const [computerUseError, setComputerUseError] = useState<string | null>(null);
+
+  // --- Computer Use Action Testing ---
+  const [selectedAction, setSelectedAction] = useState<string>("OpenWebBrowser");
+  const [actionInputs, setActionInputs] = useState<any>({
+    url: "https://www.google.com",
+    x: 500,
+    y: 500,
+    text: "Hello World",
+    press_enter: true,
+    clear_before_typing: true,
+    keys: "control+a",
+    direction: "down",
+    magnitude: 800,
+    destination_x: 600,
+    destination_y: 600,
+  });
+  const [actionOutput, setActionOutput] = useState<any>(null);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   const handleGenerateEmbedding = async () => {
     if (!embeddingInput.trim()) return;
     setEmbeddingLoading(true);
@@ -115,6 +140,69 @@ export default function Dev() {
       setEmbeddingError(typeof err === 'string' ? err : JSON.stringify(err));
     } finally {
       setEmbeddingLoading(false);
+    }
+  };
+
+  const handleTestComputerUse = async () => {
+    if (!computerUsePrompt.trim()) return;
+    setComputerUseLoading(true);
+    setComputerUseError(null);
+    setComputerUseResult(null);
+    try {
+      const result = await invoke<string>("start_computer_use", { prompt: computerUsePrompt });
+      setComputerUseResult(result);
+      console.log("Computer Use Result:", result);
+    } catch (err: any) {
+      setComputerUseError(typeof err === 'string' ? err : JSON.stringify(err));
+      console.error("Error testing computer use:", err);
+    } finally {
+      setComputerUseLoading(false);
+    }
+  };
+
+  const handleExecuteAction = async () => {
+    setActionLoading(true);
+    setActionOutput(null);
+    setActionError(null);
+
+    let data: any = null;
+    switch (selectedAction) {
+      case "Navigate": data = { url: actionInputs.url }; break;
+      case "ClickAt": data = { x: parseInt(actionInputs.x), y: parseInt(actionInputs.y) }; break;
+      case "HoverAt": data = { x: parseInt(actionInputs.x), y: parseInt(actionInputs.y) }; break;
+      case "TypeTextAt": data = { 
+        x: parseInt(actionInputs.x), 
+        y: parseInt(actionInputs.y), 
+        text: actionInputs.text,
+        press_enter: actionInputs.press_enter,
+        clear_before_typing: actionInputs.clear_before_typing
+      }; break;
+      case "KeyCombination": data = { keys: actionInputs.keys }; break;
+      case "ScrollDocument": data = { direction: actionInputs.direction }; break;
+      case "ScrollAt": data = { 
+        x: parseInt(actionInputs.x), 
+        y: parseInt(actionInputs.y), 
+        direction: actionInputs.direction,
+        magnitude: parseInt(actionInputs.magnitude)
+      }; break;
+      case "DragAndDrop": data = { 
+        x: parseInt(actionInputs.x), 
+        y: parseInt(actionInputs.y), 
+        destination_x: parseInt(actionInputs.destination_x), 
+        destination_y: parseInt(actionInputs.destination_y) 
+      }; break;
+    }
+
+    try {
+      console.log(`Executing direct action: ${selectedAction} with data:`, data);
+      const result = await invoke("execute_computer_action", { 
+        action: data ? { action: selectedAction, data } : { action: selectedAction } 
+      });
+      setActionOutput(result);
+    } catch (err: any) {
+      setActionError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -277,6 +365,22 @@ export default function Dev() {
         </Button>
       </div>
 
+      {/* Open and close computer use window */}
+      <div className="flex gap-4 justify-center">
+        <Button 
+          onClick={async () => { await invoke("open_computer_use_window"); }}
+          variant="default"
+        >
+          Open Computer Use Window
+        </Button>
+        <Button 
+          onClick={async () => { await invoke("close_computer_use_window"); }}
+          variant="destructive"
+        >
+          Close Computer Use Window
+        </Button>
+      </div>  
+
       {/* Screen Selection Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
         <h2 className="text-lg font-semibold">Screen Selection Tool</h2>
@@ -436,6 +540,38 @@ export default function Dev() {
         )}
       </div>
 
+      {/* Computer Use Test Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-green-50">
+        <h2 className="text-lg font-semibold">Computer Use Engine Test</h2>
+        <p className="text-sm text-gray-600">Test the Gemini Computer Use API with a custom prompt.</p>
+        <Textarea
+          value={computerUsePrompt}
+          onChange={(e) => setComputerUsePrompt(e.target.value)}
+          rows={3}
+          placeholder="Enter a prompt for the computer use engine..."
+        />
+        <Button
+          onClick={handleTestComputerUse}
+          disabled={computerUseLoading || !computerUsePrompt.trim()}
+          variant="default"
+        >
+          {computerUseLoading ? "Testing..." : "Test Computer Use"}
+        </Button>
+        {computerUseError && (
+          <div className="p-2 bg-red-100 border border-red-300 rounded text-xs font-mono overflow-x-auto">
+            Error: {computerUseError}
+          </div>
+        )}
+        {computerUseResult && !computerUseError && (
+          <div className="space-y-2">
+            <Label>API Response:</Label>
+            <pre className="p-3 bg-white border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+              {computerUseResult}
+            </pre>
+          </div>
+        )}
+      </div>
+
       {/* SQL Execution Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4">
         <h2 className="text-lg font-semibold">Execute SQL Query</h2>
@@ -466,6 +602,137 @@ export default function Dev() {
             <pre className="mt-2 p-2 border rounded bg-gray-50 text-sm overflow-x-auto">
               {sqlError ? `Error: ${sqlError}` : sqlResult}
             </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Direct Computer Action Test Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-red-50">
+        <h2 className="text-lg font-semibold">Direct Computer Action Test</h2>
+        <p className="text-sm text-gray-600">Test individual computer use actions directly.</p>
+        
+        <div className="space-y-2">
+          <Label htmlFor="action-select">Select Action</Label>
+          <select 
+            id="action-select"
+            className="w-full p-2 border rounded-md bg-white text-sm"
+            value={selectedAction}
+            onChange={(e) => setSelectedAction(e.target.value)}
+          >
+            <option value="OpenWebBrowser">Open Web Browser</option>
+            <option value="Wait5Seconds">Wait 5 Seconds</option>
+            <option value="GoBack">Go Back</option>
+            <option value="GoForward">Go Forward</option>
+            <option value="Search">Search</option>
+            <option value="Navigate">Navigate</option>
+            <option value="ClickAt">Click At</option>
+            <option value="HoverAt">Hover At</option>
+            <option value="TypeTextAt">Type Text At</option>
+            <option value="KeyCombination">Key Combination</option>
+            <option value="ScrollDocument">Scroll Document</option>
+            <option value="ScrollAt">Scroll At</option>
+            <option value="DragAndDrop">Drag and Drop</option>
+          </select>
+        </div>
+
+        {/* Dynamic Inputs based on selected action */}
+        <div className="grid grid-cols-2 gap-4">
+          {(selectedAction === "Navigate") && (
+            <div className="col-span-2 space-y-2">
+              <Label>URL</Label>
+              <Input value={actionInputs.url} onChange={(e) => setActionInputs({...actionInputs, url: e.target.value})} />
+            </div>
+          )}
+
+          {(selectedAction === "ClickAt" || selectedAction === "HoverAt" || selectedAction === "TypeTextAt" || selectedAction === "ScrollAt" || selectedAction === "DragAndDrop") && (
+            <>
+              <div className="space-y-2">
+                <Label>X Coordinate</Label>
+                <Input type="number" value={actionInputs.x} onChange={(e) => setActionInputs({...actionInputs, x: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Y Coordinate</Label>
+                <Input type="number" value={actionInputs.y} onChange={(e) => setActionInputs({...actionInputs, y: e.target.value})} />
+              </div>
+            </>
+          )}
+
+          {selectedAction === "TypeTextAt" && (
+            <>
+              <div className="col-span-2 space-y-2">
+                <Label>Text to Type</Label>
+                <Input value={actionInputs.text} onChange={(e) => setActionInputs({...actionInputs, text: e.target.value})} />
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={actionInputs.press_enter} onChange={(e) => setActionInputs({...actionInputs, press_enter: e.target.checked})} />
+                <Label>Press Enter</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" checked={actionInputs.clear_before_typing} onChange={(e) => setActionInputs({...actionInputs, clear_before_typing: e.target.checked})} />
+                <Label>Clear Before Typing</Label>
+              </div>
+            </>
+          )}
+
+          {selectedAction === "KeyCombination" && (
+            <div className="col-span-2 space-y-2">
+              <Label>Keys (e.g. control+c)</Label>
+              <Input value={actionInputs.keys} onChange={(e) => setActionInputs({...actionInputs, keys: e.target.value})} />
+            </div>
+          )}
+
+          {(selectedAction === "ScrollDocument" || selectedAction === "ScrollAt") && (
+            <div className="space-y-2">
+              <Label>Direction</Label>
+              <select className="w-full p-2 border rounded-md text-sm" value={actionInputs.direction} onChange={(e) => setActionInputs({...actionInputs, direction: e.target.value})}>
+                <option value="up">Up</option>
+                <option value="down">Down</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
+          )}
+
+          {selectedAction === "ScrollAt" && (
+            <div className="space-y-2">
+              <Label>Magnitude</Label>
+              <Input type="number" value={actionInputs.magnitude} onChange={(e) => setActionInputs({...actionInputs, magnitude: e.target.value})} />
+            </div>
+          )}
+
+          {selectedAction === "DragAndDrop" && (
+            <>
+              <div className="space-y-2">
+                <Label>Dest X</Label>
+                <Input type="number" value={actionInputs.destination_x} onChange={(e) => setActionInputs({...actionInputs, destination_x: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Dest Y</Label>
+                <Input type="number" value={actionInputs.destination_y} onChange={(e) => setActionInputs({...actionInputs, destination_y: e.target.value})} />
+              </div>
+            </>
+          )}
+        </div>
+
+        <Button 
+          onClick={handleExecuteAction} 
+          disabled={actionLoading}
+          variant="destructive"
+          className="w-full"
+        >
+          {actionLoading ? "Executing..." : `Execute ${selectedAction}`}
+        </Button>
+
+        {actionError && (
+          <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm whitespace-pre-wrap">
+            Error: {actionError}
+          </div>
+        )}
+
+        {actionOutput && (
+          <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm overflow-auto max-h-60">
+            <h3 className="font-semibold mb-1 text-xs">Result:</h3>
+            <pre className="text-[10px] leading-tight">{JSON.stringify(actionOutput, null, 2)}</pre>
           </div>
         )}
       </div>

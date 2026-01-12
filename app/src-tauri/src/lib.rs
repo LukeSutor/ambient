@@ -1,9 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod auth;
 pub mod constants;
-pub mod images;
-pub mod db; // new modular database (core, events, workflows, activity)
+pub mod db;
 pub mod events;
+pub mod images;
 pub mod memory;
 pub mod models;
 pub mod os_utils;
@@ -34,6 +34,7 @@ pub fn run() {
   setup_signal_handlers();
 
   tauri::Builder::default()
+    .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_store::Builder::new().build())
     .plugin(
       tauri_plugin_log::Builder::new()
@@ -41,7 +42,10 @@ pub fn run() {
         .target(Target::new(TargetKind::Stdout))
         .filter(|metadata| {
           let t = metadata.target();
-          !(t.starts_with("hyper") || t.starts_with("reqwest") || t == "tao::platform_impl::platform::event_loop::runner")
+          !(t.starts_with("hyper")
+            || t.starts_with("reqwest")
+            || t.starts_with("enigo")
+            || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
     )
@@ -149,12 +153,15 @@ pub fn run() {
       windows::open_secondary_window,
       windows::minimize_secondary_window,
       windows::close_secondary_window,
+      windows::open_computer_use_window,
+      windows::close_computer_use_window,
       windows::resize_hud,
       windows::refresh_hud_window_size,
+      windows::resize_computer_use_window,
       settings::load_user_settings,
       settings::save_user_settings,
       settings::emit_settings_changed,
-      images::take_screenshot,
+      images::save_screenshot,
       scheduler::start_capture_scheduler,
       scheduler::stop_capture_scheduler,
       scheduler::get_scheduler_interval,
@@ -177,6 +184,7 @@ pub fn run() {
       db::conversations::delete_conversation,
       db::conversations::update_conversation_name,
       setup::setup,
+      setup::is_online,
       setup::get_vlm_text_model_path,
       setup::get_vlm_mmproj_model_path,
       setup::check_vlm_text_model_download,
@@ -233,6 +241,8 @@ pub fn run() {
       tasks::commands::get_task_progress_history,
       models::ocr::ocr::process_image,
       models::ocr::ocr::check_ocr_models_available,
+      models::computer_use::commands::start_computer_use,
+      models::computer_use::commands::execute_computer_action,
       screen_selection::open_screen_selector,
       screen_selection::close_screen_selector,
       screen_selection::process_screen_selection,

@@ -1,16 +1,18 @@
 import { invoke } from '@tauri-apps/api/core';
-import { Conversation } from './types';
-import { OcrResponseEvent, HudChatEvent } from '@/types/events';
+import { emit } from '@tauri-apps/api/event';
+import { OcrResponseEvent, HudChatEvent, GenerateConversationNameEvent } from '@/types/events';
+import { Conversation } from '@/types/conversations';
 
 /**
  * Creates a new conversation
  * @param name - Optional conversation name
  * @returns Promise resolving to the created Conversation
  */
-export async function createConversation(name?: string): Promise<Conversation> {
+export async function createConversation(name?: string, convType?: string | null): Promise<Conversation> {
   try {
     const conversation = await invoke<Conversation>('create_conversation', { 
-      name: name || null 
+      name: name || null,
+      convType: convType || null
     });
     return conversation;
   } catch (error) {
@@ -50,6 +52,40 @@ export async function sendMessage(
   } catch (error) {
     console.error('[ConversationAPI] Failed to send message:', error);
     throw new Error('Failed to send message');
+  }
+}
+
+/**
+ * Starts a computer use session
+ * @param conversationId - ID of the conversation
+ * @param prompt - The prompt to initiate computer use
+ */
+export async function startComputerUseSession(conversationId: string, prompt: string): Promise<void> {  
+  try {
+    await invoke('start_computer_use', { conversationId, prompt });
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to start computer use session:', error);
+    throw new Error('Failed to start computer use session');
+  }
+}
+
+/**
+ * Emits an event to generate a conversation name
+ * @param conversationId - ID of the conversation
+ * @param message - The message content to base the name on
+ */
+export async function emitGenerateConversationName(conversationId: string, message: string): Promise<void> {
+  const generateConversationNameEvent: GenerateConversationNameEvent = {
+    conv_id: conversationId,
+    message: message,
+    timestamp: Date.now().toString(),
+  };
+  
+  try {
+    await emit('generate_conversation_name', generateConversationNameEvent);
+  } catch (error) {
+    console.error('[ConversationAPI] Failed to generate conversation name:', error);
+    throw new Error('Failed to generate conversation name');
   }
 }
 

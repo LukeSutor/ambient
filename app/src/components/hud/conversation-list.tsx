@@ -22,6 +22,12 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { useWindows } from '@/lib/windows/useWindows';
 
 const SKELETON_COUNT = 3;
@@ -129,17 +135,26 @@ export function ConversationList({ conversations, hasMoreConversations, loadConv
             <X className="w-4 h-4" />
           </Button>
         </div>
-        {conversations.length === 0 ? (
-          <div className="flex items-center justify-center py-2">
-            <Loader2 className="animate-spin text-black/50" />
-          </div>
+        {conversations.length === 0  ? (
+          isLoadingRef.current ? (
+            <div className="flex items-center justify-center py-2">
+              <Loader2 className="animate-spin text-black/50" />
+            </div>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No Conversations</EmptyTitle>
+                <EmptyDescription className="text-gray-600">You have no conversations yet. Start a new chat to see your conversation history here.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )
         ) : (
           <>
             {conversations.map((conv) => (
               editingConversationId !== conv.id ? (
                 <div key={conv.id} className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg">
                   <Button onClick={handleLoadConversation(conv.id)} variant="ghost" className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent">
-                    <span className="truncate">{conv.name || 'Untitled Conversation'}</span>
+                    <span title={conv.name || 'Untitled Conversation'} className="truncate">{conv.name || 'Untitled Conversation'}</span>
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

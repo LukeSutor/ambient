@@ -31,6 +31,10 @@ export async function invokeGetCurrentUser(): Promise<CognitoUserInfo | null> {
   return invoke<CognitoUserInfo | null>('get_current_user');
 }
 
+export async function invokeIsOnline(): Promise<boolean> {
+  return invoke<boolean>('is_online');
+}
+
 export async function invokeCognitoSignIn(
   username: string,
   password: string,

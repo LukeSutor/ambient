@@ -1,14 +1,17 @@
+use crate::constants::{
+  HEALTH_CHECK_ENDPOINT, HEALTH_CHECK_INTERVAL, MAX_HEALTH_CHECK_RETRIES, MAX_PORT,
+  MAX_PORT_ATTEMPTS, MIN_PORT,
+};
+use crate::events::{emitter::emit, types::*};
 use crate::setup;
 use rand::Rng;
 use reqwest;
 use serde_json::{json, Value};
 use std::sync::Mutex;
-use tauri::{AppHandle};
+use tauri::AppHandle;
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
-use crate::events::{emitter::emit, types::*};
-use crate::constants::{MIN_PORT, MAX_PORT, MAX_PORT_ATTEMPTS, HEALTH_CHECK_ENDPOINT, MAX_HEALTH_CHECK_RETRIES, HEALTH_CHECK_INTERVAL};
 
 /// Global state to track the running server process and port
 #[derive(Debug)]
@@ -511,8 +514,7 @@ pub async fn generate(
 
   // If conversation ID is provided, load existing messages
   if let Some(conversation_id) = &conv_id {
-  match crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone())
-      .await
+    match crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
     {
       Ok(conv_messages) => {
         for msg in conv_messages {

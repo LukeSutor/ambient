@@ -1,7 +1,7 @@
 use super::types::*;
-use crate::memory::handlers::handle_extract_interactive_memory;
 use crate::db::core::DbState;
-use crate::models::llm::handlers::{handle_detect_tasks, handle_summarize_screen};
+use crate::memory::handlers::handle_extract_interactive_memory;
+use crate::models::llm::handlers::{handle_detect_tasks, handle_summarize_screen, handle_generate_conversation_name};
 use crate::os_utils::handlers::{handle_capture_screen, handle_get_screen_diff};
 use tauri::{AppHandle, Listener, Manager};
 
@@ -54,7 +54,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone3.clone();
         tauri::async_runtime::spawn(async move {
-          handle_detect_tasks(event_data, &app_handle_clone).await;
+          let _ = handle_detect_tasks(&app_handle_clone, event_data).await;
         });
       }
       Err(e) => {
@@ -72,7 +72,7 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone4.clone();
         tauri::async_runtime::spawn(async move {
-          handle_summarize_screen(event_data, &app_handle_clone).await;
+          let _ = handle_summarize_screen(&app_handle_clone, event_data).await;
         });
       }
       Err(e) => {
@@ -90,11 +90,35 @@ pub fn initialize_event_listeners(app_handle: AppHandle) {
         // For async function, we need to spawn a task
         let app_handle_clone = app_handle_clone5.clone();
         tauri::async_runtime::spawn(async move {
-          handle_extract_interactive_memory(event_data, &app_handle_clone).await;
+          let _ = handle_extract_interactive_memory(&app_handle_clone, event_data).await;
         });
       }
       Err(e) => {
-        log::error!("[events] Failed to parse extract interactive memory event: {}", e);
+        log::error!(
+          "[events] Failed to parse extract interactive memory event: {}",
+          e
+        );
+      }
+    }
+  });
+
+  let app_handle_clone6 = app_handle.clone();
+  app_handle.listen(GENERATE_CONVERSATION_NAME, move |event| {
+    let payload_str = event.payload();
+    match serde_json::from_str::<GenerateConversationNameEvent>(payload_str) {
+      Ok(event_data) => {
+        log::info!("[events] Generate conversation name event received");
+        // For async function, we need to spawn a task
+        let app_handle_clone = app_handle_clone6.clone();
+        tauri::async_runtime::spawn(async move {
+          let _ = handle_generate_conversation_name(&app_handle_clone, event_data).await;
+        });
+      }
+      Err(e) => {
+        log::error!(
+          "[events] Failed to parse generate conversation name event: {}",
+          e
+        );
       }
     }
   });

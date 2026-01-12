@@ -1,6 +1,6 @@
+use crate::constants::{COMPUTER_USE_WINDOW_LABEL, COMPUTER_USE_PATH, DASHBOARD_WINDOW_LABEL, DASHBOARD_PATH, HUD_WINDOW_LABEL, MARGIN_BOTTOM, MARGIN_LEFT};
+use crate::settings::{load_user_settings, HudDimensions};
 use tauri::{AppHandle, LogicalSize, Manager};
-use crate::settings::{HudDimensions, load_user_settings};
-use crate::constants::HUD_WINDOW_LABEL;
 
 /// Get current HUD dimensions from user settings
 async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
@@ -21,23 +21,34 @@ async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
 
 // Resize the HUD to the input size, keeping top aligned and ensuring the window doesn't overflow the bottom of the screen
 #[tauri::command]
-pub async fn resize_hud(
-  app_handle: AppHandle,
-  width: f64,
-  height: f64,
-) -> Result<(), String> {
+pub async fn resize_hud(app_handle: AppHandle, width: f64, height: f64) -> Result<(), String> {
   let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let requested_size = LogicalSize::new(width, height);
-    
-    // Get position before resizing
+    // Get position before resizing to calculate bottom overflow
     let position = window.outer_position().map_err(|e| e.to_string())?;
-    window.set_size(requested_size).map_err(|e| e.to_string())?;
+    let mut new_y = position.y;
 
-    // Adjust position to keep top aligned
-    window.set_position(tauri::PhysicalPosition::new(position.x, position.y)).map_err(|e| e.to_string())?;
-    log::info!("HUD window resized to: {}x{}", width, height);
+    // Ensure resizing doesn't push the window off the bottom of the screen
+    // We do this by calculating the physical height and checking against the monitor's work area
+    if let (Ok(Some(monitor)), Ok(scale_factor)) = (window.current_monitor(), window.scale_factor()) {
+      let work_area = monitor.work_area();
+      let physical_height = (height * scale_factor) as i32;
+      let monitor_bottom = work_area.position.y + work_area.size.height as i32;
+
+      if new_y + physical_height > monitor_bottom {
+        new_y = (monitor_bottom - physical_height).max(work_area.position.y);
+      }
+    }
+
+    window
+      .set_size(LogicalSize::new(width, height))
+      .map_err(|e| e.to_string())?;
+
+    window
+      .set_position(tauri::PhysicalPosition::new(position.x, new_y))
+      .map_err(|e| e.to_string())?;
+
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -51,7 +62,7 @@ pub async fn refresh_hud_window_size(
   label: Option<String>,
   is_expanded: bool,
 ) -> Result<(), String> {
-  let window_label = label.unwrap_or_else(|| "main".to_string());
+  let window_label = label.unwrap_or_else(|| HUD_WINDOW_LABEL.to_string());
   let dimensions = get_current_hud_dimensions(&app_handle).await;
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
@@ -63,7 +74,12 @@ pub async fn refresh_hud_window_size(
 
     let size = LogicalSize::new(dimensions.chat_width, height);
     window.set_size(size).map_err(|e| e.to_string())?;
-    log::info!("HUD window size refreshed: {}x{} (expanded: {})", dimensions.chat_width, height, is_expanded);
+    log::info!(
+      "HUD window size refreshed: {}x{} (expanded: {})",
+      dimensions.chat_width,
+      height,
+      is_expanded
+    );
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -72,10 +88,8 @@ pub async fn refresh_hud_window_size(
 
 // Reopen the main window
 #[tauri::command]
-pub async fn open_main_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
-  let window_label = "main".to_string();
+pub async fn open_main_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(win) = app_handle.get_webview_window(&window_label) {
     // Focus and show existing window
@@ -89,10 +103,8 @@ pub async fn open_main_window(
 
 /// Close the floating HUD window by label (defaults to 'main').
 #[tauri::command]
-pub async fn close_main_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
-  let window_label = "main".to_string();
+pub async fn close_main_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     window.close().map_err(|e| e.to_string())?;
@@ -108,19 +120,20 @@ pub async fn open_secondary_window(
   app_handle: AppHandle,
   destination: Option<String>,
 ) -> Result<(), String> {
-  let window_label = "secondary".to_string();
+  let window_label = DASHBOARD_WINDOW_LABEL.to_string();
 
   // Build the URL path based on destination parameter
   let path = if let Some(dest) = &destination {
-    format!("/secondary/{}", dest)
+    format!("{}/{}", DASHBOARD_PATH, dest)
   } else {
-    "/secondary".to_string()
+    DASHBOARD_PATH.to_string()
   };
 
   if let Some(win) = app_handle.get_webview_window(&window_label) {
     // Navigate to the destination if provided
     if destination.is_some() {
-      win.eval(&format!("window.location.href = '{}'", path))
+      win
+        .eval(&format!("window.location.href = '{}'", path))
         .map_err(|e| e.to_string())?;
     }
     // Focus and show existing window
@@ -135,7 +148,7 @@ pub async fn open_secondary_window(
     window_label,
     tauri::WebviewUrl::App(path.into()),
   )
-  .title("Settings")
+  .title("Dashboard")
   .inner_size(800 as f64, 800 as f64)
   .resizable(false)
   .transparent(true)
@@ -149,10 +162,8 @@ pub async fn open_secondary_window(
 
 /// Minimize the secondary window
 #[tauri::command]
-pub async fn minimize_secondary_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
-  let window_label = "secondary".to_string();
+pub async fn minimize_secondary_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = DASHBOARD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     window.minimize().map_err(|e| e.to_string())?;
@@ -164,13 +175,109 @@ pub async fn minimize_secondary_window(
 
 /// Close the secondary window
 #[tauri::command]
-pub async fn close_secondary_window(
-  app_handle: AppHandle,
-) -> Result<(), String> {
-  let window_label = "secondary".to_string();
+pub async fn close_secondary_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = DASHBOARD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
     window.close().map_err(|e| e.to_string())?;
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
+}
+
+
+/// Open computer use window
+#[tauri::command]
+pub async fn open_computer_use_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = COMPUTER_USE_WINDOW_LABEL.to_string();
+
+  if let Some(win) = app_handle.get_webview_window(&window_label) {
+    // Focus and show existing window
+    win.show().map_err(|e| e.to_string())?;
+    win.set_focus().map_err(|e| e.to_string())?;
+    return Ok(());
+  }
+
+  // Get monitor dimensions to calculate position
+  let monitor = app_handle
+    .primary_monitor()
+    .map_err(|e| e.to_string())?
+    .ok_or("Primary monitor not found")?;
+  
+  let scale_factor = monitor.scale_factor();
+  let work_area = monitor.work_area().size.to_logical::<f64>(scale_factor);
+  
+  let width = 300.0;
+  let height = 40.0;
+
+  // Calculate coordinates (50 pixels from left and bottom)
+  let x = MARGIN_LEFT as f64;
+  let y = work_area.height - MARGIN_BOTTOM as f64 - height;
+
+  // Create the window
+  let _window = tauri::WebviewWindowBuilder::new(
+    &app_handle,
+    window_label,
+    tauri::WebviewUrl::App(COMPUTER_USE_PATH.into()),
+  )
+  .title("Computer Use")
+  .inner_size(width, height)
+  .position(x, y)
+  .resizable(false)
+  .transparent(true)
+  .decorations(false)
+  .shadow(false)
+  .always_on_top(true)
+  .skip_taskbar(true)
+  .build()
+  .map_err(|e| e.to_string())?;
+  Ok(())
+}
+
+/// Close the computer use window
+#[tauri::command]
+pub async fn close_computer_use_window(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = COMPUTER_USE_WINDOW_LABEL.to_string();
+
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    window.close().map_err(|e| e.to_string())?;
+    Ok(())
+  } else {
+    Err("Window not found".to_string())
+  }
+}
+
+/// Resize computer use window, ensuring it stays within margin of bottom left corner
+#[tauri::command]
+pub async fn resize_computer_use_window(
+  app_handle: AppHandle,
+  width: f64,
+  height: f64,
+) -> Result<(), String> {
+  let window_label = COMPUTER_USE_WINDOW_LABEL.to_string();
+  if let Some(window) = app_handle.get_webview_window(&window_label) {
+    // Get monitor dimensions to calculate position
+    let monitor = app_handle
+      .primary_monitor()
+      .map_err(|e| e.to_string())?
+      .ok_or("Primary monitor not found")?;
+    
+    let scale_factor = monitor.scale_factor();
+    let work_area = monitor.work_area().size.to_logical::<f64>(scale_factor);
+
+    // Calculate new position to keep within margin
+    let x = MARGIN_LEFT as f64;
+    let y = work_area.height - MARGIN_BOTTOM as f64 - height;
+
+    window
+      .set_size(LogicalSize::new(width, height))
+      .map_err(|e| e.to_string())?;
+
+    window
+      .set_position(tauri::LogicalPosition::new(x, y))
+      .map_err(|e| e.to_string())?;
+
     Ok(())
   } else {
     Err("Window not found".to_string())

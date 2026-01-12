@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "secondary",
-    "screen-selector"
+    "screen-selector",
+    "computer-use"
   ],
   "permissions": [
     "core:default",
@@ -164,10 +165,19 @@
         }
       ]
     },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://google.com"
+        }
+      ]
+    },
     "fs:default",
     "core:event:default",
     "deep-link:default",
     "log:default",
-    "store:default"
+    "store:default",
+    "os:default"
   ]
 }

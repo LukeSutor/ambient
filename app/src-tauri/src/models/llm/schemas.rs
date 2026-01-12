@@ -56,6 +56,21 @@ static SCHEMAS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
   "additionalProperties": false
 }"#,
   );
+  map.insert(
+    "generate_conversation_name",
+    r#"{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Generated short title for the conversation"
+    }
+  },
+  "required": ["name"],
+  "additionalProperties": false
+}"#,
+  );
   map
 });
 

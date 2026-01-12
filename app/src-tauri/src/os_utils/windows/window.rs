@@ -24,10 +24,9 @@ use windows::{
     },
     UI::Accessibility::{
       CUIAutomation, IUIAutomation, IUIAutomationValuePattern, TreeScope_Descendants,
-      TreeScope_Subtree, UIA_ControlTypePropertyId, UIA_DocumentControlTypeId,
-      UIA_EditControlTypeId, UIA_IsOffscreenPropertyId, UIA_NamePropertyId,
-      UIA_ProcessIdPropertyId, UIA_TextControlTypeId, UIA_ValuePatternId,
-      UIA_BoundingRectanglePropertyId,
+      TreeScope_Subtree, UIA_BoundingRectanglePropertyId, UIA_ControlTypePropertyId,
+      UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_IsOffscreenPropertyId,
+      UIA_NamePropertyId, UIA_ProcessIdPropertyId, UIA_TextControlTypeId, UIA_ValuePatternId,
     },
   },
 };
@@ -147,15 +146,15 @@ pub fn get_screen_text_by_application(app_pid: u32) -> Result<Vec<ApplicationTex
 }
 
 pub fn get_screen_text_by_application_with_bounds(
-  app_pid: u32, 
-  bounding_box: BoundingBox
+  app_pid: u32,
+  bounding_box: BoundingBox,
 ) -> Result<Vec<ApplicationTextData>, String> {
   get_screen_text_by_application_internal(app_pid, Some(bounding_box))
 }
 
 fn get_screen_text_by_application_internal(
-  app_pid: u32, 
-  bounding_box: Option<BoundingBox>
+  app_pid: u32,
+  bounding_box: Option<BoundingBox>,
 ) -> Result<Vec<ApplicationTextData>, String> {
   unsafe {
     let hr = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
@@ -249,13 +248,16 @@ fn get_screen_text_by_application_internal(
             let element_top = rect.top;
             let element_right = rect.right;
             let element_bottom = rect.bottom;
-            
+
             let bbox_right = bbox.x + bbox.width;
             let bbox_bottom = bbox.y + bbox.height;
 
             // Element must be completely within the bounding box
-            if element_left < bbox.x || element_top < bbox.y || 
-               element_right > bbox_right || element_bottom > bbox_bottom {
+            if element_left < bbox.x
+              || element_top < bbox.y
+              || element_right > bbox_right
+              || element_bottom > bbox_bottom
+            {
               continue;
             }
           } else {
@@ -517,17 +519,17 @@ pub async fn get_screen_text(app_handle: AppHandle) -> Result<Vec<ApplicationTex
 }
 
 pub async fn get_screen_text_in_bounds(
-  app_handle: AppHandle, 
-  bounding_box: BoundingBox
+  app_handle: AppHandle,
+  bounding_box: BoundingBox,
 ) -> Result<Vec<ApplicationTextData>, String> {
   // Get app PID from app state
   let state = app_handle.state::<AppState>();
   let app_pid = state.pid;
 
   // Get the screen text in another thread with bounding box constraint
-  let result = task::spawn_blocking(move || {
-    get_screen_text_by_application_with_bounds(app_pid, bounding_box)
-  }).await;
+  let result =
+    task::spawn_blocking(move || get_screen_text_by_application_with_bounds(app_pid, bounding_box))
+      .await;
 
   match result {
     Ok(applications) => {
@@ -567,13 +569,18 @@ pub async fn get_screen_text_formatted(app_handle: AppHandle) -> Result<String, 
 
 #[tauri::command]
 pub async fn get_screen_text_in_bounds_formatted(
-  app_handle: AppHandle, 
-  x: i32, 
-  y: i32, 
-  width: i32, 
-  height: i32
+  app_handle: AppHandle,
+  x: i32,
+  y: i32,
+  width: i32,
+  height: i32,
 ) -> Result<String, String> {
-  let bounding_box = BoundingBox { x, y, width, height };
+  let bounding_box = BoundingBox {
+    x,
+    y,
+    width,
+    height,
+  };
   let applications = get_screen_text_in_bounds(app_handle, bounding_box).await?;
   let markdown = format_as_markdown(applications);
   Ok(markdown)
@@ -581,13 +588,18 @@ pub async fn get_screen_text_in_bounds_formatted(
 
 #[tauri::command]
 pub async fn get_screen_text_in_bounds_raw(
-  app_handle: AppHandle, 
-  x: i32, 
-  y: i32, 
-  width: i32, 
-  height: i32
+  app_handle: AppHandle,
+  x: i32,
+  y: i32,
+  width: i32,
+  height: i32,
 ) -> Result<Vec<ApplicationTextData>, String> {
-  let bounding_box = BoundingBox { x, y, width, height };
+  let bounding_box = BoundingBox {
+    x,
+    y,
+    width,
+    height,
+  };
   get_screen_text_in_bounds(app_handle, bounding_box).await
 }
 

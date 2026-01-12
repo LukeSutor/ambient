@@ -1,13 +1,13 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
+use crate::db::conversations::{add_message, add_message_with_id, update_conversation_name};
 use crate::db::core::DbState;
-use crate::db::conversations::{add_message, add_message_with_id};
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
-use crate::models::llm::{prompts::get_prompt, schemas::get_schema, client::generate};
+use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema};
 use crate::tasks::{TaskService, TaskWithSteps};
 use tauri::{AppHandle, Manager};
 
-pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle) {
+pub async fn handle_detect_tasks(app_handle: &AppHandle, event: DetectTasksEvent) -> Result<(), String> {
   // Get DB state
   let db_state = app_handle.state::<DbState>();
 
@@ -21,14 +21,14 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
       "[detect_tasks] Failed to fetch active tasks: {}",
       active_tasks.err().unwrap()
     );
-    return;
+    return Err("Failed to fetch active tasks".into());
   }
 
   // Return if no active tasks
   let tasks = active_tasks.unwrap();
   if tasks.is_empty() {
     log::info!("[detect_tasks] No active tasks found");
-    return;
+    return Ok(());
   }
 
   // Format tasks for prompt
@@ -39,7 +39,7 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
     Some(template) => template,
     None => {
       log::error!("[detect_tasks] Failed to get prompt template for 'detect_tasks'");
-      return;
+      return Err("Failed to get prompt template for 'detect_tasks'".into());
     }
   };
 
@@ -53,13 +53,19 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
   log::debug!("[detect_tasks] Generated prompt:\n{}", prompt);
 
   // Get response schema
-  let schema = get_schema("detect_tasks").unwrap_or("{}");
+  let schema = match get_schema("detect_tasks") {
+    Some(schema) => schema,
+    None => {
+      log::error!("[detect_tasks] Failed to get schema for 'detect_tasks'");
+      return Err("Failed to get schema for 'detect_tasks'".into());
+    }
+  };
 
   // Generate task updates
   let parsed_response =
     match generate_and_parse_response(app_handle.clone(), prompt, schema, "[detect_tasks]").await {
       Some(response) => response,
-      None => return,
+      None => return Err("Failed to generate and parse response for 'detect_tasks'".into()),
     };
 
   // Loop through response and update step statuses
@@ -75,12 +81,13 @@ pub async fn handle_detect_tasks(event: DetectTasksEvent, app_handle: &AppHandle
 
   // Emit update tasks event
   let update_event = UpdateTasksEvent {
-    timestamp: chrono::Utc::now().to_string(),
+    timestamp: chrono::Utc::now().to_rfc3339(),
   };
   let _ = emit(UPDATE_TASKS, update_event);
+  Ok(())
 }
 
-pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &AppHandle) {
+pub async fn handle_summarize_screen(app_handle: &AppHandle, event: SummarizeScreenEvent) -> Result<(), String> {
   // Get DB state
   let db_state = app_handle.state::<DbState>();
 
@@ -92,7 +99,7 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
     Some(template) => template,
     None => {
       log::error!("[summarize_screen] Failed to get prompt template for 'summarize_screen'");
-      return;
+      return Err("Failed to get prompt template for 'summarize_screen'".into());
     }
   };
 
@@ -108,7 +115,7 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
     Some(schema) => schema,
     None => {
       log::error!("[summarize_screen] Failed to get schema for 'summarize_screen'");
-      return;
+      return Err("Failed to get schema for 'summarize_screen'".into());
     }
   };
 
@@ -118,7 +125,7 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
       .await
     {
       Some(response) => response,
-      None => return,
+      None => return Err("Failed to generate and parse response for 'summarize_screen'".into()),
     };
 
   // Extract summary text
@@ -149,20 +156,39 @@ pub async fn handle_summarize_screen(event: SummarizeScreenEvent, app_handle: &A
     }
     Err(e) => {
       log::error!("[summarize_screen] Failed to save activity summary: {}", e);
+      return Err("Failed to save activity summary".into());
     }
   }
+  Ok(())
 }
 
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
+  // Save the user message to the database
+  let _user_message = match add_message_with_id(
+    app_handle.clone(),
+    event.conv_id.clone(),
+    "user".to_string(),
+    event.text.clone(),
+    Some(event.message_id.clone()),
+  )
+  .await
+  {
+    Ok(message) => Some(message),
+    Err(e) => {
+      log::error!("[hud_chat] Failed to save user message: {}", e);
+      None
+    }
+  };
+
   // Emit extract memory event
   let extract_event = ExtractInteractiveMemoryEvent {
     message: event.text.clone(),
     message_id: event.message_id.clone(),
-    timestamp: chrono::Utc::now().to_string(),
+    timestamp: chrono::Utc::now().to_rfc3339(),
   };
   let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
-  
+
   // Create prompt
   let system_prompt_template = match get_prompt("hud_chat") {
     Some(template) => template,
@@ -175,19 +201,19 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   // Get the current date time YYYY-MM-DD format
   let current_date_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-  let system_prompt = system_prompt_template
-    .replace("{currentDateTime}", &current_date_time);
+  let system_prompt = system_prompt_template.replace("{currentDateTime}", &current_date_time);
 
   log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
 
   // Get 3 most relevant memories
-  let relevant_memories = match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
-    Ok(memories) => memories,
-    Err(e) => {
-      log::warn!("[hud_chat] Failed to find similar memories: {}", e);
-      Vec::new()
-    }
-  };
+  let relevant_memories =
+    match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
+      Ok(memories) => memories,
+      Err(e) => {
+        log::warn!("[hud_chat] Failed to find similar memories: {}", e);
+        Vec::new()
+      }
+    };
 
   // Create memory context string
   let mut memory_context = String::new();
@@ -206,15 +232,26 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
       ocr_text.push_str(&format!("{}\n", ocr_response.text));
     }
     if !ocr_text.is_empty() {
-      ocr_text = format!("\nHere's text captured from my screen as context:\n{}\n", ocr_text);
+      ocr_text = format!(
+        "\nHere's text captured from my screen as context:\n{}\n",
+        ocr_text
+      );
     }
   }
 
   // Create user prompt with ocr data and memory context
   let user_prompt = format!(
     "{}{}Task: {}",
-    if memory_context.is_empty() { "" } else { &format!("{}\n", memory_context) },
-    if ocr_text.is_empty() { "" } else { &format!("{}\n", ocr_text) },
+    if memory_context.is_empty() {
+      ""
+    } else {
+      &format!("{}\n", memory_context)
+    },
+    if ocr_text.is_empty() {
+      ""
+    } else {
+      &format!("{}\n", ocr_text)
+    },
     event.text
   );
 
@@ -234,27 +271,11 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   .await
   {
     Ok(response) => {
-      log::debug!("[hud_chat] response: {}", response);
       response
     }
     Err(e) => {
       log::error!("[hud_chat] Failed to generate response: {}", e);
       return Err("Failed to generate response".into());
-    }
-  };
-
-  // Save the user message
-  let _user_message = match add_message_with_id(
-    app_handle.clone(),
-    event.conv_id.clone(),
-    "user".to_string(),
-    event.text.clone(),
-    Some(event.message_id.clone()),
-  ).await {
-    Ok(message) => Some(message),
-    Err(e) => {
-      log::error!("[hud_chat] Failed to save user message: {}", e);
-      None
     }
   };
 
@@ -264,7 +285,9 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     event.conv_id.clone(),
     "assistant".to_string(),
     response.clone(),
-  ).await {
+  )
+  .await
+  {
     log::error!("[hud_chat] Failed to save assistant message: {}", e);
   }
 
@@ -272,11 +295,106 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   Ok(response)
 }
 
+pub async fn handle_generate_conversation_name(
+  app_handle: &AppHandle,
+  event: GenerateConversationNameEvent,
+) -> Result<(), String> {
+  // Load system prompt
+  let system_prompt = match get_prompt("generate_conversation_name") {
+    Some(p) => p.to_string(),
+    None => {
+      log::error!("[generate_conversation_name] Missing system prompt: generate_conversation_name");
+      return Err("Missing system prompt: generate_conversation_name".into());
+    }
+  };
 
+  // Load schema
+  let schema = match get_schema("generate_conversation_name") {
+    Some(s) => Some(s.to_string()),
+    None => {
+      log::error!("[generate_conversation_name] Missing schema: generate_conversation_name");
+      return Err("Missing schema: generate_conversation_name".into());
+    }
+  };
+
+  // Generate name
+  let generated_name = match generate(
+    app_handle.clone(),
+    event.message.clone(),
+    Some(system_prompt),
+    schema,
+    None,
+    Some(false),
+    Some(false),
+    Some(true),
+  )
+  .await
+  {
+    Ok(generated) => {
+      log::info!("[generate_conversation_name] Generated conversation name: {}", generated);
+      generated
+    }
+    Err(e) => {
+      log::error!("[generate_conversation_name] Failed to generate conversation name: {}", e);
+      return Err("Failed to generate conversation name".into());
+    }
+  };
+
+  // Extract the name text
+  let extracted_name = match serde_json::from_str::<serde_json::Value>(&generated_name) {
+    Ok(json) => match json.get("name") {
+      Some(name_value) => match name_value.as_str() {
+        Some(name_text) => name_text.to_string(),
+        None => {
+          log::error!("[generate_conversation_name] Name field is not a string");
+          return Err("Name field is not a string".into());
+        }
+      },
+      None => {
+        log::error!("[generate_conversation_name] No 'name' field found in JSON response");
+        return Err("No 'name' field found in JSON response".into());
+      }
+    },
+    Err(e) => {
+      log::error!("[generate_conversation_name] Failed to parse JSON response: {}", e);
+      return Err("Failed to parse JSON response".into());
+    }
+  };
+
+  // Skip if extracted name is empty
+  if extracted_name.trim().is_empty() {
+    log::info!("[generate_conversation_name] Extracted name is empty, skipping save");
+    return Ok(());
+  }
+
+  // Save to db
+  match update_conversation_name(app_handle.clone(), event.conv_id.clone(), extracted_name.clone()).await {
+    Ok(_) => {
+      log::info!(
+        "[generate_conversation_name] Renamed conversation {} successfully",
+        event.conv_id
+      );
+    }
+    Err(e) => {
+      log::error!(
+        "[generate_conversation_name] Failed to rename conversation {}: {}",
+        event.conv_id,
+        e
+      );
+    }
+  };
+
+  // Emit name change event
+  let name_event = RenameConversationEvent {
+    conv_id: event.conv_id,
+    new_name: extracted_name,
+    timestamp: chrono::Utc::now().to_rfc3339(),
+  };
+  let _ = emit(RENAME_CONVERSATION, name_event);
+  Ok(())
+}
 
 // Helper functions
-
-
 
 /// Formats tasks with their steps for use in prompts
 pub fn format_tasks(tasks: &[TaskWithSteps]) -> String {

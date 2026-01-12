@@ -47,9 +47,9 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         match event.id.as_ref() {
           "open_hud" => {
             log::info!("[tray] Opening HUD window");
-            if let Err(e) = tauri::async_runtime::block_on(windows::open_main_window(
-              app_handle.clone()
-            )) {
+            if let Err(e) =
+              tauri::async_runtime::block_on(windows::open_main_window(app_handle.clone()))
+            {
               log::error!("[tray] Failed to open HUD window: {}", e);
             }
           }
@@ -93,9 +93,9 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
           TrayIconEvent::DoubleClick { .. } => {
             log::info!("[tray] Tray double-clicked");
             // Open HUD on double-click
-            if let Err(e) = tauri::async_runtime::block_on(windows::open_main_window(
-              app_handle.clone()
-            )) {
+            if let Err(e) =
+              tauri::async_runtime::block_on(windows::open_main_window(app_handle.clone()))
+            {
               log::error!("[tray] Failed to open HUD window on double-click: {}", e);
             }
           }

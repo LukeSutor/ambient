@@ -3,8 +3,8 @@ use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
-use uuid::Uuid;
 use ts_rs::TS;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[ts(rename_all = "lowercase")]
@@ -13,6 +13,7 @@ pub enum Role {
   System,
   User,
   Assistant,
+  FunctionCall,
 }
 
 impl Role {
@@ -21,6 +22,7 @@ impl Role {
       Role::System => "system",
       Role::User => "user",
       Role::Assistant => "assistant",
+      Role::FunctionCall => "functioncall",
     }
   }
 
@@ -29,6 +31,7 @@ impl Role {
       "system" => Role::System,
       "user" => Role::User,
       "assistant" => Role::Assistant,
+      "functioncall" => Role::FunctionCall,
       _ => Role::User,
     }
   }
@@ -51,6 +54,7 @@ pub struct Message {
 pub struct Conversation {
   pub id: String,
   pub name: String,
+  conv_type: String,
   pub created_at: String,
   pub updated_at: String,
   pub message_count: i32,
@@ -78,6 +82,7 @@ fn generate_conversation_name(first_message: Option<&str>) -> String {
 pub async fn create_conversation(
   app_handle: AppHandle,
   name: Option<String>,
+  conv_type: Option<String>,
 ) -> Result<Conversation, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
@@ -85,13 +90,22 @@ pub async fn create_conversation(
     .as_ref()
     .ok_or("Database connection not available")?;
 
+  // Print the input parameters for debugging
+  log::info!(
+    "[conversations] Creating conversation with name: {:?}, type: {:?}",
+    name,
+    conv_type
+  );
+
   let conversation_id = Uuid::new_v4().to_string();
   let now = Utc::now();
   let conversation_name = name.unwrap_or_else(|| format!("New Chat {}", now.format("%m/%d %H:%M")));
+  let conversation_type = conv_type.unwrap_or_else(|| "chat".to_string());
 
   let conversation = Conversation {
     id: conversation_id.clone(),
     name: conversation_name.clone(),
+    conv_type: conversation_type.clone(),
     created_at: now.to_rfc3339(),
     updated_at: now.to_rfc3339(),
     message_count: 0,
@@ -99,11 +113,12 @@ pub async fn create_conversation(
 
   conn
     .execute(
-      "INSERT INTO conversations (id, name, created_at, updated_at, message_count)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+      "INSERT INTO conversations (id, name, conv_type, created_at, updated_at, message_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
       params![
         conversation_id,
         conversation_name,
+        conversation_type,
         now.to_rfc3339(),
         now.to_rfc3339(),
         0
@@ -159,7 +174,13 @@ pub async fn add_message_with_id(
     .execute(
       "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![message_id, conversation_id, Role::from_str(&role).as_str(), content, now.to_rfc3339()],
+      params![
+        message_id,
+        conversation_id,
+        Role::from_str(&role).as_str(),
+        content,
+        now.to_rfc3339()
+      ],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
 
@@ -236,10 +257,7 @@ pub async fn get_messages(
 
 /// Get a message by its id
 #[tauri::command]
-pub async fn get_message(
-  app_handle: AppHandle,
-  message_id: String,
-) -> Result<Message, String> {
+pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
@@ -282,18 +300,19 @@ pub async fn get_conversation(
 
   let conversation = conn
     .query_row(
-      "SELECT id, name, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
+      "SELECT id, name, conv_type, created_at, updated_at, message_count FROM conversations WHERE id = ?1",
       params![conversation_id],
       |row| {
-        let created_at: String = row.get(2)?;
-        let updated_at: String = row.get(3)?;
+        let created_at: String = row.get(3)?;
+        let updated_at: String = row.get(4)?;
 
         Ok(Conversation {
           id: row.get(0)?,
           name: row.get(1)?,
+          conv_type: row.get(2)?,
           created_at,
           updated_at,
-          message_count: row.get(4)?,
+          message_count: row.get(5)?,
         })
       },
     )
@@ -304,7 +323,11 @@ pub async fn get_conversation(
 
 /// List all conversations
 #[tauri::command]
-pub async fn list_conversations(app_handle: AppHandle, limit: usize, offset: usize) -> Result<Vec<Conversation>, String> {
+pub async fn list_conversations(
+  app_handle: AppHandle,
+  limit: usize,
+  offset: usize,
+) -> Result<Vec<Conversation>, String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
@@ -313,7 +336,7 @@ pub async fn list_conversations(app_handle: AppHandle, limit: usize, offset: usi
 
   let mut stmt = conn
     .prepare(
-      "SELECT id, name, created_at, updated_at, message_count 
+      "SELECT id, name, conv_type, created_at, updated_at, message_count 
          FROM conversations 
          ORDER BY updated_at DESC
          LIMIT ?1 OFFSET ?2",
@@ -322,15 +345,16 @@ pub async fn list_conversations(app_handle: AppHandle, limit: usize, offset: usi
 
   let conversations = stmt
     .query_map(params![limit, offset], |row| {
-      let created_at: String = row.get(2)?;
-      let updated_at: String = row.get(3)?;
+      let created_at: String = row.get(3)?;
+      let updated_at: String = row.get(4)?;
 
       Ok(Conversation {
         id: row.get(0)?,
         name: row.get(1)?,
+        conv_type: row.get(2)?,
         created_at,
         updated_at,
-        message_count: row.get(4)?,
+        message_count: row.get(5)?,
       })
     })
     .map_err(|e| format!("Failed to query conversations: {}", e))?

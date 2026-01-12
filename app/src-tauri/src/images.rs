@@ -1,12 +1,12 @@
-use image::imageops::{FilterType, crop};
+use crate::screen_selection::SelectionBounds;
+use image::imageops::{crop, FilterType};
 use screenshots::Screen;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
-use crate::screen_selection::SelectionBounds;
 
 #[tauri::command]
-pub fn take_screenshot(app_handle: tauri::AppHandle, filename: String) -> String {
+pub fn save_screenshot(app_handle: tauri::AppHandle, filename: String) -> String {
   let screens = Screen::all().unwrap();
   let screen = &screens[0]; // Assuming single screen for simplicity
   let image = screen.capture().unwrap();
@@ -24,9 +24,25 @@ pub fn take_screenshot(app_handle: tauri::AppHandle, filename: String) -> String
   screenshot_path.to_str().unwrap().to_string()
 }
 
+// Returns png data for screenshot
+pub fn take_screenshot() -> Vec<u8> {
+  let screens = Screen::all().unwrap();
+  let screen = &screens[0]; // Assuming single screen for simplicity
+  let image = screen.capture().unwrap();
+  let mut buffer = std::io::Cursor::new(Vec::new());
+  image.write_to(&mut buffer, screenshots::image::ImageFormat::Png).unwrap();
+  buffer.into_inner()
+}
+
 pub fn crop_image_selection(path: PathBuf, selection: SelectionBounds) {
   let mut img = image::open(&path).expect("Failed to open image");
-  let cropped_img = crop(&mut img, selection.x.try_into().unwrap(), selection.y.try_into().unwrap(), selection.width.try_into().unwrap(), selection.height.try_into().unwrap());
+  let cropped_img = crop(
+    &mut img,
+    selection.x.try_into().unwrap(),
+    selection.y.try_into().unwrap(),
+    selection.width.try_into().unwrap(),
+    selection.height.try_into().unwrap(),
+  );
   cropped_img
     .to_image()
     .save(&path)
