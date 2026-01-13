@@ -1,10 +1,10 @@
 // New auth modules
 pub mod auth_types;
 pub mod auth_storage;
-pub mod auth_commands;
 
 // Legacy modules (kept for compatibility during transition)
 pub mod supabase;
+pub mod commands;
 pub mod deep_link;
 pub mod jwt;
 pub mod storage;
@@ -19,9 +19,6 @@ pub use auth_storage::{
     get_access_token as get_stored_access_token, get_refresh_token,
     needs_token_refresh, clear_auth_state, update_session,
 };
-
-// Re-export new auth commands
-pub use auth_commands::*;
 
 // Re-export JWT utilities
 pub use jwt::*;
