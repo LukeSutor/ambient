@@ -202,9 +202,37 @@ pub async fn verify_otp(email: String, token: String, type_: String) -> Result<S
 }
 
 pub async fn resend_confirmation(email: String) -> Result<(), String> {
-   // Trigger signup to resend email
-   let _ = sign_up(email, "placeholder".to_string(), None, None).await; 
-   Ok(())
+    log::info!("[auth] Attempting resend_confirmation for email: {}", email);
+    let (base_url, api_key) = get_env_vars()?;
+    let endpoint = format!("{}/auth/v1/resend", base_url);
+
+    let body = json!({
+        "email": email,
+        "type": "signup"
+    });
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .header("apikey", &api_key)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_default();
+        log::error!("[auth] Resend confirmation failed. Status: {}. Response: {}", status, error_text);
+        if let Ok(err_obj) = serde_json::from_str::<SupabaseErrorResponse>(&error_text) {
+            return Err(err_obj.message());
+        }
+        return Err(format!("Resend confirmation failed: {}", error_text));
+    }
+
+    log::info!("[auth] Resend confirmation successful for email: {}", email);
+    Ok(())
 }
 
 pub async fn sign_out(access_token: String) -> Result<(), String> {

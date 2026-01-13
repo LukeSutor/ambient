@@ -65,9 +65,9 @@ export async function invokeCognitoConfirmSignUp(
 }
 
 export async function invokeCognitoResendConfirmationCode(
-  username: string,
+  email: string,
 ): Promise<SignUpResult> {
   return invoke<SignUpResult>('cognito_resend_confirmation_code', {
-    username,
+    email,
   });
 }
