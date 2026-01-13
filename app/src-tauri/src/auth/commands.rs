@@ -60,9 +60,8 @@ pub async fn is_authenticated() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn cognito_sign_up(
-  username: String,
-  password: String,
   email: String,
+  password: String,
   given_name: Option<String>,
   family_name: Option<String>,
 ) -> Result<SignUpResult, String> {
@@ -72,12 +71,11 @@ pub async fn cognito_sign_up(
 
 #[tauri::command]
 pub async fn cognito_confirm_sign_up(
-  username: String,
+  email: String,
   confirmation_code: String,
-  _session: Option<String>,
 ) -> Result<String, String> {
   // Supabase 'verify' uses type='signup' for email verification
-  supabase::verify_otp(username, confirmation_code, "signup".to_string()).await
+  supabase::verify_otp(email, confirmation_code, "signup".to_string()).await
 }
 
 #[tauri::command]

@@ -105,9 +105,8 @@ export default function SignUpPage() {
       setError(null);
       
       const formData: SignUpRequest = {
-        username: values.username,
-        password: values.password,
         email: step1Data.email,
+        password: values.password,
         given_name: step1Data.given_name,
         family_name: step1Data.family_name,
       };
@@ -117,7 +116,7 @@ export default function SignUpPage() {
       
       if (result.user_confirmed) {
         // User is automatically confirmed, sign them in
-        await signIn(values.username, values.password);
+        await signIn(step1Data.email, values.password);
         setFormStep('success');
         setTimeout(() => {
           router.push('/secondary');
@@ -152,8 +151,8 @@ export default function SignUpPage() {
 
     setHasTriedConfirm(true);
 
-    if (confirmationCode.length !== 6) {
-      setError('Please enter the 6-digit verification code');
+    if (confirmationCode.length !== 8) {
+      setError('Please enter the 8-digit verification code');
       return;
     }
 
@@ -162,18 +161,18 @@ export default function SignUpPage() {
       setError(null);
       
       const step2Values = step2Form.getValues();
+      const step1Values = step1Form.getValues();
 
       const confirmationData: ConfirmSignUpRequest = {
-        username: step2Values.username,
+        email: step1Values.email,
         confirmation_code: confirmationCode,
-        session: signUpResult.session,
       };
       
       // First confirm the signup
       await confirmSignUp(confirmationData);
       
       // Then automatically sign in the user
-      await signIn(step2Values.username, step2Values.password);
+      await signIn(step1Values.email, step2Values.password);
 
       setFormStep('success');
       setTimeout(() => {
@@ -198,8 +197,8 @@ export default function SignUpPage() {
   const handleResendCode = async () => {
     try {
       setError(null);
-      const step2Values = step2Form.getValues();
-      const result = await resendConfirmationCode(step2Values.username);
+      const step1Values = step1Form.getValues();
+      const result = await resendConfirmationCode(step1Values.email);
       setSignUpResult(result);
       // Show success message or update UI to indicate code was resent
     } catch (err) {
@@ -267,14 +266,14 @@ export default function SignUpPage() {
                 className="space-y-6"
                 noValidate
               >
-                <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 6}>
+                <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 8}>
                   <FieldLabel htmlFor="signup-confirmation-code">
                     Verification Code
                   </FieldLabel>
                   <div className="flex justify-center">
                     <InputOTP
                       id="signup-confirmation-code"
-                      maxLength={6}
+                      maxLength={8}
                       pattern={REGEXP_ONLY_DIGITS}
                       value={confirmationCode}
                       onChange={(value) => {
@@ -283,7 +282,7 @@ export default function SignUpPage() {
                         setConfirmationCode(value);
                       }}
                       disabled={isConfirming}
-                      aria-invalid={hasTriedConfirm && confirmationCode.length !== 6}
+                      aria-invalid={hasTriedConfirm && confirmationCode.length !== 8}
                     >
                       <InputOTPGroup>
                         <InputOTPSlot index={0} />
@@ -292,12 +291,14 @@ export default function SignUpPage() {
                         <InputOTPSlot index={3} />
                         <InputOTPSlot index={4} />
                         <InputOTPSlot index={5} />
+                        <InputOTPSlot index={6} />
+                        <InputOTPSlot index={7} />
                       </InputOTPGroup>
                     </InputOTP>
                   </div>
-                  {hasTriedConfirm && confirmationCode.length !== 6 && (
+                  {hasTriedConfirm && confirmationCode.length !== 8 && (
                     <FieldError
-                      errors={[{ message: 'Enter the 6-digit code from your email.' }]}
+                      errors={[{ message: 'Enter the 8-digit code from your email.' }]}
                     />
                   )}
                 </Field>

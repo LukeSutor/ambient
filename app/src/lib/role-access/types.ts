@@ -28,22 +28,19 @@ export interface SignUpResult {
 }
 
 export interface SignUpRequest {
-  username: string;
-  password: string;
   email: string;
+  password: string;
   given_name?: string;
   family_name?: string;
 }
 
 export interface ConfirmSignUpRequest {
-  username: string;
+  email: string;
   confirmation_code: string;
-  session?: string;
 }
 
 export interface UserInfo {
-  username: string;
-  email?: string;
+  email: string;
   given_name?: string;
   family_name?: string;
   sub: string;

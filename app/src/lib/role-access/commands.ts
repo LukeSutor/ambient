@@ -2,6 +2,9 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   UserInfo,
   SignInResult,
+  ConfirmSignUpRequest,
+  SignUpRequest,
+  SignUpResult,
 } from './types';
 
 export async function invokeGoogleSignOut(): Promise<void> {
@@ -48,9 +51,8 @@ export async function invokeGoogleSignIn(): Promise<SignInResult> {
 
 export async function invokeCognitoSignUp(request: SignUpRequest): Promise<SignUpResult> {
   return invoke<SignUpResult>('cognito_sign_up', {
-    username: request.username,
-    password: request.password,
     email: request.email,
+    password: request.password,
     givenName: request.given_name,
     familyName: request.family_name,
   });
@@ -59,10 +61,10 @@ export async function invokeCognitoSignUp(request: SignUpRequest): Promise<SignU
 export async function invokeCognitoConfirmSignUp(
   request: ConfirmSignUpRequest,
 ): Promise<void> {
+  console.log('Invoking cognito_confirm_sign_up with', request);
   return invoke('cognito_confirm_sign_up', {
-    username: request.username,
+    email: request.email,
     confirmationCode: request.confirmation_code,
-    session: request.session,
   });
 }
 
