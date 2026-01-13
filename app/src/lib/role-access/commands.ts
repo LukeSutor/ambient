@@ -1,10 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  CognitoUserInfo,
+  UserInfo,
   SignInResult,
-  SignUpRequest,
-  SignUpResult,
-  ConfirmSignUpRequest,
 } from './types';
 
 export async function invokeGoogleSignOut(): Promise<void> {
@@ -27,8 +24,8 @@ export async function invokeEmitAuthChanged(): Promise<void> {
   return invoke<void>('emit_auth_changed');
 }
 
-export async function invokeGetCurrentUser(): Promise<CognitoUserInfo | null> {
-  return invoke<CognitoUserInfo | null>('get_current_user');
+export async function invokeGetCurrentUser(): Promise<UserInfo | null> {
+  return invoke<UserInfo | null>('get_current_user');
 }
 
 export async function invokeIsOnline(): Promise<boolean> {

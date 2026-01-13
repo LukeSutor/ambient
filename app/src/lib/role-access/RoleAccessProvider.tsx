@@ -15,7 +15,7 @@ import {
   invokeIsOnline,
   invokeIsSetupComplete,
 } from "./commands";
-import type { CognitoUserInfo, RoleAccessState } from "./types";
+import type { UserInfo, RoleAccessState } from "./types";
 
 const initialState: RoleAccessState = {
   isHydrated: false,
@@ -31,8 +31,9 @@ type RoleAccessAction =
   | { type: "SET_LOGGED_IN"; payload: boolean }
   | { type: "SET_SETUP_COMPLETE"; payload: boolean }
   | { type: "SET_PREMIUM_USER"; payload: boolean }
-  | { type: "SET_USER_INFO"; payload: CognitoUserInfo | null }
+  | { type: "SET_USER_INFO"; payload: UserInfo | null }
   | { type: "SET_IS_HYDRATED"; payload: boolean };
+
 
 function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): RoleAccessState {
   switch (action.type) {

@@ -1,9 +1,7 @@
-pub mod cognito;
 pub mod supabase;
 pub mod commands;
 pub mod deep_link;
 pub mod jwt;
-pub mod oauth2;
 pub mod storage;
 pub mod types;
 
@@ -15,6 +13,6 @@ pub use types::*;
 // Re-export all Tauri commands
 pub use commands::*;
 
-// Re-export cognito functionality
-pub use cognito::*;
+// Re-export supabase functionality
+pub use supabase::*;
 pub use deep_link::*;

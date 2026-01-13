@@ -41,7 +41,7 @@ export interface ConfirmSignUpRequest {
   session?: string;
 }
 
-export interface CognitoUserInfo {
+export interface UserInfo {
   username: string;
   email?: string;
   given_name?: string;
@@ -49,10 +49,13 @@ export interface CognitoUserInfo {
   sub: string;
 }
 
+// Alias for backward compatibility
+export type CognitoUserInfo = UserInfo;
+
 export interface SignInResult {
   access_token: string;
-  id_token: string;
-  refresh_token: string;
+  id_token?: string;
+  refresh_token?: string;
   expires_in: number;
-  user_info: CognitoUserInfo;
+  user_info: UserInfo;
 }

@@ -1,4 +1,3 @@
-use oauth2::{basic::BasicClient, CsrfToken, PkceCodeChallenge};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -12,15 +11,6 @@ pub struct AuthToken {
   pub expires_in: Option<std::time::Duration>,
 }
 
-#[derive(Clone)]
-pub struct AuthState {
-  pub csrf_token: CsrfToken,
-  pub pkce: Arc<(PkceCodeChallenge, String)>,
-  pub client: Arc<BasicClient>,
-  pub socket_addr: SocketAddr,
-  pub auth_result: Arc<Mutex<Option<oneshot::Sender<Result<AuthToken, String>>>>>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignUpResult {
   pub user_sub: String,
@@ -32,7 +22,7 @@ pub struct SignUpResult {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CognitoUserInfo {
+pub struct UserInfo {
   pub username: String,
   pub email: Option<String>,
   pub given_name: Option<String>,
@@ -40,13 +30,16 @@ pub struct CognitoUserInfo {
   pub sub: String, // User's unique identifier
 }
 
+// Alias for backward compatibility
+pub type CognitoUserInfo = UserInfo;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SignInResult {
   pub access_token: String,
-  pub id_token: String,
-  pub refresh_token: String,
+  pub id_token: Option<String>,
+  pub refresh_token: Option<String>,
   pub expires_in: i64,
-  pub user_info: CognitoUserInfo,
+  pub user_info: UserInfo,
 }
 
 // Constants

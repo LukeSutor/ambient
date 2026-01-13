@@ -49,7 +49,8 @@ export function useRoleAccess(location?: string) {
       pathname === normalizedLocation || pathname.startsWith(`${normalizedLocation}/`);
 
     // Go to sign in if online and not logged in
-    if (state.isOnline && !state.isLoggedIn && isWithinBase && !isAuthRoute) {
+    //TODO: Fix logic for offline mode
+    if (!state.isLoggedIn && isWithinBase && !isAuthRoute) {
       router.replace(signInPath);
       return;
     }
@@ -61,7 +62,7 @@ export function useRoleAccess(location?: string) {
     }
 
     // Prevent going to auth routes if not online or already logged in
-    if ((!state.isOnline || state.isLoggedIn) && isAuthRoute) {
+    if ((state.isLoggedIn) && isAuthRoute) {
       router.replace(normalizedLocation);
     }
 

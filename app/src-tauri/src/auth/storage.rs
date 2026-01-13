@@ -31,11 +31,11 @@ pub fn clear_stored_token() -> Result<(), Box<dyn std::error::Error>> {
   Ok(())
 }
 
-/// Store Cognito authentication result securely using file storage for large tokens
-pub fn store_cognito_auth(sign_in_result: &SignInResult) -> Result<(), Box<dyn std::error::Error>> {
+/// Store Authentication result securely
+pub fn store_auth(sign_in_result: &SignInResult) -> Result<(), Box<dyn std::error::Error>> {
   // Get the app data directory
   let app_data_dir = get_app_data_dir()?;
-  let auth_file_path = app_data_dir.join("cognito_auth.json");
+  let auth_file_path = app_data_dir.join("auth.json");
 
   // Serialize the auth result
   let auth_json = serde_json::to_string(sign_in_result)?;
@@ -44,21 +44,21 @@ pub fn store_cognito_auth(sign_in_result: &SignInResult) -> Result<(), Box<dyn s
   fs::write(&auth_file_path, auth_json)?;
 
   // Also store a flag in keyring to indicate we have auth stored
-  let entry = Entry::new(KEYRING_SERVICE, "has_cognito_auth")?;
+  let entry = Entry::new(KEYRING_SERVICE, "has_auth")?;
   entry.set_password("true")?;
 
   Ok(())
 }
 
-/// Retrieve stored Cognito authentication from file storage
-pub fn retrieve_cognito_auth() -> Result<Option<SignInResult>, Box<dyn std::error::Error>> {
+/// Retrieve stored Authentication
+pub fn retrieve_auth() -> Result<Option<SignInResult>, Box<dyn std::error::Error>> {
   // First check if we have auth stored
-  let entry = Entry::new(KEYRING_SERVICE, "has_cognito_auth")?;
+  let entry = Entry::new(KEYRING_SERVICE, "has_auth")?;
   match entry.get_password() {
     Ok(_) => {
       // We have auth, try to read from file
       let app_data_dir = get_app_data_dir()?;
-      let auth_file_path = app_data_dir.join("cognito_auth.json");
+      let auth_file_path = app_data_dir.join("auth.json");
 
       if auth_file_path.exists() {
         let auth_json = fs::read_to_string(&auth_file_path)?;
@@ -75,15 +75,15 @@ pub fn retrieve_cognito_auth() -> Result<Option<SignInResult>, Box<dyn std::erro
   }
 }
 
-/// Clear stored Cognito authentication
-pub fn clear_cognito_auth() -> Result<(), Box<dyn std::error::Error>> {
+/// Clear stored Authentication
+pub fn clear_auth() -> Result<(), Box<dyn std::error::Error>> {
   // Clear the keyring flag
-  let entry = Entry::new(KEYRING_SERVICE, "has_cognito_auth")?;
+  let entry = Entry::new(KEYRING_SERVICE, "has_auth")?;
   let _ = entry.delete_password();
 
   // Remove the auth file
   let app_data_dir = get_app_data_dir()?;
-  let auth_file_path = app_data_dir.join("cognito_auth.json");
+  let auth_file_path = app_data_dir.join("auth.json");
 
   if auth_file_path.exists() {
     fs::remove_file(&auth_file_path)?;
