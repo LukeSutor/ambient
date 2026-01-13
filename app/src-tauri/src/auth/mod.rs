@@ -1,7 +1,6 @@
 // New auth modules
 pub mod auth_types;
 pub mod auth_storage;
-pub mod supabase_auth;
 pub mod auth_commands;
 
 // Legacy modules (kept for compatibility during transition)
@@ -19,18 +18,6 @@ pub use auth_storage::{
     store_session, retrieve_auth_state, get_current_session,
     get_access_token as get_stored_access_token, get_refresh_token,
     needs_token_refresh, clear_auth_state, update_session,
-};
-
-// Re-export new auth service
-pub use supabase_auth::{
-    sign_up as supabase_sign_up,
-    sign_in_with_password,
-    refresh_session,
-    refresh_session_with_token,
-    verify_otp as supabase_verify_otp,
-    resend_confirmation as supabase_resend_confirmation,
-    sign_out as supabase_sign_out,
-    get_user as supabase_get_user,
 };
 
 // Re-export new auth commands

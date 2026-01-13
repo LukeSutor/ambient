@@ -8,7 +8,6 @@ import type {
   SignUpRequest, 
   AuthResponse, 
   SignUpResponse,
-  SignInResult,
   ResendConfirmationResponse,
 } from './types';
 import {

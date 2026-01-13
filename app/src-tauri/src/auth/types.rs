@@ -3,14 +3,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{oneshot, Mutex};
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AuthToken {
-  pub access_token: String,
-  pub refresh_token: Option<String>,
-  pub id_token: Option<String>,
-  pub expires_in: Option<std::time::Duration>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignUpResult {
   pub user_sub: String,
