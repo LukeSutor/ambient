@@ -269,38 +269,3 @@ pub async fn emit_auth_changed(app_handle: AppHandle) -> Result<(), String> {
         .emit("auth_changed", ())
         .map_err(|e| format!("Failed to emit auth_changed event: {}", e))
 }
-
-// ============================================================================
-// Legacy Compatibility Commands (map old names to new)
-// ============================================================================
-
-#[tauri::command]
-pub async fn cognito_sign_up(
-    email: String,
-    password: String,
-    given_name: Option<String>,
-    family_name: Option<String>,
-) -> Result<SignUpResponse, String> {
-    sign_up(email, password, given_name, family_name).await
-}
-
-#[tauri::command]
-pub async fn cognito_confirm_sign_up(
-    email: String,
-    confirmation_code: String,
-) -> Result<VerifyOtpResponse, String> {
-    verify_otp(email, confirmation_code, Some("signup".to_string())).await
-}
-
-#[tauri::command]
-pub async fn cognito_resend_confirmation_code(email: String) -> Result<ResendConfirmationResponse, String> {
-    resend_confirmation(email).await
-}
-
-#[tauri::command]
-pub async fn cognito_sign_in(
-    email: String,
-    password: String,
-) -> Result<AuthResponse, String> {
-    sign_in(email, password).await
-}

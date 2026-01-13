@@ -217,11 +217,6 @@ pub fn run() {
       auth::auth_commands::get_current_user,
       auth::auth_commands::get_access_token_command,
       auth::auth_commands::emit_auth_changed,
-      // Legacy compatibility aliases
-      auth::auth_commands::cognito_sign_up,
-      auth::auth_commands::cognito_sign_in,
-      auth::auth_commands::cognito_confirm_sign_up,
-      auth::auth_commands::cognito_resend_confirmation_code,
       tasks::commands::create_task,
       tasks::commands::create_task_from_template,
       tasks::commands::get_task,

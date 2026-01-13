@@ -3,17 +3,25 @@
 import { useCallback, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useRoleAccessContext } from './RoleAccessProvider';
-import type { ConfirmSignUpRequest, SignInResult, SignUpRequest, SignUpResult } from './types';
+import type { 
+  ConfirmSignUpRequest, 
+  SignUpRequest, 
+  AuthResponse, 
+  SignUpResponse,
+  SignInResult,
+} from './types';
 import {
   invokeCognitoConfirmSignUp,
   invokeCognitoResendConfirmationCode,
-  invokeCognitoSignIn,
-  invokeCognitoSignUp,
+  invokeSignIn,
+  invokeSignUp,
   invokeEmitAuthChanged,
   invokeGetCurrentUser,
   invokeIsSetupComplete,
   invokeGoogleSignIn,
   invokeLogout,
+  invokeRefreshToken,
+  invokeGetAuthState,
 } from './commands';
 
 function normalizeBasePath(base?: string): string | null {
@@ -72,11 +80,24 @@ export function useRoleAccess(location?: string) {
   }, [normalizedLocation, pathname, router, state.isHydrated, state.isOnline, state.isLoggedIn, state.isSetupComplete]);
 
   const signIn = useCallback(
-    async (email: string, password: string): Promise<SignInResult> => {
+    async (email: string, password: string): Promise<AuthResponse> => {
       try {
-        const result = await invokeCognitoSignIn(email, password);
+        const result = await invokeSignIn(email, password);
         dispatch({ type: 'SET_LOGGED_IN', payload: true });
-        dispatch({ type: 'SET_USER_INFO', payload: result.user_info });
+        
+        // Extract user info from response
+        if (result.user) {
+          dispatch({ type: 'SET_USER_INFO', payload: {
+            id: result.user.id,
+            email: result.user.email,
+            given_name: result.user.user_metadata?.given_name ?? null,
+            family_name: result.user.user_metadata?.family_name ?? null,
+            email_verified: result.user.user_metadata?.email_verified ?? null,
+            provider: result.user.app_metadata?.provider ?? null,
+            created_at: result.user.created_at ?? null,
+          }});
+        }
+        
         const setupComplete = await invokeIsSetupComplete();
         dispatch({ type: 'SET_SETUP_COMPLETE', payload: setupComplete });
         await invokeEmitAuthChanged();
@@ -106,9 +127,9 @@ export function useRoleAccess(location?: string) {
     }
   }, [dispatch]);
 
-  const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResult> => {
+  const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResponse> => {
     try {
-      return await invokeCognitoSignUp(request);
+      return await invokeSignUp(request);
     } catch (error) {
       console.error('Error during signUp:', error);
       throw error;
@@ -124,7 +145,7 @@ export function useRoleAccess(location?: string) {
     }
   }, []);
 
-  const resendConfirmationCode = useCallback(async (email: string): Promise<SignUpResult> => {
+  const resendConfirmationCode = useCallback(async (email: string): Promise<SignUpResponse> => {
     try {
       return await invokeCognitoResendConfirmationCode(email);
     } catch (error) {
@@ -132,6 +153,24 @@ export function useRoleAccess(location?: string) {
       throw error;
     }
   }, []);
+
+  const refreshSession = useCallback(async (): Promise<void> => {
+    try {
+      await invokeRefreshToken();
+      // Refresh the auth state after token refresh
+      const authState = await invokeGetAuthState();
+      dispatch({ type: 'SET_LOGGED_IN', payload: authState.is_authenticated });
+      if (authState.user) {
+        dispatch({ type: 'SET_USER_INFO', payload: authState.user });
+      }
+    } catch (error) {
+      console.error('Error during refreshSession:', error);
+      // If refresh fails, user may need to re-login
+      dispatch({ type: 'SET_LOGGED_IN', payload: false });
+      dispatch({ type: 'SET_USER_INFO', payload: null });
+      throw error;
+    }
+  }, [dispatch]);
 
   const signOut = useCallback(async (): Promise<void> => {
     try {
@@ -172,6 +211,7 @@ export function useRoleAccess(location?: string) {
     confirmSignUp,
     resendConfirmationCode,
     signOut,
+    refreshSession,
     getAuthMethod,
     refresh,
   };

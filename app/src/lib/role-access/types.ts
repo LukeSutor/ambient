@@ -1,3 +1,28 @@
+// Re-export types from generated auth types
+import type {
+  AuthResponse,
+  AuthState,
+  SignUpResponse,
+  UserInfo as GeneratedUserInfo,
+  VerifyOtpResponse,
+  RefreshTokenResponse,
+  ResendConfirmationResponse,
+  Session,
+  SupabaseUser,
+} from '@/types/auth';
+
+// Re-export all auth types
+export type {
+  AuthResponse,
+  AuthState,
+  SignUpResponse,
+  VerifyOtpResponse,
+  RefreshTokenResponse,
+  ResendConfirmationResponse,
+  Session,
+  SupabaseUser,
+} from '@/types/auth';
+
 /**
  * Role access state
  */
@@ -7,25 +32,33 @@ export interface RoleAccessState {
   isLoggedIn: boolean;
   isSetupComplete: boolean;
   isPremiumUser: boolean;
-  userInfo: CognitoUserInfo | null;
+  userInfo: UserInfo | null;
 }
 
-// Auth types for Tauri commands
-export interface AuthToken {
-  access_token: string;
-  refresh_token?: string;
-  id_token?: string;
-  expires_in?: number; // Duration in seconds
+/**
+ * User info exposed to the frontend - matches the generated UserInfo type
+ */
+export interface UserInfo {
+  id: string;
+  email: string | null;
+  given_name: string | null;
+  family_name: string | null;
+  email_verified: boolean | null;
+  provider: string | null;
+  created_at: string | null;
 }
 
-export interface SignUpResult {
-  user_sub: string;
-  user_confirmed: boolean;
-  verification_required: boolean;
-  destination?: string;
-  delivery_medium?: string;
-  session?: string;
-}
+// Alias for backward compatibility
+export type CognitoUserInfo = UserInfo;
+
+/**
+ * Alias for backward compatibility - use SignUpResponse instead
+ */
+export type SignUpResult = SignUpResponse;
+
+// ============================================================================
+// Request Types (for frontend use)
+// ============================================================================
 
 export interface SignUpRequest {
   email: string;
@@ -39,20 +72,44 @@ export interface ConfirmSignUpRequest {
   confirmation_code: string;
 }
 
-export interface UserInfo {
+export interface SignInRequest {
   email: string;
-  given_name?: string;
-  family_name?: string;
-  sub: string;
+  password: string;
 }
 
-// Alias for backward compatibility
-export type CognitoUserInfo = UserInfo;
+// ============================================================================
+// Legacy Types (deprecated - use new types from @/types/auth)
+// ============================================================================
 
+/**
+ * @deprecated Use AuthResponse from @/types/auth instead
+ */
 export interface SignInResult {
   access_token: string;
   id_token?: string;
   refresh_token?: string;
   expires_in: number;
   user_info: UserInfo;
+}
+
+/**
+ * @deprecated Use SignUpResponse from @/types/auth instead
+ */
+export interface LegacySignUpResult {
+  user_sub: string;
+  user_confirmed: boolean;
+  verification_required: boolean;
+  destination?: string;
+  delivery_medium?: string;
+  session?: string;
+}
+
+/**
+ * @deprecated Use Session from @/types/auth instead
+ */
+export interface AuthToken {
+  access_token: string;
+  refresh_token?: string;
+  id_token?: string;
+  expires_in?: number;
 }
