@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupabaseAuthResponse {
     pub access_token: Option<String>,
     pub token_type: Option<String>,
@@ -11,7 +11,7 @@ pub struct SupabaseAuthResponse {
     pub session: Option<SupabaseSession>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupabaseSession {
     pub access_token: String,
     pub token_type: String,
@@ -20,27 +20,31 @@ pub struct SupabaseSession {
     pub user: SupabaseUser,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupabaseUser {
     pub id: String,
-    pub email: Option<String>, 
+    pub email: Option<String>,
     pub user_metadata: Option<HashMap<String, serde_json::Value>>,
     pub confirmed_at: Option<String>,
+    pub app_metadata: Option<HashMap<String, serde_json::Value>>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub is_anonymous: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupabaseErrorResponse {
+    pub code: Option<String>,
+    pub error_code: Option<String>,
     pub msg: Option<String>,
-    pub error: Option<String>,
-    pub error_description: Option<String>,
 }
 
 impl SupabaseErrorResponse {
     pub fn message(&self) -> String {
-        self.error_description
+        self.msg
             .clone()
-            .or(self.msg.clone())
-            .or(self.error.clone())
+            .or(self.code.clone())
+            .or(self.error_code.clone())
             .unwrap_or_else(|| "Unknown error".to_string())
     }
 }
