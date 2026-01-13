@@ -2,7 +2,7 @@ use crate::auth::auth_types::{
     AuthResponse, AuthState, SignUpResponse, UserInfo, VerifyOtpResponse,
     RefreshTokenResponse, ResendConfirmationResponse,
 };
-use crate::auth::auth_storage::{
+use crate::auth::storage::{
     retrieve_auth_state, clear_auth_state, get_access_token,
 };
 use crate::auth::supabase;

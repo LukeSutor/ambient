@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from '@/lib/role-access';
+import { useRoleAccess, SignUpRequest, ConfirmSignUpRequest, SignUpResponse } from '@/lib/role-access';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -53,7 +53,7 @@ export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [signUpResult, setSignUpResult] = useState<SignUpResult | null>(null);
+  const [signUpResult, setSignUpResult] = useState<SignUpResponse | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);

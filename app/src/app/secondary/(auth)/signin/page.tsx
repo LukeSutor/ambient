@@ -45,7 +45,7 @@ export default function SignInPage() {
 
     try {
       const result = await signIn(values.username.trim(), values.password);
-      console.log('Sign in successful:', result.user_info);
+      console.log('Sign in successful:', result.user);
       router.push('/secondary');
     } catch (err) {
       console.error('Sign in failed:', err);

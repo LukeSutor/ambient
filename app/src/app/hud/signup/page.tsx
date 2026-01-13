@@ -11,7 +11,7 @@ import { CheckCircle, UserPlus, Loader2, Mail, Eye, EyeOff, AlertCircle, X, Arro
 import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from '@/lib/role-access';
+import { useRoleAccess, SignUpRequest, SignUpResponse, ConfirmSignUpRequest } from '@/lib/role-access';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { useRouter } from 'next/navigation';
@@ -56,7 +56,7 @@ export default function SignUp() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [signUpResult, setSignUpResult] = useState<SignUpResult | null>(null);
+  const [signUpResult, setSignUpResult] = useState<SignUpResponse | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);

@@ -48,14 +48,6 @@ export interface UserInfo {
   created_at: string | null;
 }
 
-// Alias for backward compatibility
-export type CognitoUserInfo = UserInfo;
-
-/**
- * Alias for backward compatibility - use SignUpResponse instead
- */
-export type SignUpResult = SignUpResponse;
-
 // ============================================================================
 // Request Types (for frontend use)
 // ============================================================================

@@ -2,7 +2,7 @@ use crate::auth::auth_types::{
     AuthResponse, AuthError, Session, SignUpResponse, SupabaseUser, 
     VerifyOtpResponse, RefreshTokenResponse, ResendConfirmationResponse,
 };
-use crate::auth::auth_storage::{store_session, get_refresh_token, clear_auth_state};
+use crate::auth::storage::{store_session, get_refresh_token, clear_auth_state};
 use serde_json::json;
 
 extern crate dotenv;
