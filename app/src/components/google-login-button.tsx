@@ -30,9 +30,6 @@ export function GoogleLoginButton({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Auth state
-  const { googleSignIn } = useRoleAccess();
-
   useEffect(() => {
     // Listen for OAuth2 events from Tauri
     const listenToOAuth2Events = async () => {
@@ -74,7 +71,7 @@ export function GoogleLoginButton({
     setIsLoading(true);
 
     try {
-      await googleSignIn();
+      //TODO: implement google sign in later
       // Note: The actual authentication will be handled by the deep link callback
       // The loading state will be cleared by the event listeners above
     } catch (err) {

@@ -4,8 +4,6 @@ use crate::auth::auth_types::{
 };
 use crate::auth::auth_storage::{
     retrieve_auth_state, clear_auth_state, get_access_token,
-    // Legacy compatibility
-    clear_stored_token, retrieve_token,
 };
 use crate::auth::supabase_auth;
 use tauri::{AppHandle, Emitter};
@@ -78,11 +76,6 @@ pub async fn logout() -> Result<String, String> {
     let access_token = get_access_token()
         .ok()
         .flatten();
-    
-    // Clear legacy OAuth tokens
-    if let Err(e) = clear_stored_token() {
-        log::warn!("[auth_commands] Warning: Failed to clear OAuth token: {}", e);
-    }
     
     // Sign out from Supabase
     supabase_auth::sign_out(access_token).await?;
@@ -160,11 +153,6 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
 
 #[tauri::command]
 pub async fn is_authenticated() -> Result<bool, String> {
-    // Check legacy OAuth tokens first
-    if let Ok(Some(_token)) = retrieve_token() {
-        return Ok(true);
-    }
-    
     // Check new auth state - convert error to string before any await
     let state_result = retrieve_auth_state()
         .map_err(|e| e.to_string());

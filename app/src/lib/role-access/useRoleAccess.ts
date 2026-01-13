@@ -9,16 +9,16 @@ import type {
   AuthResponse, 
   SignUpResponse,
   SignInResult,
+  ResendConfirmationResponse,
 } from './types';
 import {
-  invokeCognitoConfirmSignUp,
-  invokeCognitoResendConfirmationCode,
+  invokeVerifyOtp,
+  invokeResendConfirmation,
   invokeSignIn,
   invokeSignUp,
   invokeEmitAuthChanged,
   invokeGetCurrentUser,
   invokeIsSetupComplete,
-  invokeGoogleSignIn,
   invokeLogout,
   invokeRefreshToken,
   invokeGetAuthState,
@@ -110,23 +110,6 @@ export function useRoleAccess(location?: string) {
   [dispatch],
   );
 
-  const googleSignIn = useCallback(async (): Promise<SignInResult> => {
-    try {
-      const result = await invokeGoogleSignIn();
-      dispatch({ type: 'SET_LOGGED_IN', payload: true });
-      if (result.user_info) {
-        dispatch({ type: 'SET_USER_INFO', payload: result.user_info });
-      }
-      const setupComplete = await invokeIsSetupComplete();
-      dispatch({ type: 'SET_SETUP_COMPLETE', payload: setupComplete });
-      await invokeEmitAuthChanged();
-      return result;
-    } catch (error) {
-      console.error('Error during googleSignIn:', error);
-      throw error;
-    }
-  }, [dispatch]);
-
   const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResponse> => {
     try {
       return await invokeSignUp(request);
@@ -138,16 +121,16 @@ export function useRoleAccess(location?: string) {
 
   const confirmSignUp = useCallback(async (request: ConfirmSignUpRequest): Promise<void> => {
     try {
-      await invokeCognitoConfirmSignUp(request);
+      await invokeVerifyOtp(request.email, request.confirmation_code);
     } catch (error) {
       console.error('Error during confirmSignUp:', error);
       throw error;
     }
   }, []);
 
-  const resendConfirmationCode = useCallback(async (email: string): Promise<SignUpResponse> => {
+  const resendConfirmationCode = useCallback(async (email: string): Promise<ResendConfirmationResponse> => {
     try {
-      return await invokeCognitoResendConfirmationCode(email);
+      return await invokeResendConfirmation(email);
     } catch (error) {
       console.error('Error during resendConfirmationCode:', error);
       throw error;
@@ -206,7 +189,6 @@ export function useRoleAccess(location?: string) {
   return {
     ...state,
     signIn,
-    googleSignIn,
     signUp,
     confirmSignUp,
     resendConfirmationCode,

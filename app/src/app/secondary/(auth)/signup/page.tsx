@@ -108,7 +108,7 @@ export default function SignUpPage() {
       const result = await signUp(formData);
       setSignUpResult(result);
       
-      if (result.user_confirmed) {
+      if (!result.verification_required) {
         // User is automatically confirmed, sign them in
         await signIn(step1Data.email, values.password);
         setFormStep('success');
@@ -192,9 +192,9 @@ export default function SignUpPage() {
     try {
       setError(null);
       const step1Values = step1Form.getValues();
-      const result = await resendConfirmationCode(step1Values.email);
-      setSignUpResult(result);
+      await resendConfirmationCode(step1Values.email);
       // Show success message or update UI to indicate code was resent
+      //TODO: Implement success feedback
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resend code');
     }

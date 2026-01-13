@@ -19,8 +19,6 @@ pub use auth_storage::{
     store_session, retrieve_auth_state, get_current_session,
     get_access_token as get_stored_access_token, get_refresh_token,
     needs_token_refresh, clear_auth_state, update_session,
-    // Legacy compatibility
-    store_token, retrieve_token, clear_stored_token,
 };
 
 // Re-export new auth service
@@ -46,4 +44,4 @@ pub use deep_link::*;
 
 // Legacy re-exports (for backward compatibility with existing code)
 // These can be gradually removed as the codebase is updated
-pub use types::{SignUpResult, SignInResult, UserInfo as LegacyUserInfo, AuthToken as LegacyAuthToken};
+pub use types::{SignUpResult, SignInResult, UserInfo as LegacyUserInfo};

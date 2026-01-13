@@ -1,4 +1,3 @@
-use crate::auth::storage::store_auth;
 use crate::auth::supabase::types::*;
 use crate::auth::types::{SignInResult, SignUpResult, UserInfo};
 use serde_json::json;
@@ -156,9 +155,9 @@ pub async fn sign_in(email: String, password: String) -> Result<SignInResult, St
       user_info,
   };
 
-  if let Err(e) = store_auth(&sign_in_result) {
-      log::warn!("Warning: Failed to store authentication: {}", e);
-  }
+  // if let Err(e) = store_auth(&sign_in_result) {
+  //     log::warn!("Warning: Failed to store authentication: {}", e);
+  // }
 
   log::info!("[auth] SignIn successful for user user_sub={}", sign_in_result.user_info.sub);
   Ok(sign_in_result)
