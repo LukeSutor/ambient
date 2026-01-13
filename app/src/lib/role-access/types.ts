@@ -1,14 +1,6 @@
 // Re-export types from generated auth types
 import type {
-  AuthResponse,
-  AuthState,
-  SignUpResponse,
-  UserInfo as GeneratedUserInfo,
-  VerifyOtpResponse,
-  RefreshTokenResponse,
-  ResendConfirmationResponse,
-  Session,
-  SupabaseUser,
+  UserInfo,
 } from '@/types/auth';
 
 // Re-export all auth types
@@ -21,6 +13,7 @@ export type {
   ResendConfirmationResponse,
   Session,
   SupabaseUser,
+  UserInfo,
 } from '@/types/auth';
 
 /**
@@ -35,21 +28,8 @@ export interface RoleAccessState {
   userInfo: UserInfo | null;
 }
 
-/**
- * User info exposed to the frontend - matches the generated UserInfo type
- */
-export interface UserInfo {
-  id: string;
-  email: string | null;
-  given_name: string | null;
-  family_name: string | null;
-  email_verified: boolean | null;
-  provider: string | null;
-  created_at: string | null;
-}
-
 // ============================================================================
-// Request Types (for frontend use)
+// Request Types for frontend use
 // ============================================================================
 
 export interface SignUpRequest {

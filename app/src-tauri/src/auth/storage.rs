@@ -2,6 +2,7 @@ use crate::auth::types::{StoredAuthState, Session, KEYRING_SERVICE, KEYRING_AUTH
 use keyring::Entry;
 use std::fs;
 use std::path::PathBuf;
+use tauri::Manager;
 
 /// Store the complete auth state (session with tokens)
 pub fn store_auth_state(state: &StoredAuthState) -> Result<(), Box<dyn std::error::Error>> {
@@ -123,6 +124,23 @@ pub fn update_session(session: &Session) -> Result<(), Box<dyn std::error::Error
 
 /// Helper function to get app data directory
 fn get_app_data_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    // Try to get the app handle from the event emitter
+    if let Some(app_handle) = crate::events::get_emitter().get_app_handle() {
+        let app_data_dir = app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
+        
+        // Create directory if it doesn't exist
+        if !app_data_dir.exists() {
+            fs::create_dir_all(&app_data_dir)?;
+        }
+        
+        return Ok(app_data_dir);
+    }
+
+    log::warn!("[auth_storage] AppHandle not initialized in EventEmitter, falling back to manual path resolution");
+
     let app_data_dir = if cfg!(target_os = "windows") {
         std::env::var("APPDATA")
             .map(|path| std::path::PathBuf::from(path))

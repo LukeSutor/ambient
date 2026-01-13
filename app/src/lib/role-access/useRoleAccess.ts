@@ -36,6 +36,7 @@ export function useRoleAccess(location?: string) {
   const router = useRouter();
   const pathname = usePathname();
   const normalizedLocation = normalizeBasePath(location ?? undefined);
+  console.log(state.userInfo)
 
   useEffect(() => {
     if (!normalizedLocation || !state.isHydrated || !pathname) {

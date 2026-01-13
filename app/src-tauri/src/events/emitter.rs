@@ -56,6 +56,10 @@ impl EventEmitter {
   pub fn is_initialized(&self) -> bool {
     self.app_handle.lock().unwrap().is_some()
   }
+
+  pub fn get_app_handle(&self) -> Option<AppHandle> {
+    self.app_handle.lock().unwrap().clone()
+  }
 }
 
 // Global singleton instance
