@@ -1,4 +1,4 @@
-use crate::auth::auth_types::{
+use crate::auth::types::{
     AuthResponse, AuthState, SignUpResponse, UserInfo, VerifyOtpResponse,
     RefreshTokenResponse, ResendConfirmationResponse,
 };

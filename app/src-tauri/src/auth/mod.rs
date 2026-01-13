@@ -1,7 +1,3 @@
-// New auth modules
-pub mod auth_types;
-
-// Legacy modules (kept for compatibility during transition)
 pub mod supabase;
 pub mod commands;
 pub mod deep_link;
@@ -10,7 +6,7 @@ pub mod storage;
 pub mod types;
 
 // Re-export new auth types
-pub use auth_types::*;
+pub use types::*;
 
 // Re-export new auth storage
 pub use storage::{

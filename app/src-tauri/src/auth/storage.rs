@@ -1,4 +1,4 @@
-use crate::auth::auth_types::{StoredAuthState, Session, KEYRING_SERVICE, KEYRING_AUTH_KEY};
+use crate::auth::types::{StoredAuthState, Session, KEYRING_SERVICE, KEYRING_AUTH_KEY};
 use keyring::Entry;
 use std::fs;
 use std::path::PathBuf;
