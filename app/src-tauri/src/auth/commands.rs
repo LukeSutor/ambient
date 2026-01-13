@@ -79,8 +79,8 @@ pub async fn cognito_confirm_sign_up(
 }
 
 #[tauri::command]
-pub async fn cognito_resend_confirmation_code(username: String) -> Result<SignUpResult, String> {
-  supabase::resend_confirmation(username).await?;
+pub async fn cognito_resend_confirmation_code(email: String) -> Result<SignUpResult, String> {
+  supabase::resend_confirmation(email).await?;
   Ok(SignUpResult {
       user_sub: "".to_string(),
       user_confirmed: false,
@@ -92,8 +92,8 @@ pub async fn cognito_resend_confirmation_code(username: String) -> Result<SignUp
 }
 
 #[tauri::command]
-pub async fn cognito_sign_in(username: String, password: String) -> Result<SignInResult, String> {
-  supabase::sign_in(username, password).await
+pub async fn cognito_sign_in(email: String, password: String) -> Result<SignInResult, String> {
+  supabase::sign_in(email, password).await
 }
 
 #[tauri::command]

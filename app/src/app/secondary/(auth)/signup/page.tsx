@@ -16,25 +16,20 @@ import { GoogleLoginButton } from '@/components/google-login-button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 
-// Step 1: Personal Info (name and email)
+// Step 1: Email
 const step1Schema = z.object({
-  given_name: z.string().min(1, {
-    message: "First name is required",
-  }),
-  family_name: z.string().min(1, {
-    message: "Last name is required",
-  }),
   email: z.string().email({
     message: "Please enter a valid email address",
   }),
 });
 
-// Step 2: Account Info (username and password)
+// Step 2: Personal Info & Password
 const step2Schema = z.object({
-  username: z.string().min(3, {
-    message: "Username must be at least 3 characters long",
-  }).max(20, {
-    message: "Username must be less than 20 characters",
+  given_name: z.string().min(1, {
+    message: "First name is required",
+  }),
+  family_name: z.string().min(1, {
+    message: "Last name is required",
   }),
   password: z.string()
     .min(8, {
@@ -68,8 +63,6 @@ export default function SignUpPage() {
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
     defaultValues: {
-      given_name: "",
-      family_name: "",
       email: "",
     },
   });
@@ -77,7 +70,8 @@ export default function SignUpPage() {
   const step2Form = useForm<z.infer<typeof step2Schema>>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
-      username: "",
+      given_name: "",
+      family_name: "",
       password: "",
     },
   });
@@ -107,8 +101,8 @@ export default function SignUpPage() {
       const formData: SignUpRequest = {
         email: step1Data.email,
         password: values.password,
-        given_name: step1Data.given_name,
-        family_name: step1Data.family_name,
+        given_name: values.given_name,
+        family_name: values.family_name,
       };
       
       const result = await signUp(formData);
@@ -339,7 +333,7 @@ export default function SignUpPage() {
     );
   }
 
-  // Step 1: Personal Information
+  // Step 1: Email
   if (formStep === 'step1') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -350,7 +344,7 @@ export default function SignUpPage() {
                 Create Your Account
               </CardTitle>
               <CardDescription>
-                Step 1 of 2: Tell us about yourself
+                Step 1 of 2: Start with your email
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -378,45 +372,6 @@ export default function SignUpPage() {
               </div>
 
               <form onSubmit={step1Form.handleSubmit(onStep1Submit)} className="space-y-6" noValidate>
-                <div className="grid grid-cols-2 gap-4">
-                  <Controller
-                    control={step1Form.control}
-                    name="given_name"
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="signup-given-name">First Name</FieldLabel>
-                        <Input
-                          id="signup-given-name"
-                          className="h-11"
-                          placeholder="John"
-                          autoComplete="given-name"
-                          aria-invalid={fieldState.invalid}
-                          {...field}
-                        />
-                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                      </Field>
-                    )}
-                  />
-                  <Controller
-                    control={step1Form.control}
-                    name="family_name"
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="signup-family-name">Last Name</FieldLabel>
-                        <Input
-                          id="signup-family-name"
-                          className="h-11"
-                          placeholder="Doe"
-                          autoComplete="family-name"
-                          aria-invalid={fieldState.invalid}
-                          {...field}
-                        />
-                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                      </Field>
-                    )}
-                  />
-                </div>
-                
                 <Controller
                   control={step1Form.control}
                   name="email"
@@ -465,7 +420,7 @@ export default function SignUpPage() {
     );
   }
 
-  // Step 2: Account Information
+  // Step 2: Personal Info & Password
   if (formStep === 'step2') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -476,7 +431,7 @@ export default function SignUpPage() {
                 Create Your Account
               </CardTitle>
               <CardDescription>
-                Step 2 of 2: Choose your credentials
+                Step 2 of 2: Personal Info & Password
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -488,28 +443,46 @@ export default function SignUpPage() {
               )}
 
               <form onSubmit={step2Form.handleSubmit(onStep2Submit)} className="space-y-6" noValidate>
-                <Controller
-                  control={step2Form.control}
-                  name="username"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-username">Username</FieldLabel>
-                      <div className="relative">
-                        <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <div className="grid grid-cols-2 gap-4">
+                  <Controller
+                    control={step2Form.control}
+                    name="given_name"
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="signup-given-name">First Name</FieldLabel>
                         <Input
-                          id="signup-username"
-                          className="pl-10 h-11"
-                          placeholder="johndoe"
-                          autoComplete="username"
+                          id="signup-given-name"
+                          className="h-11"
+                          placeholder="John"
+                          autoComplete="given-name"
                           disabled={isLoading}
                           aria-invalid={fieldState.invalid}
                           {...field}
                         />
-                      </div>
-                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                    </Field>
-                  )}
-                />
+                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={step2Form.control}
+                    name="family_name"
+                    render={({ field, fieldState }) => (
+                      <Field data-invalid={fieldState.invalid}>
+                        <FieldLabel htmlFor="signup-family-name">Last Name</FieldLabel>
+                        <Input
+                          id="signup-family-name"
+                          className="h-11"
+                          placeholder="Doe"
+                          autoComplete="family-name"
+                          disabled={isLoading}
+                          aria-invalid={fieldState.invalid}
+                          {...field}
+                        />
+                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                      </Field>
+                    )}
+                  />
+                </div>
                 
                 <Controller
                   control={step2Form.control}

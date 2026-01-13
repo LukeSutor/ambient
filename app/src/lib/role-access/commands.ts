@@ -7,10 +7,6 @@ import type {
   SignUpResult,
 } from './types';
 
-export async function invokeGoogleSignOut(): Promise<void> {
-  return invoke<void>('google_sign_out');
-}
-
 export async function invokeLogout(): Promise<string> {
   return invoke<string>('logout');
 }
@@ -36,11 +32,11 @@ export async function invokeIsOnline(): Promise<boolean> {
 }
 
 export async function invokeCognitoSignIn(
-  username: string,
+  email: string,
   password: string,
 ): Promise<SignInResult> {
   return invoke<SignInResult>('cognito_sign_in', {
-    username,
+    email,
     password,
   });
 }

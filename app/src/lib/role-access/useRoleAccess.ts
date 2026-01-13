@@ -13,7 +13,6 @@ import {
   invokeGetCurrentUser,
   invokeIsSetupComplete,
   invokeGoogleSignIn,
-  invokeGoogleSignOut,
   invokeLogout,
 } from './commands';
 
@@ -73,9 +72,9 @@ export function useRoleAccess(location?: string) {
   }, [normalizedLocation, pathname, router, state.isHydrated, state.isOnline, state.isLoggedIn, state.isSetupComplete]);
 
   const signIn = useCallback(
-    async (username: string, password: string): Promise<SignInResult> => {
+    async (email: string, password: string): Promise<SignInResult> => {
       try {
-        const result = await invokeCognitoSignIn(username, password);
+        const result = await invokeCognitoSignIn(email, password);
         dispatch({ type: 'SET_LOGGED_IN', payload: true });
         dispatch({ type: 'SET_USER_INFO', payload: result.user_info });
         const setupComplete = await invokeIsSetupComplete();
@@ -125,9 +124,9 @@ export function useRoleAccess(location?: string) {
     }
   }, []);
 
-  const resendConfirmationCode = useCallback(async (username: string): Promise<SignUpResult> => {
+  const resendConfirmationCode = useCallback(async (email: string): Promise<SignUpResult> => {
     try {
-      return await invokeCognitoResendConfirmationCode(username);
+      return await invokeCognitoResendConfirmationCode(email);
     } catch (error) {
       console.error('Error during resendConfirmationCode:', error);
       throw error;
@@ -136,7 +135,6 @@ export function useRoleAccess(location?: string) {
 
   const signOut = useCallback(async (): Promise<void> => {
     try {
-      await invokeGoogleSignOut();
       await invokeLogout();
       dispatch({ type: 'SET_LOGGED_IN', payload: false });
       dispatch({ type: 'SET_USER_INFO', payload: null });
@@ -155,7 +153,7 @@ export function useRoleAccess(location?: string) {
         return 'unknown';
       }
 
-      if (user.username?.startsWith('google_')) {
+      if (user.email?.startsWith('google_')) {
         return 'google';
       }
 
