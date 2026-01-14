@@ -70,9 +70,6 @@ export default function AccountPage() {
       if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase()
       return userInfo.full_name[0].toUpperCase()
     }
-    if (userInfo.given_name && userInfo.family_name) {
-      return `${userInfo.given_name[0]}${userInfo.family_name[0]}`.toUpperCase()
-    }
     return userInfo.email ? userInfo.email[0].toUpperCase() : 'U'
   })()
 
@@ -108,10 +105,8 @@ export default function AccountPage() {
             </Avatar>
             <div className="space-y-1">
               <h3 className="text-xl font-semibold">
-                {userInfo.full_name || (userInfo.given_name && userInfo.family_name 
-                  ? `${userInfo.given_name} ${userInfo.family_name}` 
-                  : userInfo.email || 'Unknown User')}
-                {!(userInfo.full_name || (userInfo.given_name && userInfo.family_name)) && userInfo.providers?.includes('google') && (
+                {userInfo.full_name || userInfo.email || 'Unknown User'}
+                {!userInfo.full_name && userInfo.providers?.includes('google') && (
                   <Tooltip>
 
                     <TooltipTrigger>
@@ -125,7 +120,7 @@ export default function AccountPage() {
                   </Tooltip>
                 )}
               </h3>
-              {(userInfo.full_name || (userInfo.given_name && userInfo.family_name)) && (
+              {userInfo.full_name && (
                 <p className="text-muted-foreground flex items-center space-x-1">
                   <Mail className="h-4 w-4" />
                   <span>{userInfo.email || 'No email available'}</span>

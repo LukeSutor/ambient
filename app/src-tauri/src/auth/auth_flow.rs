@@ -26,8 +26,7 @@ pub fn get_env_vars() -> Result<(String, String), String> {
 pub async fn sign_up(
     email: String,
     password: String,
-    given_name: Option<String>,
-    family_name: Option<String>,
+    full_name: Option<String>,
 ) -> Result<SignUpResponse, String> {
     log::info!("[supabase_auth] Attempting sign_up for email: {}", email);
     let (base_url, api_key) = get_env_vars()?;
@@ -35,12 +34,10 @@ pub async fn sign_up(
     
     // Build user metadata
     let mut user_meta = serde_json::Map::new();
-    if let Some(gn) = &given_name {
-        user_meta.insert("given_name".to_string(), json!(gn));
+    if let Some(name) = &full_name {
+        user_meta.insert("full_name".to_string(), json!(name));
     }
-    if let Some(fn_name) = &family_name {
-        user_meta.insert("family_name".to_string(), json!(fn_name));
-    }
+    user_meta.insert("avatar_url".to_string(), json!(""));
     
     let body = json!({
         "email": email,
@@ -376,8 +373,7 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 /// Returns the URL that should be opened in the system browser
 #[tauri::command]
 pub async fn sign_in_with_google(
-    given_name: Option<String>,
-    family_name: Option<String>,
+    full_name: Option<String>,
 ) -> Result<OAuthUrlResponse, String> {
     log::info!("[supabase_auth] Initiating Google OAuth sign in");
     let (base_url, _) = get_env_vars()?;
@@ -389,16 +385,8 @@ pub async fn sign_in_with_google(
     
     // Build optional metadata to pass through
     let mut data = serde_json::Map::new();
-    if let Some(gn) = given_name {
-        data.insert("given_name".to_string(), json!(gn));
-        data.insert("full_name".to_string(), json!(gn));
-    }
-    if let Some(fn_name) = family_name {
-        data.insert("family_name".to_string(), json!(fn_name));
-        // If we also have a given name, update full_name
-        if let Some(gn) = data.get("given_name").and_then(|v| v.as_str()) {
-            data.insert("full_name".to_string(), json!(format!("{} {}", gn, fn_name)));
-        }
+    if let Some(name) = full_name {
+        data.insert("full_name".to_string(), json!(name));
     }
     
     let mut auth_url = format!(
@@ -473,6 +461,31 @@ pub async fn exchange_code_for_session(code: String) -> Result<AuthResponse, Str
         destination: None,
         delivery_medium: None,
     })
+}
+
+/// Fetch user profile from the public.profiles table
+pub async fn fetch_user_profile(user_id: &str, access_token: &str) -> Result<serde_json::Value, String> {
+    let (base_url, api_key) = get_env_vars()?;
+    let endpoint = format!("{}/rest/v1/profiles?id=eq.{}&select=*", base_url, user_id);
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&endpoint)
+        .header("apikey", &api_key)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Range", "0-0") // Just get one
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch profile: {}", e))?;
+    
+    if !response.status().is_success() {
+        return Err(format!("Profile fetch failed: {}", response.status()));
+    }
+    
+    let profiles: Vec<serde_json::Value> = response.json().await
+        .map_err(|e| format!("Failed to parse profile response: {}", e))?;
+    
+    Ok(profiles.into_iter().next().unwrap_or(serde_json::json!({})))
 }
 
 /// Handle the OAuth callback URL directly

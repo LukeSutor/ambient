@@ -36,8 +36,7 @@ export interface RoleAccessState {
 export interface SignUpRequest {
   email: string;
   password: string;
-  given_name?: string;
-  family_name?: string;
+  full_name?: string;
 }
 
 export interface ConfirmSignUpRequest {

@@ -29,8 +29,7 @@ export async function invokeSignUp(request: SignUpRequest): Promise<SignUpRespon
   return invoke<SignUpResponse>('sign_up', {
     email: request.email,
     password: request.password,
-    givenName: request.given_name,
-    familyName: request.family_name,
+    fullName: request.full_name,
   });
 }
 
@@ -42,10 +41,9 @@ export async function invokeSignUp(request: SignUpRequest): Promise<SignUpRespon
  * Initiates Google OAuth sign-in by getting the authorization URL
  * The URL should be opened in the system browser
  */
-export async function invokeSignInWithGoogle(givenName?: string, familyName?: string): Promise<OAuthUrlResponse> {
+export async function invokeSignInWithGoogle(fullName?: string): Promise<OAuthUrlResponse> {
   return invoke<OAuthUrlResponse>('sign_in_with_google', {
-    givenName,
-    familyName,
+    fullName,
   });
 }
 

@@ -8,8 +8,6 @@ pub struct UserMetadata {
     pub email: Option<String>,
     pub email_verified: Option<bool>,
     pub phone_verified: Option<bool>,
-    pub given_name: Option<String>,
-    pub family_name: Option<String>,
     pub full_name: Option<String>,
     pub avatar_url: Option<String>,
     pub sub: Option<String>,
@@ -21,8 +19,6 @@ impl Default for UserMetadata {
             email: None,
             email_verified: None,
             phone_verified: None,
-            given_name: None,
-            family_name: None,
             full_name: None,
             avatar_url: None,
             sub: None,
@@ -248,8 +244,6 @@ impl StoredAuthState {
 pub struct UserInfo {
     pub id: String,
     pub email: Option<String>,
-    pub given_name: Option<String>,
-    pub family_name: Option<String>,
     pub full_name: Option<String>,
     pub avatar_url: Option<String>,
     pub email_verified: Option<bool>,
@@ -260,17 +254,15 @@ pub struct UserInfo {
 
 impl From<&SupabaseUser> for UserInfo {
     fn from(user: &SupabaseUser) -> Self {
-        let (given_name, family_name, full_name, avatar_url, email_verified) = user
+        let (full_name, avatar_url, email_verified) = user
             .user_metadata
             .as_ref()
             .map(|m| (
-                m.given_name.clone(), 
-                m.family_name.clone(),
                 m.full_name.clone(),
                 m.avatar_url.clone(),
                 m.email_verified
             ))
-            .unwrap_or((None, None, None, None, None));
+            .unwrap_or((None, None, None));
         
         let provider = user
             .app_metadata
@@ -287,8 +279,6 @@ impl From<&SupabaseUser> for UserInfo {
         Self {
             id: user.id.clone(),
             email: user.email.clone(),
-            given_name,
-            family_name,
             full_name,
             avatar_url,
             email_verified,
@@ -296,6 +286,19 @@ impl From<&SupabaseUser> for UserInfo {
             created_at: user.created_at.clone(),
             providers,
         }
+    }
+}
+
+impl UserInfo {
+    /// Update user info with data from the profiles table
+    pub fn with_profile(mut self, profile: &serde_json::Value) -> Self {
+        if let Some(full_name) = profile.get("full_name").and_then(|v| v.as_str()) {
+            self.full_name = Some(full_name.to_string());
+        }
+        if let Some(avatar_url) = profile.get("avatar_url").and_then(|v| v.as_str()) {
+            self.avatar_url = Some(avatar_url.to_string());
+        }
+        self
     }
 }
 

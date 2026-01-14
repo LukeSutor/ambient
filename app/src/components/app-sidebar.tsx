@@ -90,11 +90,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // Create user object for NavUser component
   const user = userInfo ? {
-    name: userInfo.full_name 
-      ? userInfo.full_name
-      : (userInfo.given_name && userInfo.family_name 
-          ? `${userInfo.given_name} ${userInfo.family_name}`
-          : userInfo.email?.split('@')[0] || 'User'),
+    name: userInfo.full_name || userInfo.email?.split('@')[0] || 'User',
     email: userInfo.email || '',
     avatar: userInfo.avatar_url || '/',
   } : {

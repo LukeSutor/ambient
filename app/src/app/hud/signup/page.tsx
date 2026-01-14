@@ -28,11 +28,8 @@ const step1Schema = z.object({
 
 // Step 2: Personal Info & Password
 const step2Schema = z.object({
-  given_name: z.string().min(1, {
-    message: "First name is required",
-  }),
-  family_name: z.string().min(1, {
-    message: "Last name is required",
+  full_name: z.string().min(1, {
+    message: "Full name is required",
   }),
   password: z.string()
     .min(8, {
@@ -98,8 +95,7 @@ export default function SignUp() {
   const step2Form = useForm<z.infer<typeof step2Schema>>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
-      given_name: "",
-      family_name: "",
+      full_name: "",
       password: "",
     },
   });
@@ -131,8 +127,7 @@ export default function SignUp() {
       const formData: SignUpRequest = {
         email: step1Data.email,
         password: values.password,
-        given_name: values.given_name,
-        family_name: values.family_name,
+        full_name: values.full_name,
       };
       
       const result = await signUp(formData);
@@ -500,43 +495,20 @@ export default function SignUp() {
               className="space-y-6"
               noValidate
             >
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <Controller
                   control={step2Form.control}
-                  name="given_name"
+                  name="full_name"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-given-name">
-                        First Name
+                      <FieldLabel htmlFor="signup-full-name">
+                        Full Name
                       </FieldLabel>
                       <Input
-                        id="signup-given-name"
+                        id="signup-full-name"
                         className="h-11"
-                        placeholder="John"
-                        autoComplete="given-name"
-                        disabled={isLoading}
-                        aria-invalid={fieldState.invalid}
-                        {...field}
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={step2Form.control}
-                  name="family_name"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-family-name">
-                        Last Name
-                      </FieldLabel>
-                      <Input
-                        id="signup-family-name"
-                        className="h-11"
-                        placeholder="Doe"
-                        autoComplete="family-name"
+                        placeholder="John Doe"
+                        autoComplete="name"
                         disabled={isLoading}
                         aria-invalid={fieldState.invalid}
                         {...field}

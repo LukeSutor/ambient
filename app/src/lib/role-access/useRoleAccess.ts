@@ -94,8 +94,6 @@ export function useRoleAccess(location?: string) {
           dispatch({ type: 'SET_USER_INFO', payload: {
             id: result.user.id,
             email: result.user.email,
-            given_name: result.user.user_metadata?.given_name ?? null,
-            family_name: result.user.user_metadata?.family_name ?? null,
             full_name: result.user.user_metadata?.full_name ?? null,
             avatar_url: result.user.user_metadata?.avatar_url ?? null,
             email_verified: result.user.user_metadata?.email_verified ?? null,
@@ -122,9 +120,9 @@ export function useRoleAccess(location?: string) {
    * Opens the authorization URL in the system browser
    * The actual session creation happens via deep link callback
    */
-  const signInWithGoogle = useCallback(async (givenName?: string, familyName?: string): Promise<void> => {
+  const signInWithGoogle = useCallback(async (fullName?: string): Promise<void> => {
     try {
-      const { url } = await invokeSignInWithGoogle(givenName, familyName);
+      const { url } = await invokeSignInWithGoogle(fullName);
       
       // Open the OAuth URL in the system browser
       const { open } = await import('@tauri-apps/plugin-shell');

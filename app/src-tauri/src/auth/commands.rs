@@ -4,7 +4,7 @@ use crate::auth::types::{
 use crate::auth::storage::{
     retrieve_auth_state, clear_auth_state,
 };
-use crate::auth::auth_flow::{get_env_vars, refresh_token};
+use crate::auth::auth_flow::{get_env_vars, refresh_token, fetch_user_profile};
 use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
@@ -18,36 +18,38 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
             // Extract what we need before any potential await
             let is_expired = state.is_access_token_expired();
             
-            if is_expired {
+            let (user, token, expires_at) = if is_expired {
                 // Try to refresh
                 match refresh_token().await {
-                    Ok(refreshed) => {
-                        Ok(AuthState {
-                            is_authenticated: true,
-                            user: Some(UserInfo::from(&refreshed.user)),
-                            access_token: Some(refreshed.session.access_token),
-                            expires_at: refreshed.session.expires_at,
-                        })
-                    }
+                    Ok(refreshed) => (refreshed.user, refreshed.session.access_token, refreshed.session.expires_at),
                     Err(_) => {
                         // Clear auth state on refresh failure
                         let _ = clear_auth_state();
-                        Ok(AuthState {
+                        return Ok(AuthState {
                             is_authenticated: false,
                             user: None,
                             access_token: None,
                             expires_at: None,
-                        })
+                        });
                     }
                 }
             } else {
-                Ok(AuthState {
-                    is_authenticated: true,
-                    user: Some(UserInfo::from(&state.session.user)),
-                    access_token: Some(state.session.access_token),
-                    expires_at: state.session.expires_at,
-                })
+                (state.session.user.clone(), state.session.access_token.clone(), state.session.expires_at)
+            };
+
+            let mut user_info = UserInfo::from(&user);
+
+            // Pull latest info from profiles table
+            if let Ok(profile) = fetch_user_profile(&user.id, &token).await {
+                user_info = user_info.with_profile(&profile);
             }
+
+            Ok(AuthState {
+                is_authenticated: true,
+                user: Some(user_info),
+                access_token: Some(token),
+                expires_at,
+            })
         }
         Ok(None) => Ok(AuthState {
             is_authenticated: false,
@@ -103,20 +105,28 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, String> {
     match state_result {
         Ok(Some(state)) => {
             let is_expired = state.is_access_token_expired();
-            let user_from_state = UserInfo::from(&state.session.user);
             
-            if is_expired {
+            let (user, token) = if is_expired {
                 // Try to refresh
                 match refresh_token().await {
-                    Ok(refreshed) => Ok(Some(UserInfo::from(&refreshed.user))),
+                    Ok(refreshed) => (refreshed.user, refreshed.session.access_token),
                     Err(_) => {
                         let _ = clear_auth_state();
-                        Ok(None)
+                        return Ok(None);
                     }
                 }
             } else {
-                Ok(Some(user_from_state))
+                (state.session.user.clone(), state.session.access_token.clone())
+            };
+
+            let mut user_info = UserInfo::from(&user);
+
+            // Pull latest info from profiles table
+            if let Ok(profile) = fetch_user_profile(&user.id, &token).await {
+                user_info = user_info.with_profile(&profile);
             }
+            
+            Ok(Some(user_info))
         }
         Ok(None) => Ok(None),
         Err(e) => {
