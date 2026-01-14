@@ -1,6 +1,5 @@
 "use client"
 
-import { useState, useEffect } from 'react'
 import { useRoleAccess } from '@/lib/role-access'
 import {
   Tooltip,
@@ -17,44 +16,13 @@ import {
   Mail, 
   AlertCircle,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 const googleLogo = "/google-logo.png";
 
 export default function AccountPage() {
-  const [authMethod, setAuthMethod] = useState<'google' | 'cognito' | 'unknown'>('unknown')
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
-
   // Auth state
-  const { isLoggedIn, userInfo, getAuthMethod } = useRoleAccess()
+  const { isHydrated, userInfo } = useRoleAccess()
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        setIsLoading(true)
-        
-        if (!isLoggedIn) {
-          router.push('/secondary/signin')
-          return
-        }
-
-        // Determine authentication method
-        const method = await getAuthMethod()
-        setAuthMethod(method)
-        
-      } catch (err) {
-        console.error('Failed to load userInfo data:', err)
-        setError('Failed to load account information')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadUserData()
-  }, [isLoggedIn, router])
-
-  if (isLoading) {
+  if (!isHydrated) {
     return (
       <div className="container mx-auto p-6 max-w-4xl">
         <div className="space-y-6">
@@ -83,26 +51,13 @@ export default function AccountPage() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="container mx-auto p-6 max-w-4xl">
-        <Card>
-          <CardContent className="flex items-center space-x-2 p-6">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-            <span className="text-destructive">{error}</span>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   if (!userInfo) {
     return (
       <div className="container mx-auto p-6 max-w-4xl">
         <Card>
           <CardContent className="flex items-center space-x-2 p-6">
             <AlertCircle className="h-5 w-5 text-muted-foreground" />
-            <span className="text-muted-foreground">No userInfo information available</span>
+            <span className="text-muted-foreground">No user information available</span>
           </CardContent>
         </Card>
       </div>
@@ -110,22 +65,24 @@ export default function AccountPage() {
   }
 
   const initials = (() => {
+    if (userInfo.full_name) {
+      const parts = userInfo.full_name.split(' ')
+      if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase()
+      return userInfo.full_name[0].toUpperCase()
+    }
     if (userInfo.given_name && userInfo.family_name) {
       return `${userInfo.given_name[0]}${userInfo.family_name[0]}`.toUpperCase()
     }
-    if (userInfo.username && userInfo.username.length > 0) {
-      return userInfo.username[0].toUpperCase()
-    }
-    return 'U'
+    return userInfo.email ? userInfo.email[0].toUpperCase() : 'U'
   })()
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Account Settings</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Account Information</h1>
         <p className="text-muted-foreground">
-          Manage your account information and preferences
+          Manage your account information
         </p>
       </div>
 
@@ -144,22 +101,19 @@ export default function AccountPage() {
           {/* Avatar and Basic Info */}
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={""} alt={userInfo.username || 'User'} />
+              <AvatarImage src={userInfo.avatar_url || ""} alt={userInfo.email || 'User'} />
               <AvatarFallback className="text-lg font-semibold">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="space-y-1">
               <h3 className="text-xl font-semibold">
-                {userInfo.given_name && userInfo.family_name 
+                {userInfo.full_name || (userInfo.given_name && userInfo.family_name 
                   ? `${userInfo.given_name} ${userInfo.family_name}` 
-                  : userInfo.username || 'Unknown User'}
-              </h3>
-              <p className="text-muted-foreground flex items-center space-x-1">
-                <Mail className="h-4 w-4" />
-                <span>{userInfo.email || 'No email available'}</span>
-                {authMethod === 'google' && (
+                  : userInfo.email || 'Unknown User')}
+                {!(userInfo.full_name || (userInfo.given_name && userInfo.family_name)) && userInfo.providers?.includes('google') && (
                   <Tooltip>
+
                     <TooltipTrigger>
                       <Badge className="ml-2 h-7 w-7 rounded-full p-1" variant="outline">
                         <img src={googleLogo} alt="Google Logo" className="w-4 h-4" />
@@ -170,48 +124,26 @@ export default function AccountPage() {
                     </TooltipContent>
                   </Tooltip>
                 )}
-              </p>
+              </h3>
+              {(userInfo.full_name || (userInfo.given_name && userInfo.family_name)) && (
+                <p className="text-muted-foreground flex items-center space-x-1">
+                  <Mail className="h-4 w-4" />
+                  <span>{userInfo.email || 'No email available'}</span>
+                  {userInfo.providers?.includes('google') && (
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Badge className="ml-2 h-7 w-7 rounded-full p-1" variant="outline">
+                          <img src={googleLogo} alt="Google Logo" className="w-4 h-4" />
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span>Authenticated via Google</span>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </p>
+              )}
             </div>
-          </div>
-
-          <Separator />
-
-          {/* Account Details */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Username</label>
-              <p className="text-sm font-mono bg-muted p-2 rounded truncate">{userInfo.username || 'N/A'}</p>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">User ID</label>
-              <p className="text-sm font-mono bg-muted p-2 rounded truncate" title={userInfo.sub}>
-                {userInfo.sub}
-              </p>
-            </div>
-
-            {userInfo.given_name && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">First Name</label>
-                <p className="text-sm bg-muted p-2 rounded truncate">{userInfo.given_name}</p>
-              </div>
-            )}
-
-            {userInfo.family_name && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Last Name</label>
-                <p className="text-sm bg-muted p-2 rounded truncate">{userInfo.family_name}</p>
-              </div>
-            )}
-
-            {userInfo.email && (
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium text-muted-foreground">Email Address</label>
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm bg-muted p-2 rounded flex-1 truncate">{userInfo.email}</p>
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

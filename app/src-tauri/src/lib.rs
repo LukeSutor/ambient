@@ -79,7 +79,6 @@ pub fn run() {
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
-        log::info!("[deep_link] Received URLs: {:?}", urls);
         for url in &urls {
           crate::auth::deep_link::handle_open_url(&app_handle_for_deep_link, url.as_str());
         }

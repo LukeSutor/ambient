@@ -96,6 +96,8 @@ export function useRoleAccess(location?: string) {
             email: result.user.email,
             given_name: result.user.user_metadata?.given_name ?? null,
             family_name: result.user.user_metadata?.family_name ?? null,
+            full_name: result.user.user_metadata?.full_name ?? null,
+            avatar_url: result.user.user_metadata?.avatar_url ?? null,
             email_verified: result.user.user_metadata?.email_verified ?? null,
             provider: result.user.app_metadata?.provider ?? null,
             created_at: result.user.created_at ?? null,
@@ -120,9 +122,9 @@ export function useRoleAccess(location?: string) {
    * Opens the authorization URL in the system browser
    * The actual session creation happens via deep link callback
    */
-  const signInWithGoogle = useCallback(async (): Promise<void> => {
+  const signInWithGoogle = useCallback(async (givenName?: string, familyName?: string): Promise<void> => {
     try {
-      const { url } = await invokeSignInWithGoogle();
+      const { url } = await invokeSignInWithGoogle(givenName, familyName);
       
       // Open the OAuth URL in the system browser
       const { open } = await import('@tauri-apps/plugin-shell');
@@ -194,24 +196,6 @@ export function useRoleAccess(location?: string) {
     }
   }, [dispatch]);
 
-  const getAuthMethod = useCallback(async (): Promise<'google' | 'cognito' | 'unknown'> => {
-    try {
-      const user = await invokeGetCurrentUser();
-      if (!user) {
-        return 'unknown';
-      }
-
-      if (user.email?.startsWith('google_')) {
-        return 'google';
-      }
-
-      return 'cognito';
-    } catch (error) {
-      console.error('Failed to determine authentication method:', error);
-      return 'unknown';
-    }
-  }, []);
-
   return {
     ...state,
     signIn,
@@ -221,7 +205,6 @@ export function useRoleAccess(location?: string) {
     resendConfirmationCode,
     signOut,
     refreshSession,
-    getAuthMethod,
     refresh,
   };
 }

@@ -375,22 +375,45 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 /// Generate the Google OAuth authorization URL for PKCE flow
 /// Returns the URL that should be opened in the system browser
 #[tauri::command]
-pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
+pub async fn sign_in_with_google(
+    given_name: Option<String>,
+    family_name: Option<String>,
+) -> Result<OAuthUrlResponse, String> {
     log::info!("[supabase_auth] Initiating Google OAuth sign in");
-    let (base_url, api_key) = get_env_vars()?;
+    let (base_url, _) = get_env_vars()?;
     
     // Build the OAuth authorization URL
     // Using PKCE flow with the deep link callback
     let redirect_uri = "cortical://auth/callback";
     let provider = "google";
     
-    // Supabase OAuth endpoint
-    let auth_url = format!(
+    // Build optional metadata to pass through
+    let mut data = serde_json::Map::new();
+    if let Some(gn) = given_name {
+        data.insert("given_name".to_string(), json!(gn));
+        data.insert("full_name".to_string(), json!(gn));
+    }
+    if let Some(fn_name) = family_name {
+        data.insert("family_name".to_string(), json!(fn_name));
+        // If we also have a given name, update full_name
+        if let Some(gn) = data.get("given_name").and_then(|v| v.as_str()) {
+            data.insert("full_name".to_string(), json!(format!("{} {}", gn, fn_name)));
+        }
+    }
+    
+    let mut auth_url = format!(
         "{}/auth/v1/authorize?provider={}&redirect_to={}",
         base_url,
         provider,
         urlencoding::encode(redirect_uri)
     );
+
+    // Append metadata if provided
+    if !data.is_empty() {
+        if let Ok(data_json) = serde_json::to_string(&data) {
+            auth_url.push_str(&format!("&data={}", urlencoding::encode(&data_json)));
+        }
+    }
     
     log::info!("[supabase_auth] Generated Google OAuth URL: {}", auth_url);
     

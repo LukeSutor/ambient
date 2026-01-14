@@ -42,8 +42,11 @@ export async function invokeSignUp(request: SignUpRequest): Promise<SignUpRespon
  * Initiates Google OAuth sign-in by getting the authorization URL
  * The URL should be opened in the system browser
  */
-export async function invokeSignInWithGoogle(): Promise<OAuthUrlResponse> {
-  return invoke<OAuthUrlResponse>('sign_in_with_google');
+export async function invokeSignInWithGoogle(givenName?: string, familyName?: string): Promise<OAuthUrlResponse> {
+  return invoke<OAuthUrlResponse>('sign_in_with_google', {
+    givenName,
+    familyName,
+  });
 }
 
 /**

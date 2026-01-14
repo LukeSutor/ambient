@@ -4,7 +4,7 @@ use crate::auth::auth_flow::handle_oauth_callback;
 /// Handle incoming deep link URLs (e.g., cortical://auth/callback?code=...)
 /// Parses the URL and routes to appropriate auth flows, emitting success/error events.
 pub fn handle_open_url(app_handle: &tauri::AppHandle, url: &str) {
-  log::info!("[deep_link] Processing URL: {}", url);
+  log::info!("[deep_link] Processing URL: {:20}", url);
 
   if url.starts_with("cortical://auth/callback") {
     let app = app_handle.clone();
