@@ -18,7 +18,7 @@ export async function invokeSignIn(
   email: string,
   password: string,
 ): Promise<AuthResponse> {
-  return invoke<AuthResponse>('sign_in', {
+  return invoke<AuthResponse>('sign_in_with_password', {
     email,
     password,
   });

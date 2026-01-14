@@ -1,10 +1,6 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-// ============================================================================
-// Core User Types
-// ============================================================================
-
 /// User metadata from Supabase - matches the user_metadata and identity_data fields
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -84,10 +80,6 @@ pub struct SupabaseUser {
     pub is_anonymous: Option<bool>,
 }
 
-// ============================================================================
-// Session Types
-// ============================================================================
-
 /// Complete session object from Supabase
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -108,10 +100,6 @@ pub struct WeakPassword {
     pub reasons: Option<Vec<String>>,
 }
 
-// ============================================================================
-// Auth Response Types
-// ============================================================================
-
 /// Sign In Response - returned after successful password sign in
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -119,6 +107,12 @@ pub struct AuthResponse {
     pub session: Option<Session>,
     pub user: Option<SupabaseUser>,
     pub weak_password: Option<WeakPassword>,
+    /// Whether verification is required (email confirmation) - used if sign in fails due to unconfirmed email
+    pub verification_required: bool,
+    /// Where the verification was sent (email address)
+    pub destination: Option<String>,
+    /// Delivery medium (EMAIL, SMS)
+    pub delivery_medium: Option<String>,
 }
 
 /// Sign Up Response - returned after user registration
@@ -160,10 +154,6 @@ pub struct ResendConfirmationResponse {
     pub message_id: Option<String>,
 }
 
-// ============================================================================
-// Error Types
-// ============================================================================
-
 /// Supabase Auth Error Response
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -187,10 +177,6 @@ impl AuthError {
             .unwrap_or_else(|| "Unknown error".to_string())
     }
 }
-
-// ============================================================================
-// Stored Auth State (for persistence)
-// ============================================================================
 
 /// The complete auth state that gets stored locally
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -238,10 +224,6 @@ impl StoredAuthState {
     }
 }
 
-// ============================================================================
-// Simple User Info (for frontend display)
-// ============================================================================
-
 /// Simplified user info for frontend usage
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -280,10 +262,6 @@ impl From<&SupabaseUser> for UserInfo {
     }
 }
 
-// ============================================================================
-// Auth State for Frontend
-// ============================================================================
-
 /// Current auth state exposed to the frontend
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -294,9 +272,6 @@ pub struct AuthState {
     pub expires_at: Option<i64>,
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
-
+// Keyrind constants
 pub const KEYRING_SERVICE: &str = "local-computer-use";
 pub const KEYRING_AUTH_KEY: &str = "supabase_auth";

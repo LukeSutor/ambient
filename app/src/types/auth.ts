@@ -13,7 +13,19 @@ export type AuthError = { code: string | null, error_code: string | null, error:
 /**
  * Sign In Response - returned after successful password sign in
  */
-export type AuthResponse = { session: Session | null, user: SupabaseUser | null, weak_password: WeakPassword | null, };
+export type AuthResponse = { session: Session | null, user: SupabaseUser | null, weak_password: WeakPassword | null, 
+/**
+ * Whether verification is required (email confirmation) - used if sign in fails due to unconfirmed email
+ */
+verification_required: boolean, 
+/**
+ * Where the verification was sent (email address)
+ */
+destination: string | null, 
+/**
+ * Delivery medium (EMAIL, SMS)
+ */
+delivery_medium: string | null, };
 
 /**
  * Current auth state exposed to the frontend
@@ -99,6 +111,6 @@ export type UserMetadata = { email: string | null, email_verified: boolean | nul
 export type VerifyOtpResponse = { session: Session | null, user: SupabaseUser | null, };
 
 /**
- * Weak password indicator from Supabase (when password is too weak)
+ * Weak password indicator from Supabase
  */
 export type WeakPassword = { message: string | null, reasons: Array<string> | null, };

@@ -64,10 +64,7 @@ pub async fn sign_up(
     log::debug!("[supabase_auth] SignUp response status: {}, body: {}", status, response_text);
     
     if !status.is_success() {
-        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            return Err(err.get_message());
-        }
-        return Err(format!("SignUp failed: {}", response_text));
+        return Err(response_text);
     }
     
     // Try to parse as full auth response (when autoconfirm is enabled)
@@ -135,10 +132,31 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     log::debug!("[supabase_auth] SignIn response status: {}", status);
     
     if !status.is_success() {
+        log::debug!("[supabase_auth] SignIn failed response body: {}", response_text);
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            return Err(err.get_message());
+            log::debug!("[supabase_auth] SignIn error response: {:?}", err);
+            let msg = err.get_message();
+            
+            // Handle unconfirmed email case
+            if msg.contains("Email not confirmed") || err.error_code == Some("email_not_confirmed".to_string()) {
+                log::info!("[supabase_auth] User email not confirmed for {}. Automatically resending confirmation.", email);
+                
+                // Automatically resend confirmation email
+                let _ = resend_confirmation(email.clone()).await;
+                
+                return Ok(AuthResponse {
+                    session: None,
+                    user: None,
+                    weak_password: None,
+                    verification_required: true,
+                    destination: Some(email),
+                    delivery_medium: Some("EMAIL".to_string()),
+                });
+            }
+            
+            return Err(response_text);
         }
-        return Err(format!("SignIn failed: {}", response_text));
+        return Err(response_text);
     }
     
     // Parse the session response
@@ -151,11 +169,15 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     }
     
     log::info!("[supabase_auth] SignIn successful for user: {}", session.user.id);
+    log::debug!("[supabase_auth] session: {:?}", session);
     
     Ok(AuthResponse {
         session: Some(session.clone()),
         user: Some(session.user),
         weak_password: None,
+        verification_required: false,
+        destination: None,
+        delivery_medium: None,
     })
 }
 
@@ -198,10 +220,7 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
         // Clear auth state on refresh failure
         let _ = clear_auth_state();
         
-        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            return Err(err.get_message());
-        }
-        return Err(format!("Token refresh failed: {}", response_text));
+        return Err(response_text);
     }
     
     // Parse the new session
@@ -252,10 +271,7 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
     log::debug!("[supabase_auth] VerifyOTP response status: {}", status);
     
     if !status.is_success() {
-        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            return Err(err.get_message());
-        }
-        return Err(format!("Verification failed: {}", response_text));
+        return Err(response_text);
     }
     
     // Try to parse as session response (verification may return a session)
@@ -313,10 +329,7 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
         .map_err(|e| format!("Failed to read response: {}", e))?;
     
     if !status.is_success() {
-        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            return Err(err.get_message());
-        }
-        return Err(format!("Resend confirmation failed: {}", response_text));
+        return Err(response_text);
     }
     
     log::info!("[supabase_auth] Resend confirmation successful for email: {}", email);

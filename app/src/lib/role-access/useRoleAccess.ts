@@ -83,7 +83,10 @@ export function useRoleAccess(location?: string) {
     async (email: string, password: string): Promise<AuthResponse> => {
       try {
         const result = await invokeSignIn(email, password);
-        dispatch({ type: 'SET_LOGGED_IN', payload: true });
+        
+        if (result.session) {
+          dispatch({ type: 'SET_LOGGED_IN', payload: true });
+        }
         
         // Extract user info from response
         if (result.user) {

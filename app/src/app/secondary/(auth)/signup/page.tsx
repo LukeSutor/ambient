@@ -127,7 +127,7 @@ export default function SignUpPage() {
       let message = 'Sign up failed.';
       try {
         const errorObj = JSON.parse(err as string);
-        message = errorObj.message || message;
+        message = errorObj.msg || message;
       } catch(err) {
         console.error('Error parsing sign-up error message:', err);
       }
@@ -178,7 +178,7 @@ export default function SignUpPage() {
       let message = 'Verification failed.';
       try {
         const errorObj = JSON.parse(err as string);
-        message = errorObj.message || message;
+        message = errorObj.msg || message;
       } catch(err) {
         console.error('Error parsing verification error message:', err);
       }
@@ -196,7 +196,16 @@ export default function SignUpPage() {
       // Show success message or update UI to indicate code was resent
       //TODO: Implement success feedback
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend code');
+      console.error('Resend code failed:', err);
+      // Turn err into json and extract message
+      let message = 'Resend code failed.';
+      try {
+        const errorObj = JSON.parse(err as string);
+        message = errorObj.msg || message;
+      } catch(err) {
+        console.error('Error parsing resend code error message:', err);
+      }
+      setError(message);
     }
   };
 
