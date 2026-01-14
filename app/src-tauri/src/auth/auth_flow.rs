@@ -67,22 +67,20 @@ pub async fn sign_up(
         return Err(response_text);
     }
     
-    // Try to parse as full auth response (when autoconfirm is enabled)
-    if let Ok(auth_response) = serde_json::from_str::<AuthResponse>(&response_text) {
-        if let Some(session) = &auth_response.session {
-            // Store the session
-            if let Err(e) = store_session(session) {
-                log::warn!("[supabase_auth] Failed to store session: {}", e);
-            }
-            
-            return Ok(SignUpResponse {
-                user: auth_response.user,
-                session: auth_response.session,
-                verification_required: false,
-                destination: None,
-                delivery_medium: None,
-            });
+    // Try to parse as session response (when autoconfirm is enabled)
+    if let Ok(session) = serde_json::from_str::<Session>(&response_text) {
+        // Store the session
+        if let Err(e) = store_session(&session) {
+            log::warn!("[supabase_auth] Failed to store session: {}", e);
         }
+        
+        return Ok(SignUpResponse {
+            user: Some(session.user.clone()),
+            session: Some(session),
+            verification_required: false,
+            destination: None,
+            delivery_medium: None,
+        });
     }
     
     // Parse as user object only (when email confirmation is required)
@@ -133,28 +131,31 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     
     if !status.is_success() {
         log::debug!("[supabase_auth] SignIn failed response body: {}", response_text);
-        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            log::debug!("[supabase_auth] SignIn error response: {:?}", err);
-            let msg = err.get_message();
-            
-            // Handle unconfirmed email case
-            if msg.contains("Email not confirmed") || err.error_code == Some("email_not_confirmed".to_string()) {
-                log::info!("[supabase_auth] User email not confirmed for {}. Automatically resending confirmation.", email);
+        match serde_json::from_str::<AuthError>(&response_text) {
+            Ok(err) => {
+                log::debug!("[supabase_auth] SignIn error response: {:?}", err);
+                let msg = err.get_message();
                 
-                // Automatically resend confirmation email
-                let _ = resend_confirmation(email.clone()).await;
-                
-                return Ok(AuthResponse {
-                    session: None,
-                    user: None,
-                    weak_password: None,
-                    verification_required: true,
-                    destination: Some(email),
-                    delivery_medium: Some("EMAIL".to_string()),
-                });
+                // Handle unconfirmed email case
+                if msg.contains("Email not confirmed") || err.error_code == Some("email_not_confirmed".to_string()) {
+                    log::info!("[supabase_auth] User email not confirmed for {}. Automatically resending confirmation.", email);
+                    
+                    // Automatically resend confirmation email
+                    let _ = resend_confirmation(email.clone()).await;
+                    
+                    return Ok(AuthResponse {
+                        session: None,
+                        user: None,
+                        weak_password: None,
+                        verification_required: true,
+                        destination: Some(email),
+                        delivery_medium: Some("EMAIL".to_string()),
+                    });
+                }
+            },
+            Err(e) => {
+                log::warn!("[supabase_auth] Failed to parse auth error: {}. Body: {}", e, response_text);
             }
-            
-            return Err(response_text);
         }
         return Err(response_text);
     }

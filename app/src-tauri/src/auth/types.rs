@@ -108,10 +108,13 @@ pub struct AuthResponse {
     pub user: Option<SupabaseUser>,
     pub weak_password: Option<WeakPassword>,
     /// Whether verification is required (email confirmation) - used if sign in fails due to unconfirmed email
+    #[serde(default)]
     pub verification_required: bool,
     /// Where the verification was sent (email address)
+    #[serde(default)]
     pub destination: Option<String>,
     /// Delivery medium (EMAIL, SMS)
+    #[serde(default)]
     pub delivery_medium: Option<String>,
 }
 
@@ -124,10 +127,13 @@ pub struct SignUpResponse {
     /// Session is null if email confirmation is required
     pub session: Option<Session>,
     /// Whether verification is required (email confirmation)
+    #[serde(default)]
     pub verification_required: bool,
     /// Where the verification was sent (email address)
+    #[serde(default)]
     pub destination: Option<String>,
     /// Delivery medium (EMAIL, SMS)
+    #[serde(default)]
     pub delivery_medium: Option<String>,
 }
 
@@ -158,7 +164,8 @@ pub struct ResendConfirmationResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
 pub struct AuthError {
-    pub code: Option<String>,
+    #[ts(type = "any")]
+    pub code: Option<serde_json::Value>,
     pub error_code: Option<String>,
     pub error: Option<String>,
     pub error_description: Option<String>,
@@ -173,7 +180,7 @@ impl AuthError {
             .or(self.error_description.clone())
             .or(self.error.clone())
             .or(self.error_code.clone())
-            .or(self.code.clone())
+            .or(self.code.as_ref().map(|v| v.to_string()))
             .unwrap_or_else(|| "Unknown error".to_string())
     }
 }
