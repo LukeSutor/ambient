@@ -60,9 +60,7 @@ pub async fn sign_up(
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
-    
-    log::debug!("[supabase_auth] SignUp response status: {}, body: {}", status, response_text);
-    
+        
     if !status.is_success() {
         return Err(response_text);
     }
@@ -126,14 +124,10 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
-    
-    log::debug!("[supabase_auth] SignIn response status: {}", status);
-    
+        
     if !status.is_success() {
-        log::debug!("[supabase_auth] SignIn failed response body: {}", response_text);
         match serde_json::from_str::<AuthError>(&response_text) {
             Ok(err) => {
-                log::debug!("[supabase_auth] SignIn error response: {:?}", err);
                 let msg = err.get_message();
                 
                 // Handle unconfirmed email case
@@ -170,7 +164,6 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     }
     
     log::info!("[supabase_auth] SignIn successful for user: {}", session.user.id);
-    log::debug!("[supabase_auth] session: {:?}", session);
     
     Ok(AuthResponse {
         session: Some(session.clone()),
@@ -214,9 +207,7 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
-    
-    log::debug!("[supabase_auth] Refresh response status: {}", status);
-    
+        
     if !status.is_success() {
         // Clear auth state on refresh failure
         let _ = clear_auth_state();
@@ -245,7 +236,7 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
 pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) -> Result<VerifyOtpResponse, String> {
     let otp_type = otp_type.unwrap_or_else(|| "signup".to_string());
 
-    log::info!("[supabase_auth] Attempting verify_otp for email: {}, type: {}", email, otp_type);
+    log::info!("[supabase_auth] Attempting verify_otp for email: {}", email);
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/verify", base_url);
     
@@ -268,9 +259,7 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
-    
-    log::debug!("[supabase_auth] VerifyOTP response status: {}", status);
-    
+        
     if !status.is_success() {
         return Err(response_text);
     }

@@ -12,6 +12,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { GoogleLoginButton } from '@/components/google-login-button';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { REGEXP_ONLY_DIGITS } from 'input-otp';
 
 
 const formSchema = z.object({
@@ -30,6 +32,7 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [formStep, setFormStep] = useState<'login' | 'verify' | 'success'>('login');
   const [verificationCode, setVerificationCode] = useState("");
+  const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
   const [loginData, setLoginData] = useState<{email: string, password: string} | null>(null);
   const router = useRouter();
 
@@ -54,6 +57,7 @@ export default function SignInPage() {
         setLoginData({ email: values.username.trim(), password: values.password });
         setFormStep('verify');
         setVerificationCode("");
+        setHasTriedConfirm(false);
       } else {
         console.log('Sign in successful:', result.user);
         router.push('/secondary');
@@ -74,6 +78,8 @@ export default function SignInPage() {
 
   const onConfirmationSubmit = async () => {
     if (!loginData) return;
+    
+    setHasTriedConfirm(true);
     
     if (verificationCode.length !== 8) {
       setError('Please enter the 8-digit verification code');
@@ -167,24 +173,45 @@ export default function SignInPage() {
                 </div>
               )}
               
-              <div className="space-y-2">
+              <Field data-invalid={hasTriedConfirm && verificationCode.length !== 8}>
                 <FieldLabel htmlFor="verification-code">Verification Code</FieldLabel>
-                <Input
-                  id="verification-code"
-                  type="text"
-                  placeholder="12345678"
-                  className="text-center text-2xl tracking-widest h-14"
-                  maxLength={8}
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                  disabled={isConfirming}
-                />
-              </div>
+                <div className="flex justify-center">
+                  <InputOTP
+                    id="verification-code"
+                    maxLength={8}
+                    pattern={REGEXP_ONLY_DIGITS}
+                    value={verificationCode}
+                    onChange={(value) => {
+                      setError(null);
+                      setHasTriedConfirm(false);
+                      setVerificationCode(value);
+                    }}
+                    disabled={isConfirming}
+                    aria-invalid={hasTriedConfirm && verificationCode.length !== 8}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                      <InputOTPSlot index={6} />
+                      <InputOTPSlot index={7} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                {hasTriedConfirm && verificationCode.length !== 8 && (
+                  <FieldError
+                    errors={[{ message: 'Enter the 8-digit code from your email.' }]}
+                  />
+                )}
+              </Field>
 
               <Button 
                 onClick={onConfirmationSubmit}
                 className="w-full h-11"
-                disabled={isConfirming || verificationCode.length !== 8}
+                disabled={isConfirming}
               >
                 {isConfirming ? (
                   <>
