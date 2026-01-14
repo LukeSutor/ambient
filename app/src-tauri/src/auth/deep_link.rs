@@ -1,4 +1,4 @@
-use tauri::Emitter;
+// use tauri::Emitter;
 
 // Handle incoming deep link URLs (e.g., cortical://auth/callback?code=...)
 // Parses the URL and routes to appropriate auth flows, emitting success/error events.

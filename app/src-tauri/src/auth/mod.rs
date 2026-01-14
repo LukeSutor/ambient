@@ -1,7 +1,6 @@
-pub mod supabase;
+pub mod auth_flow;
 pub mod commands;
-pub mod deep_link;
-pub mod jwt;
+// pub mod deep_link;
 pub mod storage;
 pub mod types;
 
@@ -15,12 +14,5 @@ pub use storage::{
     needs_token_refresh, clear_auth_state, update_session,
 };
 
-// Re-export JWT utilities
-pub use jwt::*;
-
 // Re-export deep link functionality
-pub use deep_link::*;
-
-// Legacy re-exports (for backward compatibility with existing code)
-// These can be gradually removed as the codebase is updated
-pub use types::{UserInfo as LegacyUserInfo};
+// pub use deep_link::*;

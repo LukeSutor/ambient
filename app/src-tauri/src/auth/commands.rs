@@ -1,91 +1,11 @@
 use crate::auth::types::{
-    AuthResponse, AuthState, SignUpResponse, UserInfo, VerifyOtpResponse,
-    RefreshTokenResponse, ResendConfirmationResponse,
+    AuthState, UserInfo, SupabaseUser, AuthError,
 };
 use crate::auth::storage::{
-    retrieve_auth_state, clear_auth_state, get_access_token,
+    retrieve_auth_state, clear_auth_state,
 };
-use crate::auth::supabase;
+use crate::auth::auth_flow::{get_env_vars, refresh_token};
 use tauri::{AppHandle, Emitter};
-
-// ============================================================================
-// Sign Up
-// ============================================================================
-
-#[tauri::command]
-pub async fn sign_up(
-    email: String,
-    password: String,
-    given_name: Option<String>,
-    family_name: Option<String>,
-) -> Result<SignUpResponse, String> {
-    supabase::sign_up(email, password, given_name, family_name).await
-}
-
-// ============================================================================
-// Sign In
-// ============================================================================
-
-#[tauri::command]
-pub async fn sign_in(
-    email: String,
-    password: String,
-) -> Result<AuthResponse, String> {
-    supabase::sign_in_with_password(email, password).await
-}
-
-// ============================================================================
-// Verify OTP (Email Confirmation)
-// ============================================================================
-
-#[tauri::command]
-pub async fn verify_otp(
-    email: String,
-    token: String,
-    otp_type: Option<String>,
-) -> Result<VerifyOtpResponse, String> {
-    let otp_type = otp_type.unwrap_or_else(|| "signup".to_string());
-    supabase::verify_otp(email, token, otp_type).await
-}
-
-// ============================================================================
-// Resend Confirmation
-// ============================================================================
-
-#[tauri::command]
-pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResponse, String> {
-    supabase::resend_confirmation(email).await
-}
-
-// ============================================================================
-// Refresh Token
-// ============================================================================
-
-#[tauri::command]
-pub async fn refresh_token() -> Result<RefreshTokenResponse, String> {
-    supabase::refresh_session().await
-}
-
-// ============================================================================
-// Sign Out
-// ============================================================================
-
-#[tauri::command]
-pub async fn logout() -> Result<String, String> {
-    // Get access token for server-side logout
-    let access_token = get_access_token()
-        .ok()
-        .flatten();
-    
-    // Sign out from Supabase
-    supabase::sign_out(access_token).await?;
-    
-    Ok("Logged out successfully".to_string())
-}
-
-// ============================================================================
-// Get Auth State
-// ============================================================================
 
 #[tauri::command]
 pub async fn get_auth_state() -> Result<AuthState, String> {
@@ -100,7 +20,7 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
             
             if is_expired {
                 // Try to refresh
-                match supabase::refresh_session().await {
+                match refresh_token().await {
                     Ok(refreshed) => {
                         Ok(AuthState {
                             is_authenticated: true,
@@ -147,10 +67,6 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
     }
 }
 
-// ============================================================================
-// Check Authentication Status
-// ============================================================================
-
 #[tauri::command]
 pub async fn is_authenticated() -> Result<bool, String> {
     // Check new auth state - convert error to string before any await
@@ -162,7 +78,7 @@ pub async fn is_authenticated() -> Result<bool, String> {
             let is_expired = state.is_access_token_expired();
             if is_expired {
                 // Try to refresh
-                match supabase::refresh_session().await {
+                match refresh_token().await {
                     Ok(_) => Ok(true),
                     Err(_) => {
                         let _ = clear_auth_state();
@@ -178,10 +94,6 @@ pub async fn is_authenticated() -> Result<bool, String> {
     }
 }
 
-// ============================================================================
-// Get Current User
-// ============================================================================
-
 #[tauri::command]
 pub async fn get_current_user() -> Result<Option<UserInfo>, String> {
     // Convert error to string before any await
@@ -195,7 +107,7 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, String> {
             
             if is_expired {
                 // Try to refresh
-                match supabase::refresh_session().await {
+                match refresh_token().await {
                     Ok(refreshed) => Ok(Some(UserInfo::from(&refreshed.user))),
                     Err(_) => {
                         let _ = clear_auth_state();
@@ -214,9 +126,36 @@ pub async fn get_current_user() -> Result<Option<UserInfo>, String> {
     }
 }
 
-// ============================================================================
-// Get Access Token
-// ============================================================================
+#[tauri::command]
+pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
+    let (base_url, api_key) = get_env_vars()?;
+    let endpoint = format!("{}/auth/v1/user", base_url);
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&endpoint)
+        .header("apikey", &api_key)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+    
+    let status = response.status();
+    let response_text = response.text().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+    
+    if !status.is_success() {
+        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
+            return Err(err.get_message());
+        }
+        return Err(format!("Failed to get user: {}", response_text));
+    }
+    
+    let user: SupabaseUser = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse user: {}. Body: {}", e, response_text))?;
+    
+    Ok(user)
+}
 
 #[tauri::command]
 pub async fn get_access_token_command() -> Result<Option<String>, String> {
@@ -231,7 +170,7 @@ pub async fn get_access_token_command() -> Result<Option<String>, String> {
             
             if is_expired {
                 // Try to refresh
-                match supabase::refresh_session().await {
+                match refresh_token().await {
                     Ok(refreshed) => Ok(Some(refreshed.session.access_token)),
                     Err(_) => {
                         let _ = clear_auth_state();
@@ -246,10 +185,6 @@ pub async fn get_access_token_command() -> Result<Option<String>, String> {
         Err(e) => Err(format!("Failed to retrieve access token: {}", e)),
     }
 }
-
-// ============================================================================
-// Emit Auth Changed Event
-// ============================================================================
 
 #[tauri::command]
 pub async fn emit_auth_changed(app_handle: AppHandle) -> Result<(), String> {
