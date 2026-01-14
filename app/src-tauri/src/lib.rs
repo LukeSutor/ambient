@@ -79,7 +79,6 @@ pub fn run() {
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
-        log::info!("[deep_link] Received URLs: {:?}", urls);
         for url in &urls {
           crate::auth::deep_link::handle_open_url(&app_handle_for_deep_link, url.as_str());
         }
@@ -205,18 +204,20 @@ pub fn run() {
       db::memory::get_memory_entries_with_message,
       db::memory::delete_memory_entry,
       db::memory::delete_all_memories,
-      auth::logout,
-      auth::get_stored_token,
-      auth::is_authenticated,
-      auth::cognito_sign_up,
-      auth::cognito_sign_in,
-      auth::cognito_confirm_sign_up,
-      auth::cognito_resend_confirmation_code,
-      auth::get_current_user,
-      auth::get_access_token,
-      auth::google_sign_in,
-      auth::google_sign_out,
-      auth::emit_auth_changed,
+      auth::auth_flow::sign_up,
+      auth::auth_flow::sign_in_with_password,
+      auth::auth_flow::sign_in_with_google,
+      auth::auth_flow::exchange_code_for_session,
+      auth::auth_flow::verify_otp,
+      auth::auth_flow::resend_confirmation,
+      auth::auth_flow::refresh_token,
+      auth::auth_flow::logout,
+      auth::commands::is_authenticated,
+      auth::commands::get_auth_state,
+      auth::commands::get_current_user,
+      auth::commands::get_user,
+      auth::commands::get_access_token_command,
+      auth::commands::emit_auth_changed,
       tasks::commands::create_task,
       tasks::commands::create_task_from_template,
       tasks::commands::get_task,

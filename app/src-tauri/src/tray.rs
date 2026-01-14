@@ -30,7 +30,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 
   // Create menu items
   let open_hud = MenuItem::with_id(app, "open_hud", "Open", true, None::<&str>)?;
-  let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+  let settings = MenuItem::with_id(app, "settings", "Dashboard", true, None::<&str>)?;
   let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
   // Create menu

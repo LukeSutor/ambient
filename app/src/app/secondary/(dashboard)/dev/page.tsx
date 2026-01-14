@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { OcrResponseEvent } from "@/types/events";
+import { SupabaseUser } from "@/types/auth";
 
 export default function Dev() {
   // State for SQL execution
@@ -219,6 +220,24 @@ export default function Dev() {
     };
     checkOcrModels();
   }, []);
+
+  // --- Supabase user object ---
+  const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+
+  const fetchSupabaseUser = async () => {
+    try {
+      const accessToken = await invoke<any>("get_access_token_command");
+      console.log("Access Token:", accessToken);
+      if (accessToken) {
+        const supabaseUser = await invoke<SupabaseUser>("get_user", { accessToken });
+        console.log("Supabase User:", supabaseUser);
+        setSupabaseUser(supabaseUser);
+      }
+    }
+    catch (error: any) {
+      console.error("Error fetching Supabase user:", error);
+    }
+  };
 
   // --- Screen Selection ---
   const [screenSelectionResult, setScreenSelectionResult] = useState<any>(null);
@@ -735,6 +754,15 @@ export default function Dev() {
             <pre className="text-[10px] leading-tight">{JSON.stringify(actionOutput, null, 2)}</pre>
           </div>
         )}
+      </div>
+
+      {/* Supabase user fetching */}
+      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50">
+        <h2 className="text-lg font-semibold mb-2">Supabase User</h2>
+        <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(supabaseUser, null, 2)}</pre>
+        <Button onClick={fetchSupabaseUser} variant="default">
+          Fetch Supabase User
+        </Button>
       </div>
 
       {/* --- Screen Text by Application Section --- */}

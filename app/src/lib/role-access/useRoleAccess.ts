@@ -3,18 +3,25 @@
 import { useCallback, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useRoleAccessContext } from './RoleAccessProvider';
-import type { ConfirmSignUpRequest, SignInResult, SignUpRequest, SignUpResult } from './types';
+import type { 
+  ConfirmSignUpRequest, 
+  SignUpRequest, 
+  AuthResponse, 
+  SignUpResponse,
+  ResendConfirmationResponse,
+} from './types';
 import {
-  invokeCognitoConfirmSignUp,
-  invokeCognitoResendConfirmationCode,
-  invokeCognitoSignIn,
-  invokeCognitoSignUp,
+  invokeVerifyOtp,
+  invokeResendConfirmation,
+  invokeSignIn,
+  invokeSignInWithGoogle,
+  invokeSignUp,
   invokeEmitAuthChanged,
   invokeGetCurrentUser,
   invokeIsSetupComplete,
-  invokeGoogleSignIn,
-  invokeGoogleSignOut,
   invokeLogout,
+  invokeRefreshToken,
+  invokeGetAuthState,
 } from './commands';
 
 function normalizeBasePath(base?: string): string | null {
@@ -30,6 +37,7 @@ export function useRoleAccess(location?: string) {
   const router = useRouter();
   const pathname = usePathname();
   const normalizedLocation = normalizeBasePath(location ?? undefined);
+  console.log(state.userInfo)
 
   useEffect(() => {
     if (!normalizedLocation || !state.isHydrated || !pathname) {
@@ -49,7 +57,8 @@ export function useRoleAccess(location?: string) {
       pathname === normalizedLocation || pathname.startsWith(`${normalizedLocation}/`);
 
     // Go to sign in if online and not logged in
-    if (state.isOnline && !state.isLoggedIn && isWithinBase && !isAuthRoute) {
+    //TODO: Fix logic for offline mode
+    if (!state.isLoggedIn && isWithinBase && !isAuthRoute) {
       router.replace(signInPath);
       return;
     }
@@ -61,7 +70,7 @@ export function useRoleAccess(location?: string) {
     }
 
     // Prevent going to auth routes if not online or already logged in
-    if ((!state.isOnline || state.isLoggedIn) && isAuthRoute) {
+    if ((state.isLoggedIn) && isAuthRoute) {
       router.replace(normalizedLocation);
     }
 
@@ -72,11 +81,28 @@ export function useRoleAccess(location?: string) {
   }, [normalizedLocation, pathname, router, state.isHydrated, state.isOnline, state.isLoggedIn, state.isSetupComplete]);
 
   const signIn = useCallback(
-    async (username: string, password: string): Promise<SignInResult> => {
+    async (email: string, password: string): Promise<AuthResponse> => {
       try {
-        const result = await invokeCognitoSignIn(username, password);
-        dispatch({ type: 'SET_LOGGED_IN', payload: true });
-        dispatch({ type: 'SET_USER_INFO', payload: result.user_info });
+        const result = await invokeSignIn(email, password);
+        
+        if (result.session) {
+          dispatch({ type: 'SET_LOGGED_IN', payload: true });
+        }
+        
+        // Extract user info from response
+        if (result.user) {
+          dispatch({ type: 'SET_USER_INFO', payload: {
+            id: result.user.id,
+            email: result.user.email,
+            full_name: result.user.user_metadata?.full_name ?? null,
+            avatar_url: result.user.user_metadata?.avatar_url ?? null,
+            email_verified: result.user.user_metadata?.email_verified ?? null,
+            provider: result.user.app_metadata?.provider ?? null,
+            created_at: result.user.created_at ?? null,
+            providers: result.user.identities?.map((identity) => identity.provider) ?? [],
+          }});
+        }
+        
         const setupComplete = await invokeIsSetupComplete();
         dispatch({ type: 'SET_SETUP_COMPLETE', payload: setupComplete });
         await invokeEmitAuthChanged();
@@ -89,26 +115,30 @@ export function useRoleAccess(location?: string) {
   [dispatch],
   );
 
-  const googleSignIn = useCallback(async (): Promise<SignInResult> => {
+  /**
+   * Initiates Google OAuth sign-in flow
+   * Opens the authorization URL in the system browser
+   * The actual session creation happens via deep link callback
+   */
+  const signInWithGoogle = useCallback(async (fullName?: string): Promise<void> => {
     try {
-      const result = await invokeGoogleSignIn();
-      dispatch({ type: 'SET_LOGGED_IN', payload: true });
-      if (result.user_info) {
-        dispatch({ type: 'SET_USER_INFO', payload: result.user_info });
-      }
-      const setupComplete = await invokeIsSetupComplete();
-      dispatch({ type: 'SET_SETUP_COMPLETE', payload: setupComplete });
-      await invokeEmitAuthChanged();
-      return result;
+      const { url } = await invokeSignInWithGoogle(fullName);
+      
+      // Open the OAuth URL in the system browser
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(url);
+      
+      // Note: The actual session creation happens when the deep link callback
+      // is received in deep_link.rs, which emits 'oauth2-success' or 'oauth2-error'
     } catch (error) {
-      console.error('Error during googleSignIn:', error);
+      console.error('Error during signInWithGoogle:', error);
       throw error;
     }
-  }, [dispatch]);
+  }, []);
 
-  const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResult> => {
+  const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResponse> => {
     try {
-      return await invokeCognitoSignUp(request);
+      return await invokeSignUp(request);
     } catch (error) {
       console.error('Error during signUp:', error);
       throw error;
@@ -117,25 +147,42 @@ export function useRoleAccess(location?: string) {
 
   const confirmSignUp = useCallback(async (request: ConfirmSignUpRequest): Promise<void> => {
     try {
-      await invokeCognitoConfirmSignUp(request);
+      await invokeVerifyOtp(request.email, request.confirmation_code);
     } catch (error) {
       console.error('Error during confirmSignUp:', error);
       throw error;
     }
   }, []);
 
-  const resendConfirmationCode = useCallback(async (username: string): Promise<SignUpResult> => {
+  const resendConfirmationCode = useCallback(async (email: string): Promise<ResendConfirmationResponse> => {
     try {
-      return await invokeCognitoResendConfirmationCode(username);
+      return await invokeResendConfirmation(email);
     } catch (error) {
       console.error('Error during resendConfirmationCode:', error);
       throw error;
     }
   }, []);
 
+  const refreshSession = useCallback(async (): Promise<void> => {
+    try {
+      await invokeRefreshToken();
+      // Refresh the auth state after token refresh
+      const authState = await invokeGetAuthState();
+      dispatch({ type: 'SET_LOGGED_IN', payload: authState.is_authenticated });
+      if (authState.user) {
+        dispatch({ type: 'SET_USER_INFO', payload: authState.user });
+      }
+    } catch (error) {
+      console.error('Error during refreshSession:', error);
+      // If refresh fails, user may need to re-login
+      dispatch({ type: 'SET_LOGGED_IN', payload: false });
+      dispatch({ type: 'SET_USER_INFO', payload: null });
+      throw error;
+    }
+  }, [dispatch]);
+
   const signOut = useCallback(async (): Promise<void> => {
     try {
-      await invokeGoogleSignOut();
       await invokeLogout();
       dispatch({ type: 'SET_LOGGED_IN', payload: false });
       dispatch({ type: 'SET_USER_INFO', payload: null });
@@ -147,33 +194,15 @@ export function useRoleAccess(location?: string) {
     }
   }, [dispatch]);
 
-  const getAuthMethod = useCallback(async (): Promise<'google' | 'cognito' | 'unknown'> => {
-    try {
-      const user = await invokeGetCurrentUser();
-      if (!user) {
-        return 'unknown';
-      }
-
-      if (user.username?.startsWith('google_')) {
-        return 'google';
-      }
-
-      return 'cognito';
-    } catch (error) {
-      console.error('Failed to determine authentication method:', error);
-      return 'unknown';
-    }
-  }, []);
-
   return {
     ...state,
     signIn,
-    googleSignIn,
+    signInWithGoogle,
     signUp,
     confirmSignUp,
     resendConfirmationCode,
     signOut,
-    getAuthMethod,
+    refreshSession,
     refresh,
   };
 }

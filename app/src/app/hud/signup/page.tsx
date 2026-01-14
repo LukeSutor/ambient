@@ -11,7 +11,7 @@ import { CheckCircle, UserPlus, Loader2, Mail, Eye, EyeOff, AlertCircle, X, Arro
 import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { useRoleAccess, SignUpRequest, SignUpResult, ConfirmSignUpRequest } from '@/lib/role-access';
+import { useRoleAccess, SignUpRequest, SignUpResponse, ConfirmSignUpRequest } from '@/lib/role-access';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { useRouter } from 'next/navigation';
@@ -19,25 +19,17 @@ import AutoResizeContainer from '@/components/hud/auto-resize-container';
 import { HudDimensions } from '@/types/settings';
 import { useSettings } from '@/lib/settings/useSettings';
 
-// Step 1: Personal Info (name and email)
+// Step 1: Email
 const step1Schema = z.object({
-  given_name: z.string().min(1, {
-    message: "First name is required",
-  }),
-  family_name: z.string().min(1, {
-    message: "Last name is required",
-  }),
   email: z.string().email({
     message: "Please enter a valid email address",
   }),
 });
 
-// Step 2: Account Info (username and password)
+// Step 2: Personal Info & Password
 const step2Schema = z.object({
-  username: z.string().min(3, {
-    message: "Username must be at least 3 characters long",
-  }).max(20, {
-    message: "Username must be less than 20 characters",
+  full_name: z.string().min(1, {
+    message: "Full name is required",
   }),
   password: z.string()
     .min(8, {
@@ -61,7 +53,7 @@ export default function SignUp() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [signUpResult, setSignUpResult] = useState<SignUpResult | null>(null);
+  const [signUpResult, setSignUpResult] = useState<SignUpResponse | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
   const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
@@ -96,8 +88,6 @@ export default function SignUp() {
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
     defaultValues: {
-      given_name: "",
-      family_name: "",
       email: "",
     },
   });
@@ -105,7 +95,7 @@ export default function SignUp() {
   const step2Form = useForm<z.infer<typeof step2Schema>>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
-      username: "",
+      full_name: "",
       password: "",
     },
   });
@@ -135,19 +125,17 @@ export default function SignUp() {
       setError(null);
       
       const formData: SignUpRequest = {
-        username: values.username,
-        password: values.password,
         email: step1Data.email,
-        given_name: step1Data.given_name,
-        family_name: step1Data.family_name,
+        password: values.password,
+        full_name: values.full_name,
       };
       
       const result = await signUp(formData);
       setSignUpResult(result);
       
-      if (result.user_confirmed) {
+      if (!result.verification_required) {
         // User is automatically confirmed, sign them in
-        await signIn(values.username, values.password);
+        await signIn(step1Data.email, values.password);
         setFormStep('success');
         setTimeout(() => {
           window.location.href = '/hud';
@@ -164,7 +152,7 @@ export default function SignUp() {
       let message = 'Sign up failed.';
       try {
         const errorObj = JSON.parse(err as string);
-        message = errorObj.message || message;
+        message = errorObj.msg || message;
       } catch(err) {
         console.error('Error parsing sign-up error message:', err);
       }
@@ -182,8 +170,8 @@ export default function SignUp() {
 
     setHasTriedConfirm(true);
 
-    if (confirmationCode.length !== 6) {
-      setError('Please enter the 6-digit verification code');
+    if (confirmationCode.length !== 8) {
+      setError('Please enter the 8-digit verification code');
       return;
     }
 
@@ -192,25 +180,34 @@ export default function SignUp() {
       setError(null);
       
       const step2Values = step2Form.getValues();
+      const step1Values = step1Form.getValues();
 
       const confirmRequest: ConfirmSignUpRequest = {
-        username: step2Values.username,
+        email: step1Values.email,
         confirmation_code: confirmationCode,
-        session: signUpResult.session,
       };
       
       // First confirm the signup
       await confirmSignUp(confirmRequest);
       
       // Then automatically sign in the user
-      await signIn(step2Values.username, step2Values.password);
+      await signIn(step1Values.email, step2Values.password);
       
       setFormStep('success');
       setTimeout(() => {
         window.location.href = '/hud';
       }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      console.error('Verification failed:', err);
+      // Turn err into json and extract message
+      let message = 'Verification failed.';
+      try {
+        const errorObj = JSON.parse(err as string);
+        message = errorObj.msg || message;
+      } catch(err) {
+        console.error('Error parsing verification error message:', err);
+      }
+      setError(message);
     } finally {
       setIsConfirming(false);
     }
@@ -219,12 +216,21 @@ export default function SignUp() {
   const handleResendCode = async () => {
     try {
       setError(null);
-      const step2Values = step2Form.getValues();
-      const result = await resendConfirmationCode(step2Values.username);
-      setSignUpResult(result);
+      const step1Values = step1Form.getValues();
+      await resendConfirmationCode(step1Values.email);
       // Show success message or update UI to indicate code was resent
+      //TODO: Implement success feedback
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend code');
+      console.error('Resend code failed:', err);
+      // Turn err into json and extract message
+      let message = 'Resend code failed.';
+      try {
+        const errorObj = JSON.parse(err as string);
+        message = errorObj.msg || message;
+      } catch(err) {
+        console.error('Error parsing resend code error message:', err);
+      }
+      setError(message);
     }
   };
 
@@ -299,14 +305,14 @@ export default function SignUp() {
               className="space-y-6"
               noValidate
             >
-              <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 6}>
+              <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 8}>
                 <FieldLabel htmlFor="signup-confirmation-code">
                   Verification Code
                 </FieldLabel>
                 <div className="flex justify-center">
                   <InputOTP
                     id="signup-confirmation-code"
-                    maxLength={6}
+                    maxLength={8}
                     pattern={REGEXP_ONLY_DIGITS}
                     value={confirmationCode}
                     onChange={(value) => {
@@ -315,7 +321,7 @@ export default function SignUp() {
                       setConfirmationCode(value);
                     }}
                     disabled={isConfirming}
-                    aria-invalid={hasTriedConfirm && confirmationCode.length !== 6}
+                    aria-invalid={hasTriedConfirm && confirmationCode.length !== 8}
                   >
                     <InputOTPGroup>
                       <InputOTPSlot index={0} />
@@ -324,12 +330,14 @@ export default function SignUp() {
                       <InputOTPSlot index={3} />
                       <InputOTPSlot index={4} />
                       <InputOTPSlot index={5} />
+                      <InputOTPSlot index={6} />
+                      <InputOTPSlot index={7} />
                     </InputOTPGroup>
                   </InputOTP>
                 </div>
-                {hasTriedConfirm && confirmationCode.length !== 6 && (
+                {hasTriedConfirm && confirmationCode.length !== 8 && (
                   <FieldError
-                    errors={[{ message: 'Enter the 6-digit code from your email.' }]}
+                    errors={[{ message: 'Enter the 8-digit code from your email.' }]}
                   />
                 )}
               </Field>
@@ -369,7 +377,7 @@ export default function SignUp() {
     );
   }
 
-  // Step 1: Personal Information
+  // Step 1: Email
   if (formStep === 'step1') {
     return (
       <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
@@ -386,7 +394,7 @@ export default function SignUp() {
               Create Your Account
             </CardTitle>
             <CardDescription>
-              Step 1 of 2: Tell us about yourself
+              Step 1 of 2: Start with your email
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -407,53 +415,6 @@ export default function SignUp() {
               className="space-y-6"
               noValidate
             >
-              <div className="grid grid-cols-2 gap-4">
-                <Controller
-                  control={step1Form.control}
-                  name="given_name"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-given-name">
-                        First Name
-                      </FieldLabel>
-                      <Input
-                        id="signup-given-name"
-                        className="h-11"
-                        placeholder="John"
-                        autoComplete="given-name"
-                        aria-invalid={fieldState.invalid}
-                        {...field}
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={step1Form.control}
-                  name="family_name"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-family-name">
-                        Last Name
-                      </FieldLabel>
-                      <Input
-                        id="signup-family-name"
-                        className="h-11"
-                        placeholder="Doe"
-                        autoComplete="family-name"
-                        aria-invalid={fieldState.invalid}
-                        {...field}
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-              </div>
-
               <Controller
                 control={step1Form.control}
                 name="email"
@@ -501,7 +462,7 @@ export default function SignUp() {
     );
   }
 
-  // Step 2: Account Information
+  // Step 2: Personal Info & Password
   if (formStep === 'step2') {
     return (
       <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
@@ -518,7 +479,7 @@ export default function SignUp() {
               Create Your Account
             </CardTitle>
             <CardDescription>
-              Step 2 of 2: Choose your credentials
+              Step 2 of 2: Personal Info & Password
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -534,30 +495,31 @@ export default function SignUp() {
               className="space-y-6"
               noValidate
             >
-              <Controller
-                control={step2Form.control}
-                name="username"
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="signup-username">Username</FieldLabel>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+              <div className="space-y-4">
+                <Controller
+                  control={step2Form.control}
+                  name="full_name"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="signup-full-name">
+                        Full Name
+                      </FieldLabel>
                       <Input
-                        id="signup-username"
-                        className="h-11 pl-10"
-                        placeholder="johndoe"
-                        autoComplete="username"
-                        aria-invalid={fieldState.invalid}
+                        id="signup-full-name"
+                        className="h-11"
+                        placeholder="John Doe"
+                        autoComplete="name"
                         disabled={isLoading}
+                        aria-invalid={fieldState.invalid}
                         {...field}
                       />
-                    </div>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
+                    </Field>
+                  )}
+                />
+              </div>
 
               <Controller
                 control={step2Form.control}

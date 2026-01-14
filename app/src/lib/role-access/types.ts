@@ -1,3 +1,22 @@
+// Re-export types from generated auth types
+import type {
+  UserInfo,
+} from '@/types/auth';
+
+// Re-export all auth types
+export type {
+  AuthResponse,
+  AuthState,
+  SignUpResponse,
+  VerifyOtpResponse,
+  RefreshTokenResponse,
+  ResendConfirmationResponse,
+  Session,
+  SupabaseUser,
+  UserInfo,
+  OAuthUrlResponse,
+} from '@/types/auth';
+
 /**
  * Role access state
  */
@@ -7,52 +26,25 @@ export interface RoleAccessState {
   isLoggedIn: boolean;
   isSetupComplete: boolean;
   isPremiumUser: boolean;
-  userInfo: CognitoUserInfo | null;
+  userInfo: UserInfo | null;
 }
 
-// Auth types for Tauri commands
-export interface AuthToken {
-  access_token: string;
-  refresh_token?: string;
-  id_token?: string;
-  expires_in?: number; // Duration in seconds
-}
-
-export interface SignUpResult {
-  user_sub: string;
-  user_confirmed: boolean;
-  verification_required: boolean;
-  destination?: string;
-  delivery_medium?: string;
-  session?: string;
-}
+// ============================================================================
+// Request Types for frontend use
+// ============================================================================
 
 export interface SignUpRequest {
-  username: string;
-  password: string;
   email: string;
-  given_name?: string;
-  family_name?: string;
+  password: string;
+  full_name?: string;
 }
 
 export interface ConfirmSignUpRequest {
-  username: string;
+  email: string;
   confirmation_code: string;
-  session?: string;
 }
 
-export interface CognitoUserInfo {
-  username: string;
-  email?: string;
-  given_name?: string;
-  family_name?: string;
-  sub: string;
-}
-
-export interface SignInResult {
-  access_token: string;
-  id_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user_info: CognitoUserInfo;
+export interface SignInRequest {
+  email: string;
+  password: string;
 }
