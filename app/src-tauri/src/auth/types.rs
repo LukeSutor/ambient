@@ -249,6 +249,7 @@ pub struct UserInfo {
     pub email_verified: Option<bool>,
     pub provider: Option<String>,
     pub created_at: Option<String>,
+    pub providers: Option<Vec<String>>,
 }
 
 impl From<&SupabaseUser> for UserInfo {
@@ -263,6 +264,13 @@ impl From<&SupabaseUser> for UserInfo {
             .app_metadata
             .as_ref()
             .and_then(|m| m.provider.clone());
+
+        let providers = user.identities.as_ref().map(|identities| {
+            identities
+                .iter()
+                .map(|identity| identity.provider.clone())
+                .collect::<Vec<_>>()
+        });
         
         Self {
             id: user.id.clone(),
@@ -272,6 +280,7 @@ impl From<&SupabaseUser> for UserInfo {
             email_verified,
             provider,
             created_at: user.created_at.clone(),
+            providers,
         }
     }
 }

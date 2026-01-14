@@ -103,7 +103,7 @@ export type UserIdentity = { identity_id: string, id: string, user_id: string, i
 /**
  * Simplified user info for frontend usage
  */
-export type UserInfo = { id: string, email: string | null, given_name: string | null, family_name: string | null, email_verified: boolean | null, provider: string | null, created_at: string | null, };
+export type UserInfo = { id: string, email: string | null, given_name: string | null, family_name: string | null, email_verified: boolean | null, provider: string | null, created_at: string | null, providers: Array<string> | null, };
 
 /**
  * User metadata from Supabase - matches the user_metadata and identity_data fields

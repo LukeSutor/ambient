@@ -99,6 +99,7 @@ export function useRoleAccess(location?: string) {
             email_verified: result.user.user_metadata?.email_verified ?? null,
             provider: result.user.app_metadata?.provider ?? null,
             created_at: result.user.created_at ?? null,
+            providers: result.user.identities?.map((identity) => identity.provider) ?? [],
           }});
         }
         
