@@ -160,6 +160,13 @@ pub struct ResendConfirmationResponse {
     pub message_id: Option<String>,
 }
 
+/// OAuth URL Response
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "auth.ts")]
+pub struct OAuthUrlResponse {
+    pub url: String,
+}
+
 /// Supabase Auth Error Response
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]

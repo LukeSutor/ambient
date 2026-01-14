@@ -14,6 +14,7 @@ export type {
   Session,
   SupabaseUser,
   UserInfo,
+  OAuthUrlResponse,
 } from '@/types/auth';
 
 /**

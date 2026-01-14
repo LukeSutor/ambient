@@ -18,7 +18,7 @@ pub mod windows;
 use db::core::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
-// use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::{Target, TargetKind};
 use types::AppState;
 extern crate dotenv;
@@ -76,15 +76,14 @@ pub fn run() {
       events::initialize_event_listeners(app.handle().clone());
 
       // Handle deep link events for OAuth2 callbacks
-      //TODO: Re-enable deep links for supabase auth
-      // let app_handle_for_deep_link = app.handle().clone();
-      // app.deep_link().on_open_url(move |event| {
-      //   let urls = event.urls();
-      //   log::info!("[deep_link] Received URLs: {:?}", urls);
-      //   for url in &urls {
-      //     crate::auth::deep_link::handle_open_url(&app_handle_for_deep_link, url.as_str());
-      //   }
-      // });
+      let app_handle_for_deep_link = app.handle().clone();
+      app.deep_link().on_open_url(move |event| {
+        let urls = event.urls();
+        log::info!("[deep_link] Received URLs: {:?}", urls);
+        for url in &urls {
+          crate::auth::deep_link::handle_open_url(&app_handle_for_deep_link, url.as_str());
+        }
+      });
 
       // Initialize the database connection during setup
       let app_handle = app.handle().clone();
@@ -208,6 +207,8 @@ pub fn run() {
       db::memory::delete_all_memories,
       auth::auth_flow::sign_up,
       auth::auth_flow::sign_in_with_password,
+      auth::auth_flow::sign_in_with_google,
+      auth::auth_flow::exchange_code_for_session,
       auth::auth_flow::verify_otp,
       auth::auth_flow::resend_confirmation,
       auth::auth_flow::refresh_token,

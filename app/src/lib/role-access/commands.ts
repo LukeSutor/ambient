@@ -8,6 +8,7 @@ import type {
   RefreshTokenResponse,
   ResendConfirmationResponse,
   VerifyOtpResponse,
+  OAuthUrlResponse,
 } from './types';
 
 // ============================================================================
@@ -30,6 +31,28 @@ export async function invokeSignUp(request: SignUpRequest): Promise<SignUpRespon
     password: request.password,
     givenName: request.given_name,
     familyName: request.family_name,
+  });
+}
+
+// ============================================================================
+// Google OAuth Commands
+// ============================================================================
+
+/**
+ * Initiates Google OAuth sign-in by getting the authorization URL
+ * The URL should be opened in the system browser
+ */
+export async function invokeSignInWithGoogle(): Promise<OAuthUrlResponse> {
+  return invoke<OAuthUrlResponse>('sign_in_with_google');
+}
+
+/**
+ * Exchange an OAuth authorization code for a session
+ * This is called internally when the deep link callback is received
+ */
+export async function invokeExchangeCodeForSession(code: string): Promise<AuthResponse> {
+  return invoke<AuthResponse>('exchange_code_for_session', {
+    code,
   });
 }
 

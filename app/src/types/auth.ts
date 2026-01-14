@@ -8,7 +8,7 @@ export type AppMetadata = { provider: string | null, providers: Array<string> | 
 /**
  * Supabase Auth Error Response
  */
-export type AuthError = { code: string | null, error_code: string | null, error: string | null, error_description: string | null, msg: string | null, };
+export type AuthError = { code: any, error_code: string | null, error: string | null, error_description: string | null, msg: string | null, };
 
 /**
  * Sign In Response - returned after successful password sign in
@@ -31,6 +31,11 @@ delivery_medium: string | null, };
  * Current auth state exposed to the frontend
  */
 export type AuthState = { is_authenticated: boolean, user: UserInfo | null, access_token: string | null, expires_at: bigint | null, };
+
+/**
+ * OAuth URL Response
+ */
+export type OAuthUrlResponse = { url: string, };
 
 /**
  * Token Refresh Response

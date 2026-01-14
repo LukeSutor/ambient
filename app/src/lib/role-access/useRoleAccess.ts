@@ -14,6 +14,7 @@ import {
   invokeVerifyOtp,
   invokeResendConfirmation,
   invokeSignIn,
+  invokeSignInWithGoogle,
   invokeSignUp,
   invokeEmitAuthChanged,
   invokeGetCurrentUser,
@@ -113,6 +114,27 @@ export function useRoleAccess(location?: string) {
   [dispatch],
   );
 
+  /**
+   * Initiates Google OAuth sign-in flow
+   * Opens the authorization URL in the system browser
+   * The actual session creation happens via deep link callback
+   */
+  const signInWithGoogle = useCallback(async (): Promise<void> => {
+    try {
+      const { url } = await invokeSignInWithGoogle();
+      
+      // Open the OAuth URL in the system browser
+      const { open } = await import('@tauri-apps/plugin-shell');
+      await open(url);
+      
+      // Note: The actual session creation happens when the deep link callback
+      // is received in deep_link.rs, which emits 'oauth2-success' or 'oauth2-error'
+    } catch (error) {
+      console.error('Error during signInWithGoogle:', error);
+      throw error;
+    }
+  }, []);
+
   const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResponse> => {
     try {
       return await invokeSignUp(request);
@@ -192,6 +214,7 @@ export function useRoleAccess(location?: string) {
   return {
     ...state,
     signIn,
+    signInWithGoogle,
     signUp,
     confirmSignUp,
     resendConfirmationCode,

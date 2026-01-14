@@ -1,6 +1,7 @@
 use crate::auth::types::{
     AuthResponse, AuthError, Session, SignUpResponse, SupabaseUser, 
     VerifyOtpResponse, RefreshTokenResponse, ResendConfirmationResponse,
+    OAuthUrlResponse,
 };
 use crate::auth::storage::{store_session, get_refresh_token, clear_auth_state, get_access_token};
 use serde_json::json;
@@ -365,4 +366,202 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
     
     log::info!("[supabase_auth] Sign out successful");
     Ok(())
+}
+
+// ============================================================================
+// Google OAuth Functions
+// ============================================================================
+
+/// Generate the Google OAuth authorization URL for PKCE flow
+/// Returns the URL that should be opened in the system browser
+#[tauri::command]
+pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
+    log::info!("[supabase_auth] Initiating Google OAuth sign in");
+    let (base_url, api_key) = get_env_vars()?;
+    
+    // Build the OAuth authorization URL
+    // Using PKCE flow with the deep link callback
+    let redirect_uri = "cortical://auth/callback";
+    let provider = "google";
+    
+    // Supabase OAuth endpoint
+    let auth_url = format!(
+        "{}/auth/v1/authorize?provider={}&redirect_to={}",
+        base_url,
+        provider,
+        urlencoding::encode(redirect_uri)
+    );
+    
+    log::info!("[supabase_auth] Generated Google OAuth URL: {}", auth_url);
+    
+    Ok(OAuthUrlResponse { url: auth_url })
+}
+
+/// Exchange an OAuth authorization code for a session
+/// Called after the deep link callback is received with the code
+#[tauri::command]
+pub async fn exchange_code_for_session(code: String) -> Result<AuthResponse, String> {
+    log::info!("[supabase_auth] Exchanging OAuth code for session");
+    let (base_url, api_key) = get_env_vars()?;
+    
+    // Exchange the code for a session using Supabase's token endpoint
+    let endpoint = format!("{}/auth/v1/token?grant_type=pkce", base_url);
+    
+    let body = json!({
+        "auth_code": code,
+        "code_verifier": ""  // For implicit/simple OAuth flow without PKCE verifier
+    });
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&endpoint)
+        .header("apikey", &api_key)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+    
+    let status = response.status();
+    let response_text = response.text().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+    
+    if !status.is_success() {
+        log::error!("[supabase_auth] Failed to exchange code: {}", response_text);
+        return Err(format!("Failed to exchange code for session: {}", response_text));
+    }
+    
+    // Parse the session response
+    let session: Session = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse session: {}. Body: {}", e, response_text))?;
+    
+    // Store the session
+    if let Err(e) = store_session(&session) {
+        log::warn!("[supabase_auth] Failed to store session: {}", e);
+    }
+    
+    log::info!("[supabase_auth] OAuth code exchange successful for user: {}", session.user.id);
+    
+    Ok(AuthResponse {
+        session: Some(session.clone()),
+        user: Some(session.user),
+        weak_password: None,
+        verification_required: false,
+        destination: None,
+        delivery_medium: None,
+    })
+}
+
+/// Handle the OAuth callback URL directly
+/// This parses the callback URL which may contain tokens in the fragment or a code in query params
+pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, String> {
+    log::info!("[supabase_auth] Handling OAuth callback URL");
+    
+    let parsed = url::Url::parse(callback_url)
+        .map_err(|e| format!("Failed to parse callback URL: {}", e))?;
+    
+    // Check for error in query params
+    let query_pairs: std::collections::HashMap<String, String> = parsed
+        .query_pairs()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
+    
+    if let Some(error) = query_pairs.get("error") {
+        let error_description = query_pairs.get("error_description")
+            .cloned()
+            .unwrap_or_default();
+        return Err(format!("OAuth error: {} - {}", error, error_description));
+    }
+    
+    // Check for authorization code in query params (PKCE flow)
+    if let Some(code) = query_pairs.get("code") {
+        return exchange_code_for_session(code.clone()).await;
+    }
+    
+    // Check for tokens in the URL fragment (implicit flow)
+    // Fragment comes after # in the URL
+    if let Some(fragment) = parsed.fragment() {
+        let fragment_pairs: std::collections::HashMap<String, String> = 
+            url::form_urlencoded::parse(fragment.as_bytes())
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+        
+        if let (Some(access_token), Some(refresh_token)) = 
+            (fragment_pairs.get("access_token"), fragment_pairs.get("refresh_token")) 
+        {
+            // We have tokens directly, fetch the user and create session
+            return handle_tokens_from_fragment(access_token, refresh_token, &fragment_pairs).await;
+        }
+    }
+    
+    Err("No authorization code or tokens found in callback URL".to_string())
+}
+
+/// Handle tokens received in URL fragment (implicit flow)
+async fn handle_tokens_from_fragment(
+    access_token: &str,
+    refresh_token: &str,
+    fragment_pairs: &std::collections::HashMap<String, String>,
+) -> Result<AuthResponse, String> {
+    log::info!("[supabase_auth] Handling tokens from URL fragment");
+    let (base_url, api_key) = get_env_vars()?;
+    
+    // Get user info using the access token
+    let endpoint = format!("{}/auth/v1/user", base_url);
+    
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&endpoint)
+        .header("apikey", &api_key)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to get user info: {}", e))?;
+    
+    let status = response.status();
+    let response_text = response.text().await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+    
+    if !status.is_success() {
+        return Err(format!("Failed to get user info: {}", response_text));
+    }
+    
+    let user: SupabaseUser = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse user: {}. Body: {}", e, response_text))?;
+    
+    // Parse expires_in from fragment
+    let expires_in: i64 = fragment_pairs.get("expires_in")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(3600);
+    
+    let expires_at: Option<i64> = fragment_pairs.get("expires_at")
+        .and_then(|s| s.parse().ok());
+    
+    // Create session object
+    let session = Session {
+        access_token: access_token.to_string(),
+        token_type: fragment_pairs.get("token_type")
+            .cloned()
+            .unwrap_or_else(|| "bearer".to_string()),
+        expires_in,
+        expires_at,
+        refresh_token: refresh_token.to_string(),
+        user: user.clone(),
+    };
+    
+    // Store the session
+    if let Err(e) = store_session(&session) {
+        log::warn!("[supabase_auth] Failed to store session: {}", e);
+    }
+    
+    log::info!("[supabase_auth] OAuth sign in successful for user: {}", user.id);
+    
+    Ok(AuthResponse {
+        session: Some(session),
+        user: Some(user),
+        weak_password: None,
+        verification_required: false,
+        destination: None,
+        delivery_medium: None,
+    })
 }
