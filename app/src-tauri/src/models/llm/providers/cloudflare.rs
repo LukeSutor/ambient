@@ -2,7 +2,7 @@ use super::LlmProvider;
 use crate::events::{emitter::emit, types::*};
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use crate::auth::commands::get_access_token_command;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio_stream::StreamExt;
@@ -106,7 +106,7 @@ impl LlmProvider for CloudflareProvider {
 
     if should_stream {
       let resp = client
-        .post(&CLOUDFLARE_COMPLETIONS_WORKER_URL)
+        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
         .headers(headers)
         .json(&body)
         .send()
@@ -177,7 +177,7 @@ impl LlmProvider for CloudflareProvider {
       Ok(full)
     } else {
       let resp = client
-        .post(&CLOUDFLARE_COMPLETIONS_WORKER_URL)
+        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
         .headers(headers)
         .json(&body)
         .send()

@@ -24,3 +24,4 @@ pub trait LlmProvider: Send + Sync {
 
 pub mod local;
 pub mod openrouter;
+pub mod cloudflare;
