@@ -50,9 +50,7 @@ export default {
 		}
 
 		// Build chat config
-		let chatConfig: GenerateContentConfig = {
-			systemInstruction: body.systemPrompt || "You are a helpful assistant.",
-		};
+		let chatConfig: GenerateContentConfig = {};
 		if (body.jsonSchema) {
 			let schema = body.jsonSchema;
 			if (typeof schema === 'string') {
@@ -76,6 +74,7 @@ export default {
 			chatConfig.topK = 40;
 			chatConfig.maxOutputTokens = 8192;
 		} else {
+			chatConfig.systemInstruction = body.systemPrompt || "You are a helpful assistant.";
 			chatConfig.thinkingConfig = {
 				thinkingLevel: ThinkingLevel.MINIMAL
 			};
