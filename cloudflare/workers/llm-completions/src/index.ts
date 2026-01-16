@@ -34,6 +34,7 @@ export default {
 		} catch (e) {
 				return new Response('Bad Request: Invalid JSON', { status: 400 });
 		}
+		console.log(JSON.stringify(body));
 
 		// Ensure use is authenticated
 		const supabase = createClient(env["SUPABASE_URL"], env["SUPABASE_ANON_KEY"]);

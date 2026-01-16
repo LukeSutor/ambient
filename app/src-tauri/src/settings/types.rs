@@ -84,8 +84,8 @@ pub enum HudState {
 #[ts(export, export_to = "settings.ts")]
 pub enum ModelSelection {
   Local,
-  GptOss,
-  Gpt5,
+  Fast,
+  Pro,
 }
 
 impl Default for ModelSelection {
@@ -98,16 +98,16 @@ impl ModelSelection {
   pub fn as_str(&self) -> &'static str {
     match self {
       Self::Local => "local",
-      Self::GptOss => "gpt_oss",
-      Self::Gpt5 => "gpt_5",
+      Self::Fast => "fast",
+      Self::Pro => "pro",
     }
   }
 
   pub fn from_str(s: &str) -> Self {
     match s {
       "local" => Self::Local,
-      "gpt_oss" => Self::GptOss,
-      "gpt_5" => Self::Gpt5,
+      "fast" => Self::Fast,
+      "pro" => Self::Pro,
       _ => Self::Local, // Default fallback
     }
   }

@@ -1,5 +1,5 @@
 use super::providers::{
-  local::LocalProvider, openrouter::OpenRouterProvider, LlmProvider, ProviderPolicy,
+  local::LocalProvider, cloudflare::CloudflareProvider, LlmProvider, ProviderPolicy,
 };
 use tauri::AppHandle;
 
@@ -49,7 +49,7 @@ pub async fn generate(
       )
       .await
   } else {
-    let provider = OpenRouterProvider;
+    let provider = CloudflareProvider;
     provider
       .generate(
         app_handle,

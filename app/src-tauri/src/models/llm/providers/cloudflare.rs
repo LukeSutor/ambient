@@ -2,18 +2,11 @@ use super::LlmProvider;
 use crate::events::{emitter::emit, types::*};
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use crate::auth::commands::get_access_token_command;
+use crate::settings::types::ModelSelection;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
 use tauri::AppHandle;
 use tokio_stream::StreamExt;
-
-fn model_from_selection(selection: crate::settings::types::ModelSelection) -> &'static str {
-  match selection {
-    crate::settings::types::ModelSelection::GptOss => "openai/gpt-oss-20b",
-    crate::settings::types::ModelSelection::Gpt5 => "openai/gpt-5-chat",
-    _ => "openai/gpt-oss-20b",
-  }
-}
 
 // Map roles to Gemini format
 fn role_to_gemini(role: &str) -> &str {
@@ -38,12 +31,12 @@ async fn build_content(
       crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
     {
       for msg in conv_messages {
-        content.push(json!({"role": role_to_gemini(msg.role.as_str()), "parts": {"text": msg.content}}));
+        content.push(json!({"role": role_to_gemini(msg.role.as_str()), "parts": [{"text": msg.content}]}));
       }
     }
   }
 
-  content.push(json!({"role":"user","parts":{"text": prompt}}));
+  content.push(json!({"role":"user","parts":[{"text": prompt}]}));
   content
 }
 
@@ -65,7 +58,7 @@ impl LlmProvider for CloudflareProvider {
     let settings = crate::settings::service::load_user_settings(app_handle.clone())
       .await
       .map_err(|e| format!("Failed to load user settings: {}", e))?;
-    let model = model_from_selection(settings.model_selection);
+    let model = &settings.model_selection.as_str();
 
     let should_stream = stream.unwrap_or(false);
     let content = build_content(&app_handle, prompt.clone(), &conv_id).await;

@@ -9,6 +9,6 @@ export type HudSizeOption = "Small" | "Normal" | "Large";
 
 export type HudState = "Input" | "Chat" | "Login" | "Default";
 
-export type ModelSelection = "Local" | "GptOss" | "Gpt5";
+export type ModelSelection = "Local" | "Fast" | "Pro";
 
 export type UserSettings = { hud_size: HudSizeOption, model_selection: ModelSelection, };
