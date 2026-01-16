@@ -21,7 +21,6 @@ fn role_to_gemini(role: &str) -> &str {
 // Builds messages in the Gemini API format
 async fn build_content(
   app_handle: &AppHandle,
-  prompt: String,
   conv_id: &Option<String>,
 ) -> Vec<Value> {
   let mut content = Vec::new();
@@ -36,7 +35,6 @@ async fn build_content(
     }
   }
 
-  content.push(json!({"role":"user","parts":[{"text": prompt}]}));
   content
 }
 
@@ -61,7 +59,7 @@ impl LlmProvider for CloudflareProvider {
     let model = &settings.model_selection.as_str();
 
     let should_stream = stream.unwrap_or(false);
-    let content = build_content(&app_handle, prompt.clone(), &conv_id).await;
+    let content = build_content(&app_handle, &conv_id).await;
 
     // Log all content for debugging
     log::debug!(
@@ -97,6 +95,9 @@ impl LlmProvider for CloudflareProvider {
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
+    let mut prompt_tokens = 0u64;
+    let mut completion_tokens = 0u64;
+
     if should_stream {
       let resp = client
         .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
@@ -109,22 +110,30 @@ impl LlmProvider for CloudflareProvider {
       if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
+        log::error!("Cloudflare streaming error status: {}. Body: {}", status, text);
         return Err(format!("Cloudflare error {}: {}", status, text));
       }
 
       let mut full = String::new();
+      let mut buffer = String::new();
       let mut stream = resp.bytes_stream();
       while let Some(chunk) = stream.next().await {
         let Ok(chunk) = chunk.map_err(|e| format!("Error reading stream: {}", e)) else {
+          log::warn!("Stream chunk error encountered");
           break;
         };
         let text = String::from_utf8_lossy(&chunk);
-        for line in text.lines() {
-          let line = line.trim();
+        buffer.push_str(&text);
+
+        while let Some(newline_idx) = buffer.find('\n') {
+          let line = buffer[..newline_idx].trim().to_string();
+          buffer.drain(..=newline_idx);
+
           if line.is_empty() || line.starts_with(": ") {
             continue;
           }
           if !line.starts_with("data: ") {
+            log::debug!("Ignoring non-data line: {}", line);
             continue;
           }
           let data = &line[6..];
@@ -132,26 +141,41 @@ impl LlmProvider for CloudflareProvider {
             continue;
           }
           if let Ok(obj) = serde_json::from_str::<Value>(data) {
-            if let Some(choice) = obj
-              .get("choices")
-              .and_then(|c| c.as_array())
-              .and_then(|a| a.get(0))
-            {
-              if let Some(delta) = choice.get("delta").and_then(|d| d.as_object()) {
-                if let Some(piece) = delta.get("content").and_then(|c| c.as_str()) {
-                  full.push_str(piece);
-                  let _ = emit(
-                    CHAT_STREAM,
-                    ChatStreamEvent {
-                      delta: piece.to_string(),
-                      is_finished: false,
-                      full_response: full.clone(),
-                      conv_id: conv_id.clone(),
-                    },
-                  );
-                }
+            // Update token counts if present in usageMetadata
+            if let Some(usage) = obj.get("usageMetadata") {
+              if let Some(p) = usage.get("promptTokenCount").and_then(|v| v.as_u64()) {
+                prompt_tokens = p;
+              }
+              if let Some(c) = usage.get("candidatesTokenCount").and_then(|v| v.as_u64()) {
+                completion_tokens = c;
               }
             }
+
+            // Extract content piece from Gemini structure
+            if let Some(piece) = obj
+              .get("candidates")
+              .and_then(|c| c.as_array())
+              .and_then(|a| a.get(0))
+              .and_then(|c| c.get("content"))
+              .and_then(|c| c.get("parts"))
+              .and_then(|p| p.as_array())
+              .and_then(|a| a.get(0))
+              .and_then(|p| p.get("text"))
+              .and_then(|t| t.as_str())
+            {
+              full.push_str(piece);
+              let _ = emit(
+                CHAT_STREAM,
+                ChatStreamEvent {
+                  delta: piece.to_string(),
+                  is_finished: false,
+                  full_response: full.clone(),
+                  conv_id: conv_id.clone(),
+                },
+              );
+            }
+          } else {
+            log::warn!("Failed to parse line as JSON: {}", data);
           }
         }
       }
@@ -167,6 +191,12 @@ impl LlmProvider for CloudflareProvider {
         },
       );
 
+      log::info!(
+        "Cloudflare streaming usage - Prompt: {}, Completion: {}",
+        prompt_tokens,
+        completion_tokens
+      );
+
       Ok(full)
     } else {
       let resp = client
@@ -176,19 +206,53 @@ impl LlmProvider for CloudflareProvider {
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
-      if !resp.status().is_success() {
-        let status = resp.status();
+
+      let status = resp.status();
+      if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
+        log::error!("Cloudflare error status: {}. Body: {}", status, text);
         return Err(format!("Cloudflare error {}: {}", status, text));
       }
+
       let json: Value = resp
         .json()
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
-      let content = json["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("")
-        .to_string();
+
+      // Extract token counts
+      if let Some(usage) = json.get("usageMetadata") {
+        prompt_tokens = usage
+          .get("promptTokenCount")
+          .and_then(|v| v.as_u64())
+          .unwrap_or(0);
+        completion_tokens = usage
+          .get("candidatesTokenCount")
+          .and_then(|v| v.as_u64())
+          .unwrap_or(0);
+      }
+
+      // Try extraction from full Gemini structure, or fallback to direct string if worker returned response.text
+      let content = json
+        .get("candidates")
+        .and_then(|c| c.as_array())
+        .and_then(|a| a.get(0))
+        .and_then(|c| c.get("content"))
+        .and_then(|c| c.get("parts"))
+        .and_then(|p| p.as_array())
+        .and_then(|a| a.get(0))
+        .and_then(|p| p.get("text"))
+        .and_then(|t| t.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+          log::warn!("Failed to extract content from Gemini structure, falling back to as_str()");
+          json.as_str().unwrap_or("").to_string()
+        });
+
+      log::info!(
+        "Cloudflare usage - Prompt: {}, Completion: {}",
+        prompt_tokens,
+        completion_tokens
+      );
 
       Ok(content)
     }

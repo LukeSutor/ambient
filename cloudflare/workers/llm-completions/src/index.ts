@@ -34,7 +34,6 @@ export default {
 		} catch (e) {
 				return new Response('Bad Request: Invalid JSON', { status: 400 });
 		}
-		console.log(JSON.stringify(body));
 
 		// Ensure use is authenticated
 		const supabase = createClient(env["SUPABASE_URL"], env["SUPABASE_ANON_KEY"]);
@@ -76,8 +75,9 @@ export default {
 			chatConfig.maxOutputTokens = 8192;
 		} else {
 			chatConfig.systemInstruction = body.systemPrompt || "You are a helpful assistant.";
+			// Thinking level minimal is not supported on pro, only on fast
 			chatConfig.thinkingConfig = {
-				thinkingLevel: ThinkingLevel.MINIMAL
+				thinkingLevel: body.modelType === "fast" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
 			};
 		}
 
@@ -121,7 +121,7 @@ export default {
 				contents: body.content,
 				config: chatConfig
 			});
-			return new Response(JSON.stringify(response.text), {
+			return new Response(JSON.stringify(response), {
 				headers: { 'Content-Type': 'application/json' },
 			});
 		}
