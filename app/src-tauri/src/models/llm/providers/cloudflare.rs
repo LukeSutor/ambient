@@ -1,8 +1,7 @@
-use super::LlmProvider;
+use crate::models::llm::types::{LlmRequest, LlmProvider};
 use crate::events::{emitter::emit, types::*};
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use crate::auth::commands::get_access_token_command;
-use crate::settings::types::ModelSelection;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
 use tauri::AppHandle;
@@ -21,20 +20,29 @@ fn role_to_gemini(role: &str) -> &str {
 // Builds messages in the Gemini API format
 async fn build_content(
   app_handle: &AppHandle,
+  user_prompt: String,
   conv_id: &Option<String>,
+  current_message_id: &Option<String>,
 ) -> Vec<Value> {
   let mut content = Vec::new();
 
   if let Some(conversation_id) = conv_id {
-    if let Ok(conv_messages) =
+    if let Ok(mut conv_messages) =
       crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
     {
+      // Filter out the message we are currently augmenting to avoid doubling
+      if let Some(mid) = current_message_id {
+        conv_messages.retain(|m| &m.id != mid);
+      }
+
       for msg in conv_messages {
         content.push(json!({"role": role_to_gemini(msg.role.as_str()), "parts": [{"text": msg.content}]}));
       }
     }
   }
 
+  // Add user prompt
+  content.push(json!({"role": "user", "parts": [{"text": user_prompt}]}));
   content
 }
 
@@ -45,12 +53,7 @@ impl LlmProvider for CloudflareProvider {
   async fn generate(
     &self,
     app_handle: AppHandle,
-    prompt: String,
-    system_prompt: Option<String>,
-    json_schema: Option<String>,
-    conv_id: Option<String>,
-    _use_thinking: Option<bool>,
-    stream: Option<bool>,
+    request: LlmRequest,
   ) -> Result<String, String> {
     // Load user settings to get model selection
     let settings = crate::settings::service::load_user_settings(app_handle.clone())
@@ -58,8 +61,8 @@ impl LlmProvider for CloudflareProvider {
       .map_err(|e| format!("Failed to load user settings: {}", e))?;
     let model = &settings.model_selection.as_str();
 
-    let should_stream = stream.unwrap_or(false);
-    let content = build_content(&app_handle, &conv_id).await;
+    let should_stream = request.stream.unwrap_or(false);
+    let content = build_content(&app_handle, request.prompt.clone(), &request.conv_id, &request.current_message_id).await;
 
     // Log all content for debugging
     log::debug!(
@@ -78,10 +81,10 @@ impl LlmProvider for CloudflareProvider {
         "content": content,
         "stream": should_stream,
         "token": access_token,
-        "systemPrompt": system_prompt.unwrap_or_else(|| "You are a helpful assistant.".to_string()),
+        "systemPrompt": request.system_prompt.unwrap_or_else(|| "You are a helpful assistant.".to_string()),
     });
 
-    if let Some(schema_str) = json_schema {
+    if let Some(schema_str) = request.json_schema {
       if let Ok(schema_value) = serde_json::from_str::<Value>(&schema_str) {
         body["jsonSchema"] = schema_value;
       } else {
@@ -170,7 +173,7 @@ impl LlmProvider for CloudflareProvider {
                   delta: piece.to_string(),
                   is_finished: false,
                   full_response: full.clone(),
-                  conv_id: conv_id.clone(),
+                  conv_id: request.conv_id.clone(),
                 },
               );
             }
@@ -187,7 +190,7 @@ impl LlmProvider for CloudflareProvider {
           delta: "".to_string(),
           is_finished: true,
           full_response: full.clone(),
-          conv_id: conv_id.clone(),
+          conv_id: request.conv_id.clone(),
         },
       );
 

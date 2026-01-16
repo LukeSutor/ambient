@@ -1,17 +1,13 @@
 use super::providers::{
-  local::LocalProvider, cloudflare::CloudflareProvider, LlmProvider, ProviderPolicy,
+  local::LocalProvider, cloudflare::CloudflareProvider
 };
+use super::types::{LlmRequest, ProviderPolicy, LlmProvider};
 use tauri::AppHandle;
 
 /// Unified generate function that routes to the selected provider.
 pub async fn generate(
   app_handle: AppHandle,
-  prompt: String,
-  system_prompt: Option<String>,
-  json_schema: Option<String>,
-  conv_id: Option<String>,
-  use_thinking: Option<bool>,
-  stream: Option<bool>,
+  request: LlmRequest,
   force_local: Option<bool>,
 ) -> Result<String, String> {
   let policy = if force_local.unwrap_or(false) {
@@ -37,29 +33,9 @@ pub async fn generate(
 
   if provider_is_local {
     let provider = LocalProvider;
-    provider
-      .generate(
-        app_handle,
-        prompt,
-        system_prompt,
-        json_schema,
-        conv_id,
-        use_thinking,
-        stream,
-      )
-      .await
+    provider.generate(app_handle, request).await
   } else {
     let provider = CloudflareProvider;
-    provider
-      .generate(
-        app_handle,
-        prompt,
-        system_prompt,
-        json_schema,
-        conv_id,
-        use_thinking,
-        stream,
-      )
-      .await
+    provider.generate(app_handle, request).await
   }
 }

@@ -3,7 +3,7 @@ use crate::db::memory::insert_memory_entry;
 use crate::events::{emitter::emit, types::*};
 use crate::memory::types::MemoryEntry;
 use crate::models::embedding::embedding::generate_embedding;
-use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema};
+use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema, types::LlmRequest};
 use chrono;
 use tauri::{AppHandle, Manager};
 
@@ -37,18 +37,13 @@ pub async fn handle_extract_interactive_memory(
   };
 
   // Generate memory extraction
-  let extracted_memory = match generate(
-    app_handle.clone(),
-    event.message.clone(),
-    Some(system_prompt),
-    schema,
-    None,
-    Some(false),
-    Some(false),
-    Some(true),
-  )
-  .await
-  {
+  let request = LlmRequest::new(event.message.clone())
+    .with_system_prompt(Some(system_prompt))
+    .with_json_schema(schema)
+    .with_use_thinking(Some(false))
+    .with_stream(Some(false));
+
+  let extracted_memory = match generate(app_handle.clone(), request, Some(true)).await {
     Ok(generated) => {
       log::info!("[memory] Extracted interactive memory: {}", generated);
       generated
