@@ -1,19 +1,22 @@
-import { GoogleGenAI } from "@google/genai";
+import { Environment, GenerateContentConfig, GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createClient } from '@supabase/supabase-js'
 
 type requestData = {
 	modelType: string;
-	messages: Array<{ role: string; content: string }>;
-	jsonSchema?: object;
+	content: Array<{ role: string; parts: object[] }>;
 	stream: boolean;
 	token: string;
+	systemPrompt?: string;
+	jsonSchema?: object;
 }
 
 const extractModelName = (modelType: string): string | null => {
 	if (modelType === "fast")
-		return "gemini-3-flash";
-	if (modelType === "thinking")
-		return "gemini-3-pro";
+		return "gemini-3-flash-preview";
+	if (modelType === "pro")
+		return "gemini-3-pro-preview";
+	if (modelType === "computer-use")
+		return "gemini-2.5-computer-use-preview-10-2025";
 	return null;
 };
 
@@ -31,7 +34,6 @@ export default {
 		} catch (e) {
 				return new Response('Bad Request: Invalid JSON', { status: 400 });
 		}
-		console.log('Request data received:', body);
 
 		// Ensure use is authenticated
 		const supabase = createClient(env["SUPABASE_URL"], env["SUPABASE_ANON_KEY"]);
@@ -47,19 +49,81 @@ export default {
 			return new Response('Bad Request: Invalid model type', { status: 400 });
 		}
 
-		// Remove system message if present
-		let systemInstruction = "";
-		if (body.messages.length > 0 && body.messages[0].role === "system") {
-			systemInstruction = body.messages[0].content;
-			body.messages.shift();
+		// Build chat config
+		let chatConfig: GenerateContentConfig = {
+			systemInstruction: body.systemPrompt || "You are a helpful assistant.",
+		};
+		if (body.jsonSchema) {
+			let schema = body.jsonSchema;
+			if (typeof schema === 'string') {
+				try {
+					schema = JSON.parse(schema);
+				} catch (e) {
+					return new Response('Bad Request: Invalid JSON in jsonSchema', { status: 400 });
+				}
+			}
+			chatConfig.responseJsonSchema = schema as object;
+			chatConfig.responseMimeType = "application/json";
+		}
+		if (body.modelType === "computer-use") {
+			chatConfig.tools = [{
+				computerUse: {
+							environment: Environment.ENVIRONMENT_BROWSER
+					}
+			}]
+			chatConfig.temperature = 1;
+			chatConfig.topP = 0.95;
+			chatConfig.topK = 40;
+			chatConfig.maxOutputTokens = 8192;
+		} else {
+			chatConfig.thinkingConfig = {
+				thinkingLevel: ThinkingLevel.MINIMAL
+			};
 		}
 
-		const history = body.messages.map((msg) => { return { role: msg.role, parts: [{text: msg.content}] }; });
+		const ai = new GoogleGenAI({ apiKey: env["GEMINI_API_KEY"] });
+		if (body.stream) {
+			const result = await ai.models.generateContentStream({
+				model: modelName,
+				contents: body.content,
+				config: chatConfig
+			});
 
-		// Handle model response
-		const ai = new GoogleGenAI({apiKey: env["GEMINI_API_KEY"]});
-		const chat = ai.chats.create({model: modelName, history: history, config: {systemInstruction: systemInstruction}});
+			const { readable, writable } = new TransformStream();
+			const writer = writable.getWriter();
+			const encoder = new TextEncoder();
 
-		return new Response('Hello Worlsd!');
+			ctx.waitUntil((async () => {
+				try {
+					for await (const chunk of result) {
+						await writer.write(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+					}
+					await writer.write(encoder.encode('data: [DONE]\n\n'));
+				} catch (e) {
+					console.error("Streaming error:", e);
+					const errorMsg = e instanceof Error ? e.message : String(e);
+					await writer.write(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: errorMsg })}\n\n`));
+				} finally {
+					await writer.close();
+				}
+			})());
+
+			return new Response(readable, {
+				headers: {
+					'Content-Type': 'text/event-stream',
+					'Cache-Control': 'no-cache',
+					'Connection': 'keep-alive',
+				},
+			});
+		} else {
+			const response = await ai.models.generateContent({
+				model: modelName,
+				contents: body.content,
+				config: chatConfig
+			});
+			return new Response(JSON.stringify(response.text), {
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
 	},
 } satisfies ExportedHandler<Env>;
