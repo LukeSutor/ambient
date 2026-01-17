@@ -311,7 +311,3 @@ pub struct AuthState {
     pub access_token: Option<String>,
     pub expires_at: Option<i64>,
 }
-
-// Keyrind constants
-pub const KEYRING_SERVICE: &str = "local-computer-use";
-pub const KEYRING_AUTH_KEY: &str = "supabase_auth";

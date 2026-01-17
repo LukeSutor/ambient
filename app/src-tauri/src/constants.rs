@@ -29,8 +29,14 @@ pub const MMPROJ_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-
 pub const VLM_CHAT_TEMPLATE: &str = "smolvlm";
 
 // Settings storage
-pub const SETTINGS_STORE_PATH: &str = "user-settings.json";
+pub const STORE_PATH: &str = "store.json";
 pub const SETTINGS_KEY: &str = "settings";
+pub const AUTH_KEY: &str = "auth";
+
+// Keyring constants
+pub const KEYRING_ENCRYPTION_KEY: &str = "supabase_storage_key";
+pub const KEYRING_SERVICE: &str = "local-computer-use";
+pub const KEYRING_AUTH_KEY: &str = "supabase_auth";
 
 // Server setup
 pub const MAX_PORT: u16 = 9999;

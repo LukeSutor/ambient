@@ -72,6 +72,9 @@ tauri-plugin-store = "2"
 ocrs = "0.10.4"
 rten = "0.21.0"
 
+# Crypto
+aes-gcm = "0.10"
+
 # Computer use crates
 enigo = "0.6.1"
 tauri-plugin-os = "2"
