@@ -36,7 +36,7 @@ rusqlite_migration = "2.3.0"
 zerocopy = "0.8.25"
 reqwest = { version = "0.12.15", default-features = false, features = ["rustls-tls", "json", "stream", "blocking"] }
 tokio-stream = { version = "0.1.17", features = ["net"] }
-chrono = "0.4.41"
+chrono = { version = "0.4.41", features = ["serde"] }
 uuid = { version = "1.17.0", features = ["v4"] }
 ts-rs = "11.0.1"
 tauri-plugin-log = "2"
@@ -60,8 +60,7 @@ windows = { version = "0.60.0", features = [
 ] }
 
 # Auth crates
-oauth2 = "4.3"
-keyring = "2.3"
+keyring = { version = "3.6.3", features = ["windows-native", "apple-native"] }
 dotenv = "0.15"
 base64 = "0.22"
 tauri-plugin-deep-link = "2"

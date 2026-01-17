@@ -45,7 +45,7 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
                 Ok(Some(state))
             } else {
                 // File doesn't exist, clear the flag and return None
-                let _ = entry.delete_password();
+                let _ = entry.delete_credential();
                 Ok(None)
             }
         }
@@ -97,7 +97,7 @@ pub fn needs_token_refresh() -> Result<bool, Box<dyn std::error::Error>> {
 pub fn clear_auth_state() -> Result<(), Box<dyn std::error::Error>> {
     // Clear the keyring flag
     let entry = Entry::new(KEYRING_SERVICE, KEYRING_AUTH_KEY)?;
-    let _ = entry.delete_password();
+    let _ = entry.delete_credential();
     
     // Remove the auth file
     let app_data_dir = get_app_data_dir()?;
