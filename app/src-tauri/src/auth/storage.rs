@@ -103,6 +103,7 @@ pub fn store_session(session: &Session) -> Result<(), Box<dyn std::error::Error>
 }
 
 /// Retrieve the stored auth state
+/// Fix #6: Handle decryption failures gracefully by clearing corrupted state
 pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::error::Error>> {
     let app_handle = match get_app_handle() {
         Some(h) => h,
@@ -114,34 +115,66 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
     let auth_val = store.get(AUTH_KEY);
     
     if let Some(val) = auth_val {
-        let mut state: StoredAuthState = serde_json::from_value(val.clone())?;
+        // Try to deserialize the stored state
+        let mut state: StoredAuthState = match serde_json::from_value(val.clone()) {
+            Ok(s) => s,
+            Err(e) => {
+                log::warn!("[auth_storage] Failed to deserialize stored auth state: {}. Clearing corrupted data.", e);
+                // Clear corrupted state (Fix #6)
+                let _ = clear_auth_state();
+                return Ok(None);
+            }
+        };
         
         // Check for encrypted tokens in the JSON
         if let Some(encrypted_tokens_base64) = val.get("encrypted_tokens").and_then(|v| v.as_str()) {
-            let combined = BASE64_STANDARD.decode(encrypted_tokens_base64)?;
-            if combined.len() < 12 {
-                return Err("Invalid encrypted token data".into());
+            // Try to decrypt tokens, handle failures gracefully (Fix #6)
+            match decrypt_tokens(encrypted_tokens_base64) {
+                Ok(token_data) => {
+                    state.session.access_token = token_data.access_token;
+                    state.session.refresh_token = token_data.refresh_token;
+                    return Ok(Some(state));
+                }
+                Err(e) => {
+                    log::warn!("[auth_storage] Failed to decrypt tokens: {}. Clearing auth state.", e);
+                    // Decryption failed - encryption key might have been lost (Fix #6)
+                    // Clear the corrupted/unusable state and force re-authentication
+                    let _ = clear_auth_state();
+                    return Ok(None);
+                }
             }
-            
-            let (nonce_bytes, ciphertext) = combined.split_at(12);
-            let nonce = Nonce::from_slice(nonce_bytes);
-            
-            let key_bytes = get_or_create_encryption_key()?;
-            let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
-            let cipher = Aes256Gcm::new(key);
-            
-            let decrypted_bytes = cipher.decrypt(nonce, ciphertext)
-                .map_err(|e| format!("Decryption failed: {}", e))?;
-            
-            let token_data: TokenData = serde_json::from_slice(&decrypted_bytes)?;
-            state.session.access_token = token_data.access_token;
-            state.session.refresh_token = token_data.refresh_token;
-            
-            return Ok(Some(state));
         }
     }
     
     Ok(None)
+}
+
+/// Helper function to decrypt tokens
+/// Separated for cleaner error handling (Fix #6)
+fn decrypt_tokens(encrypted_tokens_base64: &str) -> Result<TokenData, Box<dyn std::error::Error>> {
+    let combined = BASE64_STANDARD.decode(encrypted_tokens_base64)?;
+    if combined.len() < 12 {
+        return Err("Invalid encrypted token data: too short".into());
+    }
+    
+    let (nonce_bytes, ciphertext) = combined.split_at(12);
+    let nonce = Nonce::from_slice(nonce_bytes);
+    
+    let key_bytes = get_or_create_encryption_key()?;
+    let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+    
+    let decrypted_bytes = cipher.decrypt(nonce, ciphertext)
+        .map_err(|e| format!("Decryption failed: {}", e))?;
+    
+    let token_data: TokenData = serde_json::from_slice(&decrypted_bytes)?;
+    
+    // Validate decrypted tokens are not empty (additional safety check)
+    if token_data.access_token.is_empty() || token_data.refresh_token.is_empty() {
+        return Err("Decrypted tokens are empty".into());
+    }
+    
+    Ok(token_data)
 }
 
 /// Get the current session if valid

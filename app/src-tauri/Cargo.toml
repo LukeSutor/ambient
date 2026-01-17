@@ -74,6 +74,7 @@ rten = "0.21.0"
 
 # Crypto
 aes-gcm = "0.10"
+sha2 = "0.10"
 
 # Computer use crates
 enigo = "0.6.1"

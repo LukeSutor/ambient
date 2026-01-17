@@ -10,10 +10,7 @@ import React, {
 } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
-  invokeGetCurrentUser,
-  invokeIsAuthenticated,
-  invokeIsOnline,
-  invokeIsSetupComplete,
+  invokeGetFullAuthState,
 } from "./commands";
 import type { UserInfo, RoleAccessState } from "./types";
 
@@ -32,7 +29,8 @@ type RoleAccessAction =
   | { type: "SET_SETUP_COMPLETE"; payload: boolean }
   | { type: "SET_PREMIUM_USER"; payload: boolean }
   | { type: "SET_USER_INFO"; payload: UserInfo | null }
-  | { type: "SET_IS_HYDRATED"; payload: boolean };
+  | { type: "SET_IS_HYDRATED"; payload: boolean }
+  | { type: "SET_FULL_STATE"; payload: { isOnline: boolean; isLoggedIn: boolean; isSetupComplete: boolean; userInfo: UserInfo | null } };
 
 
 function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): RoleAccessState {
@@ -67,6 +65,15 @@ function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): Ro
         ...state,
         isHydrated: action.payload,
       };
+    // Fix #9: Handle full state update in single dispatch
+    case "SET_FULL_STATE":
+      return {
+        ...state,
+        isOnline: action.payload.isOnline,
+        isLoggedIn: action.payload.isLoggedIn,
+        isSetupComplete: action.payload.isSetupComplete,
+        userInfo: action.payload.userInfo,
+      };
     default:
       return state;
   }
@@ -87,24 +94,20 @@ interface RoleAccessProviderProps {
 export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
   const [state, dispatch] = useReducer(roleAccessReducer, initialState);
 
+  // Fix #9: Use single combined API call instead of multiple parallel calls
   const refresh = useCallback(async () => {
     try {
-      const [isOnline, isLoggedIn, isSetupComplete] = await Promise.all([
-        invokeIsOnline(),
-        invokeIsAuthenticated(),
-        invokeIsSetupComplete(),
-      ]);
-
-      dispatch({ type: "SET_IS_ONLINE", payload: isOnline });
-      dispatch({ type: "SET_LOGGED_IN", payload: isLoggedIn });
-      dispatch({ type: "SET_SETUP_COMPLETE", payload: isSetupComplete });
-
-      if (isLoggedIn) {
-        const userInfo = await invokeGetCurrentUser();
-        dispatch({ type: "SET_USER_INFO", payload: userInfo });
-      } else {
-        dispatch({ type: "SET_USER_INFO", payload: null });
-      }
+      const fullState = await invokeGetFullAuthState();
+      
+      dispatch({ 
+        type: "SET_FULL_STATE", 
+        payload: {
+          isOnline: fullState.is_online,
+          isLoggedIn: fullState.is_authenticated,
+          isSetupComplete: fullState.is_setup_complete,
+          userInfo: fullState.user,
+        }
+      });
     } catch (error) {
       console.error("Error fetching role access state:", error);
     } finally {

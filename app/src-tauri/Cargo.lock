@@ -2781,6 +2781,7 @@ dependencies = [
  "screenshots",
  "serde",
  "serde_json",
+ "sha2",
  "sqlite-vec",
  "tauri",
  "tauri-build",

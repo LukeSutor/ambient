@@ -1,10 +1,11 @@
 use crate::auth::types::{
-    AuthState, UserInfo, SupabaseUser, AuthError,
+    AuthState, UserInfo, SupabaseUser, AuthError, FullAuthState, AuthErrorResponse,
 };
 use crate::auth::storage::{
     retrieve_auth_state, clear_auth_state,
 };
 use crate::auth::auth_flow::{get_env_vars, refresh_token, fetch_user_profile};
+use crate::auth::security::HTTP_CLIENT;
 use tauri::{AppHandle, Emitter};
 
 #[tauri::command]
@@ -17,6 +18,7 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
         Ok(Some(state)) => {
             // Extract what we need before any potential await
             let is_expired = state.is_access_token_expired();
+            let needs_refresh = state.needs_refresh();
             
             let (user, token, expires_at) = if is_expired {
                 // Try to refresh
@@ -28,7 +30,7 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
                         return Ok(AuthState {
                             is_authenticated: false,
                             user: None,
-                            access_token: None,
+                            needs_refresh: false,
                             expires_at: None,
                         });
                     }
@@ -44,17 +46,18 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
                 user_info = user_info.with_profile(&profile);
             }
 
+            // Fix #3: Don't expose access_token to frontend
             Ok(AuthState {
                 is_authenticated: true,
                 user: Some(user_info),
-                access_token: Some(token),
+                needs_refresh,
                 expires_at,
             })
         }
         Ok(None) => Ok(AuthState {
             is_authenticated: false,
             user: None,
-            access_token: None,
+            needs_refresh: false,
             expires_at: None,
         }),
         Err(e) => {
@@ -62,11 +65,96 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
             Ok(AuthState {
                 is_authenticated: false,
                 user: None,
-                access_token: None,
+                needs_refresh: false,
                 expires_at: None,
             })
         }
     }
+}
+
+/// Combined auth state fetch to reduce redundant API calls (Fix #9)
+/// Returns all auth-related state in a single call
+#[tauri::command]
+pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState, String> {
+    // Check online status
+    let is_online = check_online().await;
+    
+    // Check setup complete (needs AppHandle)
+    let is_setup_complete = crate::setup::check_setup_complete(app_handle).unwrap_or(false);
+    
+    // Get auth state
+    let state_result = retrieve_auth_state()
+        .map_err(|e| e.to_string());
+    
+    match state_result {
+        Ok(Some(state)) => {
+            let is_expired = state.is_access_token_expired();
+            let needs_refresh = state.needs_refresh();
+            
+            let (user, token, expires_at) = if is_expired {
+                match refresh_token().await {
+                    Ok(refreshed) => (refreshed.user, refreshed.session.access_token, refreshed.session.expires_at),
+                    Err(_) => {
+                        let _ = clear_auth_state();
+                        return Ok(FullAuthState {
+                            is_online,
+                            is_authenticated: false,
+                            is_setup_complete,
+                            user: None,
+                            needs_refresh: false,
+                            expires_at: None,
+                        });
+                    }
+                }
+            } else {
+                (state.session.user.clone(), state.session.access_token.clone(), state.session.expires_at)
+            };
+
+            let mut user_info = UserInfo::from(&user);
+            if let Ok(profile) = fetch_user_profile(&user.id, &token).await {
+                user_info = user_info.with_profile(&profile);
+            }
+
+            Ok(FullAuthState {
+                is_online,
+                is_authenticated: true,
+                is_setup_complete,
+                user: Some(user_info),
+                needs_refresh,
+                expires_at,
+            })
+        }
+        Ok(None) => Ok(FullAuthState {
+            is_online,
+            is_authenticated: false,
+            is_setup_complete,
+            user: None,
+            needs_refresh: false,
+            expires_at: None,
+        }),
+        Err(e) => {
+            log::error!("[auth_commands] Failed to get full auth state: {}", e);
+            Ok(FullAuthState {
+                is_online,
+                is_authenticated: false,
+                is_setup_complete,
+                user: None,
+                needs_refresh: false,
+                expires_at: None,
+            })
+        }
+    }
+}
+
+/// Quick online check helper using shared HTTP client
+async fn check_online() -> bool {
+    HTTP_CLIENT
+        .get("https://www.google.com")
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -141,8 +229,8 @@ pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/user", base_url);
     
-    let client = reqwest::Client::new();
-    let response = client
+    // Use shared HTTP client (Fix #10)
+    let response = HTTP_CLIENT
         .get(&endpoint)
         .header("apikey", &api_key)
         .header("Authorization", format!("Bearer {}", access_token))
@@ -156,7 +244,7 @@ pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
     
     if !status.is_success() {
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
-            return Err(err.get_message());
+            return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
         }
         return Err(format!("Failed to get user: {}", response_text));
     }

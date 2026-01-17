@@ -15,6 +15,9 @@ export type {
   SupabaseUser,
   UserInfo,
   OAuthUrlResponse,
+  FullAuthState,
+  AuthErrorResponse,
+  AuthErrorCode,
 } from '@/types/auth';
 
 /**

@@ -9,7 +9,35 @@ import type {
   ResendConfirmationResponse,
   VerifyOtpResponse,
   OAuthUrlResponse,
+  FullAuthState,
+  AuthErrorResponse,
 } from './types';
+
+// ============================================================================
+// Error Handling Helpers (Fix #15)
+// ============================================================================
+
+/**
+ * Parse a structured auth error from a string response
+ */
+export function parseAuthError(error: unknown): AuthErrorResponse | null {
+  if (typeof error === 'string') {
+    try {
+      return JSON.parse(error) as AuthErrorResponse;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if an error is a specific auth error code
+ */
+export function isAuthErrorCode(error: unknown, code: AuthErrorResponse['code']): boolean {
+  const parsed = parseAuthError(error);
+  return parsed?.code === code;
+}
 
 // ============================================================================
 // Core Auth Commands
@@ -47,15 +75,8 @@ export async function invokeSignInWithGoogle(fullName?: string): Promise<OAuthUr
   });
 }
 
-/**
- * Exchange an OAuth authorization code for a session
- * This is called internally when the deep link callback is received
- */
-export async function invokeExchangeCodeForSession(code: string): Promise<AuthResponse> {
-  return invoke<AuthResponse>('exchange_code_for_session', {
-    code,
-  });
-}
+// Note: exchange_code_for_session is now handled internally by the deep link handler
+// and is no longer exposed as a command since it requires the PKCE state
 
 export async function invokeVerifyOtp(
   email: string,
@@ -83,6 +104,14 @@ export async function invokeRefreshToken(): Promise<RefreshTokenResponse> {
 
 export async function invokeGetAuthState(): Promise<AuthState> {
   return invoke<AuthState>('get_auth_state');
+}
+
+/**
+ * Get full auth state in a single call (Fix #9 - reduces redundant API calls)
+ * Returns: isOnline, isAuthenticated, isSetupComplete, user, needsRefresh, expiresAt
+ */
+export async function invokeGetFullAuthState(): Promise<FullAuthState> {
+  return invoke<FullAuthState>('get_full_auth_state');
 }
 
 export async function invokeGetAccessToken(): Promise<string | null> {

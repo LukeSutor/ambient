@@ -303,11 +303,130 @@ impl UserInfo {
 }
 
 /// Current auth state exposed to the frontend
+/// NOTE: access_token is intentionally NOT exposed to frontend for security
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
 pub struct AuthState {
     pub is_authenticated: bool,
     pub user: Option<UserInfo>,
-    pub access_token: Option<String>,
+    /// Whether the token will expire soon (within 5 minutes)
+    pub needs_refresh: bool,
+    pub expires_at: Option<i64>,
+}
+
+/// Structured error response for auth operations (Fix #15)
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "auth.ts")]
+pub struct AuthErrorResponse {
+    /// Machine-readable error code
+    pub code: AuthErrorCode,
+    /// Human-readable error message
+    pub message: String,
+    /// Additional details (optional)
+    pub details: Option<String>,
+}
+
+/// Error codes for auth operations
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "auth.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum AuthErrorCode {
+    /// Network or connectivity error
+    NetworkError,
+    /// Invalid credentials
+    InvalidCredentials,
+    /// Email not confirmed
+    EmailNotConfirmed,
+    /// User already exists
+    UserAlreadyExists,
+    /// Invalid or expired OTP
+    InvalidOtp,
+    /// Rate limited
+    RateLimited,
+    /// OAuth error (state mismatch, PKCE failure, etc.)
+    OAuthError,
+    /// Session expired and refresh failed
+    SessionExpired,
+    /// Invalid request parameters
+    InvalidRequest,
+    /// Server error
+    ServerError,
+    /// Storage/encryption error
+    StorageError,
+    /// Unknown error
+    Unknown,
+}
+
+impl AuthErrorResponse {
+    pub fn new(code: AuthErrorCode, message: impl Into<String>) -> Self {
+        Self {
+            code,
+            message: message.into(),
+            details: None,
+        }
+    }
+    
+    pub fn with_details(mut self, details: impl Into<String>) -> Self {
+        self.details = Some(details.into());
+        self
+    }
+    
+    pub fn network_error(message: impl Into<String>) -> Self {
+        Self::new(AuthErrorCode::NetworkError, message)
+    }
+    
+    pub fn rate_limited(message: impl Into<String>) -> Self {
+        Self::new(AuthErrorCode::RateLimited, message)
+    }
+    
+    pub fn oauth_error(message: impl Into<String>) -> Self {
+        Self::new(AuthErrorCode::OAuthError, message)
+    }
+    
+    pub fn session_expired() -> Self {
+        Self::new(AuthErrorCode::SessionExpired, "Session expired. Please sign in again.")
+    }
+    
+    pub fn storage_error(message: impl Into<String>) -> Self {
+        Self::new(AuthErrorCode::StorageError, message)
+    }
+    
+    /// Convert from a Supabase AuthError
+    pub fn from_supabase_error(err: &AuthError) -> Self {
+        let message = err.get_message();
+        
+        // Map Supabase error codes to our error codes
+        let code = match err.error_code.as_deref() {
+            Some("email_not_confirmed") => AuthErrorCode::EmailNotConfirmed,
+            Some("invalid_credentials") => AuthErrorCode::InvalidCredentials,
+            Some("user_already_exists") => AuthErrorCode::UserAlreadyExists,
+            Some("otp_expired") | Some("otp_invalid") => AuthErrorCode::InvalidOtp,
+            Some("over_request_rate_limit") => AuthErrorCode::RateLimited,
+            _ if message.contains("Email not confirmed") => AuthErrorCode::EmailNotConfirmed,
+            _ if message.contains("Invalid login credentials") => AuthErrorCode::InvalidCredentials,
+            _ => AuthErrorCode::Unknown,
+        };
+        
+        Self::new(code, message)
+    }
+}
+
+impl std::fmt::Display for AuthErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap_or_else(|_| self.message.clone()))
+    }
+}
+
+impl std::error::Error for AuthErrorResponse {}
+
+/// Combined auth state for single-request hydration (Fix #9)
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "auth.ts")]
+pub struct FullAuthState {
+    pub is_online: bool,
+    pub is_authenticated: bool,
+    pub is_setup_complete: bool,
+    pub user: Option<UserInfo>,
+    pub needs_refresh: bool,
     pub expires_at: Option<i64>,
 }
