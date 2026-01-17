@@ -1,5 +1,6 @@
 use tauri::{AppHandle, Manager, Listener};
 use tokio::sync::oneshot;
+use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use base64::{Engine as _, engine::general_purpose};
 use super::actions::*;
 use super::types::ActionResponse;
@@ -9,6 +10,8 @@ use crate::events::{emitter::emit, types::*};
 use crate::db::conversations::add_message;
 use crate::windows::{open_main_window, close_main_window, open_computer_use_window, close_computer_use_window};
 use crate::db::computer_use::{get_computer_use_session, save_computer_use_session};
+use crate::auth::commands::get_access_token_command;
+use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use chrono;
 
 fn transform_function_call(function_name: String, args: Vec<String>) -> (String, String) {
@@ -134,46 +137,59 @@ impl ComputerUseEngine {
     }
 
     async fn get_model_response(&self) -> Result<serde_json::Value, String> {
-        let api_key = std::env::var("GEMINI_API_KEY")
-            .map_err(|_| "Missing GEMINI_API_KEY environment variable".to_string())?;
-        
-        let model = "gemini-2.5-computer-use-preview-10-2025";
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            model, api_key
-        );
+        // Get user access token
+        let access_token = get_access_token_command()
+            .await?
+            .ok_or_else(|| "No access token found. Please sign in.".to_string())?;
 
         // Build request body
-        let request_body = json!({
-            "contents": self.contents,
-            "tools": [{
-                "computer_use": {
-                    "environment": "ENVIRONMENT_BROWSER"
-                }
-            }],
-            "generationConfig": {
-                "temperature": 1,
-                "topP": 0.95,
-                "topK": 40,
-                "maxOutputTokens": 8192,
-            }
+        let body = json!({
+            "modelType": "computer-use",
+            "content": self.contents,
+            "stream": false,
+            "token": access_token,
+            "systemPrompt": "",
         });
 
-        // Make the HTTP request (async)
         let client = reqwest::Client::new();
-        let response = client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .json(&request_body)
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+
+        let mut prompt_tokens = 0u64;
+        let mut completion_tokens = 0u64;
+
+        let resp = client
+            .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
+            .headers(headers)
+            .json(&body)
             .send()
             .await
             .map_err(|e| format!("Failed to send request: {}", e))?;
 
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            log::error!("Cloudflare error status: {}. Body: {}", status, text);
+            return Err(format!("Cloudflare error {}: {}", status, text));
+        }
+
         // Get response as raw JSON Value
-        let json_response: serde_json::Value = response
+        let json_response: serde_json::Value = resp
             .json()
             .await
             .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+        // Extract token counts
+        if let Some(usage) = json_response.get("usageMetadata") {
+            prompt_tokens = usage
+            .get("promptTokenCount")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+            completion_tokens = usage
+            .get("candidatesTokenCount")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        }
 
         // Check for errors in the response
         if let Some(error) = json_response.get("error") {
@@ -182,6 +198,13 @@ impl ComputerUseEngine {
             log::error!("[computer_use] API Error {}: {}", code, message);
             return Err(format!("API Error {}: {}", code, message));
         }
+
+        // Log token usage
+        log::info!(
+            "[computer_use] Token usage - Prompt: {}, Completion: {}",
+            prompt_tokens,
+            completion_tokens,
+        );
 
         Ok(json_response)
     }

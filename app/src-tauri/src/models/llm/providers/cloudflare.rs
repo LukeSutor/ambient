@@ -89,7 +89,7 @@ impl LlmProvider for CloudflareProvider {
         body["jsonSchema"] = schema_value;
       } else {
         // Fallback to json_object
-        body["response_format"] = json!({ "type": "json_object" });
+        body["jsonSchema"] = json!({ "type": "json_object" });
       }
     }
 
