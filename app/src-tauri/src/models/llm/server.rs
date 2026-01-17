@@ -433,12 +433,6 @@ pub async fn generate(
     "content": request.prompt
   }));
 
-  // Log all messages for debugging
-  log::debug!(
-    "[llama_server] Building messages for generation: {}",
-    serde_json::to_string_pretty(&messages).unwrap_or_default()
-  );
-
   // Build request body
   let mut request_body = json!({
       "model": "gemini-7",

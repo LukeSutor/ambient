@@ -40,9 +40,6 @@ pub const HEALTH_CHECK_ENDPOINT: &str = "/health";
 pub const MAX_HEALTH_CHECK_RETRIES: u8 = 30;
 pub const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(120);
 
-// Cloudflare llm-completions worker URL
-pub const CLOUDFLARE_COMPLETIONS_WORKER_URL: &str = "http://localhost:8787";
-
 // HUD information
 pub const HUD_WINDOW_LABEL: &str = "main";
 

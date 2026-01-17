@@ -1,6 +1,5 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider};
 use crate::events::{emitter::emit, types::*};
-use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use crate::auth::commands::get_access_token_command;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
@@ -64,12 +63,6 @@ impl LlmProvider for CloudflareProvider {
     let should_stream = request.stream.unwrap_or(false);
     let content = build_content(&app_handle, request.prompt.clone(), &request.conv_id, &request.current_message_id).await;
 
-    // Log all content for debugging
-    log::debug!(
-      "Cloudflare content: {}",
-      serde_json::to_string_pretty(&content).unwrap_or_default()
-    );
-
     // Get user access token
     let access_token = get_access_token_command()
       .await?
@@ -101,9 +94,12 @@ impl LlmProvider for CloudflareProvider {
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
 
+    let url = std::env::var("CLOUDFLARE_COMPLETIONS_WORKER_URL")
+        .map_err(|_| "Missing CLOUDFLARE_COMPLETIONS_WORKER_URL environment variable".to_string())?;
+
     if should_stream {
       let resp = client
-        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
+        .post(&url)
         .headers(headers)
         .json(&body)
         .send()
@@ -203,7 +199,7 @@ impl LlmProvider for CloudflareProvider {
       Ok(full)
     } else {
       let resp = client
-        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
+        .post(&url)
         .headers(headers)
         .json(&body)
         .send()

@@ -203,8 +203,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
 
   let system_prompt = system_prompt_template.replace("{currentDateTime}", &current_date_time);
 
-  log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
-
   // Get 3 most relevant memories
   let relevant_memories =
     match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
