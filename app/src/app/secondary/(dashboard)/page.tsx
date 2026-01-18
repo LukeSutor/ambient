@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useRoleAccess } from "@/lib/role-access";
 import Link from "next/link";
 import {
   Card,
@@ -31,6 +32,25 @@ import {
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
 import { TimeFilter, AggregationLevel, TokenUsageQueryResult } from "@/types/token_usage";
 
+const greetings = [
+  "Hello",
+  "Welcome back",
+  "Good to see you",
+  "Hi there",
+  "Howdy",
+];
+
+function timeGreeting(): string {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return "Good morning";
+    } else if (hour < 18) {
+      return "Good afternoon";
+    } else {
+      return "Good evening";
+    }
+}
+
 const chartConfig = {
   local: {
     label: "Local",
@@ -43,9 +63,31 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export default function Home() {
+  const [greeting, setGreeting] = useState<string>("");
   const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
   const [aggregationLevel, setAggregationLevel] = useState<AggregationLevel>("Day");
+
+  const { userInfo, getFirstName } = useRoleAccess();
+
+  useEffect(() => {
+    if (!userInfo) return;
+
+    // Set the greeting randomly based on greetings or time of day
+    let greeting = "";
+    if (Math.random() < 0.5) {
+      greeting = timeGreeting();
+    } else {
+      greeting = greetings[Math.floor(Math.random() * greetings.length)];
+    }
+
+    // Add first name if available
+    const firstName = getFirstName();
+    if (firstName) {
+      greeting += `, ${firstName}`;
+    }
+    setGreeting(greeting);
+  }, [userInfo]);
 
   useEffect(() => {
     console.log({timeFilter, aggregationLevel})
@@ -59,9 +101,14 @@ export default function Home() {
 
   return (
     <div className="relative flex flex-col items-center justify-start p-4 w-full">
+      {userInfo ? 
+      <p className="text-4xl font-bold w-full h-20">{greeting}</p>
+      :
+      <div className="h-20 w-full" />
+      }
       <Card className="w-full">
         <CardHeader>
-          <CardTitle>Token Usage Overvasdfsafdsadfiew</CardTitle>
+          <CardTitle>Token Usage Overview</CardTitle>
           <CardDescription>
             {chartData?.time_range}
           </CardDescription>
@@ -75,7 +122,7 @@ export default function Home() {
                 tickLine={false}
                 axisLine={false}
               />
-              <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot"  />} />
+              <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
               <ChartLegend content={<ChartLegendContent />} />
               {chartData?.models.map((model, index) => (
                 <Bar 

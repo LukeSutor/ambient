@@ -430,23 +430,13 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 /// Returns the URL that should be opened in the system browser
 /// Note: Supabase handles PKCE internally for social OAuth providers
 #[tauri::command]
-pub async fn sign_in_with_google(
-    full_name: Option<String>,
-) -> Result<OAuthUrlResponse, String> {
+pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     log::info!("[supabase_auth] Initiating Google OAuth sign in");
     let (base_url, _) = get_env_vars()?;
     
     // Build the OAuth authorization URL
-    // Note: Supabase manages PKCE and state internally for social OAuth
-    // We should NOT pass our own code_challenge or state parameters
     let redirect_uri = "cortical://auth/callback";
     let provider = "google";
-    
-    // Build optional metadata to pass through
-    let mut data = serde_json::Map::new();
-    if let Some(name) = full_name {
-        data.insert("full_name".to_string(), json!(name));
-    }
     
     let mut auth_url = format!(
         "{}/auth/v1/authorize?provider={}&redirect_to={}",
@@ -454,13 +444,6 @@ pub async fn sign_in_with_google(
         provider,
         urlencoding::encode(redirect_uri)
     );
-
-    // Append metadata if provided
-    if !data.is_empty() {
-        if let Ok(data_json) = serde_json::to_string(&data) {
-            auth_url.push_str(&format!("&data={}", urlencoding::encode(&data_json)));
-        }
-    }
     
     log::info!("[supabase_auth] Generated Google OAuth URL");
     

@@ -53,8 +53,7 @@ export function useRoleAccess(location?: string) {
       pathname === normalizedLocation || pathname.startsWith(`${normalizedLocation}/`);
 
     // Go to sign in if online and not logged in
-    //TODO: Fix logic for offline mode
-    if (!state.isLoggedIn && isWithinBase && !isAuthRoute) {
+    if (state.isOnline && !state.isLoggedIn && isWithinBase && !isAuthRoute) {
       router.replace(signInPath);
       return;
     }
@@ -66,7 +65,7 @@ export function useRoleAccess(location?: string) {
     }
 
     // Prevent going to auth routes if not online or already logged in
-    if ((state.isLoggedIn) && isAuthRoute) {
+    if ((!state.isOnline || state.isLoggedIn) && isAuthRoute) {
       router.replace(normalizedLocation);
     }
 
@@ -116,9 +115,9 @@ export function useRoleAccess(location?: string) {
    * Opens the authorization URL in the system browser
    * The actual session creation happens via deep link callback
    */
-  const signInWithGoogle = useCallback(async (fullName?: string): Promise<void> => {
+  const signInWithGoogle = useCallback(async (): Promise<void> => {
     try {
-      const { url } = await invokeSignInWithGoogle(fullName);
+      const { url } = await invokeSignInWithGoogle();
       
       // Open the OAuth URL in the system browser
       const { open } = await import('@tauri-apps/plugin-shell');
@@ -172,6 +171,14 @@ export function useRoleAccess(location?: string) {
     }
   }, [dispatch]);
 
+  const getFirstName = useCallback((): string | null => {
+    if (state.userInfo?.full_name) {
+      const parts = state.userInfo.full_name.trim().split(' ');
+      return parts.length > 0 ? parts[0] : null;
+    }
+    return null;
+  }, [state.userInfo]);
+
   return {
     ...state,
     signIn,
@@ -181,5 +188,6 @@ export function useRoleAccess(location?: string) {
     resendConfirmationCode,
     signOut,
     refresh,
+    getFirstName,
   };
 }
