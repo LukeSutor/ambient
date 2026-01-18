@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useRoleAccess } from "@/lib/role-access";
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -30,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
-import { TimeFilter, AggregationLevel, TokenUsageQueryResult } from "@/types/token_usage";
+import { TimeFilter, AggregationLevel, TokenUsageQueryResult, TokenUsageConsumptionResult } from "@/types/token_usage";
 
 const greetings = [
   "Hello",
@@ -64,12 +63,14 @@ const chartConfig = {
 
 export default function Home() {
   const [greeting, setGreeting] = useState<string>("");
+  const [consumptionData, setConsumptionData] = useState<TokenUsageConsumptionResult | null>(null);
   const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
   const [aggregationLevel, setAggregationLevel] = useState<AggregationLevel>("Day");
 
   const { userInfo, getFirstName } = useRoleAccess();
 
+  // Set greeting
   useEffect(() => {
     if (!userInfo) return;
 
@@ -89,23 +90,59 @@ export default function Home() {
     setGreeting(greeting);
   }, [userInfo]);
 
+  // Fetch consumption data
+  useEffect(() => {
+    async function fetchConsumptionData() {
+      const data = await invoke<TokenUsageConsumptionResult>('get_token_usage_consumption');
+      setConsumptionData(data);
+      console.log("Consumption Data:", data);
+    }
+    fetchConsumptionData();
+  }, []);  
+
+  // Fetch chart data
   useEffect(() => {
     console.log({timeFilter, aggregationLevel})
     async function fetchData() {
       const data = await invoke<TokenUsageQueryResult>('get_token_usage', { timeFilter, aggregationLevel });
       setChartData(data);
-      console.log({data})
     }
     fetchData();
   }, [timeFilter, aggregationLevel]);
 
   return (
     <div className="relative flex flex-col items-center justify-start p-4 w-full">
+      {/* Greeting */}
       {userInfo ? 
       <p className="text-4xl font-bold w-full h-20">{greeting}</p>
       :
       <div className="h-20 w-full" />
       }
+      {/* Consumption cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full my-4">
+        <Card>
+          <CardHeader>Cost Savings</CardHeader>
+          <CardContent className="flex flex-row items-baseline justify-center mt-auto">
+            <p className="text-4xl text-black font-bold mx-2">{consumptionData?.cost_amount?.toFixed(2)}</p>
+            <p className="text-xl">{consumptionData?.cost_unit}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>Water Savings</CardHeader>
+          <CardContent className="flex flex-row items-baseline justify-center mt-auto">
+            <p className="text-4xl text-black font-bold mx-2">{consumptionData?.water_amount?.toFixed(2)}</p>
+            <p className="text-xl">{consumptionData?.water_unit}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>Energy Savings</CardHeader>
+          <CardContent className="flex flex-row items-baseline justify-center mt-auto">
+            <p className="text-4xl text-black font-bold mx-2">{consumptionData?.energy_amount?.toFixed(2)}</p>
+            <p className="text-xl">{consumptionData?.energy_unit}</p>
+          </CardContent>
+        </Card>
+      </div>
+      {/* Token usage graph */}
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Token Usage Overview</CardTitle>

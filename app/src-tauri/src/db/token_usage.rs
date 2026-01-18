@@ -5,6 +5,7 @@ use tauri::{AppHandle, Manager};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use std::collections::{HashSet, BTreeMap};
+use crate::constants::{COST_PER_TOKEN, WATER_PER_TOKEN, ENERGY_PER_TOKEN};
 
 /// Time filters for querying token usage
 #[derive(Debug, Serialize, Deserialize, TS, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +48,16 @@ pub struct TokenUsageQueryResult {
   pub time_range: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "token_usage.ts")]
+pub struct TokenUsageConsumptionResult {
+  pub cost_amount: f64,
+  pub cost_unit: String,
+  pub water_amount: f64,
+  pub water_unit: String,
+  pub energy_amount: f64,
+  pub energy_unit: String,
+}
 
 /// Add token usage record
 pub async fn add_token_usage(
@@ -129,6 +140,49 @@ pub async fn get_total_token_usage(
     total_prompt_tokens.unwrap_or(0),
     total_completion_tokens.unwrap_or(0),
   ))
+}
+
+/// Get the estimated cost, water, and energy savings for the local token counts
+#[tauri::command]
+pub async fn get_token_usage_consumption(app_handle: AppHandle) -> Result<TokenUsageConsumptionResult, String> {
+  // Get total token usage for local mode
+  let (total_prompt_tokens, total_completion_tokens) = get_total_token_usage(app_handle, "local").await?;
+  let total_tokens = total_prompt_tokens + total_completion_tokens;
+
+  // Calculate estimates based on constants
+  let cost_amount = (total_tokens as f64) * COST_PER_TOKEN;
+  let water_amount = (total_tokens as f64) * WATER_PER_TOKEN;
+  let energy_amount = (total_tokens as f64) * ENERGY_PER_TOKEN;
+
+  // Determine units based on magnitude
+  // Dollars or cents for USD
+  let (cost_amount, cost_unit) = if cost_amount >= 1.0 {
+    (cost_amount, "$".to_string())
+  } else {
+    (cost_amount * 100.0, "¢".to_string())
+  };
+
+  // Liters or milliliters for water
+  let (water_amount, water_unit) = if water_amount >= 1000.0 {
+    (water_amount / 1000.0, "L".to_string())
+  } else {
+    (water_amount, "mL".to_string())
+  };
+
+  // kWh or Wh for energy
+  let (energy_amount, energy_unit) = if energy_amount >= 1000.0 {
+    (energy_amount / 1000.0, "kWh".to_string())
+  } else {
+    (energy_amount, "Wh".to_string())
+  };
+  Ok(TokenUsageConsumptionResult {
+    cost_amount,
+    cost_unit,
+    water_amount,
+    water_unit,
+    energy_amount,
+    energy_unit,
+  })
 }
 
 /// Get token usage aggregated by the specified level and model filtered by time range

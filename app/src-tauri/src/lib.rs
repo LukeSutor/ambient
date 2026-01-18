@@ -186,6 +186,7 @@ pub fn run() {
       db::memory::get_memory_entries_with_message,
       db::memory::delete_memory_entry,
       db::memory::delete_all_memories,
+      db::token_usage::get_token_usage_consumption,
       db::token_usage::get_token_usage,
       setup::setup,
       setup::is_online,

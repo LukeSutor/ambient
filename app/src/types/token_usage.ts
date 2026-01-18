@@ -7,4 +7,6 @@ export type AggregationLevel = "Hour" | "Day" | "Week" | "Month";
  */
 export type TimeFilter = "Last24Hours" | "Last7Days" | "Last30Days" | "LastYear" | "AllTime";
 
+export type TokenUsageConsumptionResult = { cost_amount: number, cost_unit: string, water_amount: number, water_unit: string, energy_amount: number, energy_unit: string, };
+
 export type TokenUsageQueryResult = { time_filter: TimeFilter, aggregation_level: AggregationLevel, data: ({ time_label: string, date: string } & Record<string, number>)[], models: Array<string>, total_prompt_tokens: number, total_completion_tokens: number, time_range: string, };
