@@ -11,6 +11,28 @@ export type AppMetadata = { provider: string | null, providers: Array<string> | 
 export type AuthError = { code: any, error_code: string | null, error: string | null, error_description: string | null, msg: string | null, };
 
 /**
+ * Error codes for auth operations
+ */
+export type AuthErrorCode = "network_error" | "invalid_credentials" | "email_not_confirmed" | "user_already_exists" | "invalid_otp" | "rate_limited" | "o_auth_error" | "session_expired" | "invalid_request" | "server_error" | "storage_error" | "unknown";
+
+/**
+ * Structured error response for auth operations
+ */
+export type AuthErrorResponse = { 
+/**
+ * Machine-readable error code
+ */
+code: AuthErrorCode, 
+/**
+ * Human-readable error message
+ */
+message: string, 
+/**
+ * Additional details (optional)
+ */
+details: string | null, };
+
+/**
  * Sign In Response - returned after successful password sign in
  */
 export type AuthResponse = { session: Session | null, user: SupabaseUser | null, weak_password: WeakPassword | null, 
@@ -29,43 +51,18 @@ delivery_medium: string | null, };
 
 /**
  * Current auth state exposed to the frontend
- * NOTE: access_token is intentionally NOT exposed for security
+ * NOTE: access_token is intentionally NOT exposed to frontend for security
  */
-export type AuthState = { is_authenticated: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
-
+export type AuthState = { is_authenticated: boolean, user: UserInfo | null, 
 /**
- * Structured error response for auth operations
+ * Whether the token will expire soon (within 5 minutes)
  */
-export type AuthErrorResponse = { code: AuthErrorCode, message: string, details: string | null, };
-
-/**
- * Error codes for auth operations
- */
-export type AuthErrorCode = 
-  | "network_error"
-  | "invalid_credentials"
-  | "email_not_confirmed"
-  | "user_already_exists"
-  | "invalid_otp"
-  | "rate_limited"
-  | "oauth_error"
-  | "session_expired"
-  | "invalid_request"
-  | "server_error"
-  | "storage_error"
-  | "unknown";
+needs_refresh: boolean, expires_at: bigint | null, };
 
 /**
  * Combined auth state for single-request hydration
  */
-export type FullAuthState = { 
-  is_online: boolean, 
-  is_authenticated: boolean, 
-  is_setup_complete: boolean, 
-  user: UserInfo | null, 
-  needs_refresh: boolean, 
-  expires_at: bigint | null, 
-};
+export type FullAuthState = { is_online: boolean, is_authenticated: boolean, is_setup_complete: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
 
 /**
  * OAuth URL Response
