@@ -1,10 +1,16 @@
 use crate::auth::types::{
     AuthResponse, AuthError, Session, SignUpResponse, SupabaseUser, 
     VerifyOtpResponse, RefreshTokenResponse, ResendConfirmationResponse,
-    OAuthUrlResponse,
+    OAuthUrlResponse, AuthErrorResponse, AuthErrorCode,
 };
-use crate::auth::storage::{store_session, get_refresh_token, clear_auth_state, get_access_token};
+use crate::auth::storage::{store_session, get_refresh_token, clear_auth_state, get_access_token, retrieve_auth_state};
+use crate::auth::security::{
+    HTTP_CLIENT,
+    check_rate_limit, record_attempt, clear_rate_limit, RateLimitOp,
+};
 use serde_json::json;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
 
 extern crate dotenv;
 
@@ -28,7 +34,11 @@ pub async fn sign_up(
     password: String,
     full_name: Option<String>,
 ) -> Result<SignUpResponse, String> {
-    log::info!("[supabase_auth] Attempting sign_up for email: {}", email);
+    log::info!("[supabase_auth] Attempting sign up");
+    
+    check_rate_limit(RateLimitOp::SignUp, &email)?;
+    record_attempt(RateLimitOp::SignUp, &email);
+    
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/signup", base_url);
     
@@ -45,22 +55,27 @@ pub async fn sign_up(
         "data": user_meta
     });
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
+        .map_err(|e| {
+            let err = AuthErrorResponse::network_error(format!("Failed to send request: {}", e));
+            err.to_string()
+        })?;
     
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
         
     if !status.is_success() {
-        return Err(response_text);
+        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
+            return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
+        }
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
     
     // Try to parse as session response (when autoconfirm is enabled)
@@ -87,7 +102,7 @@ pub async fn sign_up(
         .map(|c| !c.is_empty())
         .unwrap_or(false);
     
-    log::info!("[supabase_auth] SignUp successful. User ID: {}, Confirmed: {}", user.id, user_confirmed);
+    log::info!("[supabase_auth] SignUp successful. Confirmed: {}", user_confirmed);
     
     Ok(SignUpResponse {
         user: Some(user),
@@ -100,7 +115,11 @@ pub async fn sign_up(
 
 #[tauri::command]
 pub async fn sign_in_with_password(email: String, password: String) -> Result<AuthResponse, String> {
-    log::info!("[supabase_auth] Attempting sign_in for email: {}", email);
+    log::info!("[supabase_auth] Attempting sign in");
+    
+    check_rate_limit(RateLimitOp::SignIn, &email)?;
+    record_attempt(RateLimitOp::SignIn, &email);
+    
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/token?grant_type=password", base_url);
     
@@ -109,47 +128,40 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
         "password": password
     });
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
+        .map_err(|e| {
+            AuthErrorResponse::network_error(format!("Failed to send request: {}", e)).to_string()
+        })?;
     
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
         
     if !status.is_success() {
-        match serde_json::from_str::<AuthError>(&response_text) {
-            Ok(err) => {
-                let msg = err.get_message();
-                
-                // Handle unconfirmed email case
-                if msg.contains("Email not confirmed") || err.error_code == Some("email_not_confirmed".to_string()) {
-                    log::info!("[supabase_auth] User email not confirmed for {}. Automatically resending confirmation.", email);
-                    
-                    // Automatically resend confirmation email
-                    let _ = resend_confirmation(email.clone()).await;
-                    
-                    return Ok(AuthResponse {
-                        session: None,
-                        user: None,
-                        weak_password: None,
-                        verification_required: true,
-                        destination: Some(email),
-                        delivery_medium: Some("EMAIL".to_string()),
-                    });
-                }
-            },
-            Err(e) => {
-                log::warn!("[supabase_auth] Failed to parse auth error: {}. Body: {}", e, response_text);
+        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
+            let auth_err = AuthErrorResponse::from_supabase_error(&err);
+            
+            if auth_err.code == AuthErrorCode::EmailNotConfirmed {
+                log::info!("[supabase_auth] User email not confirmed");
+                return Ok(AuthResponse {
+                    session: None,
+                    user: None,
+                    weak_password: None,
+                    verification_required: true,
+                    destination: Some(email),
+                    delivery_medium: Some("EMAIL".to_string()),
+                });
             }
+            
+            return Err(auth_err.to_string());
         }
-        return Err(response_text);
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
     
     // Parse the session response
@@ -159,9 +171,13 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     // Store the session
     if let Err(e) = store_session(&session) {
         log::warn!("[supabase_auth] Failed to store session: {}", e);
+        return Err(AuthErrorResponse::storage_error(format!("Failed to store session: {}", e)).to_string());
     }
     
-    log::info!("[supabase_auth] SignIn successful for user: {}", session.user.id);
+    // Clear rate limit on successful login
+    clear_rate_limit(RateLimitOp::SignIn, &email);
+    
+    log::info!("[supabase_auth] SignIn successful");
     
     Ok(AuthResponse {
         session: Some(session.clone()),
@@ -173,13 +189,33 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     })
 }
 
+static REFRESH_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 #[tauri::command]
 pub async fn refresh_token() -> Result<RefreshTokenResponse, String> {
     log::info!("[supabase_auth] Attempting to refresh session");
     
+    // Acquire lock to serialize refresh requests
+    let _guard = REFRESH_MUTEX.lock().await;
+
+    // Check if the token was already refreshed by another thread while we waited
+    if let Ok(Some(state)) = retrieve_auth_state().map_err(|e| e.to_string()) {
+        if !state.is_access_token_expired() {
+            log::info!("[supabase_auth] Token already refreshed by concurrent request. Returning valid session.");
+            return Ok(RefreshTokenResponse {
+                session: state.session.clone(),
+                user: state.session.user,
+            });
+        }
+    }
+    
+    // Rate limiting for refresh to prevent abuse
+    check_rate_limit(RateLimitOp::RefreshToken, "global")?;
+    record_attempt(RateLimitOp::RefreshToken, "global");
+    
     let refresh_token = get_refresh_token()
-        .map_err(|e| format!("Failed to get refresh token: {}", e))?
-        .ok_or("No refresh token available")?;
+        .map_err(|e| AuthErrorResponse::storage_error(format!("Failed to get refresh token: {}", e)).to_string())?
+        .ok_or_else(|| AuthErrorResponse::session_expired().to_string())?;
     
     refresh_session_with_token(&refresh_token).await
 }
@@ -192,15 +228,14 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
         "refresh_token": refresh_token
     });
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Failed to send refresh request: {}", e))?;
+        .map_err(|e| AuthErrorResponse::network_error(format!("Failed to send refresh request: {}", e)).to_string())?;
     
     let status = response.status();
     let response_text = response.text().await
@@ -210,7 +245,10 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
         // Clear auth state on refresh failure
         let _ = clear_auth_state();
         
-        return Err(response_text);
+        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
+            return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
+        }
+        return Err(AuthErrorResponse::session_expired().to_string());
     }
     
     // Parse the new session
@@ -220,7 +258,11 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
     // Store the new session
     if let Err(e) = store_session(&session) {
         log::warn!("[supabase_auth] Failed to store refreshed session: {}", e);
+        return Err(AuthErrorResponse::storage_error(format!("Failed to store session: {}", e)).to_string());
     }
+    
+    // Clear rate limit on success
+    clear_rate_limit(RateLimitOp::RefreshToken, "global");
     
     log::info!("[supabase_auth] Session refreshed successfully");
     
@@ -234,7 +276,11 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
 pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) -> Result<VerifyOtpResponse, String> {
     let otp_type = otp_type.unwrap_or_else(|| "signup".to_string());
 
-    log::info!("[supabase_auth] Attempting verify_otp for email: {}", email);
+    log::info!("[supabase_auth] Attempting to verify otp");
+    
+    check_rate_limit(RateLimitOp::VerifyOtp, &email)?;
+    record_attempt(RateLimitOp::VerifyOtp, &email);
+    
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/verify", base_url);
     
@@ -244,29 +290,35 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
         "type": otp_type
     });
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
+        .map_err(|e| AuthErrorResponse::network_error(format!("Failed to send request: {}", e)).to_string())?;
     
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
         
     if !status.is_success() {
-        return Err(response_text);
+        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
+            return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
+        }
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
+    
+    // Clear rate limit on success
+    clear_rate_limit(RateLimitOp::VerifyOtp, &email);
     
     // Try to parse as session response (verification may return a session)
     if let Ok(session) = serde_json::from_str::<Session>(&response_text) {
         // Store the session
         if let Err(e) = store_session(&session) {
             log::warn!("[supabase_auth] Failed to store session: {}", e);
+            return Err(AuthErrorResponse::storage_error(format!("Failed to store session: {}", e)).to_string());
         }
         
         return Ok(VerifyOtpResponse {
@@ -293,7 +345,11 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
 
 #[tauri::command]
 pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResponse, String> {
-    log::info!("[supabase_auth] Attempting resend_confirmation for email: {}", email);
+    log::info!("[supabase_auth] Attempting resend confirmation");
+    
+    check_rate_limit(RateLimitOp::ResendConfirmation, &email)?;
+    record_attempt(RateLimitOp::ResendConfirmation, &email);
+    
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/resend", base_url);
     
@@ -302,25 +358,27 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
         "type": "signup"
     });
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
         .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
+        .map_err(|e| AuthErrorResponse::network_error(format!("Failed to send request: {}", e)).to_string())?;
     
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
     
     if !status.is_success() {
-        return Err(response_text);
+        if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
+            return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
+        }
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
     
-    log::info!("[supabase_auth] Resend confirmation successful for email: {}", email);
+    log::info!("[supabase_auth] Resend confirmation successful");
     
     Ok(ResendConfirmationResponse {
         message_id: None,
@@ -348,8 +406,7 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
         let (base_url, api_key) = get_env_vars()?;
         let endpoint = format!("{}/auth/v1/logout", base_url);
         
-        let client = reqwest::Client::new();
-        let _ = client
+        let _ = HTTP_CLIENT
             .post(&endpoint)
             .header("apikey", &api_key)
             .header("Authorization", format!("Bearer {}", token))
@@ -359,7 +416,7 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
     
     // Always clear local auth state
     clear_auth_state()
-        .map_err(|e| format!("Failed to clear auth state: {}", e))?;
+        .map_err(|e| AuthErrorResponse::storage_error(format!("Failed to clear auth state: {}", e)).to_string())?;
     
     log::info!("[supabase_auth] Sign out successful");
     Ok(())
@@ -369,8 +426,9 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 // Google OAuth Functions
 // ============================================================================
 
-/// Generate the Google OAuth authorization URL for PKCE flow
+/// Generate the Google OAuth authorization URL
 /// Returns the URL that should be opened in the system browser
+/// Note: Supabase handles PKCE internally for social OAuth providers
 #[tauri::command]
 pub async fn sign_in_with_google(
     full_name: Option<String>,
@@ -379,7 +437,8 @@ pub async fn sign_in_with_google(
     let (base_url, _) = get_env_vars()?;
     
     // Build the OAuth authorization URL
-    // Using PKCE flow with the deep link callback
+    // Note: Supabase manages PKCE and state internally for social OAuth
+    // We should NOT pass our own code_challenge or state parameters
     let redirect_uri = "cortical://auth/callback";
     let provider = "google";
     
@@ -403,64 +462,9 @@ pub async fn sign_in_with_google(
         }
     }
     
-    log::info!("[supabase_auth] Generated Google OAuth URL: {}", auth_url);
+    log::info!("[supabase_auth] Generated Google OAuth URL");
     
     Ok(OAuthUrlResponse { url: auth_url })
-}
-
-/// Exchange an OAuth authorization code for a session
-/// Called after the deep link callback is received with the code
-#[tauri::command]
-pub async fn exchange_code_for_session(code: String) -> Result<AuthResponse, String> {
-    log::info!("[supabase_auth] Exchanging OAuth code for session");
-    let (base_url, api_key) = get_env_vars()?;
-    
-    // Exchange the code for a session using Supabase's token endpoint
-    let endpoint = format!("{}/auth/v1/token?grant_type=pkce", base_url);
-    
-    let body = json!({
-        "auth_code": code,
-        "code_verifier": ""  // For implicit/simple OAuth flow without PKCE verifier
-    });
-    
-    let client = reqwest::Client::new();
-    let response = client
-        .post(&endpoint)
-        .header("apikey", &api_key)
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
-    
-    let status = response.status();
-    let response_text = response.text().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-    
-    if !status.is_success() {
-        log::error!("[supabase_auth] Failed to exchange code: {}", response_text);
-        return Err(format!("Failed to exchange code for session: {}", response_text));
-    }
-    
-    // Parse the session response
-    let session: Session = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse session: {}. Body: {}", e, response_text))?;
-    
-    // Store the session
-    if let Err(e) = store_session(&session) {
-        log::warn!("[supabase_auth] Failed to store session: {}", e);
-    }
-    
-    log::info!("[supabase_auth] OAuth code exchange successful for user: {}", session.user.id);
-    
-    Ok(AuthResponse {
-        session: Some(session.clone()),
-        user: Some(session.user),
-        weak_password: None,
-        verification_required: false,
-        destination: None,
-        delivery_medium: None,
-    })
 }
 
 /// Fetch user profile from the public.profiles table
@@ -468,8 +472,7 @@ pub async fn fetch_user_profile(user_id: &str, access_token: &str) -> Result<ser
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/rest/v1/profiles?id=eq.{}&select=*", base_url, user_id);
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .get(&endpoint)
         .header("apikey", &api_key)
         .header("Authorization", format!("Bearer {}", access_token))
@@ -488,13 +491,12 @@ pub async fn fetch_user_profile(user_id: &str, access_token: &str) -> Result<ser
     Ok(profiles.into_iter().next().unwrap_or(serde_json::json!({})))
 }
 
-/// Handle the OAuth callback URL directly
-/// This parses the callback URL which may contain tokens in the fragment or a code in query params
+/// Handle the OAuth callback URL
 pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Handling OAuth callback URL");
     
     let parsed = url::Url::parse(callback_url)
-        .map_err(|e| format!("Failed to parse callback URL: {}", e))?;
+        .map_err(|e| AuthErrorResponse::oauth_error(format!("Failed to parse callback URL: {}", e)).to_string())?;
     
     // Check for error in query params
     let query_pairs: std::collections::HashMap<String, String> = parsed
@@ -506,15 +508,10 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, S
         let error_description = query_pairs.get("error_description")
             .cloned()
             .unwrap_or_default();
-        return Err(format!("OAuth error: {} - {}", error, error_description));
+        return Err(AuthErrorResponse::oauth_error(format!("{}: {}", error, error_description)).to_string());
     }
     
-    // Check for authorization code in query params (PKCE flow)
-    if let Some(code) = query_pairs.get("code") {
-        return exchange_code_for_session(code.clone()).await;
-    }
-    
-    // Check for tokens in the URL fragment (implicit flow)
+    // Check for tokens in the URL fragment (Supabase social OAuth flow)
     // Fragment comes after # in the URL
     if let Some(fragment) = parsed.fragment() {
         let fragment_pairs: std::collections::HashMap<String, String> = 
@@ -525,45 +522,78 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, S
         if let (Some(access_token), Some(refresh_token)) = 
             (fragment_pairs.get("access_token"), fragment_pairs.get("refresh_token")) 
         {
+            // Validate tokens are not empty
+            if access_token.is_empty() || refresh_token.is_empty() {
+                return Err(AuthErrorResponse::oauth_error("Received empty tokens in OAuth callback").to_string());
+            }
+            
             // We have tokens directly, fetch the user and create session
+            // This validates the tokens server-side
             return handle_tokens_from_fragment(access_token, refresh_token, &fragment_pairs).await;
         }
     }
     
-    Err("No authorization code or tokens found in callback URL".to_string())
+    // Check for authorization code in query params (used for custom OAuth server flows)
+    // This is for when you build your own OAuth server with Supabase, not social login
+    if query_pairs.contains_key("code") {
+        log::info!("[supabase_auth] Received authorization code - this flow is not supported for social OAuth");
+        // For code exchange, we'd need to have stored the code_verifier
+        // This path is for advanced custom OAuth flows
+        return Err(AuthErrorResponse::oauth_error(
+            "Authorization code flow not implemented for social OAuth. Tokens expected in URL fragment."
+        ).to_string());
+    }
+    
+    Err(AuthErrorResponse::oauth_error("No authorization code or tokens found in callback URL").to_string())
 }
 
-/// Handle tokens received in URL fragment (implicit flow)
+/// Handle tokens received in URL fragment
+/// Validates tokens by fetching user info before trusting them
 async fn handle_tokens_from_fragment(
     access_token: &str,
     refresh_token: &str,
     fragment_pairs: &std::collections::HashMap<String, String>,
 ) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Handling tokens from URL fragment");
+    
+    // Validate token format
+    if access_token.len() < 10 || refresh_token.len() < 10 {
+        return Err(AuthErrorResponse::oauth_error("Invalid token format received").to_string());
+    }
+    
     let (base_url, api_key) = get_env_vars()?;
     
-    // Get user info using the access token
+    // Get user info using the access token - this validates the token server-side
     let endpoint = format!("{}/auth/v1/user", base_url);
     
-    let client = reqwest::Client::new();
-    let response = client
+    let response = HTTP_CLIENT
         .get(&endpoint)
         .header("apikey", &api_key)
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .await
-        .map_err(|e| format!("Failed to get user info: {}", e))?;
+        .map_err(|e| AuthErrorResponse::network_error(format!("Failed to get user info: {}", e)).to_string())?;
     
     let status = response.status();
     let response_text = response.text().await
         .map_err(|e| format!("Failed to read response: {}", e))?;
     
     if !status.is_success() {
-        return Err(format!("Failed to get user info: {}", response_text));
+        // Token validation failed - this is a security concern
+        log::error!("[supabase_auth] Token validation failed - server rejected the access token");
+        return Err(AuthErrorResponse::oauth_error("Token validation failed - access token rejected by server").to_string());
     }
     
     let user: SupabaseUser = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse user: {}. Body: {}", e, response_text))?;
+        .map_err(|e| {
+            log::error!("[supabase_auth] Failed to parse user from token validation: {}", e);
+            AuthErrorResponse::oauth_error(format!("Failed to parse user info: {}", e)).to_string()
+        })?;
+    
+    // Validate user has required fields
+    if user.id.is_empty() {
+        return Err(AuthErrorResponse::oauth_error("Invalid user data received from OAuth").to_string());
+    }
     
     // Parse expires_in from fragment
     let expires_in: i64 = fragment_pairs.get("expires_in")
@@ -588,9 +618,10 @@ async fn handle_tokens_from_fragment(
     // Store the session
     if let Err(e) = store_session(&session) {
         log::warn!("[supabase_auth] Failed to store session: {}", e);
+        return Err(AuthErrorResponse::storage_error(format!("Failed to store session: {}", e)).to_string());
     }
     
-    log::info!("[supabase_auth] OAuth sign in successful for user: {}", user.id);
+    log::info!("[supabase_auth] OAuth sign in successful");
     
     Ok(AuthResponse {
         session: Some(session),

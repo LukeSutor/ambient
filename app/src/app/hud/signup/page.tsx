@@ -11,7 +11,7 @@ import { CheckCircle, UserPlus, Loader2, Mail, Eye, EyeOff, AlertCircle, X, Arro
 import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { useRoleAccess, SignUpRequest, SignUpResponse, ConfirmSignUpRequest } from '@/lib/role-access';
+import { useRoleAccess, SignUpRequest, SignUpResponse, ConfirmSignUpRequest, getAuthErrorMessage } from '@/lib/role-access';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { useRouter } from 'next/navigation';
@@ -148,15 +148,7 @@ export default function SignUp() {
       }
     } catch (err) {
       console.error('Sign up failed:', err);
-      // Turn err into json and extract message
-      let message = 'Sign up failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing sign-up error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Sign up failed. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -199,15 +191,7 @@ export default function SignUp() {
       }, 2000);
     } catch (err) {
       console.error('Verification failed:', err);
-      // Turn err into json and extract message
-      let message = 'Verification failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing verification error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
     } finally {
       setIsConfirming(false);
     }
@@ -222,15 +206,7 @@ export default function SignUp() {
       //TODO: Implement success feedback
     } catch (err) {
       console.error('Resend code failed:', err);
-      // Turn err into json and extract message
-      let message = 'Resend code failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing resend code error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
     }
   };
 

@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { useRoleAccess } from '@/lib/role-access';
+import { useRoleAccess, getAuthErrorMessage } from '@/lib/role-access';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -64,13 +64,7 @@ export default function SignInPage() {
       }
     } catch (err) {
       console.error('Sign in failed:', err);
-      // Turn err into json and extract message
-      let message = 'Sign in failed. Please check your credentials.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {}
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Sign in failed. Please check your credentials.'));
     } finally {
       setIsLoading(false);
     }
@@ -104,12 +98,7 @@ export default function SignInPage() {
       }, 2000);
     } catch (err) {
       console.error('Verification failed:', err);
-      let message = 'Verification failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {}
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
     } finally {
       setIsConfirming(false);
     }
@@ -122,15 +111,7 @@ export default function SignInPage() {
       await resendConfirmationCode(loginData.email);
     } catch (err) {
       console.error('Resend code failed:', err);
-      // Turn err into json and extract message
-      let message = 'Resend code failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing resend code error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
     }
   };
 

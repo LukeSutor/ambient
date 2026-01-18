@@ -6,7 +6,6 @@ import type {
 // Re-export all auth types
 export type {
   AuthResponse,
-  AuthState,
   SignUpResponse,
   VerifyOtpResponse,
   RefreshTokenResponse,
@@ -15,6 +14,9 @@ export type {
   SupabaseUser,
   UserInfo,
   OAuthUrlResponse,
+  AuthState,
+  AuthErrorResponse,
+  AuthErrorCode,
 } from '@/types/auth';
 
 /**

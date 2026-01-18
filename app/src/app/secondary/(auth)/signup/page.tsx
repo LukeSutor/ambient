@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRoleAccess, SignUpRequest, ConfirmSignUpRequest, SignUpResponse } from '@/lib/role-access';
+import { useRoleAccess, SignUpRequest, ConfirmSignUpRequest, SignUpResponse, getAuthErrorMessage } from '@/lib/role-access';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -118,15 +118,7 @@ export default function SignUpPage() {
       }
     } catch (err) {
       console.error('Sign up failed:', err);
-      // Turn err into json and extract message
-      let message = 'Sign up failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing sign-up error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Sign up failed. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -169,15 +161,7 @@ export default function SignUpPage() {
       }, 2000);
     } catch (err) {
       console.error('Verification failed:', err);
-      // Turn err into json and extract message
-      let message = 'Verification failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing verification error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
     } finally {
       setIsConfirming(false);
     }
@@ -192,15 +176,7 @@ export default function SignUpPage() {
       //TODO: Implement success feedback
     } catch (err) {
       console.error('Resend code failed:', err);
-      // Turn err into json and extract message
-      let message = 'Resend code failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing resend code error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
     }
   };
 

@@ -17,11 +17,8 @@ import {
   invokeSignInWithGoogle,
   invokeSignUp,
   invokeEmitAuthChanged,
-  invokeGetCurrentUser,
   invokeIsSetupComplete,
   invokeLogout,
-  invokeRefreshToken,
-  invokeGetAuthState,
 } from './commands';
 
 function normalizeBasePath(base?: string): string | null {
@@ -37,7 +34,6 @@ export function useRoleAccess(location?: string) {
   const router = useRouter();
   const pathname = usePathname();
   const normalizedLocation = normalizeBasePath(location ?? undefined);
-  console.log(state.userInfo)
 
   useEffect(() => {
     if (!normalizedLocation || !state.isHydrated || !pathname) {
@@ -163,24 +159,6 @@ export function useRoleAccess(location?: string) {
     }
   }, []);
 
-  const refreshSession = useCallback(async (): Promise<void> => {
-    try {
-      await invokeRefreshToken();
-      // Refresh the auth state after token refresh
-      const authState = await invokeGetAuthState();
-      dispatch({ type: 'SET_LOGGED_IN', payload: authState.is_authenticated });
-      if (authState.user) {
-        dispatch({ type: 'SET_USER_INFO', payload: authState.user });
-      }
-    } catch (error) {
-      console.error('Error during refreshSession:', error);
-      // If refresh fails, user may need to re-login
-      dispatch({ type: 'SET_LOGGED_IN', payload: false });
-      dispatch({ type: 'SET_USER_INFO', payload: null });
-      throw error;
-    }
-  }, [dispatch]);
-
   const signOut = useCallback(async (): Promise<void> => {
     try {
       await invokeLogout();
@@ -202,7 +180,6 @@ export function useRoleAccess(location?: string) {
     confirmSignUp,
     resendConfirmationCode,
     signOut,
-    refreshSession,
     refresh,
   };
 }
