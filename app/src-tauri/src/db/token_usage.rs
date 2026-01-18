@@ -251,9 +251,9 @@ pub async fn get_token_usage(
         }
         AggregationLevel::Week => {
           if multi_year {
-            format!("W/C {}", dt.format("%b %d, %y"))
+            format!("{}", dt.format("%b %d, %y"))
           } else {
-            format!("W/C {}", dt.format("%b %d"))
+            format!("{}", dt.format("%b %d"))
           }
         }
         AggregationLevel::Month => {
