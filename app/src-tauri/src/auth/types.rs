@@ -314,7 +314,7 @@ pub struct AuthState {
     pub expires_at: Option<i64>,
 }
 
-/// Structured error response for auth operations (Fix #15)
+/// Structured error response for auth operations
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
 pub struct AuthErrorResponse {
@@ -419,7 +419,7 @@ impl std::fmt::Display for AuthErrorResponse {
 
 impl std::error::Error for AuthErrorResponse {}
 
-/// Combined auth state for single-request hydration (Fix #9)
+/// Combined auth state for single-request hydration
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
 pub struct FullAuthState {

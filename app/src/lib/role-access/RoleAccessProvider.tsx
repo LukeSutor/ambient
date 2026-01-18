@@ -65,7 +65,6 @@ function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): Ro
         ...state,
         isHydrated: action.payload,
       };
-    // Fix #9: Handle full state update in single dispatch
     case "SET_FULL_STATE":
       return {
         ...state,
@@ -94,7 +93,6 @@ interface RoleAccessProviderProps {
 export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
   const [state, dispatch] = useReducer(roleAccessReducer, initialState);
 
-  // Fix #9: Use single combined API call instead of multiple parallel calls
   const refresh = useCallback(async () => {
     try {
       const fullState = await invokeGetFullAuthState();

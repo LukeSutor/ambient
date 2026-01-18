@@ -34,7 +34,6 @@ pub async fn sign_up(
 ) -> Result<SignUpResponse, String> {
     log::info!("[supabase_auth] Attempting sign up");
     
-    // Rate limiting check (Fix #7)
     check_rate_limit(RateLimitOp::SignUp, &email)?;
     record_attempt(RateLimitOp::SignUp, &email);
     
@@ -54,7 +53,6 @@ pub async fn sign_up(
         "data": user_meta
     });
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
@@ -72,7 +70,6 @@ pub async fn sign_up(
         .map_err(|e| format!("Failed to read response: {}", e))?;
         
     if !status.is_success() {
-        // Parse and return structured error (Fix #15)
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
             return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
         }
@@ -121,7 +118,6 @@ pub async fn sign_up(
 pub async fn sign_in_with_password(email: String, password: String) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Attempting sign in");
     
-    // Rate limiting check (Fix #7)
     check_rate_limit(RateLimitOp::SignIn, &email)?;
     record_attempt(RateLimitOp::SignIn, &email);
     
@@ -133,7 +129,6 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
         "password": password
     });
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
@@ -150,11 +145,9 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
         .map_err(|e| format!("Failed to read response: {}", e))?;
         
     if !status.is_success() {
-        // Parse error and return structured response (Fix #15)
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
             let auth_err = AuthErrorResponse::from_supabase_error(&err);
             
-            // Fix #8: Don't auto-resend confirmation - just return the error with a flag
             if auth_err.code == AuthErrorCode::EmailNotConfirmed {
                 log::info!("[supabase_auth] User email not confirmed");
                 return Ok(AuthResponse {
@@ -220,7 +213,6 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
         "refresh_token": refresh_token
     });
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
@@ -271,7 +263,6 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
 
     log::info!("[supabase_auth] Attempting to verify otp");
     
-    // Rate limiting check (Fix #7)
     check_rate_limit(RateLimitOp::VerifyOtp, &email)?;
     record_attempt(RateLimitOp::VerifyOtp, &email);
     
@@ -284,7 +275,6 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
         "type": otp_type
     });
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
@@ -342,7 +332,6 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
 pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResponse, String> {
     log::info!("[supabase_auth] Attempting resend confirmation");
     
-    // Rate limiting check - stricter for resend to prevent email spam (Fix #7)
     check_rate_limit(RateLimitOp::ResendConfirmation, &email)?;
     record_attempt(RateLimitOp::ResendConfirmation, &email);
     
@@ -354,7 +343,6 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
         "type": "signup"
     });
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .post(&endpoint)
         .header("apikey", &api_key)
@@ -403,7 +391,6 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
         let (base_url, api_key) = get_env_vars()?;
         let endpoint = format!("{}/auth/v1/logout", base_url);
         
-        // Use shared HTTP client (Fix #10)
         let _ = HTTP_CLIENT
             .post(&endpoint)
             .header("apikey", &api_key)
@@ -470,7 +457,6 @@ pub async fn fetch_user_profile(user_id: &str, access_token: &str) -> Result<ser
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/rest/v1/profiles?id=eq.{}&select=*", base_url, user_id);
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .get(&endpoint)
         .header("apikey", &api_key)
@@ -525,7 +511,7 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, S
         if let (Some(access_token), Some(refresh_token)) = 
             (fragment_pairs.get("access_token"), fragment_pairs.get("refresh_token")) 
         {
-            // Validate tokens are not empty (Fix #14)
+            // Validate tokens are not empty
             if access_token.is_empty() || refresh_token.is_empty() {
                 return Err(AuthErrorResponse::oauth_error("Received empty tokens in OAuth callback").to_string());
             }
@@ -550,8 +536,8 @@ pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, S
     Err(AuthErrorResponse::oauth_error("No authorization code or tokens found in callback URL").to_string())
 }
 
-/// Handle tokens received in URL fragment (implicit flow)
-/// Validates tokens by fetching user info before trusting them (Fix #14)
+/// Handle tokens received in URL fragment
+/// Validates tokens by fetching user info before trusting them
 async fn handle_tokens_from_fragment(
     access_token: &str,
     refresh_token: &str,
@@ -559,17 +545,16 @@ async fn handle_tokens_from_fragment(
 ) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Handling tokens from URL fragment");
     
-    // Validate token format (basic sanity check) (Fix #14)
+    // Validate token format
     if access_token.len() < 10 || refresh_token.len() < 10 {
         return Err(AuthErrorResponse::oauth_error("Invalid token format received").to_string());
     }
     
     let (base_url, api_key) = get_env_vars()?;
     
-    // Get user info using the access token - this validates the token server-side (Fix #14)
+    // Get user info using the access token - this validates the token server-side
     let endpoint = format!("{}/auth/v1/user", base_url);
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .get(&endpoint)
         .header("apikey", &api_key)
@@ -583,7 +568,7 @@ async fn handle_tokens_from_fragment(
         .map_err(|e| format!("Failed to read response: {}", e))?;
     
     if !status.is_success() {
-        // Token validation failed - this is a security concern (Fix #14)
+        // Token validation failed - this is a security concern
         log::error!("[supabase_auth] Token validation failed - server rejected the access token");
         return Err(AuthErrorResponse::oauth_error("Token validation failed - access token rejected by server").to_string());
     }
@@ -594,7 +579,7 @@ async fn handle_tokens_from_fragment(
             AuthErrorResponse::oauth_error(format!("Failed to parse user info: {}", e)).to_string()
         })?;
     
-    // Validate user has required fields (Fix #14)
+    // Validate user has required fields
     if user.id.is_empty() {
         return Err(AuthErrorResponse::oauth_error("Invalid user data received from OAuth").to_string());
     }

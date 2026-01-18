@@ -46,7 +46,6 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
                 user_info = user_info.with_profile(&profile);
             }
 
-            // Fix #3: Don't expose access_token to frontend
             Ok(AuthState {
                 is_authenticated: true,
                 user: Some(user_info),
@@ -72,8 +71,7 @@ pub async fn get_auth_state() -> Result<AuthState, String> {
     }
 }
 
-/// Combined auth state fetch to reduce redundant API calls (Fix #9)
-/// Returns all auth-related state in a single call
+/// Combined auth state fetch to reduce redundant API calls
 #[tauri::command]
 pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState, String> {
     // Check online status
@@ -229,7 +227,6 @@ pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
     let (base_url, api_key) = get_env_vars()?;
     let endpoint = format!("{}/auth/v1/user", base_url);
     
-    // Use shared HTTP client (Fix #10)
     let response = HTTP_CLIENT
         .get(&endpoint)
         .header("apikey", &api_key)

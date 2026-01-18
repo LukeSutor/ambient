@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 // ============================================================================
-// Shared HTTP Client (Fix #10)
+// Shared HTTP Client
 // ============================================================================
 
 /// Shared HTTP client for all auth requests to avoid per-request overhead
@@ -23,7 +23,7 @@ pub static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
 });
 
 // ============================================================================
-// PKCE Flow (Fix #2)
+// PKCE Flow
 // ============================================================================
 
 /// PKCE state stored during OAuth flow
@@ -112,7 +112,7 @@ pub fn retrieve_pkce_state(state: &str) -> Result<String, String> {
 }
 
 // ============================================================================
-// Rate Limiting (Fix #7)
+// Rate Limiting
 // ============================================================================
 
 /// Rate limiter state per operation type

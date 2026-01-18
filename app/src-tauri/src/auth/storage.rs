@@ -103,7 +103,6 @@ pub fn store_session(session: &Session) -> Result<(), Box<dyn std::error::Error>
 }
 
 /// Retrieve the stored auth state
-/// Fix #6: Handle decryption failures gracefully by clearing corrupted state
 pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::error::Error>> {
     let app_handle = match get_app_handle() {
         Some(h) => h,
@@ -120,7 +119,7 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
             Ok(s) => s,
             Err(e) => {
                 log::warn!("[auth_storage] Failed to deserialize stored auth state: {}. Clearing corrupted data.", e);
-                // Clear corrupted state (Fix #6)
+                // Clear corrupted state
                 let _ = clear_auth_state();
                 return Ok(None);
             }
@@ -128,7 +127,6 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
         
         // Check for encrypted tokens in the JSON
         if let Some(encrypted_tokens_base64) = val.get("encrypted_tokens").and_then(|v| v.as_str()) {
-            // Try to decrypt tokens, handle failures gracefully (Fix #6)
             match decrypt_tokens(encrypted_tokens_base64) {
                 Ok(token_data) => {
                     state.session.access_token = token_data.access_token;
@@ -137,7 +135,7 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
                 }
                 Err(e) => {
                     log::warn!("[auth_storage] Failed to decrypt tokens: {}. Clearing auth state.", e);
-                    // Decryption failed - encryption key might have been lost (Fix #6)
+                    // Decryption failed - encryption key might have been lost
                     // Clear the corrupted/unusable state and force re-authentication
                     let _ = clear_auth_state();
                     return Ok(None);
@@ -150,7 +148,6 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
 }
 
 /// Helper function to decrypt tokens
-/// Separated for cleaner error handling (Fix #6)
 fn decrypt_tokens(encrypted_tokens_base64: &str) -> Result<TokenData, Box<dyn std::error::Error>> {
     let combined = BASE64_STANDARD.decode(encrypted_tokens_base64)?;
     if combined.len() < 12 {

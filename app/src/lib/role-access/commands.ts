@@ -14,7 +14,7 @@ import type {
 } from './types';
 
 // ============================================================================
-// Error Handling Helpers (Fix #15)
+// Error Handling Helpers
 // ============================================================================
 
 /**
@@ -75,9 +75,6 @@ export async function invokeSignInWithGoogle(fullName?: string): Promise<OAuthUr
   });
 }
 
-// Note: exchange_code_for_session is now handled internally by the deep link handler
-// and is no longer exposed as a command since it requires the PKCE state
-
 export async function invokeVerifyOtp(
   email: string,
   token: string,
@@ -107,7 +104,7 @@ export async function invokeGetAuthState(): Promise<AuthState> {
 }
 
 /**
- * Get full auth state in a single call (Fix #9 - reduces redundant API calls)
+ * Get full auth state in a single call
  * Returns: isOnline, isAuthenticated, isSetupComplete, user, needsRefresh, expiresAt
  */
 export async function invokeGetFullAuthState(): Promise<FullAuthState> {
