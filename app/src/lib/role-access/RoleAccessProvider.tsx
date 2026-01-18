@@ -11,7 +11,7 @@ import React, {
 } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
-  invokeGetFullAuthState,
+  invokeGetAuthState,
 } from "./commands";
 import type { UserInfo, RoleAccessState } from "./types";
 
@@ -101,7 +101,7 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
     
     isRefreshing.current = true;
     try {
-      const fullState = await invokeGetFullAuthState();
+      const fullState = await invokeGetAuthState();
       
       dispatch({ 
         type: "SET_FULL_STATE", 

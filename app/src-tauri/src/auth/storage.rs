@@ -174,14 +174,6 @@ fn decrypt_tokens(encrypted_tokens_base64: &str) -> Result<TokenData, Box<dyn st
     Ok(token_data)
 }
 
-/// Get the current session if valid
-pub fn get_current_session() -> Result<Option<Session>, Box<dyn std::error::Error>> {
-    match retrieve_auth_state()? {
-        Some(state) => Ok(Some(state.session)),
-        None => Ok(None),
-    }
-}
-
 /// Get the access token if valid
 pub fn get_access_token() -> Result<Option<String>, Box<dyn std::error::Error>> {
     match retrieve_auth_state()? {
@@ -205,14 +197,6 @@ pub fn get_refresh_token() -> Result<Option<String>, Box<dyn std::error::Error>>
     }
 }
 
-/// Check if the session needs to be refreshed
-pub fn needs_token_refresh() -> Result<bool, Box<dyn std::error::Error>> {
-    match retrieve_auth_state()? {
-        Some(state) => Ok(state.needs_refresh()),
-        None => Ok(false),
-    }
-}
-
 /// Clear all stored auth data
 pub fn clear_auth_state() -> Result<(), Box<dyn std::error::Error>> {
     // Clear the keyring tokens
@@ -229,9 +213,4 @@ pub fn clear_auth_state() -> Result<(), Box<dyn std::error::Error>> {
     
     log::info!("[auth_storage] Auth state cleared successfully");
     Ok(())
-}
-
-/// Update the session after a token refresh
-pub fn update_session(session: &Session) -> Result<(), Box<dyn std::error::Error>> {
-    store_session(session)
 }

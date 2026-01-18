@@ -4,7 +4,7 @@ import { useRoleAccess, getAuthErrorMessage } from '@/lib/role-access';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { invokeIsSetupComplete, invokeEmitAuthChanged, invokeGetAuthState } from '@/lib/role-access/commands';
+import { invokeIsSetupComplete, invokeEmitAuthChanged } from '@/lib/role-access/commands';
 const googleLogo = "/google-logo.png";
 
 // Google logo SVG component
@@ -44,7 +44,6 @@ export function GoogleLoginButton({
         
         // Emit auth changed event and check setup status
         await invokeEmitAuthChanged();
-        const authState = await invokeGetAuthState();
         
         onSignInSuccess();
       });

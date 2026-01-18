@@ -302,18 +302,6 @@ impl UserInfo {
     }
 }
 
-/// Current auth state exposed to the frontend
-/// NOTE: access_token is intentionally NOT exposed to frontend for security
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "auth.ts")]
-pub struct AuthState {
-    pub is_authenticated: bool,
-    pub user: Option<UserInfo>,
-    /// Whether the token will expire soon (within 5 minutes)
-    pub needs_refresh: bool,
-    pub expires_at: Option<i64>,
-}
-
 /// Structured error response for auth operations
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
@@ -422,7 +410,7 @@ impl std::error::Error for AuthErrorResponse {}
 /// Combined auth state for single-request hydration
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "auth.ts")]
-pub struct FullAuthState {
+pub struct AuthState {
     pub is_online: bool,
     pub is_authenticated: bool,
     pub is_setup_complete: bool,

@@ -491,11 +491,7 @@ pub async fn fetch_user_profile(user_id: &str, access_token: &str) -> Result<ser
     Ok(profiles.into_iter().next().unwrap_or(serde_json::json!({})))
 }
 
-/// Handle the OAuth callback URL directly
-/// This parses the callback URL which may contain tokens in the fragment or a code in query params
 /// Handle the OAuth callback URL
-/// For social OAuth (Google, etc.), Supabase returns tokens directly in the URL fragment
-/// This validates tokens by fetching user info from the server
 pub async fn handle_oauth_callback(callback_url: &str) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Handling OAuth callback URL");
     

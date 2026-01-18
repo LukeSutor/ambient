@@ -5,6 +5,5 @@ export * from './types';
 // Export error handling utilities
 export { 
   parseAuthError, 
-  isAuthErrorCode, 
   getAuthErrorMessage 
 } from './commands';

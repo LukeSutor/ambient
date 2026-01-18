@@ -1,15 +1,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
-  UserInfo,
   SignUpRequest,
   AuthResponse,
   SignUpResponse,
-  AuthState,
-  RefreshTokenResponse,
   ResendConfirmationResponse,
   VerifyOtpResponse,
   OAuthUrlResponse,
-  FullAuthState,
+  AuthState,
   AuthErrorResponse,
 } from './types';
 
@@ -47,14 +44,6 @@ export function parseAuthError(error: unknown): AuthErrorResponse | null {
     }
   }
   return null;
-}
-
-/**
- * Check if an error is a specific auth error code
- */
-export function isAuthErrorCode(error: unknown, code: AuthErrorResponse['code']): boolean {
-  const parsed = parseAuthError(error);
-  return parsed?.code === code;
 }
 
 /**
@@ -142,32 +131,16 @@ export async function invokeResendConfirmation(
   });
 }
 
-export async function invokeRefreshToken(): Promise<RefreshTokenResponse> {
-  return invoke<RefreshTokenResponse>('refresh_token');
-}
-
-export async function invokeGetAuthState(): Promise<AuthState> {
-  return invoke<AuthState>('get_auth_state');
-}
-
 /**
  * Get full auth state in a single call
  * Returns: isOnline, isAuthenticated, isSetupComplete, user, needsRefresh, expiresAt
  */
-export async function invokeGetFullAuthState(): Promise<FullAuthState> {
-  return invoke<FullAuthState>('get_full_auth_state');
-}
-
-export async function invokeGetAccessToken(): Promise<string | null> {
-  return invoke<string | null>('get_access_token_command');
+export async function invokeGetAuthState(): Promise<AuthState> {
+  return invoke<AuthState>('get_auth_state');
 }
 
 export async function invokeLogout(): Promise<string> {
   return invoke<string>('logout');
-}
-
-export async function invokeIsAuthenticated(): Promise<boolean> {
-  return invoke<boolean>('is_authenticated');
 }
 
 export async function invokeIsSetupComplete(): Promise<boolean> {
@@ -176,12 +149,4 @@ export async function invokeIsSetupComplete(): Promise<boolean> {
 
 export async function invokeEmitAuthChanged(): Promise<void> {
   return invoke<void>('emit_auth_changed');
-}
-
-export async function invokeGetCurrentUser(): Promise<UserInfo | null> {
-  return invoke<UserInfo | null>('get_current_user');
-}
-
-export async function invokeIsOnline(): Promise<boolean> {
-  return invoke<boolean>('is_online');
 }

@@ -1,5 +1,5 @@
 use crate::auth::types::{
-    AuthState, UserInfo, SupabaseUser, AuthError, FullAuthState, AuthErrorResponse, AuthErrorCode,
+    UserInfo, SupabaseUser, AuthError, AuthState, AuthErrorResponse, AuthErrorCode,
 };
 use crate::auth::storage::{
     retrieve_auth_state, clear_auth_state,
@@ -8,72 +8,9 @@ use crate::auth::auth_flow::{get_env_vars, refresh_token, fetch_user_profile};
 use crate::auth::security::HTTP_CLIENT;
 use tauri::{AppHandle, Emitter};
 
-#[tauri::command]
-pub async fn get_auth_state() -> Result<AuthState, String> {
-    // Extract data synchronously first to avoid Send issues
-    let state_result = retrieve_auth_state()
-        .map_err(|e| e.to_string());
-    
-    match state_result {
-        Ok(Some(state)) => {
-            // Extract what we need before any potential await
-            let is_expired = state.is_access_token_expired();
-            let needs_refresh = state.needs_refresh();
-            
-            let (user, token, expires_at) = if is_expired {
-                // Try to refresh
-                match refresh_token().await {
-                    Ok(refreshed) => (refreshed.user, refreshed.session.access_token, refreshed.session.expires_at),
-                    Err(_) => {
-                        // Clear auth state on refresh failure
-                        let _ = clear_auth_state();
-                        return Ok(AuthState {
-                            is_authenticated: false,
-                            user: None,
-                            needs_refresh: false,
-                            expires_at: None,
-                        });
-                    }
-                }
-            } else {
-                (state.session.user.clone(), state.session.access_token.clone(), state.session.expires_at)
-            };
-
-            let mut user_info = UserInfo::from(&user);
-
-            // Pull latest info from profiles table
-            if let Ok(profile) = fetch_user_profile(&user.id, &token).await {
-                user_info = user_info.with_profile(&profile);
-            }
-
-            Ok(AuthState {
-                is_authenticated: true,
-                user: Some(user_info),
-                needs_refresh,
-                expires_at,
-            })
-        }
-        Ok(None) => Ok(AuthState {
-            is_authenticated: false,
-            user: None,
-            needs_refresh: false,
-            expires_at: None,
-        }),
-        Err(e) => {
-            log::error!("[auth_commands] Failed to get auth state: {}", e);
-            Ok(AuthState {
-                is_authenticated: false,
-                user: None,
-                needs_refresh: false,
-                expires_at: None,
-            })
-        }
-    }
-}
-
 /// Combined auth state fetch to reduce redundant API calls
 #[tauri::command]
-pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState, String> {
+pub async fn get_auth_state(app_handle: AppHandle) -> Result<AuthState, String> {
     // Check online status
     let is_online = check_online().await;
     
@@ -94,7 +31,7 @@ pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState,
                     Ok(refreshed) => (refreshed.user, refreshed.session.access_token, refreshed.session.expires_at),
                     Err(_) => {
                         let _ = clear_auth_state();
-                        return Ok(FullAuthState {
+                        return Ok(AuthState {
                             is_online,
                             is_authenticated: false,
                             is_setup_complete,
@@ -113,7 +50,7 @@ pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState,
                 user_info = user_info.with_profile(&profile);
             }
 
-            Ok(FullAuthState {
+            Ok(AuthState {
                 is_online,
                 is_authenticated: true,
                 is_setup_complete,
@@ -122,7 +59,7 @@ pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState,
                 expires_at,
             })
         }
-        Ok(None) => Ok(FullAuthState {
+        Ok(None) => Ok(AuthState {
             is_online,
             is_authenticated: false,
             is_setup_complete,
@@ -132,7 +69,7 @@ pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState,
         }),
         Err(e) => {
             log::error!("[auth_commands] Failed to get full auth state: {}", e);
-            Ok(FullAuthState {
+            Ok(AuthState {
                 is_online,
                 is_authenticated: false,
                 is_setup_complete,
@@ -153,73 +90,6 @@ async fn check_online() -> bool {
     ).await {
         Ok(Ok(_)) => true,
         _ => false,
-    }
-}
-
-#[tauri::command]
-pub async fn is_authenticated() -> Result<bool, String> {
-    // Check new auth state - convert error to string before any await
-    let state_result = retrieve_auth_state()
-        .map_err(|e| e.to_string());
-    
-    match state_result {
-        Ok(Some(state)) => {
-            let is_expired = state.is_access_token_expired();
-            if is_expired {
-                // Try to refresh
-                match refresh_token().await {
-                    Ok(_) => Ok(true),
-                    Err(_) => {
-                        let _ = clear_auth_state();
-                        Ok(false)
-                    }
-                }
-            } else {
-                Ok(true)
-            }
-        }
-        Ok(None) => Ok(false),
-        Err(_) => Ok(false),
-    }
-}
-
-#[tauri::command]
-pub async fn get_current_user() -> Result<Option<UserInfo>, String> {
-    // Convert error to string before any await
-    let state_result = retrieve_auth_state()
-        .map_err(|e| e.to_string());
-    
-    match state_result {
-        Ok(Some(state)) => {
-            let is_expired = state.is_access_token_expired();
-            
-            let (user, token) = if is_expired {
-                // Try to refresh
-                match refresh_token().await {
-                    Ok(refreshed) => (refreshed.user, refreshed.session.access_token),
-                    Err(_) => {
-                        let _ = clear_auth_state();
-                        return Ok(None);
-                    }
-                }
-            } else {
-                (state.session.user.clone(), state.session.access_token.clone())
-            };
-
-            let mut user_info = UserInfo::from(&user);
-
-            // Pull latest info from profiles table
-            if let Ok(profile) = fetch_user_profile(&user.id, &token).await {
-                user_info = user_info.with_profile(&profile);
-            }
-            
-            Ok(Some(user_info))
-        }
-        Ok(None) => Ok(None),
-        Err(e) => {
-            log::error!("[auth_commands] Failed to get current user: {}", e);
-            Ok(None)
-        }
     }
 }
 
