@@ -1,5 +1,5 @@
 use crate::auth::types::{
-    AuthState, UserInfo, SupabaseUser, AuthError, FullAuthState, AuthErrorResponse,
+    AuthState, UserInfo, SupabaseUser, AuthError, FullAuthState, AuthErrorResponse, AuthErrorCode,
 };
 use crate::auth::storage::{
     retrieve_auth_state, clear_auth_state,
@@ -233,21 +233,21 @@ pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
+        .map_err(|e| AuthErrorResponse::network_error(format!("Failed to send request: {}", e)).to_string())?;
     
     let status = response.status();
     let response_text = response.text().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+        .map_err(|e| AuthErrorResponse::new(AuthErrorCode::ServerError, format!("Failed to read response: {}", e)).to_string())?;
     
     if !status.is_success() {
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
             return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
         }
-        return Err(format!("Failed to get user: {}", response_text));
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, format!("Failed to get user: {}", response_text)).to_string());
     }
     
     let user: SupabaseUser = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse user: {}. Body: {}", e, response_text))?;
+        .map_err(|e| AuthErrorResponse::new(AuthErrorCode::ServerError, format!("Failed to parse user: {}. Body: {}", e, response_text)).to_string())?;
     
     Ok(user)
 }
@@ -277,7 +277,7 @@ pub async fn get_access_token_command() -> Result<Option<String>, String> {
             }
         }
         Ok(None) => Ok(None),
-        Err(e) => Err(format!("Failed to retrieve access token: {}", e)),
+        Err(e) => Err(AuthErrorResponse::storage_error(format!("Failed to retrieve access token: {}", e)).to_string()),
     }
 }
 

@@ -73,11 +73,8 @@ pub async fn sign_up(
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
             return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
         }
-        return Err(response_text);
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
-    
-    // Clear rate limit on success
-    clear_rate_limit(RateLimitOp::SignUp, &email);
     
     // Try to parse as session response (when autoconfirm is enabled)
     if let Ok(session) = serde_json::from_str::<Session>(&response_text) {
@@ -162,7 +159,7 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
             
             return Err(auth_err.to_string());
         }
-        return Err(response_text);
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
     
     // Parse the session response
@@ -292,7 +289,7 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
             return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
         }
-        return Err(response_text);
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
     
     // Clear rate limit on success
@@ -360,7 +357,7 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
         if let Ok(err) = serde_json::from_str::<AuthError>(&response_text) {
             return Err(AuthErrorResponse::from_supabase_error(&err).to_string());
         }
-        return Err(response_text);
+        return Err(AuthErrorResponse::new(AuthErrorCode::ServerError, response_text).to_string());
     }
     
     log::info!("[supabase_auth] Resend confirmation successful");

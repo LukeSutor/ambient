@@ -11,7 +11,7 @@ import { useWindows } from '@/lib/windows/useWindows';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { GoogleLoginButton } from '@/components/google-login-button';
-import { useRoleAccess } from '@/lib/role-access';
+import { useRoleAccess, getAuthErrorMessage } from '@/lib/role-access';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
@@ -82,14 +82,7 @@ export default function Login() {
       }
     } catch (err) {
       console.error('Sign in failed:', err);
-      // Turn err into json and extract message
-      let message = 'Sign in failed. Please check your credentials.';
-      console.log(err);
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {}
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Sign in failed. Please check your credentials.'));
     } finally {
       setIsLoading(false);
     }
@@ -123,12 +116,7 @@ export default function Login() {
       }, 2000);
     } catch (err) {
       console.error('Verification failed:', err);
-      let message = 'Verification failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {}
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
     } finally {
       setIsConfirming(false);
     }
@@ -141,15 +129,7 @@ export default function Login() {
       await resendConfirmationCode(loginData.email);
     } catch (err) {
       console.error('Resend code failed:', err);
-      // Turn err into json and extract message
-      let message = 'Resend code failed.';
-      try {
-        const errorObj = JSON.parse(err as string);
-        message = errorObj.msg || message;
-      } catch(err) {
-        console.error('Error parsing resend code error message:', err);
-      }
-      setError(message);
+      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
     }
   };
 

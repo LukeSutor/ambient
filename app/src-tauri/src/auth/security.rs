@@ -1,5 +1,6 @@
 //! Security utilities for OAuth PKCE flow, CSRF protection, and rate limiting.
 
+use crate::auth::types::AuthErrorResponse;
 use once_cell::sync::Lazy;
 use rand::Rng;
 use sha2::{Sha256, Digest};
@@ -164,13 +165,16 @@ impl RateLimitOp {
 }
 
 /// Check if an operation is rate limited
-/// Returns Ok(()) if allowed, Err with message if rate limited
+/// Returns Ok(()) if allowed, Err with structured AuthErrorResponse if rate limited
 pub fn check_rate_limit(op: RateLimitOp, identifier: &str) -> Result<(), String> {
     let key = format!("{}:{}", op.as_str(), identifier);
     let now = Instant::now();
     
     let mut store = RATE_LIMIT_STORE.lock()
-        .map_err(|_| "Internal error: failed to check rate limit")?;
+        .map_err(|_| AuthErrorResponse::new(
+            crate::auth::types::AuthErrorCode::ServerError,
+            "Internal error: failed to check rate limit"
+        ).to_string())?;
     
     let state = store.entry(key).or_default();
     
@@ -178,10 +182,9 @@ pub fn check_rate_limit(op: RateLimitOp, identifier: &str) -> Result<(), String>
     if let Some(lockout_until) = state.lockout_until {
         if now < lockout_until {
             let remaining = (lockout_until - now).as_secs();
-            return Err(format!(
-                "Too many attempts. Please try again in {} seconds.",
-                remaining
-            ));
+            return Err(AuthErrorResponse::rate_limited("Too many attempts")
+                .with_details(format!("Please try again in {} seconds", remaining))
+                .to_string());
         } else {
             // Lockout expired, reset state
             state.lockout_until = None;
@@ -196,10 +199,9 @@ pub fn check_rate_limit(op: RateLimitOp, identifier: &str) -> Result<(), String>
     // Check if limit exceeded
     if state.attempts.len() >= MAX_ATTEMPTS_PER_WINDOW {
         state.lockout_until = Some(now + Duration::from_secs(LOCKOUT_DURATION_SECS));
-        return Err(format!(
-            "Too many attempts. Please try again in {} seconds.",
-            LOCKOUT_DURATION_SECS
-        ));
+        return Err(AuthErrorResponse::rate_limited("Too many attempts")
+            .with_details(format!("Please try again in {} seconds", LOCKOUT_DURATION_SECS))
+            .to_string());
     }
     
     Ok(())

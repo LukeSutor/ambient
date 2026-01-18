@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { useRoleAccess } from '@/lib/role-access';
+import { useRoleAccess, getAuthErrorMessage } from '@/lib/role-access';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -39,14 +39,12 @@ export function GoogleLoginButton({
       
       // Listen for OAuth2 success
       const unlistenSuccess = await listen('oauth2-success', async (event) => {
-        console.log('[GoogleLoginButton] OAuth2 success event received:', event.payload);
         setIsLoading(false);
         setError(null);
         
         // Emit auth changed event and check setup status
         await invokeEmitAuthChanged();
         const authState = await invokeGetAuthState();
-        console.log('[GoogleLoginButton] Auth state after Google sign-in:', authState);
         
         onSignInSuccess();
       });
@@ -55,7 +53,7 @@ export function GoogleLoginButton({
       const unlistenError = await listen('oauth2-error', (event) => {
         console.error('[GoogleLoginButton] OAuth2 error:', event.payload);
         setIsLoading(false);
-        setError(event.payload as string || 'Authentication failed');
+        setError(getAuthErrorMessage(event.payload, 'Sign-in with Google failed. Please try again.'));
       });
 
       // Return cleanup function
@@ -86,7 +84,7 @@ export function GoogleLoginButton({
       // when the OAuth callback is received via deep link
     } catch (err) {
       console.error('Failed to initiate Google sign in:', err);
-      setError(typeof err === 'string' ? err : 'Failed to start Google sign in');
+      setError(getAuthErrorMessage(err, 'Failed to start Google sign in. Please try again.'));
       setIsLoading(false);
     }
   };
