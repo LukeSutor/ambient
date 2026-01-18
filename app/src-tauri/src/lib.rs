@@ -45,6 +45,7 @@ pub fn run() {
           !(t.starts_with("hyper")
             || t.starts_with("reqwest")
             || t.starts_with("enigo")
+            || t.starts_with("keyring")
             || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),

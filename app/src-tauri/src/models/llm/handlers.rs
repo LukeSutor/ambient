@@ -3,7 +3,7 @@ use crate::db::conversations::{add_message, add_message_with_id, update_conversa
 use crate::db::core::DbState;
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
-use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema};
+use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema, types::LlmRequest};
 use crate::tasks::{TaskService, TaskWithSteps};
 use tauri::{AppHandle, Manager};
 
@@ -203,8 +203,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
 
   let system_prompt = system_prompt_template.replace("{currentDateTime}", &current_date_time);
 
-  log::debug!("[hud_chat] Generated system prompt:\n{}", system_prompt);
-
   // Get 3 most relevant memories
   let relevant_memories =
     match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
@@ -258,18 +256,14 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   log::debug!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 
   // Generate response
-  let response = match generate(
-    app_handle.clone(),
-    user_prompt,
-    Some(system_prompt),
-    None,
-    Some(event.conv_id.clone()),
-    Some(false),
-    Some(true),
-    None,
-  )
-  .await
-  {
+  let request = LlmRequest::new(user_prompt)
+    .with_system_prompt(Some(system_prompt))
+    .with_conv_id(Some(event.conv_id.clone()))
+    .with_use_thinking(Some(false))
+    .with_stream(Some(true))
+    .with_current_message_id(Some(event.message_id.clone()));
+
+  let response = match generate(app_handle.clone(), request, None).await {
     Ok(response) => {
       response
     }
@@ -318,18 +312,13 @@ pub async fn handle_generate_conversation_name(
   };
 
   // Generate name
-  let generated_name = match generate(
-    app_handle.clone(),
-    event.message.clone(),
-    Some(system_prompt),
-    schema,
-    None,
-    Some(false),
-    Some(false),
-    Some(true),
-  )
-  .await
-  {
+  let request = LlmRequest::new(event.message.clone())
+    .with_system_prompt(Some(system_prompt))
+    .with_json_schema(schema)
+    .with_use_thinking(Some(false))
+    .with_stream(Some(false));
+
+  let generated_name = match generate(app_handle.clone(), request, Some(true)).await {
     Ok(generated) => {
       log::info!("[generate_conversation_name] Generated conversation name: {}", generated);
       generated
@@ -478,18 +467,11 @@ async fn generate_and_parse_response(
   log_prefix: &str,
 ) -> Option<serde_json::Value> {
   // Generate response
-  let response = match generate(
-    app_handle,
-    prompt,
-    None,
-    Some(schema.to_string()),
-    None,
-    None,
-    None,
-    Some(true),
-  )
-  .await
-  {
+  let request = LlmRequest::new(prompt)
+    .with_json_schema(Some(schema.to_string()))
+    .with_use_thinking(Some(true));
+
+  let response = match generate(app_handle, request, Some(true)).await {
     Ok(response) => {
       log::debug!("{} LLM response: {}", log_prefix, response);
       response

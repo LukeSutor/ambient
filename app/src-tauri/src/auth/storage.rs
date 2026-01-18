@@ -1,23 +1,96 @@
-use crate::auth::types::{StoredAuthState, Session, KEYRING_SERVICE, KEYRING_AUTH_KEY};
+use crate::auth::types::{StoredAuthState, Session};
+use crate::constants::{AUTH_KEY, STORE_PATH, KEYRING_ENCRYPTION_KEY, KEYRING_AUTH_KEY, KEYRING_SERVICE};
 use keyring::Entry;
-use std::fs;
-use std::path::PathBuf;
-use tauri::Manager;
+use serde::{Deserialize, Serialize};
+use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
+use aes_gcm::{
+    aead::{Aead, KeyInit, OsRng},
+    Aes256Gcm, Nonce
+};
+use rand::RngCore;
+use base64::{prelude::BASE64_STANDARD, Engine};
+
+#[derive(Serialize, Deserialize)]
+struct TokenData {
+    access_token: String,
+    refresh_token: String,
+}
+
+fn get_app_handle() -> Option<AppHandle> {
+    crate::events::get_emitter().get_app_handle()
+}
+
+/// Get or create an encryption key in the keyring
+fn get_or_create_encryption_key() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let entry = Entry::new(KEYRING_SERVICE, KEYRING_ENCRYPTION_KEY)?;
+    
+    match entry.get_password() {
+        Ok(key_base64) => {
+            let key = BASE64_STANDARD.decode(key_base64)?;
+            if key.len() == 32 {
+                return Ok(key);
+            }
+            log::warn!("[auth_storage] Invalid key length in keyring, generating new key");
+        }
+        Err(keyring::Error::NoEntry) => {
+            log::info!("[auth_storage] No encryption key found, generating new one");
+        }
+        Err(e) => return Err(Box::new(e)),
+    }
+
+    // Generate a new 32-byte key
+    let mut key = [0u8; 32];
+    OsRng.fill_bytes(&mut key);
+    let key_base64 = BASE64_STANDARD.encode(key);
+    entry.set_password(&key_base64)?;
+    Ok(key.to_vec())
+}
 
 /// Store the complete auth state (session with tokens)
 pub fn store_auth_state(state: &StoredAuthState) -> Result<(), Box<dyn std::error::Error>> {
-    let app_data_dir = get_app_data_dir()?;
-    let auth_file_path = app_data_dir.join("auth_state.json");
+    let app_handle = get_app_handle().ok_or("AppHandle not initialized")?;
     
-    // Serialize the auth state
-    let auth_json = serde_json::to_string(state)?;
+    // Get encryption key from keyring
+    let key_bytes = get_or_create_encryption_key()?;
+    let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
     
-    // Write to file
-    fs::write(&auth_file_path, auth_json)?;
+    // Encrypt sensitive tokens
+    let token_data = TokenData {
+        access_token: state.session.access_token.clone(),
+        refresh_token: state.session.refresh_token.clone(),
+    };
+    let token_json = serde_json::to_string(&token_data)?;
     
-    // Store a flag in keyring to indicate we have auth stored
-    let entry = Entry::new(KEYRING_SERVICE, KEYRING_AUTH_KEY)?;
-    entry.set_password("active")?;
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    
+    let ciphertext = cipher.encrypt(nonce, token_json.as_bytes())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+    
+    // Combine nonce + ciphertext and base64 encode
+    let mut combined = nonce_bytes.to_vec();
+    combined.extend_from_slice(&ciphertext);
+    let encrypted_tokens_base64 = BASE64_STANDARD.encode(combined);
+    
+    // Prepare non-sensitive state for JSON storage (clear tokens, add encrypted blob)
+    let mut store_data = serde_json::to_value(state)?;
+    if let Some(obj) = store_data.as_object_mut() {
+        // Clear tokens from the session object inside the JSON
+        if let Some(session) = obj.get_mut("session").and_then(|s| s.as_object_mut()) {
+            session.insert("access_token".to_string(), serde_json::Value::String(String::new()));
+            session.insert("refresh_token".to_string(), serde_json::Value::String(String::new()));
+        }
+        // Add the encrypted tokens
+        obj.insert("encrypted_tokens".to_string(), serde_json::Value::String(encrypted_tokens_base64));
+    }
+    
+    // Store in tauri store
+    let store = app_handle.store(STORE_PATH)?;
+    store.set(AUTH_KEY, store_data);
+    let _ = store.save();
     
     log::info!("[auth_storage] Auth state stored successfully");
     Ok(())
@@ -31,27 +104,44 @@ pub fn store_session(session: &Session) -> Result<(), Box<dyn std::error::Error>
 
 /// Retrieve the stored auth state
 pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::error::Error>> {
-    // First check if we have auth stored
-    let entry = Entry::new(KEYRING_SERVICE, KEYRING_AUTH_KEY)?;
-    match entry.get_password() {
-        Ok(status) if status == "active" => {
-            // We have auth, try to read from file
-            let app_data_dir = get_app_data_dir()?;
-            let auth_file_path = app_data_dir.join("auth_state.json");
-            
-            if auth_file_path.exists() {
-                let auth_json = fs::read_to_string(&auth_file_path)?;
-                let state: StoredAuthState = serde_json::from_str(&auth_json)?;
-                Ok(Some(state))
-            } else {
-                // File doesn't exist, clear the flag and return None
-                let _ = entry.delete_password();
-                Ok(None)
+    let app_handle = match get_app_handle() {
+        Some(h) => h,
+        None => return Ok(None),
+    };
+
+    // Try to get metadata from tauri store
+    let store = app_handle.store(STORE_PATH)?;
+    let auth_val = store.get(AUTH_KEY);
+    
+    if let Some(val) = auth_val {
+        let mut state: StoredAuthState = serde_json::from_value(val.clone())?;
+        
+        // Check for encrypted tokens in the JSON
+        if let Some(encrypted_tokens_base64) = val.get("encrypted_tokens").and_then(|v| v.as_str()) {
+            let combined = BASE64_STANDARD.decode(encrypted_tokens_base64)?;
+            if combined.len() < 12 {
+                return Err("Invalid encrypted token data".into());
             }
+            
+            let (nonce_bytes, ciphertext) = combined.split_at(12);
+            let nonce = Nonce::from_slice(nonce_bytes);
+            
+            let key_bytes = get_or_create_encryption_key()?;
+            let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
+            let cipher = Aes256Gcm::new(key);
+            
+            let decrypted_bytes = cipher.decrypt(nonce, ciphertext)
+                .map_err(|e| format!("Decryption failed: {}", e))?;
+            
+            let token_data: TokenData = serde_json::from_slice(&decrypted_bytes)?;
+            state.session.access_token = token_data.access_token;
+            state.session.refresh_token = token_data.refresh_token;
+            
+            return Ok(Some(state));
         }
-        Ok(_) | Err(keyring::Error::NoEntry) => Ok(None),
-        Err(e) => Err(Box::new(e)),
     }
+    
+    Ok(None)
 }
 
 /// Get the current session if valid
@@ -95,22 +185,16 @@ pub fn needs_token_refresh() -> Result<bool, Box<dyn std::error::Error>> {
 
 /// Clear all stored auth data
 pub fn clear_auth_state() -> Result<(), Box<dyn std::error::Error>> {
-    // Clear the keyring flag
+    // Clear the keyring tokens
     let entry = Entry::new(KEYRING_SERVICE, KEYRING_AUTH_KEY)?;
-    let _ = entry.delete_password();
+    let _ = entry.delete_credential();
     
-    // Remove the auth file
-    let app_data_dir = get_app_data_dir()?;
-    let auth_file_path = app_data_dir.join("auth_state.json");
-    
-    if auth_file_path.exists() {
-        fs::remove_file(&auth_file_path)?;
-    }
-    
-    // Also clear the old auth.json if it exists (migration cleanup)
-    let old_auth_file = app_data_dir.join("auth.json");
-    if old_auth_file.exists() {
-        let _ = fs::remove_file(&old_auth_file);
+    // Clear from tauri store
+    if let Some(app_handle) = get_app_handle() {
+        if let Ok(store) = app_handle.store(STORE_PATH) {
+            store.delete(AUTH_KEY);
+            let _ = store.save();
+        }
     }
     
     log::info!("[auth_storage] Auth state cleared successfully");
@@ -120,65 +204,4 @@ pub fn clear_auth_state() -> Result<(), Box<dyn std::error::Error>> {
 /// Update the session after a token refresh
 pub fn update_session(session: &Session) -> Result<(), Box<dyn std::error::Error>> {
     store_session(session)
-}
-
-/// Helper function to get app data directory
-fn get_app_data_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    // Try to get the app handle from the event emitter
-    if let Some(app_handle) = crate::events::get_emitter().get_app_handle() {
-        let app_data_dir = app_handle
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
-        
-        // Create directory if it doesn't exist
-        if !app_data_dir.exists() {
-            fs::create_dir_all(&app_data_dir)?;
-        }
-        
-        return Ok(app_data_dir);
-    }
-
-    log::warn!("[auth_storage] AppHandle not initialized in EventEmitter, falling back to manual path resolution");
-
-    let app_data_dir = if cfg!(target_os = "windows") {
-        std::env::var("APPDATA")
-            .map(|path| std::path::PathBuf::from(path))
-            .unwrap_or_else(|_| {
-                std::env::var("USERPROFILE")
-                    .map(|path| {
-                        std::path::PathBuf::from(path)
-                            .join("AppData")
-                            .join("Roaming")
-                    })
-                    .unwrap_or_else(|_| std::path::PathBuf::from("."))
-            })
-            .join("local-computer-use")
-    } else if cfg!(target_os = "macos") {
-        std::env::var("HOME")
-            .map(|path| {
-                std::path::PathBuf::from(path)
-                    .join("Library")
-                    .join("Application Support")
-                    .join("local-computer-use")
-            })
-            .unwrap_or_else(|_| std::path::PathBuf::from(".").join("local-computer-use"))
-    } else {
-        // Linux
-        std::env::var("HOME")
-            .map(|path| {
-                std::path::PathBuf::from(path)
-                    .join(".local")
-                    .join("share")
-                    .join("local-computer-use")
-            })
-            .unwrap_or_else(|_| std::path::PathBuf::from(".").join("local-computer-use"))
-    };
-    
-    // Create directory if it doesn't exist
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir)?;
-    }
-    
-    Ok(app_data_dir)
 }

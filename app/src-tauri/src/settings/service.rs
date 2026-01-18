@@ -1,5 +1,5 @@
 use super::types::UserSettings;
-use crate::constants::{SETTINGS_KEY, SETTINGS_STORE_PATH};
+use crate::constants::{SETTINGS_KEY, STORE_PATH};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_store::{Store, StoreExt};
 
@@ -8,7 +8,7 @@ async fn get_settings_store(
   app_handle: &AppHandle,
 ) -> Result<std::sync::Arc<Store<tauri::Wry>>, String> {
   app_handle
-    .store(SETTINGS_STORE_PATH)
+    .store(STORE_PATH)
     .map_err(|e| format!("Failed to get settings store: {}", e))
 }
 

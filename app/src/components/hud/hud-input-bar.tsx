@@ -247,8 +247,8 @@ export function HUDInputBar({
             <DropdownMenuTrigger asChild>
               <InputGroupButton className="ml-auto" variant="ghost" disabled={ocrLoading || isStreaming}>
                 {modelSelection === "Local" && "Local"}
-                {modelSelection === "GptOss" && "GPT OSS"}
-                {modelSelection === "Gpt5" && "GPT-5"}
+                {modelSelection === "Fast" && "Gemini 3 Flash"}
+                {modelSelection === "Pro" && "Gemini 3 Pro"}
                 <ChevronDown />
               </InputGroupButton>
             </DropdownMenuTrigger>
@@ -271,19 +271,19 @@ export function HUDInputBar({
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem 
-                  onClick={() => handleModelSelectionChange('GptOss')}
+                  onClick={() => handleModelSelectionChange('Fast')}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
-                  <span className="font-medium text-sm">GPT OSS</span>
+                  <span className="font-medium text-sm">Gemini 3 Flash</span>
                   <span className="text-xs text-muted-foreground">
-                    More powerful open-source model.
+                    More powerful fast model.
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => handleModelSelectionChange('Gpt5')}
+                  onClick={() => handleModelSelectionChange('Pro')}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
-                  <span className="font-medium text-sm">GPT-5</span>
+                  <span className="font-medium text-sm">Gemini 3 Pro</span>
                   <span className="text-xs text-muted-foreground">
                     The latest and most advanced model.
                   </span>

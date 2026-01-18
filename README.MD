@@ -13,8 +13,8 @@ Built with Tauri (Rust + Next.js).
 - Local‑first inference with llama.cpp
   - Ships with a built‑in model downloader
 - Floating chat window
-  - Chat locally with Qwen3 1.7B
-  - Optional GPT‑OSS‑20B and GPT-5 via OpenRouter
+  - Chat locally with Qwen3VL-2B
+  - Optional Gemini 3 Flash and Gemini 3 Pro
 - Gemini-powered computer use
   - Let Gemini take control of your computer to complete tasks on your behalf
 - Screen region context with OCR
@@ -26,7 +26,8 @@ Built with Tauri (Rust + Next.js).
 
 - The Tauri/Rust backend manages windowing, screen capture, OCR, and model orchestration
 - llama.cpp runs locally; the app communicates with it through a local http server
-- When you choose, OpenRouter can be used as the model provider
+- When you choose, Gemini can be used as the model
+- Supabase manages auth, cloud user data, and sessions
 - All local artifacts (models, database, caches) never leave your computer
 
 ## Roadmap (vision)
@@ -61,11 +62,8 @@ pnpm run tauri dev
 
 - Local models via llama.cpp
   - A built‑in downloader fetches models
-  - Default: Qwen3 1.7B
-- Optional OpenRouter
-  - Set `OPENROUTER_API_KEY` in `app/src-tauri/.env`
-
-See `.env.example` for all supported variables.
+  - Default: Qwen3VL-2B
+- Optional Gemini
 
 ## OCR and screen capture
 
@@ -75,11 +73,12 @@ See `.env.example` for all supported variables.
 ## Privacy
 
 - Local‑first by design: inference and screen processing happen on your machine
-- Optional cloud access through OpenRouter is opt‑in and key‑gated
+- Optional cloud access through Gemini API is opt‑in
 - Artifacts (models, logs, OCR snippets) are stored locally
 
 ## Project structure
 
 - `app/` – Tauri app with Next.js frontend and Rust backend
 - `app/src-tauri/` – Tauri config, Rust commands, binaries, and environment
+- `cloudflare/` – Cloudflare worker for Gemini completions
 - `ml/` – experiments and training scripts

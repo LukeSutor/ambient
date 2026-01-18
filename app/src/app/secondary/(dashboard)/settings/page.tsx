@@ -103,20 +103,20 @@ export default function Settings() {
                                         <span className="font-medium">Local</span>
                                     </div>
                                 )}
-                                {modelSelection === "GptOss" && (
+                                {modelSelection === "Fast" && (
                                     <div className="flex items-center gap-3">
                                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                                             <Zap className="h-4 w-4 m-1.5 text-blue-600" />
                                         </div>
-                                        <span className="font-medium">GPT OSS</span>
+                                        <span className="font-medium">Gemini 3 Flash</span>
                                     </div>
                                 )}
-                                {modelSelection === "Gpt5" && (
+                                {modelSelection === "Pro" && (
                                     <div className="flex items-center gap-3">
                                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500">
                                             <Crown className="h-4 w-4 m-1.5 text-white" />
                                         </div>
-                                        <span className="font-medium">GPT-5</span>
+                                        <span className="font-medium">Gemini 3 Pro</span>
                                     </div>
                                 )}
                                 {!modelSelection && (
@@ -152,7 +152,7 @@ export default function Settings() {
 
                             <SelectSeparator />
 
-                            <SelectItem value="GptOss" className="py-4 px-4 cursor-pointer h-auto min-h-[4rem]">
+                            <SelectItem value="Fast" className="py-4 px-4 cursor-pointer h-auto min-h-[4rem]">
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center justify-center rounded-full bg-blue-100">
@@ -160,11 +160,11 @@ export default function Settings() {
                                         </div>
                                         <div className="flex flex-col items-start">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium">GPT OSS</span>
+                                                <span className="font-medium">Gemini 3 Flash</span>
                                                 <Badge variant="outline" className="text-xs">Enhanced</Badge>
                                             </div>
                                             <span className="text-xs text-muted-foreground text-left">
-                                                More powerful. OpenAI's open-source model with advanced capabilities.
+                                                More powerful. Google's fast model with advanced capabilities.
                                             </span>
                                         </div>
                                     </div>
@@ -173,7 +173,7 @@ export default function Settings() {
 
                             <SelectSeparator />
 
-                            <SelectItem value="Gpt5" className="py-4 px-4 cursor-pointer h-auto min-h-[4rem]">
+                            <SelectItem value="Pro" className="py-4 px-4 cursor-pointer h-auto min-h-[4rem]">
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500">
@@ -181,13 +181,13 @@ export default function Settings() {
                                         </div>
                                         <div className="flex flex-col items-start">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium">GPT 5</span>
+                                                <span className="font-medium">Gemini 3 Pro</span>
                                                 <Badge variant="default" className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 border-none">
                                                     Premium
                                                 </Badge>
                                             </div>
                                             <span className="text-xs text-muted-foreground text-left">
-                                                The latest and most advanced model from OpenAI.
+                                                The latest and most advanced model from Google.
                                             </span>
                                         </div>
                                     </div>

@@ -3,6 +3,7 @@ use crate::constants::{
   MAX_PORT_ATTEMPTS, MIN_PORT,
 };
 use crate::events::{emitter::emit, types::*};
+use crate::models::llm::types::LlmRequest;
 use crate::setup;
 use rand::Rng;
 use reqwest;
@@ -376,12 +377,7 @@ async fn wait_for_server_ready(config: &ServerConfig) -> Result<(), ServerError>
 #[tauri::command]
 pub async fn generate(
   app_handle: AppHandle,
-  prompt: String,
-  system_prompt: Option<String>,
-  json_schema: Option<String>,
-  conv_id: Option<String>,
-  use_thinking: Option<bool>,
-  stream: Option<bool>,
+  request: LlmRequest,
 ) -> Result<String, String> {
   log::info!("[llama_server] Starting chat completion generation");
   let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
@@ -391,9 +387,9 @@ pub async fn generate(
     return Err(format!("Server health check failed: {}", e));
   }
 
-  let system_prompt = system_prompt.unwrap_or("You are a helpful assistant".to_string());
-  let should_stream = stream.unwrap_or(false);
-  let enable_thinking = use_thinking.unwrap_or(true);
+  let system_prompt = request.system_prompt.unwrap_or("You are a helpful assistant".to_string());
+  let should_stream = request.stream.unwrap_or(false);
+  let enable_thinking = request.use_thinking.unwrap_or(true);
 
   // Build messages array from conversation history and new prompt
   let mut messages = Vec::new();
@@ -405,10 +401,16 @@ pub async fn generate(
   }));
 
   // If conversation ID is provided, load existing messages
-  if let Some(conversation_id) = &conv_id {
+  if let Some(conversation_id) = &request.conv_id {
     match crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
     {
-      Ok(conv_messages) => {
+      Ok(mut conv_messages) => {
+        // Filter out the message we are currently augmenting to avoid doubling
+        // if it was already saved to the database (e.g. for memory extraction)
+        if let Some(mid) = &request.current_message_id {
+          conv_messages.retain(|m| &m.id != mid);
+        }
+
         for msg in conv_messages {
           messages.push(json!({
             "role": msg.role.as_str(),
@@ -428,7 +430,7 @@ pub async fn generate(
   // Add the new user message
   messages.push(json!({
     "role": "user",
-    "content": prompt
+    "content": request.prompt
   }));
 
   // Build request body
@@ -439,7 +441,7 @@ pub async fn generate(
   });
 
   // Add JSON schema if provided
-  if let Some(schema) = json_schema {
+  if let Some(schema) = request.json_schema {
     if let Ok(schema_value) = serde_json::from_str::<Value>(&schema) {
       request_body["response_format"] = json!({
           "type": "json_object",
@@ -520,7 +522,7 @@ pub async fn generate(
                           delta: content.to_string(),
                           is_finished: false,
                           full_response: full_response.clone(),
-                          conv_id: conv_id.clone(),
+                          conv_id: request.conv_id.clone(),
                         };
 
                         if let Err(e) = emit(CHAT_STREAM, stream_data) {
@@ -546,7 +548,7 @@ pub async fn generate(
       delta: "".to_string(),
       is_finished: true,
       full_response: full_response.clone(),
-      conv_id: conv_id.clone(),
+      conv_id: request.conv_id.clone(),
     };
 
     if let Err(e) = emit(CHAT_STREAM, final_stream_data) {

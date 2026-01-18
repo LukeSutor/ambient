@@ -223,11 +223,13 @@ export default function Dev() {
 
   // --- Supabase user object ---
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
+  const [supabaseToken, setSupabaseToken] = useState<string | null>(null);
 
   const fetchSupabaseUser = async () => {
     try {
       const accessToken = await invoke<any>("get_access_token_command");
       console.log("Access Token:", accessToken);
+      setSupabaseToken(accessToken);
       if (accessToken) {
         const supabaseUser = await invoke<SupabaseUser>("get_user", { accessToken });
         console.log("Supabase User:", supabaseUser);
@@ -351,7 +353,7 @@ export default function Dev() {
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center p-4 space-y-6">
+    <div className="relative flex flex-col items-center justify-center p-4 space-y-6 max-w-[30rem]">
       {/* Capture Scheduler Controls */}
       <div className="flex gap-4 justify-center">
         <Button 
@@ -757,12 +759,43 @@ export default function Dev() {
       </div>
 
       {/* Supabase user fetching */}
-      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50">
-        <h2 className="text-lg font-semibold mb-2">Supabase User</h2>
-        <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(supabaseUser, null, 2)}</pre>
-        <Button onClick={fetchSupabaseUser} variant="default">
-          Fetch Supabase User
-        </Button>
+      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Supabase Auth</h2>
+          <Button onClick={fetchSupabaseUser} variant="default">
+            Refresh Auth Info
+          </Button>
+        </div>
+        
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Access Token</h3>
+          <div className="flex gap-2">
+            <Input 
+              readOnly 
+              value={supabaseToken || "No token fetched"} 
+              className="bg-white font-mono text-xs"
+            />
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                if (supabaseToken) {
+                  navigator.clipboard.writeText(supabaseToken);
+                }
+              }}
+              disabled={!supabaseToken}
+            >
+              Copy
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">User Profile</h3>
+          <pre className="whitespace-pre-wrap text-sm bg-white p-2 rounded border max-h-60 overflow-auto">
+            {supabaseUser ? JSON.stringify(supabaseUser, null, 2) : "No user data fetched"}
+          </pre>
+        </div>
       </div>
 
       {/* --- Screen Text by Application Section --- */}
