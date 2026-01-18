@@ -3,12 +3,14 @@ use crate::auth::types::{
     VerifyOtpResponse, RefreshTokenResponse, ResendConfirmationResponse,
     OAuthUrlResponse, AuthErrorResponse, AuthErrorCode,
 };
-use crate::auth::storage::{store_session, get_refresh_token, clear_auth_state, get_access_token};
+use crate::auth::storage::{store_session, get_refresh_token, clear_auth_state, get_access_token, retrieve_auth_state};
 use crate::auth::security::{
     HTTP_CLIENT,
     check_rate_limit, record_attempt, clear_rate_limit, RateLimitOp,
 };
 use serde_json::json;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
 
 extern crate dotenv;
 
@@ -187,9 +189,25 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     })
 }
 
+static REFRESH_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
 #[tauri::command]
 pub async fn refresh_token() -> Result<RefreshTokenResponse, String> {
     log::info!("[supabase_auth] Attempting to refresh session");
+    
+    // Acquire lock to serialize refresh requests
+    let _guard = REFRESH_MUTEX.lock().await;
+
+    // Check if the token was already refreshed by another thread while we waited
+    if let Ok(Some(state)) = retrieve_auth_state().map_err(|e| e.to_string()) {
+        if !state.is_access_token_expired() {
+            log::info!("[supabase_auth] Token already refreshed by concurrent request. Returning valid session.");
+            return Ok(RefreshTokenResponse {
+                session: state.session.clone(),
+                user: state.session.user,
+            });
+        }
+    }
     
     // Rate limiting for refresh to prevent abuse
     check_rate_limit(RateLimitOp::RefreshToken, "global")?;

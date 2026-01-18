@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useReducer,
+  useRef,
   type ReactNode,
 } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -92,8 +93,13 @@ interface RoleAccessProviderProps {
 
 export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
   const [state, dispatch] = useReducer(roleAccessReducer, initialState);
+  const isRefreshing = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (isRefreshing.current) return;
+    console.log("Refreshing role access state...");
+    
+    isRefreshing.current = true;
     try {
       const fullState = await invokeGetFullAuthState();
       
@@ -109,6 +115,7 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
     } catch (error) {
       console.error("Error fetching role access state:", error);
     } finally {
+      isRefreshing.current = false;
       dispatch({ type: "SET_IS_HYDRATED", payload: true });
     }
   }, [dispatch]);

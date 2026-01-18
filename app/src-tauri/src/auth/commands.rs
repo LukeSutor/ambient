@@ -144,15 +144,16 @@ pub async fn get_full_auth_state(app_handle: AppHandle) -> Result<FullAuthState,
     }
 }
 
-/// Quick online check helper using shared HTTP client
+/// Quick online check helper using TCP connection
 async fn check_online() -> bool {
-    HTTP_CLIENT
-        .get("https://www.google.com")
-        .timeout(std::time::Duration::from_secs(5))
-        .send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+    let addr = "8.8.8.8:53";
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        tokio::net::TcpStream::connect(addr)
+    ).await {
+        Ok(Ok(_)) => true,
+        _ => false,
+    }
 }
 
 #[tauri::command]
