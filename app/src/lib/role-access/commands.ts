@@ -63,8 +63,6 @@ export function isAuthErrorCode(error: unknown, code: AuthErrorResponse['code'])
  */
 export function getAuthErrorMessage(error: unknown, defaultMessage: string): string {
   const parsed = parseAuthError(error);
-
-  console.log({parsed, error})
   
   if (parsed) {
     // Use the user-friendly message for the error code if available
