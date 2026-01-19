@@ -1,6 +1,7 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider};
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
+use crate::db::token_usage::add_token_usage;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
 use tauri::AppHandle;
@@ -190,11 +191,13 @@ impl LlmProvider for CloudflareProvider {
         },
       );
 
-      log::info!(
-        "Cloudflare streaming usage - Prompt: {}, Completion: {}",
-        prompt_tokens,
-        completion_tokens
-      );
+      // Save token usage
+      add_token_usage(
+          app_handle.clone(),
+          model,
+          prompt_tokens,
+          completion_tokens,
+      ).await?;
 
       Ok(full)
     } else {
@@ -247,11 +250,13 @@ impl LlmProvider for CloudflareProvider {
           json.as_str().unwrap_or("").to_string()
         });
 
-      log::info!(
-        "Cloudflare usage - Prompt: {}, Completion: {}",
-        prompt_tokens,
-        completion_tokens
-      );
+      // Save token usage
+      add_token_usage(
+          app_handle.clone(),
+          model,
+          prompt_tokens,
+          completion_tokens,
+      ).await?;
 
       Ok(content)
     }

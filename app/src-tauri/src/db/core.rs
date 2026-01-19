@@ -163,7 +163,8 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         INSERT OR IGNORE INTO models (model) VALUES
           ('local'),
           ('fast'),
-          ('pro');
+          ('pro'),
+          ('computer-use');
 
         CREATE TABLE IF NOT EXISTS token_usage (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

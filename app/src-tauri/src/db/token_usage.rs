@@ -30,8 +30,8 @@ pub enum AggregationLevel {
 /// Internal struct for SQL data mapping
 pub struct TokenUsageRow {
   pub model: String,
-  pub total_prompt_tokens: u32,
-  pub total_completion_tokens: u32,
+  pub total_prompt_tokens: u64,
+  pub total_completion_tokens: u64,
   pub date: String,
 }
 
@@ -43,8 +43,8 @@ pub struct TokenUsageQueryResult {
   #[ts(type = "({ time_label: string, date: string } & Record<string, number>)[]")]
   pub data: Vec<serde_json::Value>,
   pub models: Vec<String>,
-  pub total_prompt_tokens: u32,
-  pub total_completion_tokens: u32,
+  pub total_prompt_tokens: u64,
+  pub total_completion_tokens: u64,
   pub time_range: String,
 }
 
@@ -63,8 +63,8 @@ pub struct TokenUsageConsumptionResult {
 pub async fn add_token_usage(
   app_handle: AppHandle,
   model: &str,
-  prompt_tokens: u32,
-  completion_tokens: u32,
+  prompt_tokens: u64,
+  completion_tokens: u64,
 ) -> Result<(), String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
@@ -90,8 +90,8 @@ pub async fn add_token_usage(
          VALUES (?1, ?2, ?3, ?4)",
       params![
         model_id,
-        prompt_tokens,
-        completion_tokens,
+        prompt_tokens as u64,
+        completion_tokens as u64,
         now.to_rfc3339(),
       ],
     )
@@ -104,7 +104,7 @@ pub async fn add_token_usage(
 pub async fn get_total_token_usage(
   app_handle: AppHandle,
   model: &str,
-) -> Result<(u32, u32), String> {
+) -> Result<(u64, u64), String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
   let conn = db_guard
@@ -129,7 +129,7 @@ pub async fn get_total_token_usage(
     )
     .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-  let (total_prompt_tokens, total_completion_tokens): (Option<u32>, Option<u32>) =
+  let (total_prompt_tokens, total_completion_tokens): (Option<u64>, Option<u64>) =
     stmt
       .query_row(params![model_id], |row| {
         Ok((row.get(0)?, row.get(1)?))

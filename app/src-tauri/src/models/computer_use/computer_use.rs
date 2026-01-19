@@ -11,6 +11,7 @@ use crate::db::conversations::add_message;
 use crate::windows::{open_main_window, close_main_window, open_computer_use_window, close_computer_use_window};
 use crate::db::computer_use::{get_computer_use_session, save_computer_use_session};
 use crate::auth::commands::get_access_token_command;
+use crate::db::token_usage::add_token_usage;
 use chrono;
 
 fn transform_function_call(function_name: String, args: Vec<String>) -> (String, String) {
@@ -184,13 +185,13 @@ impl ComputerUseEngine {
         // Extract token counts
         if let Some(usage) = json_response.get("usageMetadata") {
             prompt_tokens = usage
-            .get("promptTokenCount")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+                .get("promptTokenCount")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             completion_tokens = usage
-            .get("candidatesTokenCount")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+                .get("candidatesTokenCount")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
         }
 
         // Check for errors in the response
@@ -201,12 +202,13 @@ impl ComputerUseEngine {
             return Err(format!("API Error {}: {}", code, message));
         }
 
-        // Log token usage
-        log::info!(
-            "[computer_use] Token usage - Prompt: {}, Completion: {}",
+        // Save token usage
+        add_token_usage(
+            self.app_handle.clone(),
+            "computer-use",
             prompt_tokens,
             completion_tokens,
-        );
+        ).await?;
 
         Ok(json_response)
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useRoleAccess } from "@/lib/role-access";
 import {
@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { TimeFilter, AggregationLevel, TokenUsageQueryResult, TokenUsageConsumptionResult } from "@/types/token_usage";
 
 const greetings = [
@@ -51,13 +51,21 @@ function timeGreeting(): string {
 }
 
 const chartConfig = {
-  local: {
+  "local": {
     label: "Local",
-    color: "blue",
+    color: "#10b981",
   },
-  fast: {
+  "fast": {
     label: "Fast",
-    color: "red",
+    color: "#60a5fa",
+  },
+  "pro": {
+    label: "Pro",
+    color: "#2563eb",
+  },
+  "computer-use": {
+    label: "Computer Use",
+    color: "#f59e0b",
   },
 } satisfies ChartConfig
 
@@ -80,12 +88,6 @@ export default function Home() {
       greeting = timeGreeting();
     } else {
       greeting = greetings[Math.floor(Math.random() * greetings.length)];
-    }
-
-    // Add first name if available
-    const firstName = getFirstName();
-    if (firstName) {
-      greeting += `, ${firstName}`;
     }
     setGreeting(greeting);
   }, [userInfo]);
@@ -114,30 +116,30 @@ export default function Home() {
     <div className="relative flex flex-col items-center justify-start p-4 w-full">
       {/* Greeting */}
       {userInfo ? 
-      <p className="text-4xl font-bold w-full h-20">{greeting}</p>
+      <p className="text-4xl font-bold w-full h-20">{greeting}{", "}{getFirstName()}</p>
       :
       <div className="h-20 w-full" />
       }
       {/* Consumption cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full my-4">
         <Card>
-          <CardHeader>Cost Savings</CardHeader>
+          <CardHeader className="text-sm">Cost Savings</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
-            <p className="text-4xl text-black font-bold mx-2">{consumptionData?.cost_amount?.toFixed(2)}</p>
+            <p className="text-4xl text-black font-bold mr-1">{consumptionData?.cost_amount?.toFixed(2)}</p>
             <p className="text-xl">{consumptionData?.cost_unit}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>Water Savings</CardHeader>
+          <CardHeader className="text-sm">Water Savings</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
-            <p className="text-4xl text-black font-bold mx-2">{consumptionData?.water_amount?.toFixed(2)}</p>
+            <p className="text-4xl text-black font-bold mr-1">{consumptionData?.water_amount?.toFixed(2)}</p>
             <p className="text-xl">{consumptionData?.water_unit}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>Energy Savings</CardHeader>
+          <CardHeader className="text-sm">Energy Savings</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
-            <p className="text-4xl text-black font-bold mx-2">{consumptionData?.energy_amount?.toFixed(2)}</p>
+            <p className="text-4xl text-black font-bold mr-1">{consumptionData?.energy_amount?.toFixed(2)}</p>
             <p className="text-xl">{consumptionData?.energy_unit}</p>
           </CardContent>
         </Card>
@@ -159,13 +161,19 @@ export default function Home() {
                 tickLine={false}
                 axisLine={false}
               />
+              {/* <YAxis
+                // scale="auto"
+                // domain={['auto', 'auto']}
+                tickLine={false}
+                axisLine={false}
+              /> */}
               <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
               <ChartLegend content={<ChartLegendContent />} />
-              {chartData?.models.map((model, index) => (
+              {chartData?.models.map((model) => (
                 <Bar 
                   key={model} 
                   dataKey={model} 
-                  fill={`blue`} 
+                  fill={chartConfig[model as keyof typeof chartConfig]?.color || "gray"} 
                   radius={4} 
                 />
               ))}

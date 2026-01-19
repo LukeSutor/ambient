@@ -438,7 +438,7 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     let redirect_uri = "cortical://auth/callback";
     let provider = "google";
     
-    let mut auth_url = format!(
+    let auth_url = format!(
         "{}/auth/v1/authorize?provider={}&redirect_to={}",
         base_url,
         provider,
