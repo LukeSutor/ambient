@@ -21,8 +21,8 @@ export function NavLogo() {
             <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src="/logo.png" />
             </Avatar>
-            <div className="flex flex-row items-center text-left text-xl leading-tight">
-            <span className="truncate font-medium">cortical</span>
+            <div className="flex flex-row items-center text-left text-xl leading-tight font-sora">
+                <span className="truncate font-medium">ambient</span>
             </div>
         </SidebarMenuButton>
       </SidebarMenuItem>

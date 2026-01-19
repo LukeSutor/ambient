@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "cortical",
+  "productName": "ambient",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "ambient",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:3000",
@@ -14,7 +14,7 @@
       {
         "label": "main",
         "url": "/hud",
-        "title": "Cortical",
+        "title": "Ambient",
         "width": 400,
         "height": 400,
         "resizable": false,
@@ -37,7 +37,6 @@
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "resources": [
@@ -48,7 +47,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["cortical"]
+        "schemes": ["ambient"]
       }
     }
   }

@@ -1,7 +1,7 @@
 [package]
-name = "local-computer-use"
+name = "ambient"
 version = "0.1.0"
-description = "A Tauri App"
+description = "A local-first AI assistant built with Tauri and Next.js"
 authors = ["Luke Sutor"]
 edition = "2021"
 

@@ -35,7 +35,7 @@ pub const AUTH_KEY: &str = "auth";
 
 // Keyring constants
 pub const KEYRING_ENCRYPTION_KEY: &str = "supabase_storage_key";
-pub const KEYRING_SERVICE: &str = "local-computer-use";
+pub const KEYRING_SERVICE: &str = "ambient";
 pub const KEYRING_AUTH_KEY: &str = "supabase_auth";
 
 // Server setup

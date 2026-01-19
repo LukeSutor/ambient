@@ -94,6 +94,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambient"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "dotenv",
+ "enigo",
+ "image 0.25.6",
+ "keyring",
+ "log",
+ "ocrs",
+ "once_cell",
+ "rand 0.8.5",
+ "reqwest",
+ "rten",
+ "rusqlite",
+ "rusqlite_migration",
+ "screenshots",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlite-vec",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-fs",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-shell",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-store",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "ts-rs",
+ "url",
+ "urlencoding",
+ "uuid",
+ "windows 0.60.0",
+ "zerocopy",
+]
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2757,52 +2803,6 @@ name = "litemap"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23fb14cb19457329c82206317a5663005a4d404783dc74f4252769b0d5f42856"
-
-[[package]]
-name = "local-computer-use"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "async-trait",
- "base64 0.22.1",
- "chrono",
- "dotenv",
- "enigo",
- "image 0.25.6",
- "keyring",
- "log",
- "ocrs",
- "once_cell",
- "rand 0.8.5",
- "reqwest",
- "rten",
- "rusqlite",
- "rusqlite_migration",
- "screenshots",
- "serde",
- "serde_json",
- "sha2",
- "sqlite-vec",
- "tauri",
- "tauri-build",
- "tauri-plugin-deep-link",
- "tauri-plugin-fs",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-shell",
- "tauri-plugin-single-instance",
- "tauri-plugin-store",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "ts-rs",
- "url",
- "urlencoding",
- "uuid",
- "windows 0.60.0",
- "zerocopy",
-]
 
 [[package]]
 name = "lock_api"

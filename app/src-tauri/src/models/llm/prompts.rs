@@ -113,7 +113,7 @@ Examples:
   );
   map.insert(
     "hud_chat",
-    r#"You are Cortical, a helpful AI assistant. Today is {currentDateTime}.
+    r#"You are Ambient, a helpful AI assistant. Today is {currentDateTime}.
 
 You may receive:
 - Memories: Past facts about the user

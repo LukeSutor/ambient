@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Sora } from "next/font/google";
 import { AppProvider } from "@/lib/providers";
 
 import "@/styles/globals.css";
@@ -15,6 +15,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  weight: ["400", "700", "800"],
 });
 
 export default function RootLayout({
@@ -34,7 +40,7 @@ export default function RootLayout({
     <AppProvider>
       <html lang="en">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} antialiased`}
         >
           {children}
         </body>

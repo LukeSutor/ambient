@@ -1,10 +1,10 @@
-# Cortical
+# Ambient
 
 Local‑first AI assistant that lives on your PC and helps automate everyday tasks.
 
 ## Overview
 
-Cortical is a desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs efficiently in the background and prioritizes privacy and speed by default.
+Ambient is a desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs efficiently in the background and prioritizes privacy and speed by default.
 
 Built with Tauri (Rust + Next.js).
 
