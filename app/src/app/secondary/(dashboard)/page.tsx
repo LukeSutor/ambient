@@ -28,8 +28,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Toggle } from "@/components/ui/toggle"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { TimeFilter, AggregationLevel, TokenUsageQueryResult, TokenUsageConsumptionResult } from "@/types/token_usage";
+import { ChartColumn } from "lucide-react";
 
 const greetings = [
   "Hello",
@@ -75,6 +77,7 @@ export default function Home() {
   const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
   const [aggregationLevel, setAggregationLevel] = useState<AggregationLevel>("Day");
+  const [logScale, setLogScale] = useState<boolean>(false);
 
   const { userInfo, getFirstName } = useRoleAccess();
 
@@ -97,14 +100,20 @@ export default function Home() {
     async function fetchConsumptionData() {
       const data = await invoke<TokenUsageConsumptionResult>('get_token_usage_consumption');
       setConsumptionData(data);
-      console.log("Consumption Data:", data);
     }
     fetchConsumptionData();
   }, []);  
 
   // Fetch chart data
   useEffect(() => {
-    console.log({timeFilter, aggregationLevel})
+    if (aggregationLevel === "Hour" && timeFilter !== "Last24Hours") {
+      setTimeFilter("Last24Hours");
+      return;
+    } else if (aggregationLevel === "Day" && (timeFilter === "LastYear" || timeFilter === "AllTime")) {
+      setTimeFilter("Last30Days");
+      return;
+    }
+
     async function fetchData() {
       const data = await invoke<TokenUsageQueryResult>('get_token_usage', { timeFilter, aggregationLevel });
       setChartData(data);
@@ -116,9 +125,9 @@ export default function Home() {
     <div className="relative flex flex-col items-center justify-start p-4 w-full">
       {/* Greeting */}
       {userInfo ? 
-      <p className="text-4xl font-bold w-full h-20">{greeting}{", "}{getFirstName()}</p>
-      :
-      <div className="h-20 w-full" />
+        <p className="text-4xl font-bold w-full h-20 font-sora">{greeting}{", "}{getFirstName()}</p>
+        :
+        <div className="h-20 w-full" />
       }
       {/* Consumption cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full my-4">
@@ -161,12 +170,11 @@ export default function Home() {
                 tickLine={false}
                 axisLine={false}
               />
-              {/* <YAxis
-                // scale="auto"
-                // domain={['auto', 'auto']}
-                tickLine={false}
-                axisLine={false}
-              /> */}
+              <YAxis
+                scale={logScale ? "log" : "linear"}
+                domain={[1, "auto"]}
+                hide={true}
+              />
               <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
               <ChartLegend content={<ChartLegendContent />} />
               {chartData?.models.map((model) => (
@@ -213,6 +221,17 @@ export default function Home() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+            <Toggle
+              pressed={logScale}
+              onPressedChange={(pressed) => setLogScale(pressed)}
+              aria-label="Toggle bookmark"
+              size="sm"
+              variant="outline"
+              className="font-normal data-[state=on]:bg-gray-100 data-[state=on]:*:[svg]:stroke-blue-500"
+            >
+              <ChartColumn />
+              Log Scale
+            </Toggle>
           </div>
         </CardFooter>
       </Card>
