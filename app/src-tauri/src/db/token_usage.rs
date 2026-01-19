@@ -219,10 +219,10 @@ pub async fn get_token_usage(
 
   // Determine the grouping based on aggregation level
   let sql_group = match aggregation_level {
-    AggregationLevel::Hour => "strftime('%Y-%m-%dT%H:00:00', tu.timestamp)",
-    AggregationLevel::Day => "DATE(tu.timestamp)",
-    AggregationLevel::Week => "date(tu.timestamp, 'weekday 0', '-6 days')",
-    AggregationLevel::Month => "strftime('%Y-%m-01', tu.timestamp)",
+    AggregationLevel::Hour => "strftime('%Y-%m-%dT%H:00:00', tu.timestamp, 'localtime')",
+    AggregationLevel::Day => "DATE(tu.timestamp, 'localtime')",
+    AggregationLevel::Week => "date(tu.timestamp, 'localtime', 'weekday 0', '-6 days')",
+    AggregationLevel::Month => "strftime('%Y-%m-01', tu.timestamp, 'localtime')",
   };
 
   // Query token usage aggregated by specified level and model
