@@ -230,7 +230,8 @@ export default function Home() {
               <YAxis
                 scale={logScale ? "log" : "linear"}
                 domain={[1, "auto"]}
-                hide={true}
+                tickLine={false}
+                axisLine={false}
               />
               <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
               <ChartLegend content={<ChartLegendContent />} />
