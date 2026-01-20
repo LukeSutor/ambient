@@ -132,7 +132,8 @@ export function HUDInputBar({
     >
       <InputGroup className={cn(
         "bg-white/60 border border-black/20 transition-all",
-        isStreaming && "streaming-ring border-transparent"
+        "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
+        isStreaming && "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent"
       )}>
         <TextareaAutosize
           data-slot="input-group-control"
