@@ -11,11 +11,9 @@ use crate::constants::{COST_PER_TOKEN, WATER_PER_TOKEN, ENERGY_PER_TOKEN};
 #[derive(Debug, Serialize, Deserialize, TS, Clone, Copy, PartialEq, Eq)]
 #[ts(export, export_to = "token_usage.ts")]
 pub enum TimeFilter {
-  Last24Hours,
   Last7Days,
   Last30Days,
-  LastYear,
-  AllTime,
+  Last3Months,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS, Clone, Copy, PartialEq, Eq)]
@@ -190,17 +188,12 @@ pub async fn get_token_usage_consumption(app_handle: AppHandle) -> Result<TokenU
 pub async fn get_token_usage(
   app_handle: AppHandle,
   time_filter: TimeFilter,
-  aggregation_level: AggregationLevel,
 ) -> Result<TokenUsageQueryResult, String> {
-  // 1. Validation
-  if aggregation_level == AggregationLevel::Hour && time_filter != TimeFilter::Last24Hours {
-    return Err("Hourly aggregation is only allowed for the Last 24 Hours time filter.".into());
-  }
-  if aggregation_level == AggregationLevel::Day
-    && (time_filter == TimeFilter::LastYear || time_filter == TimeFilter::AllTime)
-  {
-    return Err("Daily aggregation is not allowed for Last Year or All Time filtering.".into());
-  }
+  let aggregation_level = match time_filter {
+    TimeFilter::Last7Days => AggregationLevel::Day,
+    TimeFilter::Last30Days => AggregationLevel::Week,
+    TimeFilter::Last3Months => AggregationLevel::Month,
+  };
 
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
@@ -210,11 +203,9 @@ pub async fn get_token_usage(
 
   // Determine the time range based on the filter
   let time_condition = match time_filter {
-    TimeFilter::Last24Hours => "timestamp >= datetime('now', '-1 day')",
     TimeFilter::Last7Days => "timestamp >= datetime('now', '-7 days')",
     TimeFilter::Last30Days => "timestamp >= datetime('now', '-30 days')",
-    TimeFilter::LastYear => "timestamp >= datetime('now', '-1 year')",
-    TimeFilter::AllTime => "1=1", // No time filter
+    TimeFilter::Last3Months => "timestamp >= datetime('now', '-3 months')",
   };
 
   // Determine the grouping based on aggregation level

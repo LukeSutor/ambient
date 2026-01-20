@@ -86,7 +86,6 @@ export default function Home() {
   const [consumptionData, setConsumptionData] = useState<TokenUsageConsumptionResult | null>(null);
   const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
-  const [aggregationLevel, setAggregationLevel] = useState<AggregationLevel>("Day");
   const [logScale, setLogScale] = useState<boolean>(false);
 
   const { userInfo, getFirstName } = useRoleAccess();
@@ -116,20 +115,12 @@ export default function Home() {
 
   // Fetch chart data
   useEffect(() => {
-    if (aggregationLevel === "Hour" && timeFilter !== "Last24Hours") {
-      setTimeFilter("Last24Hours");
-      return;
-    } else if (aggregationLevel === "Day" && (timeFilter === "LastYear" || timeFilter === "AllTime")) {
-      setTimeFilter("Last30Days");
-      return;
-    }
-
     async function fetchData() {
-      const data = await invoke<TokenUsageQueryResult>('get_token_usage', { timeFilter, aggregationLevel });
+      const data = await invoke<TokenUsageQueryResult>('get_token_usage', { timeFilter });
       setChartData(data);
     }
     fetchData();
-  }, [timeFilter, aggregationLevel]);
+  }, [timeFilter]);
 
   const openURL = async (url: string) => {
     await open(url);
