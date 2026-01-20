@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useRoleAccess } from "@/lib/role-access";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -28,10 +29,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import { Toggle } from "@/components/ui/toggle"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { TimeFilter, AggregationLevel, TokenUsageQueryResult, TokenUsageConsumptionResult } from "@/types/token_usage";
-import { ChartColumn } from "lucide-react";
+import { ChartColumn, DollarSign, Droplet, ExternalLink, Info, Zap } from "lucide-react";
+import { open } from "@tauri-apps/plugin-shell";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group"
+import { set } from "react-hook-form";
 
 const greetings = [
   "Hello",
@@ -121,6 +131,10 @@ export default function Home() {
     fetchData();
   }, [timeFilter, aggregationLevel]);
 
+  const openURL = async (url: string) => {
+    await open(url);
+  }
+
   return (
     <div className="relative flex flex-col items-center justify-start p-4 w-full">
       {/* Greeting */}
@@ -130,23 +144,54 @@ export default function Home() {
         <div className="h-20 w-full" />
       }
       {/* Consumption cards */}
+      <div className="flex flex-row items-center justify-start space-x-2 w-full">
+        <p className="text-xl font-medium">Total Savings</p>
+        <HoverCard>
+          <HoverCardTrigger>
+            <Info className="w-4 h-4 text-gray-500 cursor-pointer" />
+          </HoverCardTrigger>
+          <HoverCardContent side="bottom" align="center" className="text-sm w-86">
+            <p>This section displays the total cost, water, and energy savings achieved by using local AI models instead of cloud-based models.</p>
+            <div className="flex flex-col items-center space-y-4 mt-4 mb-2">
+              <div className="flex flex-row items-center space-x-2 p-2 shadow rounded-md ring-1 ring-gray-300 hover:scale-101 transition-all">
+                <DollarSign className="text-green-600 h-6 w-6 flex-shrink-0" />
+                <p className="font-l">It costs about $4.34 per million tokens to use
+                  <Button className="p-0 mx-1.5 h-min" variant="link" onClick={() => openURL("https://ai.google.dev/gemini-api/docs/pricing")}>Gemini</Button>
+                </p>
+              </div>
+              <div className="flex flex-row items-center space-x-2 p-2 shadow rounded-md ring-1 ring-gray-300 hover:scale-101 transition-all">
+                <Droplet className="text-blue-600 h-6 w-6 flex-shrink-0" />
+                <p className="font-l">Gemini uses about 0.26 liters of water per response
+                  <Button className="p-0 mx-1.5 h-min" variant="link" onClick={() => openURL("https://cloud.google.com/blog/products/infrastructure/measuring-the-environmental-impact-of-ai-inference")}>according to Google</Button>
+                </p>
+              </div>
+              <div className="flex flex-row items-center space-x-2 p-2 shadow rounded-md ring-1 ring-gray-300 hover:scale-101 transition-all">
+                <Zap className="text-yellow-400 h-6 w-6 flex-shrink-0" />
+                <p className="font-l">Gemini uses about 0.24 Wh of electricity per response
+                  <Button className="p-0 mx-1.5 h-min" variant="link" onClick={() => openURL("https://cloud.google.com/blog/products/infrastructure/measuring-the-environmental-impact-of-ai-inference")}>according to Google</Button>
+                </p>
+              </div>
+            </div>
+          </HoverCardContent>
+        </HoverCard>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full my-4">
         <Card>
-          <CardHeader className="text-sm">Cost Savings</CardHeader>
+          <CardHeader className="text-sm">Cost</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
             <p className="text-4xl text-black font-bold mr-1">{consumptionData?.cost_amount?.toFixed(2)}</p>
             <p className="text-xl">{consumptionData?.cost_unit}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="text-sm">Water Savings</CardHeader>
+          <CardHeader className="text-sm block">Water</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
             <p className="text-4xl text-black font-bold mr-1">{consumptionData?.water_amount?.toFixed(2)}</p>
             <p className="text-xl">{consumptionData?.water_unit}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="text-sm">Energy Savings</CardHeader>
+          <CardHeader className="text-sm">Energy</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
             <p className="text-4xl text-black font-bold mr-1">{consumptionData?.energy_amount?.toFixed(2)}</p>
             <p className="text-xl">{consumptionData?.energy_unit}</p>
@@ -160,6 +205,27 @@ export default function Home() {
           <CardDescription>
             {chartData?.time_range}
           </CardDescription>
+          <CardAction>
+            <ButtonGroup>
+              <ButtonGroup>
+                <Button className={`${timeFilter === "Last3Months" ? "bg-gray-100" : ""}`} onClick={() => setTimeFilter("Last3Months")} variant="outline">Last 3 Months</Button>
+                <Button className={`${timeFilter === "Last30Days" ? "bg-gray-100" : ""}`} onClick={() => setTimeFilter("Last30Days")} variant="outline">Last 30 Days</Button>
+                <Button className={`${timeFilter === "Last7Days" ? "bg-gray-100" : ""}`} onClick={() => setTimeFilter("Last7Days")} variant="outline">Last 7 Days</Button>
+              </ButtonGroup>
+              <ButtonGroup>
+                <Toggle
+                  pressed={logScale}
+                  onPressedChange={(pressed) => setLogScale(pressed)}
+                  aria-label="Toggle bookmark"
+                  variant="outline"
+                  className="data-[state=on]:bg-gray-100 data-[state=on]:*:[svg]:stroke-blue-500"
+                >
+                  <ChartColumn />
+                  Log Scale
+                </Toggle>
+              </ButtonGroup>
+            </ButtonGroup>
+          </CardAction>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig}>
@@ -188,52 +254,6 @@ export default function Home() {
             </BarChart>
           </ChartContainer>
         </CardContent>
-        <CardFooter>
-          {/* Dropdowns for time filter and aggregation level */}
-          <div className="flex flex-row space-x-4">
-            <Select value={timeFilter} onValueChange={(value) => setTimeFilter(value as TimeFilter)}>
-              <SelectTrigger className="">
-                <SelectValue placeholder="Time" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Time</SelectLabel>
-                    {(["Last24Hours", "Last7Days", "Last30Days", "LastYear", "AllTime"] as TimeFilter[]).map((filter) => (
-                    <SelectItem key={filter} value={filter}>
-                      {filter.replace(/([A-Z]|\d+)/g, ' $1').trim()}
-                    </SelectItem>
-                    ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Select value={aggregationLevel} onValueChange={(value) => setAggregationLevel(value as AggregationLevel)}>
-              <SelectTrigger className="">
-                <SelectValue placeholder="Aggregation" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectLabel>Aggregation Level</SelectLabel>
-                    {(["Hour", "Day", "Week", "Month"] as AggregationLevel[]).map((level) => (
-                    <SelectItem key={level} value={level}>
-                      {level}
-                    </SelectItem>
-                    ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Toggle
-              pressed={logScale}
-              onPressedChange={(pressed) => setLogScale(pressed)}
-              aria-label="Toggle bookmark"
-              size="sm"
-              variant="outline"
-              className="font-normal data-[state=on]:bg-gray-100 data-[state=on]:*:[svg]:stroke-blue-500"
-            >
-              <ChartColumn />
-              Log Scale
-            </Toggle>
-          </div>
-        </CardFooter>
       </Card>
     </div>
   );

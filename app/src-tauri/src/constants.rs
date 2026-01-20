@@ -61,5 +61,5 @@ pub const MARGIN_BOTTOM: u32 = 20;
 
 // Cost, water, and energy estimates per token
 pub const COST_PER_TOKEN: f64 = 0.000004375; // USD/token
-pub const WATER_PER_TOKEN: f64 = 0.0033; // mL/token
+pub const WATER_PER_TOKEN: f64 = 0.0026; // mL/token
 pub const ENERGY_PER_TOKEN: f64 = 0.0024; // Wh/token

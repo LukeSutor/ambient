@@ -33,7 +33,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="relative h-full max-h-[800px] w-full rounded-xl overflow-hidden border">
+    <div className="relative h-full max-h-[800px] w-full rounded-lg overflow-hidden border">
       {/* Force transparent background for this window on first paint */}
       <style
         // eslint-disable-next-line react/no-danger
