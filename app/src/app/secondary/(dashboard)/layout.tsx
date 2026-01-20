@@ -43,17 +43,19 @@ export default function DashboardLayout({
             "html,body{background:transparent!important;background-color:transparent!important;}",
         }}
       />
-      <SidebarProvider className="flex flex-col">
+      <SidebarProvider>
         <SiteHeader handleClose={handleClose} handleMinimize={handleMinimize} />
         <div className="flex flex-1">
           <AppSidebar />
           <SidebarInset>
-            <main className="flex flex-1 flex-col p-4 overflow-y-auto min-h-0 max-h-[calc(800px-86px)]">
-              {children}
+            <main className="flex flex-1 flex-col overflow-y-auto min-h-0 max-h-[800px]">
+              <div className="h-(--header-height) shrink-0" />
+              <div className="p-4">
+                {children}
+              </div>
             </main>
             <Toaster richColors />
           </SidebarInset>
-
         </div>
       </SidebarProvider>
   </div>

@@ -16,7 +16,6 @@ import { Separator } from "@/components/ui/separator"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
-import { NavLogo } from "@/components/nav-logo"
 import {
   Sidebar,
   SidebarContent,
@@ -24,6 +23,7 @@ import {
   SidebarFooter
 } from "@/components/ui/sidebar"
 import { useRoleAccess } from "@/lib/role-access"
+import { NavHeader } from "./nav-header"
 
 const data = {
   navMain: [
@@ -107,7 +107,7 @@ export function AppSidebar({ className, ...props }: React.ComponentProps<typeof 
       {...props}
     >
       <SidebarHeader>
-        <NavLogo />
+        <NavHeader />
       </SidebarHeader>
       <Separator className={state === "collapsed" ? "hidden" : "block"} />
       <SidebarContent>

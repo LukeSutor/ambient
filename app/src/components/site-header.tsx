@@ -2,7 +2,7 @@
 
 import { Minus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
+import Image from "next/image"
 
 type SiteHeaderProps = {
   handleClose?: () => Promise<void>;
@@ -11,9 +11,10 @@ type SiteHeaderProps = {
 
 export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
   return (
-    <header className="bg-background sticky top-0 z-50 flex w-full items-center border-b h-16 shrink-0 gap-2">
+    <header className="bg-background/80 backdrop-blur-md absolute top-0 z-50 flex w-full items-center border-b h-16 shrink-0 gap-2">
       <div className="flex items-center gap-2 px-4 w-full h-full">
-        <SidebarTrigger className="-ml-1" />
+        <Image src="/logo.png" alt="App Logo" width={32} height={32} />
+        <p className="text-xl font-sora">ambient</p>
         <div data-tauri-drag-region className="w-full h-full flex justify-end items-center">
           {/* Window minimize button */}
           <Button variant="ghost" size="icon" onClick={handleMinimize}>
