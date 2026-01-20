@@ -177,6 +177,20 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
 
         CREATE INDEX IF NOT EXISTS idx_token_usage_timestamp ON token_usage(timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_token_usage_model ON token_usage(model);
+
+        -- Message attachments
+        CREATE TABLE IF NOT EXISTS attachments (
+          id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          file_type TEXT NOT NULL,
+          file_name TEXT NOT NULL,
+          file_path TEXT,
+          extracted_text TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (message_id) REFERENCES conversation_messages(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
       "#,
   )])
 });

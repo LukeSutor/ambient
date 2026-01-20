@@ -37,6 +37,19 @@ impl Role {
   }
 }
 
+/// Attachment structure
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
+pub struct Attachment {
+  pub id: String,
+  pub message_id: String,
+  pub file_type: String,
+  pub file_name: String,
+  pub file_path: Option<String>,
+  pub extracted_text: Option<String>,
+  pub created_at: String,
+}
+
 /// Message structure
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "conversations.ts")]
@@ -46,6 +59,7 @@ pub struct Message {
   pub role: Role,
   pub content: String,
   pub timestamp: String,
+  pub attachments: Vec<Attachment>,
 }
 
 /// Conversation structure
@@ -160,6 +174,7 @@ pub async fn add_message_with_id(
     role: Role::from_str(&role),
     content: content.clone(),
     timestamp: now.to_rfc3339(),
+    attachments: vec![],
   };
 
   // Insert the message
@@ -221,29 +236,50 @@ pub async fn get_messages(
 
   let mut stmt = conn
     .prepare(
-      "SELECT id, conversation_id, role, content, timestamp 
-         FROM conversation_messages 
-         WHERE conversation_id = ?1 
-         ORDER BY timestamp ASC",
+      "SELECT m.id, m.conversation_id, m.role, m.content, m.timestamp, 
+        a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        FROM conversation_messages m 
+        LEFT JOIN attachments a ON m.id = a.message_id
+        WHERE conversation_id = ?1 
+        ORDER BY m.timestamp ASC",
     )
     .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
-  let messages = stmt
-    .query_map(params![conversation_id], |row| {
-      let timestamp_str: String = row.get(4)?;
-      let role_str: String = row.get(2)?;
+    let mut rows = stmt
+      .query(params![conversation_id])
+      .map_err(|e| format!("Failed to query messages: {}", e))?;
 
-      Ok(Message {
-        id: row.get(0)?,
-        conversation_id: row.get(1)?,
-        role: Role::from_str(&role_str),
-        content: row.get(3)?,
-        timestamp: timestamp_str,
-      })
-    })
-    .map_err(|e| format!("Failed to query messages: {}", e))?
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| format!("Failed to collect messages: {}", e))?;
+    let mut messages: Vec<Message> = Vec::new();
+
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+      let msg_id: String = row.get(0).map_err(|e| e.to_string())?;
+
+      if messages.is_empty() || messages.last().unwrap().id != msg_id {
+        let role_str: String = row.get(2).map_err(|e| e.to_string())?;
+        messages.push(Message {
+          id: msg_id,
+          conversation_id: row.get(1).map_err(|e| e.to_string())?,
+          role: Role::from_str(&role_str),
+          content: row.get(3).map_err(|e| e.to_string())?,
+          timestamp: row.get(4).map_err(|e| e.to_string())?,
+          attachments: Vec::new(),
+        });
+      }
+
+      if let Some(attachment_id) = row.get::<_, Option<String>>(5).map_err(|e| e.to_string())? {
+        if let Some(msg) = messages.last_mut() {
+          msg.attachments.push(Attachment {
+            id: attachment_id,
+            message_id: row.get(6).map_err(|e| e.to_string())?,
+            file_type: row.get(7).map_err(|e| e.to_string())?,
+            file_name: row.get(8).map_err(|e| e.to_string())?,
+            file_path: row.get(9).map_err(|e| e.to_string())?,
+            extracted_text: row.get(10).map_err(|e| e.to_string())?,
+            created_at: row.get(11).map_err(|e| e.to_string())?,
+          });
+        }
+      }
+    }
 
   Ok(messages)
 }
@@ -257,24 +293,52 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
     .as_ref()
     .ok_or("Database connection not available")?;
 
-  let message = conn
-    .query_row(
-      "SELECT id, conversation_id, role, content, timestamp FROM conversation_messages WHERE id = ?1",
-      params![message_id],
-      |row| {
-        let timestamp_str: String = row.get(4)?;
-        let role_str: String = row.get(2)?;
-
-        Ok(Message {
-          id: row.get(0)?,
-          conversation_id: row.get(1)?,
-          role: Role::from_str(&role_str),
-          content: row.get(3)?,
-          timestamp: timestamp_str,
-        })
-      },
+  let mut stmt = conn
+    .prepare(
+      "SELECT 
+        m.id, m.conversation_id, m.role, m.content, m.timestamp,
+        a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        FROM conversation_messages m 
+        LEFT JOIN attachments a ON m.id = a.message_id 
+        WHERE m.id = ?1",
     )
-    .map_err(|e| format!("Failed to get message: {}", e))?;
+    .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+  let mut rows = stmt
+    .query(params![message_id])
+    .map_err(|e| format!("Failed to query message: {}", e))?;
+
+  let mut message_acc: Option<Message> = None;
+
+  while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+    if message_acc.is_none() {
+      let role_str: String = row.get(2).map_err(|e| e.to_string())?;
+      message_acc = Some(Message {
+        id: row.get(0).map_err(|e| e.to_string())?,
+        conversation_id: row.get(1).map_err(|e| e.to_string())?,
+        role: Role::from_str(&role_str),
+        content: row.get(3).map_err(|e| e.to_string())?,
+        timestamp: row.get(4).map_err(|e| e.to_string())?,
+        attachments: Vec::new(),
+      });
+    }
+
+    if let Some(ref mut msg) = message_acc {
+      if let Some(attachment_id) = row.get::<_, Option<String>>(5).map_err(|e| e.to_string())? {
+        msg.attachments.push(Attachment {
+          id: attachment_id,
+          message_id: row.get(6).map_err(|e| e.to_string())?,
+          file_type: row.get(7).map_err(|e| e.to_string())?,
+          file_name: row.get(8).map_err(|e| e.to_string())?,
+          file_path: row.get(9).map_err(|e| e.to_string())?,
+          extracted_text: row.get(10).map_err(|e| e.to_string())?,
+          created_at: row.get(11).map_err(|e| e.to_string())?,
+        });
+      }
+    }
+  }
+
+  let message = message_acc.ok_or_else(|| format!("Message not found: {}", message_id))?;
 
   Ok(message)
 }
@@ -448,4 +512,57 @@ pub async fn update_conversation_name(
     conversation_id
   );
   Ok(())
+}
+
+/// Add an attachment to a message
+#[tauri::command]
+pub async fn add_attachment(
+  app_handle: AppHandle,
+  message_id: String,
+  file_type: String,
+  file_name: String,
+  file_path: Option<String>,
+  extracted_text: Option<String>,
+) -> Result<Attachment, String> {
+  let state = app_handle.state::<DbState>();
+  let db_guard = state.0.lock().unwrap();
+  let conn = db_guard
+    .as_ref()
+    .ok_or("Database connection not available")?;
+
+  let attachment_id = Uuid::new_v4().to_string();
+  let now = Utc::now();
+
+  let attachment = Attachment {
+    id: attachment_id.clone(),
+    message_id: message_id.clone(),
+    file_type: file_type.clone(),
+    file_name: file_name.clone(),
+    file_path: file_path.clone(),
+    extracted_text: extracted_text.clone(),
+    created_at: now.to_rfc3339(),
+  };
+
+  conn
+    .execute(
+      "INSERT INTO attachments (id, message_id, file_type, file_name, file_path, extracted_text, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      params![
+        attachment_id,
+        message_id,
+        file_type,
+        file_name,
+        file_path,
+        extracted_text,
+        now.to_rfc3339()
+      ],
+    )
+    .map_err(|e| format!("Failed to add attachment: {}", e))?;
+
+  log::info!(
+    "[conversations] Added attachment: {} to message: {}",
+    attachment_id,
+    message_id
+  );
+  Ok(attachment)
 }
