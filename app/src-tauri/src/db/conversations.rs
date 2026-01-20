@@ -90,13 +90,6 @@ pub async fn create_conversation(
     .as_ref()
     .ok_or("Database connection not available")?;
 
-  // Print the input parameters for debugging
-  log::info!(
-    "[conversations] Creating conversation with name: {:?}, type: {:?}",
-    name,
-    conv_type
-  );
-
   let conversation_id = Uuid::new_v4().to_string();
   let now = Utc::now();
   let conversation_name = name.unwrap_or_else(|| format!("New Chat {}", now.format("%m/%d %H:%M")));

@@ -195,7 +195,6 @@ fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// Initializes the SQLite database connection, registers extensions, and runs migrations.
 pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
   let db_path = get_db_path(app_handle)?;
-  log::info!("[db] Database path: {:?}", db_path);
 
   unsafe {
     let rc = sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));

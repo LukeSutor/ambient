@@ -105,6 +105,5 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     })
     .build(app)?;
 
-  log::info!("[tray] System tray created successfully");
   Ok(())
 }

@@ -4,7 +4,7 @@ use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<Vec<f32>, String> {
-  log::info!("[Embedding] Generating embedding for raw input: {}", input);
+  log::info!("[Embedding] Generating embedding");
 
   // Apply EmbeddingGemma document-style prompt with a 'none' title.
   // Format: "title: none | text: {content}" as recommended for document embeddings

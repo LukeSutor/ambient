@@ -45,7 +45,6 @@ pub async fn handle_extract_interactive_memory(
 
   let extracted_memory = match generate(app_handle.clone(), request, Some(true)).await {
     Ok(generated) => {
-      log::info!("[memory] Extracted interactive memory: {}", generated);
       generated
     }
     Err(e) => {

@@ -81,7 +81,6 @@ impl ServerConfig {
 
     let api_key = api_key.unwrap_or_else(|| {
       let new_key = format!("session-{}", Uuid::new_v4().to_string());
-      log::info!("[llama_server] Generated API key: {}", new_key);
       new_key
     });
 
@@ -148,14 +147,12 @@ async fn find_available_port() -> Result<u16, ServerError> {
   for attempt in 1..=MAX_PORT_ATTEMPTS {
     let port = generate_random_port();
     log::debug!(
-      "[llama_server] Trying port {} (attempt {}/{})",
-      port,
+      "[llama_server] Trying port (attempt {}/{})",
       attempt,
       MAX_PORT_ATTEMPTS
     );
 
     if is_port_available(port).await {
-      log::info!("[llama_server] Found available port: {}", port);
       return Ok(port);
     }
   }
@@ -222,8 +219,6 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
   // Create server configuration with the found port
   let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
 
-  log::info!("[llama_server] Using port {} for server", config.port);
-
   // Prepare sidecar command
   let shell = app_handle.shell();
   let sidecar_command = shell
@@ -277,10 +272,7 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
     return Err(format!("Server failed to start: {}", e));
   }
 
-  log::debug!(
-    "[llama_server] Server started successfully on port {}",
-    config.port
-  );
+  log::debug!("[llama_server] Server started successfully");
   Ok(format!("Server started on port {}", config.port))
 }
 
@@ -464,8 +456,6 @@ pub async fn generate(
   let mut prompt_tokens = 0u64;
   let mut completion_tokens = 0u64;
 
-  log::debug!("[llama_server] Making request to: {}", completion_url);
-
   if should_stream {
     // Handle streaming response
     let response = client
@@ -597,11 +587,6 @@ pub async fn generate(
       .json()
       .await
       .map_err(|e| format!("Failed to parse response: {}", e))?;
-
-    log::debug!(
-      "[llama_server] Received response: {}",
-      result.to_string()
-    );
 
     // Extract the generated content
     let generated_text = result["choices"][0]["message"]["content"]
