@@ -12,12 +12,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuSeparator,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench } from 'lucide-react';
+import { Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions, ModelSelection } from '@/types/settings';
@@ -34,7 +33,6 @@ interface HUDInputBarProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   dispatchOCRCapture: () => void;
   deleteOCRResult: (index: number) => void;
-  onNewChat: () => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
   isDraggingWindow: boolean;
@@ -55,7 +53,6 @@ export function HUDInputBar({
   onKeyDown,
   dispatchOCRCapture,
   deleteOCRResult,
-  onNewChat,
   onDragStart,
   onMouseLeave,
   isDraggingWindow,
@@ -167,23 +164,14 @@ export function HUDInputBar({
               alignOffset={-12}
               className="bg-white/60"
             >
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { onNewChat(); }}>
-                  <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">New Chat</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
-                  <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
-                  <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+              <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
+                <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
+                <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Tools dropdown */}
@@ -331,7 +319,7 @@ export function HUDInputBar({
       <div 
         className={`pointer-events-none overflow-hidden ${
           isPlusDropdownOpen
-            ? 'h-[110px] transition-none'
+            ? 'h-[70px] transition-none'
             : isToolsDropdownOpen
             ? 'h-[70px] transition-none'
             : isModelDropdownOpen

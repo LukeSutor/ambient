@@ -22,6 +22,7 @@ export default function HudPage() {
   // Conversation Manager
   const {
     messages,
+    conversationName,
     conversations,
     conversationType,
     hasMoreConversations,
@@ -142,6 +143,7 @@ export default function HudPage() {
           {/* Dynamic Chat Content Area */}
           <DynamicChatContent 
             hudDimensions={hudDimensions}
+            conversationName={conversationName}
             messages={messages}
             messagesEndRef={messagesEndRef}
             conversations={conversations}
@@ -150,6 +152,7 @@ export default function HudPage() {
             deleteConversation={deleteConversation}
             loadMoreConversations={loadMoreConversations}
             renameConversation={renameConversation}
+            handleNewChat={handleNewChat}
           />
 
           {/* Input Container */}
@@ -161,7 +164,6 @@ export default function HudPage() {
             onKeyDown={handleKeyDown}
             dispatchOCRCapture={dispatchOCRCapture}
             deleteOCRResult={deleteOCRResult}
-            onNewChat={handleNewChat}
             onDragStart={() => setIsDraggingWindow(true)}
             onMouseLeave={handleMouseLeave}
             isDraggingWindow={isDraggingWindow}

@@ -8,6 +8,7 @@ import { useWindows } from '@/lib/windows/useWindows';
 
 interface DynamicChatContentProps {
     hudDimensions: HudDimensions | null;
+    conversationName: string;
     messages: ChatMessage[];
     messagesEndRef: React.RefObject<HTMLDivElement | null>;
     conversations: Conversation[];
@@ -16,10 +17,12 @@ interface DynamicChatContentProps {
     deleteConversation: (id: string) => Promise<void>;
     loadMoreConversations: () => Promise<void>;
     renameConversation: (conversationId: string, newName: string) => Promise<void>;
+    handleNewChat: () => void;
 };
 
 export function DynamicChatContent({ 
   hudDimensions, 
+  conversationName,
   messages,
   messagesEndRef,
   conversations,
@@ -28,6 +31,7 @@ export function DynamicChatContent({
   deleteConversation,
   loadMoreConversations,
   renameConversation,
+  handleNewChat,
 }: DynamicChatContentProps) {
   // Window Manager
   const {
@@ -76,8 +80,10 @@ export function DynamicChatContent({
         {/* Message list */}
         <div className={`overflow-hidden transition-all duration-300 min-h-0 ${dynamicMessagesClass()}`}>
           <MessageList 
+            conversationName={conversationName}
             messages={messages}
             messagesEndRef={messagesEndRef}
+            handleNewChat={handleNewChat}
           />
         </div>
       </div>

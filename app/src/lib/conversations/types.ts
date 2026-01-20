@@ -17,6 +17,7 @@ export interface ChatMessage {
  */
 export interface ConversationState {
   conversationId: string | null;
+  conversationName: string;
   conversationType: string;
   messages: ChatMessage[];
   isStreaming: boolean;
