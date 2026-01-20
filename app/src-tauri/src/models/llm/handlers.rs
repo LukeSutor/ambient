@@ -253,8 +253,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     event.text
   );
 
-  log::debug!("[hud_chat] Generated user prompt:\n{}", user_prompt);
-
   // Generate response
   let request = LlmRequest::new(user_prompt)
     .with_system_prompt(Some(system_prompt))
@@ -293,6 +291,11 @@ pub async fn handle_generate_conversation_name(
   app_handle: &AppHandle,
   event: GenerateConversationNameEvent,
 ) -> Result<(), String> {
+  log::info!(
+    "[generate_conversation_name] Generating name for conversation ID: {}",
+    event.conv_id
+  );
+  
   // Load system prompt
   let system_prompt = match get_prompt("generate_conversation_name") {
     Some(p) => p.to_string(),
@@ -320,7 +323,7 @@ pub async fn handle_generate_conversation_name(
 
   let generated_name = match generate(app_handle.clone(), request, Some(true)).await {
     Ok(generated) => {
-      log::info!("[generate_conversation_name] Generated conversation name: {}", generated);
+      log::info!("[generate_conversation_name] Generated conversation name");
       generated
     }
     Err(e) => {
@@ -358,12 +361,7 @@ pub async fn handle_generate_conversation_name(
 
   // Save to db
   match update_conversation_name(app_handle.clone(), event.conv_id.clone(), extracted_name.clone()).await {
-    Ok(_) => {
-      log::info!(
-        "[generate_conversation_name] Renamed conversation {} successfully",
-        event.conv_id
-      );
-    }
+    Ok(_) => {}
     Err(e) => {
       log::error!(
         "[generate_conversation_name] Failed to rename conversation {}: {}",

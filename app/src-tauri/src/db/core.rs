@@ -152,6 +152,31 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           updated_at TEXT NOT NULL,
           FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
         );
+
+        -- Token usage tracking
+        CREATE TABLE IF NOT EXISTS models (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          model TEXT NOT NULL UNIQUE
+        );
+
+        -- Insert default models
+        INSERT OR IGNORE INTO models (model) VALUES
+          ('local'),
+          ('fast'),
+          ('pro'),
+          ('computer-use');
+
+        CREATE TABLE IF NOT EXISTS token_usage (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          model INTEGER,
+          prompt_tokens INTEGER NOT NULL,
+          completion_tokens INTEGER NOT NULL,
+          timestamp TEXT NOT NULL,
+          FOREIGN KEY (model) REFERENCES models(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_token_usage_timestamp ON token_usage(timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_token_usage_model ON token_usage(model);
       "#,
   )])
 });
@@ -170,7 +195,6 @@ fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// Initializes the SQLite database connection, registers extensions, and runs migrations.
 pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
   let db_path = get_db_path(app_handle)?;
-  log::info!("[db] Database path: {:?}", db_path);
 
   unsafe {
     let rc = sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));

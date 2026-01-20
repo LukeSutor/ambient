@@ -5,6 +5,7 @@ use crate::constants::{
 use crate::events::{emitter::emit, types::*};
 use crate::models::llm::types::LlmRequest;
 use crate::setup;
+use crate::db::token_usage::add_token_usage;
 use rand::Rng;
 use reqwest;
 use serde_json::{json, Value};
@@ -80,7 +81,6 @@ impl ServerConfig {
 
     let api_key = api_key.unwrap_or_else(|| {
       let new_key = format!("session-{}", Uuid::new_v4().to_string());
-      log::info!("[llama_server] Generated API key: {}", new_key);
       new_key
     });
 
@@ -147,14 +147,12 @@ async fn find_available_port() -> Result<u16, ServerError> {
   for attempt in 1..=MAX_PORT_ATTEMPTS {
     let port = generate_random_port();
     log::debug!(
-      "[llama_server] Trying port {} (attempt {}/{})",
-      port,
+      "[llama_server] Trying port (attempt {}/{})",
       attempt,
       MAX_PORT_ATTEMPTS
     );
 
     if is_port_available(port).await {
-      log::info!("[llama_server] Found available port: {}", port);
       return Ok(port);
     }
   }
@@ -221,8 +219,6 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
   // Create server configuration with the found port
   let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
 
-  log::info!("[llama_server] Using port {} for server", config.port);
-
   // Prepare sidecar command
   let shell = app_handle.shell();
   let sidecar_command = shell
@@ -276,10 +272,7 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
     return Err(format!("Server failed to start: {}", e));
   }
 
-  log::debug!(
-    "[llama_server] Server started successfully on port {}",
-    config.port
-  );
+  log::debug!("[llama_server] Server started successfully");
   Ok(format!("Server started on port {}", config.port))
 }
 
@@ -460,7 +453,8 @@ pub async fn generate(
   let client = reqwest::Client::new();
   let completion_url = format!("{}/v1/chat/completions", config.base_url());
 
-  log::debug!("[llama_server] Making request to: {}", completion_url);
+  let mut prompt_tokens = 0u64;
+  let mut completion_tokens = 0u64;
 
   if should_stream {
     // Handle streaming response
@@ -472,7 +466,7 @@ pub async fn generate(
       .send()
       .await
       .map_err(|e| format!("Failed to send streaming request: {}", e))?;
-
+    
     if !response.status().is_success() {
       let status = response.status();
       let error_text = response
@@ -508,6 +502,11 @@ pub async fn generate(
                     // Check if stream is finished
                     if let Some(finish_reason) = choice["finish_reason"].as_str() {
                       if finish_reason == "stop" {
+                        // Save token usage
+                        if let Some(timings) = json_data.get("timings") {
+                          prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
+                          completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
+                        }
                         break;
                       }
                     }
@@ -555,11 +554,17 @@ pub async fn generate(
       log::error!("[llama_server] Failed to emit final stream event: {}", e);
     }
 
+    // Save token usage
+    add_token_usage(
+        app_handle.clone(),
+        "local",
+        prompt_tokens,
+        completion_tokens,
+    ).await?;
+
     Ok(full_response)
   } else {
     // Handle non-streaming response
-    let start_time = std::time::Instant::now();
-
     let response = client
       .post(&completion_url)
       .header("Content-Type", "application/json")
@@ -583,31 +588,26 @@ pub async fn generate(
       .await
       .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    let elapsed = start_time.elapsed();
-
     // Extract the generated content
     let generated_text = result["choices"][0]["message"]["content"]
       .as_str()
       .ok_or("No content in response")?
       .to_string();
 
-    // Extract token usage if available
-    let tokens_generated = result["usage"]["completion_tokens"].as_u64().unwrap_or(0);
+    // Extract token usage
+    if let Some(timings) = result.get("timings") {
+      prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
+      completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
+    }
 
-    let total_seconds = elapsed.as_secs_f64();
-    let tokens_per_second = if total_seconds > 0.0 && tokens_generated > 0 {
-      tokens_generated as f64 / total_seconds
-    } else {
-      0.0
-    };
+    // Save token usage
+    add_token_usage(
+        app_handle.clone(),
+        "local",
+        prompt_tokens,
+        completion_tokens,
+    ).await?;
 
-    log::info!(
-      "[llama_server] Generated {} characters, {} tokens in {:.2}s ({:.2} tokens/sec)",
-      generated_text.len(),
-      tokens_generated,
-      total_seconds,
-      tokens_per_second
-    );
     Ok(generated_text)
   }
 }

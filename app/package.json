@@ -1,5 +1,5 @@
 {
-  "name": "local-computer-use",
+  "name": "ambient",
   "private": true,
   "version": "0.2.0",
   "type": "module",
@@ -26,6 +26,7 @@
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-separator": "^1.1.4",
     "@radix-ui/react-slot": "^1.2.0",
+    "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.4",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-fs": "~2",
@@ -48,6 +49,7 @@
     "react-hook-form": "^7.59.0",
     "react-markdown": "^10.1.0",
     "react-textarea-autosize": "^8.5.9",
+    "recharts": "2.15.4",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",

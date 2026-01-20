@@ -1,6 +1,6 @@
 # Config-Driven Evaluation System for Local Computer Use
 
-A comprehensive, configuration-driven evaluation framework for the local-computer-use project, focusing on task detection and screen understanding capabilities.
+A comprehensive, configuration-driven evaluation framework for ambient project, focusing on task detection and screen understanding capabilities.
 
 ## 🎯 Overview
 

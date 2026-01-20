@@ -1,7 +1,7 @@
 # Evaluation Configuration
 server:
   # Server executable and connection
-  executable: "C:/Users/Luke/Desktop/coding/local-computer-use/app/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
+  executable: "C:/Users/Luke/Desktop/coding/ambient/app/src-tauri/binaries/server-x86_64-pc-windows-msvc.exe"
   timeout: 120
   auto_start: true
   auto_stop: true

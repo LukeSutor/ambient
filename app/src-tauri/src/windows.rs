@@ -149,7 +149,7 @@ pub async fn open_secondary_window(
     tauri::WebviewUrl::App(path.into()),
   )
   .title("Dashboard")
-  .inner_size(800 as f64, 800 as f64)
+  .inner_size(1200 as f64, 800 as f64)
   .resizable(false)
   .transparent(true)
   .decorations(false)

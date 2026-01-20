@@ -1,4 +1,5 @@
 use crate::constants::*;
+use crate::models::llm::server::spawn_llama_server;
 use reqwest::Client;
 use tokio::time::Duration;
 use serde::Serialize;
@@ -59,6 +60,14 @@ pub async fn setup(app_handle: tauri::AppHandle) -> Result<String, String> {
     return Err(format!("Failed to initialize VLM: {}", e));
   }
   log::info!("[setup] VLM initialization successful.");
+
+  // Spawn the llama server but don't block on it
+  let app_handle_clone = app_handle.clone();
+  let _ = tokio::spawn(async move {
+    if let Err(e) = spawn_llama_server(app_handle_clone).await {
+      log::error!("[setup] Failed to spawn LLaMA server: {}", e);
+    }
+  });
 
   // Emit auth changed event
   app_handle

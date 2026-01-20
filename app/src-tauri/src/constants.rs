@@ -35,7 +35,7 @@ pub const AUTH_KEY: &str = "auth";
 
 // Keyring constants
 pub const KEYRING_ENCRYPTION_KEY: &str = "supabase_storage_key";
-pub const KEYRING_SERVICE: &str = "local-computer-use";
+pub const KEYRING_SERVICE: &str = "ambient";
 pub const KEYRING_AUTH_KEY: &str = "supabase_auth";
 
 // Server setup
@@ -58,3 +58,8 @@ pub const COMPUTER_USE_WINDOW_LABEL: &str = "computer-use";
 pub const COMPUTER_USE_PATH: &str = "/computer-use";
 pub const MARGIN_LEFT: u32 = 50;
 pub const MARGIN_BOTTOM: u32 = 20;
+
+// Cost, water, and energy estimates per token
+pub const COST_PER_TOKEN: f64 = 0.000004375; // USD/token
+pub const WATER_PER_TOKEN: f64 = 0.0026; // mL/token
+pub const ENERGY_PER_TOKEN: f64 = 0.0024; // Wh/token

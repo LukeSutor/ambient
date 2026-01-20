@@ -40,7 +40,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
   let _tray = TrayIconBuilder::new()
     .icon(icon)
     .menu(&menu)
-    .tooltip("Cortical Assistant")
+    .tooltip("Ambient Assistant")
     .on_menu_event({
       let app_handle = app.clone();
       move |_app, event| {
@@ -105,6 +105,5 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     })
     .build(app)?;
 
-  log::info!("[tray] System tray created successfully");
   Ok(())
 }

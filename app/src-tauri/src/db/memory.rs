@@ -369,13 +369,6 @@ pub async fn find_similar_memories(
     // Cosine distance is typically 1 - cosine_similarity, so similarity = 1 - distance
     let similarity = 1.0 - cosine_distance as f32;
 
-    // Print memory and similarity for debugging
-    log::debug!(
-      "[memory] Found memory with cosine similarity {:.4}: {}",
-      similarity,
-      text
-    );
-
     // Only include memories that meet the similarity threshold
     if similarity >= p {
       // Convert BLOB back into Vec<f32> (little-endian)

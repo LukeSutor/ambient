@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import TextareaAutosize from "react-textarea-autosize";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -12,12 +13,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuSeparator,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { MessageSquarePlus, Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench } from 'lucide-react';
+import { Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
 import { OcrResponseEvent } from '@/types/events';
 import { HudDimensions, ModelSelection } from '@/types/settings';
@@ -34,7 +34,6 @@ interface HUDInputBarProps {
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   dispatchOCRCapture: () => void;
   deleteOCRResult: (index: number) => void;
-  onNewChat: () => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
   isDraggingWindow: boolean;
@@ -55,7 +54,6 @@ export function HUDInputBar({
   onKeyDown,
   dispatchOCRCapture,
   deleteOCRResult,
-  onNewChat,
   onDragStart,
   onMouseLeave,
   isDraggingWindow,
@@ -122,7 +120,6 @@ export function HUDInputBar({
   return (
     <div
       className='flex flex-col justify-start items-center relative p-2'
-      id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
       ref={inputRef}
@@ -133,7 +130,11 @@ export function HUDInputBar({
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}
     >
-      <InputGroup className="bg-white/60 border border-black/20 transition-all">
+      <InputGroup className={cn(
+        "bg-white/60 border border-black/20 transition-all",
+        "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
+        isStreaming && "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent"
+      )}>
         <TextareaAutosize
           data-slot="input-group-control"
           maxRows={4}
@@ -167,23 +168,14 @@ export function HUDInputBar({
               alignOffset={-12}
               className="bg-white/60"
             >
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { onNewChat(); }}>
-                  <MessageSquarePlus className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">New Chat</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
-                  <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
-                  <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+              <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
+                <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
+                <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Tools dropdown */}
@@ -331,7 +323,7 @@ export function HUDInputBar({
       <div 
         className={`pointer-events-none overflow-hidden ${
           isPlusDropdownOpen
-            ? 'h-[110px] transition-none'
+            ? 'h-[70px] transition-none'
             : isToolsDropdownOpen
             ? 'h-[70px] transition-none'
             : isModelDropdownOpen
