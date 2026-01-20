@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from 'react';
 import TextareaAutosize from "react-textarea-autosize";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -119,7 +120,6 @@ export function HUDInputBar({
   return (
     <div
       className='flex flex-col justify-start items-center relative p-2'
-      id="input-container"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
       ref={inputRef}
@@ -130,7 +130,10 @@ export function HUDInputBar({
         transform: hudDimensions ? 'scale(1)' : 'scale(0)'
       }}
     >
-      <InputGroup className="bg-white/60 border border-black/20 transition-all">
+      <InputGroup className={cn(
+        "bg-white/60 border border-black/20 transition-all",
+        isStreaming && "streaming-ring border-transparent"
+      )}>
         <TextareaAutosize
           data-slot="input-group-control"
           maxRows={4}

@@ -164,3 +164,70 @@ body.screen-selector-transparent {
 .hud-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(to bottom, rgba(0,0,0,0.30), rgba(0,0,0,0.3));
 }
+
+@property --gradient-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes rotation {
+  0% {
+    --gradient-angle: 0deg;
+  }
+  100% {
+    --gradient-angle: 360deg;
+  }
+}
+
+.streaming-ring {
+  position: relative;
+  background-clip: padding-box;
+}
+
+.streaming-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--gradient-angle),
+    #3b82f6,
+    #60a5fa,
+    #2dd4bf,
+    #3b82f6,
+    #60a5fa,
+    #2dd4bf,
+    #3b82f6
+  );
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rotation 4s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.streaming-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--gradient-angle),
+    rgba(59, 130, 246, 0.25),
+    rgba(96, 165, 250, 0.25),
+    rgba(45, 212, 191, 0.25),
+    rgba(59, 130, 246, 0.25)
+  );
+  filter: blur(20px);
+  animation: rotation 4s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
