@@ -327,7 +327,13 @@ pub async fn get_token_usage(
 
   let final_data: Vec<serde_json::Value> = data_points_map.into_values().collect();
   let mut models_list: Vec<String> = models_set.into_iter().collect();
-  models_list.sort();
+  // Sort models by increasing name length, then alphabetically
+  // This is hacky, but it works for putting "Fast" next to "Pro"
+  models_list.sort_by(|a, b| {
+    a.len()
+      .cmp(&b.len())
+      .then_with(|| a.to_lowercase().cmp(&b.to_lowercase()))
+  });
 
   let time_range = if let (Some(min_dt), Some(max_dt)) = (min_date, max_date) {
     if min_dt.year() == max_dt.year() {
