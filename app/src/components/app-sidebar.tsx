@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { cn } from "@/lib/utils"
 import {
   LifeBuoy,
   Settings2,
@@ -8,7 +9,6 @@ import {
   House,
   Code,
   NotebookPen,
-  CheckSquare
 } from "lucide-react"
 import { useSidebar } from "@/components/ui/sidebar"
 
@@ -40,19 +40,19 @@ const data = {
         {
           title: "Recent",
           url: "/secondary/activity/recent",
-        },
-        {
+    },
+    {
           title: "Recurring",
           url: "/secondary/activity/recurring",
         }
       ]
-    },
-    {
+        },
+        {
       title: "Memories",
       url: "/secondary/memories",
       icon: NotebookPen
     }
-  ],
+      ],
   navSecondary: [
     {
       title: "Settings",
@@ -67,7 +67,7 @@ const data = {
   ]
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
   const { userInfo } = useRoleAccess();
 
   // Create a mutable copy of the nav items for this render
@@ -100,7 +100,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
 
   return (
-    <Sidebar collapsible="icon" variant="inset" {...props}>
+    <Sidebar
+      variant="floating"
+      collapsible="icon"
+      className={cn("top-(--header-height) h-[calc(100svh-var(--header-height))]!", className)}
+      {...props}
+    >
       <SidebarHeader>
         <NavLogo />
       </SidebarHeader>
