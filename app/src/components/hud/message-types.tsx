@@ -169,8 +169,8 @@ export function UserMessage({ m }: { m: ChatMessage }) {
       {m.message.attachments?.map((a, index) => (
         <PreviewAttachment key={`attachment-${index}`} a={a} />
       ))}
-      <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto">
-        <div className="whitespace-pre-wrap max-w-64">{m.message.content}</div>
+      <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto w-fit max-w-full">
+        <div className="whitespace-pre-wrap break-all">{m.message.content}</div>
       </div>
     </>
   );
