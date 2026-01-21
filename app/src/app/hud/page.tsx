@@ -28,7 +28,6 @@ export default function HudPage() {
     hasMoreConversations,
     conversationId,
     attachmentData,
-    ocrResults,
     ocrLoading,
     isLoading,
     isStreaming,
@@ -39,7 +38,6 @@ export default function HudPage() {
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
-    deleteOCRResult,
     toggleComputerUse,
     addAttachmentData,
     removeAttachmentData,
@@ -166,7 +164,6 @@ export default function HudPage() {
             handleSubmit={handleSubmit}
             onKeyDown={handleKeyDown}
             dispatchOCRCapture={dispatchOCRCapture}
-            deleteOCRResult={deleteOCRResult}
             onDragStart={() => setIsDraggingWindow(true)}
             onMouseLeave={handleMouseLeave}
             isDraggingWindow={isDraggingWindow}
@@ -174,7 +171,6 @@ export default function HudPage() {
             setIsHoveringGroup={setIsHoveringGroup}
             toggleComputerUse={toggleComputerUse}
             ocrLoading={ocrLoading}
-            ocrResults={ocrResults}
             isStreaming={isStreaming}
             conversationType={conversationType}
             attachmentData={attachmentData}

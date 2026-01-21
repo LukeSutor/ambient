@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 import { ChatMessage, ConversationState } from './types';
-import { Conversation } from '@/types/conversations';
+import { Attachment, Conversation } from '@/types/conversations';
 import { MemoryEntry } from '@/types/memory';
 import { AttachmentData, OcrResponseEvent } from '@/types/events';
 
@@ -49,6 +49,7 @@ type ConversationAction =
   | { type: 'FINALIZE_STREAM'; payload: string }
   | { type: 'ADD_ATTACHMENT_DATA'; payload: AttachmentData }
   | { type: 'REMOVE_ATTACHMENT_DATA'; payload: number }
+  | { type: 'ADD_ATTACHMENTS_TO_MESSAGE'; payload: { messageId: string; attachments: Attachment[] } }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
   | { type: 'SET_OCR_TIMEOUT'; payload: ReturnType<typeof setTimeout> | null }
   | { type: 'CLEAR_OCR_TIMEOUT' }
@@ -358,6 +359,30 @@ function conversationReducer(
         ...state,
         attachmentData: state.attachmentData.filter((_, idx) => idx !== action.payload),
       };
+
+    case 'ADD_ATTACHMENTS_TO_MESSAGE': {
+      // Find message by ID and add attachments
+      const messagesWithAttachments = state.messages.map((msg) => {
+        if (msg.message.id === action.payload.messageId) {
+          return {
+            ...msg,
+            message: {
+              ...msg.message,
+              attachments: [
+                ...msg.message.attachments,
+                ...action.payload.attachments,
+              ],
+            },
+          };
+        }
+        return msg;
+      });
+
+      return {
+        ...state,
+        messages: messagesWithAttachments,
+      };
+    }
 
     case 'ATTACH_MEMORY': {
       // Find user message by ID and attach memory

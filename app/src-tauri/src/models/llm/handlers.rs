@@ -208,8 +208,20 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   )
   .await;
 
+  
+  
   match attachments {
     Ok(att_records) => {
+      log::info!("emitting attachments created event");
+      // Emit attachments created event
+      let now = chrono::Utc::now();
+      let attachments_event = AttachmentsCreatedEvent {
+        message_id: event.message_id.clone(),
+        attachments: att_records.clone(),
+        timestamp: now.to_rfc3339(),
+      };
+      let _ = emit(ATTACHMENTS_CREATED, attachments_event);
+
       // Link attachments to the message
       if let Err(e) = add_attachments(
         &app_handle.clone(),

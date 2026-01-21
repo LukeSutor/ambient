@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import { llmMarkdownConfig, preprocessMarkdownCurrency } from '@/components/ui/markdown-config';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
@@ -152,6 +152,10 @@ export function MessageList({ conversationName, messages, messagesEndRef, handle
       return next;
     });
   };
+
+  useEffect(() => {
+    console.log({messages});
+  }, [messages]);
 
   return (
     <ContentContainer>

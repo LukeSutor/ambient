@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
 import { Conversation, Message, Role } from '@/types/conversations';
 import { ChatMessage } from './types';
-import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent, AttachmentData } from '@/types/events';
+import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent, AttachmentData, AttachmentsCreatedEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
 import { 
   startComputerUseSession, 
@@ -86,6 +86,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const cleanupRef = useRef<(() => void) | null>(null);
   const isLoadingMoreRef = useRef(false);
 
+  // Use refs for values needed in listeners to avoid re-registering
+  const convIdRef = useRef(state.conversationId);
+  useEffect(() => {
+    convIdRef.current = state.conversationId;
+  }, [state.conversationId]);
+
   // ============================================================
   // Event Listeners Setup
   // ============================================================
@@ -105,92 +111,101 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       if (!isMounted) return;
 
       try {
-        // Stream Listener
-        const streamUnlisten = await listen<ChatStreamEvent>('chat_stream', (event) => {
-          const { delta, full_response, is_finished, conv_id } = event.payload;
+        console.log('[useConversation] Setting up event listeners...');
+        
+        // Register all listeners in parallel to avoid race conditions
+        const listenerPromises = [
+          // Stream Listener
+          listen<ChatStreamEvent>('chat_stream', (event) => {
+            const { delta, full_response, is_finished, conv_id } = event.payload;
 
-          // Filter by conversation ID to prevent corruption
-          if (conv_id !== state.conversationId) {
-            return;
-          }
+            // Filter by conversation ID using ref to prevent corruption
+            if (conv_id && conv_id !== convIdRef.current) {
+              return;
+            }
 
-          if (is_finished) {
-            // Stream is complete
-            const finalText = extractThinkingContent(full_response ?? streamContent);
-            dispatch({ type: 'FINALIZE_STREAM', payload: finalText });
-            streamContent = '';
-            return;
-          }
+            if (is_finished) {
+              // Stream is complete
+              const finalText = extractThinkingContent(full_response ?? streamContent);
+              dispatch({ type: 'FINALIZE_STREAM', payload: finalText });
+              streamContent = '';
+              return;
+            }
 
-          if (delta) {
-            // Accumulate stream content
-            streamContent += delta;
-            const cleanContent = extractThinkingContent(streamContent);
-            dispatch({ type: 'UPDATE_STREAMING_CONTENT', payload: cleanContent });
+            if (delta) {
+              // Accumulate stream content
+              streamContent += delta;
+              const cleanContent = extractThinkingContent(streamContent);
+              dispatch({ type: 'UPDATE_STREAMING_CONTENT', payload: cleanContent });
 
-            // Auto-scroll to bottom
-            if (messagesEndRef?.current) {
-              queueMicrotask(() => {
-                messagesEndRef.current?.scrollIntoView({ 
-                  behavior: 'smooth', 
-                  block: 'end' 
+              // Auto-scroll to bottom
+              if (messagesEndRef?.current) {
+                queueMicrotask(() => {
+                  messagesEndRef.current?.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'end' 
+                  });
                 });
+              }
+            }
+          }),
+
+          // Computer Use Listener
+          listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
+            // Create message from event
+            const chatMessage: ChatMessage = {
+              message: event.payload.message,
+              reasoningMessages: [],
+              memory: null,
+            };
+            
+            if (event.payload.status === 'completed') {
+              dispatch({ type: 'FINALIZE_STREAM', payload: event.payload.message.content });
+            } else {
+              dispatch({ type: 'ADD_REASONING_MESSAGE', payload: chatMessage });
+            }
+          }),
+
+          // Memory Listener
+          listen<MemoryExtractedEvent>('memory_extracted', (event) => {
+            const { memory } = event.payload;
+            
+            // Attach memory to the message with matching message_id
+            if (memory.message_id) {
+              dispatch({ 
+                type: 'ATTACH_MEMORY', 
+                payload: { messageId: memory.message_id, memory } 
               });
             }
-          }
-        });
-        unlisteners.push(streamUnlisten);
+          }),
 
-        // Computer Use Listener
-        const computerUseUnlisten = await listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
-          // Create message from event
-          const chatMessage: ChatMessage = {
-            message: event.payload.message,
-            reasoningMessages: [],
-            memory: null,
-          };
-          
-          if (event.payload.status === 'completed') {
-            dispatch({ type: 'FINALIZE_STREAM', payload: event.payload.message.content });
-          } else {
-            dispatch({ type: 'ADD_REASONING_MESSAGE', payload: chatMessage });
-          }
+          // OCR Listener
+          listen<OcrResponseEvent>('ocr_response', (event) => {
+            const ocrData: AttachmentData = {
+              name: 'OCR Capture',
+              file_type: 'ambient/ocr',
+              data: event.payload.text,
+            }
+            console.log("[useConversation] Received OCR result:", ocrData);
+            dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: ocrData });
+          }),
 
-        });
-        unlisteners.push(computerUseUnlisten);
+          // Attachments created listener
+          listen<AttachmentsCreatedEvent>('attachments_created', (event) => {
+            const { attachments } = event.payload;
+            console.log("[useConversation] Received attachments created event:", attachments);
+            dispatch({ type: 'ADD_ATTACHMENTS_TO_MESSAGE', payload: { messageId: event.payload.message_id, attachments } });
+          }),
 
-        // Memory Listener
-        const memoryUnlisten = await listen<MemoryExtractedEvent>('memory_extracted', (event) => {
-          const { memory } = event.payload;
-          
-          // Attach memory to the message with matching message_id
-          if (memory.message_id) {
-            dispatch({ 
-              type: 'ATTACH_MEMORY', 
-              payload: { messageId: memory.message_id, memory } 
-            });
-          }
-        });
-        unlisteners.push(memoryUnlisten);
+          // Rename conversation listener
+          listen<RenameConversationEvent>('rename_conversation', (event) => {
+            const { conv_id, new_name } = event.payload;
+            dispatch({ type: 'RENAME_CONVERSATION', payload: { id: conv_id, newName: new_name } });
+          })
+        ];
 
-        // OCR Listener
-        const ocrUnlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          const ocrData: AttachmentData = {
-            name: 'OCR Capture',
-            file_type: 'ambient/ocr',
-            data: event.payload.text,
-          }
-          console.log("[useConversation] Received OCR result:", ocrData);
-          dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: ocrData });
-        });
-        unlisteners.push(ocrUnlisten);
-
-        // Rename conversation listener
-        const renameUnlisten = await listen<RenameConversationEvent>('rename_conversation', (event) => {
-          const { conv_id, new_name } = event.payload;
-          dispatch({ type: 'RENAME_CONVERSATION', payload: { id: conv_id, newName: new_name } });
-        });
-        unlisteners.push(renameUnlisten);
+        const results = await Promise.all(listenerPromises);
+        unlisteners.push(...results);
 
         console.log('[useConversation] Event listeners initialized');
       } catch (error) {
@@ -224,7 +239,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         cleanupRef.current = null;
       }
     };
-  }, [state.conversationId, dispatch, messagesEndRef]);
+  }, [dispatch, messagesEndRef]); // Removed state.conversationId from dependencies
 
   // ============================================================
   // Initialization Effect

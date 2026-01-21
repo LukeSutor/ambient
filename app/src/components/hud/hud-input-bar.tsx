@@ -17,12 +17,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Field } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench, Paperclip } from 'lucide-react';
-import OcrCaptures from './ocr-captures';
-import { AttachmentData, OcrResponseEvent } from '@/types/events';
+import { AttachmentData } from '@/types/events';
 import { HudDimensions, ModelSelection } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
@@ -37,7 +34,6 @@ interface HUDInputBarProps {
   handleSubmit: () => Promise<void>;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   dispatchOCRCapture: () => void;
-  deleteOCRResult: (index: number) => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
   isDraggingWindow: boolean;
@@ -45,7 +41,6 @@ interface HUDInputBarProps {
   setIsHoveringGroup: (b: boolean) => void;
   toggleComputerUse: () => void;
   ocrLoading: boolean;
-  ocrResults: OcrResponseEvent[];
   isStreaming: boolean;
   conversationType: string;
   attachmentData: AttachmentData[];
@@ -60,7 +55,6 @@ export function HUDInputBar({
   handleSubmit,
   onKeyDown,
   dispatchOCRCapture,
-  deleteOCRResult,
   onDragStart,
   onMouseLeave,
   isDraggingWindow,
@@ -68,7 +62,6 @@ export function HUDInputBar({
   setIsHoveringGroup,
   toggleComputerUse,
   ocrLoading,
-  ocrResults,
   isStreaming,
   conversationType,
   attachmentData,
@@ -127,10 +120,6 @@ export function HUDInputBar({
       });
     }
   };
-
-  useEffect(() => {
-    console.log({attachmentData});
-  }, [attachmentData])
 
   // Animate input bar appearing
   useGSAP(() => {
