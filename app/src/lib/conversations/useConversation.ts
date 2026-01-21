@@ -407,6 +407,10 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       // Create user message with ID and timestamp
       const userMessage = createUserMessage(content, activeConversationId);
 
+      // Clear attachment data
+      const attachmentData = state.attachmentData;
+      dispatch({ type: 'CLEAR_ATTACHMENT_DATA' });
+
       // Start user message with empty content (for animation)
       dispatch({ 
         type: 'START_USER_MESSAGE', 
@@ -433,7 +437,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         await sendChatApiMessage(
           activeConversationId,
           content,
-          state.attachmentData,
+          attachmentData,
           userMessage.message.id
         );
       }

@@ -49,6 +49,7 @@ type ConversationAction =
   | { type: 'FINALIZE_STREAM'; payload: string }
   | { type: 'ADD_ATTACHMENT_DATA'; payload: AttachmentData }
   | { type: 'REMOVE_ATTACHMENT_DATA'; payload: number }
+  | { type: 'CLEAR_ATTACHMENT_DATA' }
   | { type: 'ADD_ATTACHMENTS_TO_MESSAGE'; payload: { messageId: string; attachments: Attachment[] } }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
   | { type: 'SET_OCR_TIMEOUT'; payload: ReturnType<typeof setTimeout> | null }
@@ -358,6 +359,12 @@ function conversationReducer(
       return {
         ...state,
         attachmentData: state.attachmentData.filter((_, idx) => idx !== action.payload),
+      };
+
+    case 'CLEAR_ATTACHMENT_DATA':
+      return {
+        ...state,
+        attachmentData: [],
       };
 
     case 'ADD_ATTACHMENTS_TO_MESSAGE': {
