@@ -1,5 +1,5 @@
 import { MemoryEntry } from '@/types/memory';
-import { OcrResponseEvent } from '@/types/events';
+import { AttachmentData, OcrResponseEvent } from '@/types/events';
 import { RefObject } from 'react';
 import { Conversation, Message, Role } from '@/types/conversations';
 
@@ -20,6 +20,7 @@ export interface ConversationState {
   conversationName: string;
   conversationType: string;
   messages: ChatMessage[];
+  attachmentData: AttachmentData[];
   isStreaming: boolean;
   isLoading: boolean;
   streamingContent: string;

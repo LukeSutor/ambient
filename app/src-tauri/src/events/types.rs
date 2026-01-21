@@ -52,12 +52,20 @@ pub struct ChatStreamEvent {
 pub const HUD_CHAT: &str = "hud_chat";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
+pub struct AttachmentData {
+  pub name: String,
+  pub file_type: String,
+  pub data: String,
+}
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
 pub struct HudChatEvent {
   pub text: String,
   pub ocr_responses: Vec<OcrResponseEvent>,
   pub timestamp: String,
   pub conv_id: String,
   pub message_id: String,
+  pub attachments: Vec<AttachmentData>,
 }
 
 pub const OCR_RESPONSE: &str = "ocr_response";

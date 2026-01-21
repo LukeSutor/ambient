@@ -4,6 +4,8 @@ import type { MemoryEntry } from "./memory";
 
 export type ApplicationTextData = { process_id: number, process_name: string | null, application_name: string | null, text_content: Array<string>, };
 
+export type AttachmentData = { name: string, file_type: string, data: string, };
+
 export type CaptureScreenEvent = { timestamp: string, };
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, };
@@ -20,7 +22,7 @@ export type GenerateConversationNameEvent = { conv_id: string, message: string, 
 
 export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
-export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string, message_id: string, };
+export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string, message_id: string, attachments: Array<AttachmentData>, };
 
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 

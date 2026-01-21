@@ -27,6 +27,7 @@ export default function HudPage() {
     conversationType,
     hasMoreConversations,
     conversationId,
+    attachmentData,
     ocrResults,
     ocrLoading,
     isLoading,
@@ -40,6 +41,8 @@ export default function HudPage() {
     dispatchOCRCapture,
     deleteOCRResult,
     toggleComputerUse,
+    addAttachmentData,
+    removeAttachmentData,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
@@ -174,6 +177,9 @@ export default function HudPage() {
             ocrResults={ocrResults}
             isStreaming={isStreaming}
             conversationType={conversationType}
+            attachmentData={attachmentData}
+            addAttachmentData={addAttachmentData}
+            removeAttachmentData={removeAttachmentData}
           />
         </div>
     </AutoResizeContainer>

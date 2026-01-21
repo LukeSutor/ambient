@@ -1,10 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 import { ChatMessage, ConversationState } from './types';
 import { Conversation } from '@/types/conversations';
 import { MemoryEntry } from '@/types/memory';
-import { OcrResponseEvent } from '@/types/events';
+import { AttachmentData, OcrResponseEvent } from '@/types/events';
 
 /**
  * Initial state for conversations
@@ -14,6 +14,7 @@ const initialState: ConversationState = {
   conversationName: '',
   conversationType: 'chat',
   messages: [],
+  attachmentData: [],
   isStreaming: false,
   isLoading: false,
   streamingContent: '',
@@ -47,6 +48,8 @@ type ConversationAction =
   | { type: 'START_ASSISTANT_MESSAGE'; payload: { conversationId: string } }
   | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
   | { type: 'FINALIZE_STREAM'; payload: string }
+  | { type: 'ADD_ATTACHMENT_DATA'; payload: AttachmentData }
+  | { type: 'REMOVE_ATTACHMENT_DATA'; payload: number }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
   | { type: 'ADD_OCR_RESULT'; payload: OcrResponseEvent }
   | { type: 'DELETE_OCR_RESULT'; payload: number }
@@ -216,6 +219,7 @@ function conversationReducer(
           role: 'user',
           content: '',
           timestamp: action.payload.timestamp,
+          attachments: [],
         },
         reasoningMessages: [],
         memory: null,
@@ -257,6 +261,7 @@ function conversationReducer(
           role: 'assistant',
           content: '',
           timestamp: new Date().toISOString(),
+          attachments: [],
         },
         reasoningMessages: [],
         memory: null,
@@ -345,6 +350,18 @@ function conversationReducer(
         isLoading: false,
       };
     }
+
+    case 'ADD_ATTACHMENT_DATA':
+      return {
+        ...state,
+        attachmentData: [...state.attachmentData, action.payload],
+      };
+    
+    case 'REMOVE_ATTACHMENT_DATA':
+      return {
+        ...state,
+        attachmentData: state.attachmentData.filter((_, idx) => idx !== action.payload),
+      };
 
     case 'ATTACH_MEMORY': {
       // Find user message by ID and attach memory

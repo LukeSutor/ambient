@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import TextareaAutosize from "react-textarea-autosize";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,17 +14,21 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Field } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench } from 'lucide-react';
+import { Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench, Paperclip } from 'lucide-react';
 import OcrCaptures from './ocr-captures';
-import { OcrResponseEvent } from '@/types/events';
+import { AttachmentData, OcrResponseEvent } from '@/types/events';
 import { HudDimensions, ModelSelection } from '@/types/settings';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { useWindows } from '@/lib/windows/useWindows';
 import { useSettings } from '@/lib/settings';
+import { AttachmentPreview } from './attachment-preview';
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
@@ -44,6 +48,9 @@ interface HUDInputBarProps {
   ocrResults: OcrResponseEvent[];
   isStreaming: boolean;
   conversationType: string;
+  attachmentData: AttachmentData[];
+  addAttachmentData: (attachment: AttachmentData) => void;
+  removeAttachmentData: (index: number) => void;
 }
 
 export function HUDInputBar({
@@ -64,6 +71,9 @@ export function HUDInputBar({
   ocrResults,
   isStreaming,
   conversationType,
+  attachmentData,
+  addAttachmentData,
+  removeAttachmentData,
 }: HUDInputBarProps) {
   // Ref for load animation
   const inputRef = useRef<HTMLDivElement | null>(null);
@@ -97,6 +107,31 @@ export function HUDInputBar({
     }
   }
 
+  const handleUploadFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      // Load file data and add to attachmentData
+      Array.from(files).forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (reader.result) {
+            const attachment: AttachmentData = {
+              name: file.name,
+              file_type: file.type,
+              data: reader.result as string,
+            };
+            addAttachmentData(attachment);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  useEffect(() => {
+    console.log({attachmentData});
+  }, [attachmentData])
+
   // Animate input bar appearing
   useGSAP(() => {
     // Only animate if dimensions actually changed (deep comparison)
@@ -116,7 +151,6 @@ export function HUDInputBar({
     }
   }, [hudDimensions]);
 
-
   return (
     <div
       className='flex flex-col justify-start items-center relative p-2'
@@ -135,6 +169,17 @@ export function HUDInputBar({
         "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
         isStreaming && "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent"
       )}>
+        {/* File upload container */}
+        {attachmentData.length > 0 && <ScrollArea className="flex justify-start items-center w-full space-x-2 py-1 px-3">
+            <div className="flex w-max space-x-2 py-1">
+            {attachmentData.map((attachment, index) => (
+              <AttachmentPreview attachment={attachment} index={index} removeAttachmentData={removeAttachmentData} key={index} />
+            ))}
+            </div>
+            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
+        </ScrollArea>}
+
+        {/* Text input area */}
         <TextareaAutosize
           data-slot="input-group-control"
           maxRows={4}
@@ -168,6 +213,27 @@ export function HUDInputBar({
               alignOffset={-12}
               className="bg-white/60"
             >
+              <DropdownMenuItem 
+                className="hover:bg-white/60 cursor-pointer" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const input = e.currentTarget.querySelector('input');
+                  input?.click();
+                }}
+                >
+                <Paperclip className="!w-4 !h-4 text-black shrink-0 mr-2" />
+                <span className="text-black text-sm whitespace-nowrap">Upload files</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  multiple
+                  accept=".jpg, .jpeg, .png, .pdf"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={handleUploadFiles}
+                />
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="w-11/12 mx-auto" />
               <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
                 <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
                 <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
@@ -323,7 +389,7 @@ export function HUDInputBar({
       <div 
         className={`pointer-events-none overflow-hidden ${
           isPlusDropdownOpen
-            ? 'h-[70px] transition-none'
+            ? 'h-[112px] transition-none'
             : isToolsDropdownOpen
             ? 'h-[70px] transition-none'
             : isModelDropdownOpen

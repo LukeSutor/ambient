@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
 import { Conversation, Message, Role } from '@/types/conversations';
 import { ChatMessage } from './types';
-import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent } from '@/types/events';
+import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent, AttachmentData } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
 import { 
   startComputerUseSession, 
@@ -66,6 +66,7 @@ function createUserMessage(content: string, conversationId: string, memory: Memo
     role: 'user' as Role,
     content,
     timestamp: new Date().toISOString(),
+    attachments: [],
   };
   return {
     message,
@@ -532,6 +533,20 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     console.log(state.conversationType)
   }, [dispatch, state.conversationType])
 
+  /**
+   * Add attachment data
+   */
+  const addAttachmentData = useCallback((attachment: AttachmentData): void => {
+    dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: attachment });
+  }, [dispatch]);
+
+  /**
+   * Remove attachment data by index
+   */
+  const removeAttachmentData = useCallback((index: number): void => {
+    dispatch({ type: 'REMOVE_ATTACHMENT_DATA', payload: index });
+  }, [dispatch]);
+
   // ============================================================
   // Return API
   // ============================================================
@@ -551,5 +566,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     dispatchOCRCapture,
     deleteOCRResult,
     toggleComputerUse,
+    addAttachmentData,
+    removeAttachmentData,
   };
 }
