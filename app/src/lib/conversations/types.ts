@@ -24,7 +24,6 @@ export interface ConversationState {
   isStreaming: boolean;
   isLoading: boolean;
   streamingContent: string;
-  ocrResults: OcrResponseEvent[];
   ocrLoading: boolean;
   ocrTimeoutRef: RefObject<ReturnType<typeof setTimeout> | null>;
   conversations: Conversation[];

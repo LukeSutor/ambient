@@ -22,7 +22,7 @@ export type GenerateConversationNameEvent = { conv_id: string, message: string, 
 
 export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
-export type HudChatEvent = { text: string, ocr_responses: Array<OcrResponseEvent>, timestamp: string, conv_id: string, message_id: string, attachments: Array<AttachmentData>, };
+export type HudChatEvent = { text: string, timestamp: string, conv_id: string, message_id: string, attachments: Array<AttachmentData>, };
 
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 

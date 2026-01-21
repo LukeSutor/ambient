@@ -183,7 +183,6 @@ pub fn run() {
       db::conversations::reset_conversation,
       db::conversations::delete_conversation,
       db::conversations::update_conversation_name,
-      db::conversations::add_attachment,
       db::memory::get_memory_entries_with_message,
       db::memory::delete_memory_entry,
       db::memory::delete_all_memories,

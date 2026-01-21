@@ -61,7 +61,6 @@ pub struct AttachmentData {
 #[ts(export, export_to = "events.ts")]
 pub struct HudChatEvent {
   pub text: String,
-  pub ocr_responses: Vec<OcrResponseEvent>,
   pub timestamp: String,
   pub conv_id: String,
   pub message_id: String,

@@ -1,10 +1,12 @@
 use crate::db::core::DbState;
+use crate::events::types::AttachmentData;
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use ts_rs::TS;
 use uuid::Uuid;
+use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[ts(rename_all = "lowercase")]
@@ -514,55 +516,116 @@ pub async fn update_conversation_name(
   Ok(())
 }
 
-/// Add an attachment to a message
-#[tauri::command]
-pub async fn add_attachment(
-  app_handle: AppHandle,
+/// Create attachments and save to disk
+pub async fn create_attachments(
+  app_handle: &AppHandle,
   message_id: String,
-  file_type: String,
-  file_name: String,
-  file_path: Option<String>,
-  extracted_text: Option<String>,
-) -> Result<Attachment, String> {
-  let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
-    .as_ref()
-    .ok_or("Database connection not available")?;
-
-  let attachment_id = Uuid::new_v4().to_string();
+  attachment_data: Vec<AttachmentData>,
+) -> Result<Vec<Attachment>, String> {
+  let mut attachments = Vec::new();
   let now = Utc::now();
 
-  let attachment = Attachment {
-    id: attachment_id.clone(),
-    message_id: message_id.clone(),
-    file_type: file_type.clone(),
-    file_name: file_name.clone(),
-    file_path: file_path.clone(),
-    extracted_text: extracted_text.clone(),
-    created_at: now.to_rfc3339(),
-  };
+  for data in attachment_data {
+    let attachment_id = Uuid::new_v4().to_string();
+    let file_path = match data.file_type.as_str() {
+      "ambient/ocr" => None,
+      _ => Some(format!(
+      "attachments/{}/{}",
+      message_id,
+      data.name.replace("/", "_")
+      )),
+    };
 
-  conn
-    .execute(
+    // Save to disk if not ocr
+    if data.file_type != "ambient/ocr" {
+      let full_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+        .join(file_path.as_ref().unwrap());
+      if let Some(parent) = full_path.parent() {
+        std::fs::create_dir_all(parent)
+          .map_err(|e| format!("Failed to create attachment directory: {}", e))?;
+      }
+      
+      let decoded_data = general_purpose::STANDARD
+        .decode(&data.data)
+        .map_err(|e| format!("Failed to decode attachment data: {}", e))?;
+      std::fs::write(&full_path, decoded_data)
+        .map_err(|e| format!("Failed to write attachment file: {}", e))?;
+    }
+
+    let extracted_text = match data.file_type.as_str() {
+      "ambient/ocr" => Some(data.data.clone()),
+      _ => None,
+    };
+
+    let attachment = Attachment {
+      id: attachment_id.clone(),
+      message_id: message_id.clone(),
+      file_type: data.file_type.clone(),
+      file_name: data.name.clone(),
+      file_path: file_path.clone(),
+      extracted_text: extracted_text,
+      created_at: now.to_rfc3339(),
+    };
+    attachments.push(attachment);
+  }
+
+  Ok(attachments)
+}
+
+/// Add multiple attachments to a message
+pub async fn add_attachments(
+  app_handle: &AppHandle,
+  message_id: String,
+  attachments: Vec<Attachment>,
+) -> Result<Vec<Attachment>, String> {
+  let state = app_handle.state::<DbState>();
+  let mut db_guard = state.0.lock().unwrap();
+  let conn = db_guard
+    .as_mut()
+    .ok_or("Database connection not available")?;
+
+  let now = Utc::now();
+  let mut created_attachments = Vec::new();
+
+  // Use a transaction for batch insertion
+  let tx = conn
+    .transaction()
+    .map_err(|e| format!("Failed to start transaction: {}", e))?;
+
+  for mut attachment in attachments {
+    let attachment_id = Uuid::new_v4().to_string();
+    attachment.id = attachment_id.clone();
+    attachment.message_id = message_id.clone();
+    attachment.created_at = now.to_rfc3339();
+
+    tx.execute(
       "INSERT INTO attachments (id, message_id, file_type, file_name, file_path, extracted_text, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
       params![
-        attachment_id,
-        message_id,
-        file_type,
-        file_name,
-        file_path,
-        extracted_text,
-        now.to_rfc3339()
+        attachment.id,
+        attachment.message_id,
+        attachment.file_type,
+        attachment.file_name,
+        attachment.file_path,
+        attachment.extracted_text,
+        attachment.created_at
       ],
     )
-    .map_err(|e| format!("Failed to add attachment: {}", e))?;
+    .map_err(|e| format!("Failed to add attachment {}: {}", attachment.file_name, e))?;
+
+    created_attachments.push(attachment);
+  }
+
+  tx.commit()
+    .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
   log::info!(
-    "[conversations] Added attachment: {} to message: {}",
-    attachment_id,
+    "[conversations] Added {} attachments to message: {}",
+    created_attachments.len(),
     message_id
   );
-  Ok(attachment)
+  Ok(created_attachments)
 }

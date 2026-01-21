@@ -32,17 +32,16 @@ export async function createConversation(name?: string, convType?: string | null
 export async function sendMessage(
   conversationId: string,
   content: string,
-  ocrResults: OcrResponseEvent[],
+  attachmentData: AttachmentData[],
   messageId: string
 ): Promise<string> {
   try {
     const hudChatEvent: HudChatEvent = {
       text: content,
-      ocr_responses: ocrResults,
       conv_id: conversationId,
       timestamp: Date.now().toString(),
       message_id: messageId,
-      attachments: [] as AttachmentData[],
+      attachments: attachmentData,
     };
 
     const finalText = await invoke<string>('handle_hud_chat', {

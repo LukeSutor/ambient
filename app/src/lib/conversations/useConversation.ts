@@ -418,7 +418,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         await sendChatApiMessage(
           activeConversationId,
           content,
-          state.ocrResults,
+          state.attachmentData,
           userMessage.message.id
         );
       }
@@ -430,7 +430,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_STREAMING', payload: false });
     }
-  }, [dispatch, state.conversationId, state.conversationType, state.ocrResults]);
+  }, [dispatch, state.conversationId, state.conversationType, state.attachmentData]);
 
   /**
    * Get all conversations
@@ -515,13 +515,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch]);
 
   /**
-   * Delete an OCR result by its index
-   */
-  const deleteOCRResult = useCallback((index: number): void => {
-    dispatch({ type: 'DELETE_OCR_RESULT', payload: index });
-  }, [dispatch]);
-
-  /**
    * Toggle Computer Use mode
    */
   const toggleComputerUse = useCallback((): void => {
@@ -564,7 +557,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
-    deleteOCRResult,
     toggleComputerUse,
     addAttachmentData,
     removeAttachmentData,

@@ -1,5 +1,7 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
-use crate::db::conversations::{add_message, add_message_with_id, update_conversation_name};
+use crate::db::conversations::{
+  create_attachments, add_attachments, add_message, add_message_with_id, update_conversation_name, Attachment,
+};
 use crate::db::core::DbState;
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
@@ -198,6 +200,32 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
+  // Create attachments and save them to the database
+  let attachments = create_attachments(
+    &app_handle.clone(),
+    event.message_id.clone(),
+    event.attachments.clone(),
+  )
+  .await;
+
+  match attachments {
+    Ok(att_records) => {
+      // Link attachments to the message
+      if let Err(e) = add_attachments(
+        &app_handle.clone(),
+        event.message_id.clone(),
+        att_records,
+      )
+      .await
+      {
+        log::error!("[hud_chat] Failed to link attachments to message: {}", e);
+      }
+    }
+    Err(e) => {
+      log::error!("[hud_chat] Failed to create attachments: {}", e);
+    }
+  }
+
   // Get the current date time YYYY-MM-DD format
   let current_date_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
@@ -225,9 +253,12 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
 
   // Combine OCR responses into a single string
   let mut ocr_text = String::new();
-  if !event.ocr_responses.is_empty() {
-    for ocr_response in event.ocr_responses.iter() {
-      ocr_text.push_str(&format!("{}\n", ocr_response.text));
+  if !event.attachments.is_empty() {
+    for attachment in event.attachments.iter() {
+      // Only add if the type is ocr
+      if attachment.file_type == "ambient/ocr" {
+        ocr_text.push_str(&format!("{}\n", attachment.data));
+      }
     }
     if !ocr_text.is_empty() {
       ocr_text = format!(

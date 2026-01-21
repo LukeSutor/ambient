@@ -18,7 +18,6 @@ const initialState: ConversationState = {
   isStreaming: false,
   isLoading: false,
   streamingContent: '',
-  ocrResults: [],
   ocrLoading: false,
   ocrTimeoutRef: { current: null },
   conversations: [],
@@ -51,9 +50,6 @@ type ConversationAction =
   | { type: 'ADD_ATTACHMENT_DATA'; payload: AttachmentData }
   | { type: 'REMOVE_ATTACHMENT_DATA'; payload: number }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
-  | { type: 'ADD_OCR_RESULT'; payload: OcrResponseEvent }
-  | { type: 'DELETE_OCR_RESULT'; payload: number }
-  | { type: 'CLEAR_OCR_RESULTS' }
   | { type: 'SET_OCR_TIMEOUT'; payload: ReturnType<typeof setTimeout> | null }
   | { type: 'CLEAR_OCR_TIMEOUT' }
   | { type: 'CLEAR_MESSAGES' }
@@ -380,24 +376,6 @@ function conversationReducer(
         messages: messagesWithMemory,
       };
     }
-
-    case 'ADD_OCR_RESULT':
-      return {
-        ...state,
-        ocrResults: [...state.ocrResults, action.payload],
-      };
-
-    case 'CLEAR_OCR_RESULTS':
-      return {
-        ...state,
-        ocrResults: [],
-      };
-
-    case 'DELETE_OCR_RESULT':
-      return {
-        ...state,
-        ocrResults: state.ocrResults.filter((_, idx) => idx !== action.payload),
-      };
 
     case 'SET_OCR_TIMEOUT':
       return {
