@@ -182,7 +182,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
           // OCR Listener
           listen<OcrResponseEvent>('ocr_response', (event) => {
             const ocrData: AttachmentData = {
-              name: 'OCR Capture',
+              name: 'Screen Capture',
               file_type: 'ambient/ocr',
               data: event.payload.text,
             }
