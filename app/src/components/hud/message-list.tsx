@@ -1,17 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import Markdown from 'react-markdown';
-import { UserMessage, ReasoningAssistantMessage, ReasoningFunctionMessage, ReasoningMessages, AssistantMessage, FunctionMessage } from './message-types';
-import { llmMarkdownConfig, preprocessMarkdownCurrency } from '@/components/ui/markdown-config';
-import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
+import React, { useState } from 'react';
+import { UserMessage, AssistantMessage, FunctionMessage } from './message-types';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { ChevronDown, Menu, MessageSquarePlus, NotebookPen } from 'lucide-react';
+import { Menu, MessageSquarePlus } from 'lucide-react';
 import { ContentContainer } from '@/components/hud/content-container';
 import { ChatMessage } from '@/lib/conversations/types';
 import { useWindows } from '@/lib/windows/useWindows';
@@ -41,10 +38,6 @@ export function MessageList({ conversationName, messages, messagesEndRef, handle
       return next;
     });
   };
-
-  useEffect(() => {
-    console.log({messages});
-  }, [messages]);
 
   return (
     <ContentContainer>

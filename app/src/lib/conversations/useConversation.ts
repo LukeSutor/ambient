@@ -334,7 +334,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         conversationId: conversation.id
       });
       let messages = backendMessages.map(transformBackendMessage);
-      console.log({messages});
       // Load messages depending on conversation type
       if (conversation.conv_type === 'computer_use') {
         console.log('Loading computer use messages with reasoning grouping');

@@ -35,14 +35,14 @@ function DialogOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
-  const { isChatExpanded } = useWindows();
+  const { isChatExpanded, isChatHistoryExpanded } = useWindows();
   const pathName = typeof window !== 'undefined' ? window.location.pathname : '';
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
-        (pathName === '/hud') ? `mr-2 ml-2 mb-2 rounded-md ${!isChatExpanded && "mt-2"}` : "",
+        (pathName === '/hud') ? `mr-2 ml-2 mb-2 rounded-md ${!(isChatExpanded || isChatHistoryExpanded) && "mt-2"}` : "",
         className
       )}
       {...props}

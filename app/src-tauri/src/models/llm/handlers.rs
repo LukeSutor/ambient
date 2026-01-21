@@ -207,8 +207,6 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     event.attachments.clone(),
   )
   .await;
-
-  
   
   match attachments {
     Ok(att_records) => {
@@ -239,7 +237,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   }
 
   // Get the current date time YYYY-MM-DD format
-  let current_date_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+  let current_date_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
   let system_prompt = system_prompt_template.replace("{currentDateTime}", &current_date_time);
 
@@ -256,45 +254,25 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   // Create memory context string
   let mut memory_context = String::new();
   if !relevant_memories.is_empty() {
-    memory_context.push_str("Here are some relevant memories you have of our past interactions:\n");
+    memory_context.push_str("Relevant memories from past interactions:\n");
     for memory in relevant_memories {
       memory_context.push_str(&format!("- {}\n", memory.text));
     }
     memory_context.push_str("\n");
   }
 
-  // Combine OCR responses into a single string
-  let mut ocr_text = String::new();
-  if !event.attachments.is_empty() {
-    for attachment in event.attachments.iter() {
-      // Only add if the type is ocr
-      if attachment.file_type == "ambient/ocr" {
-        ocr_text.push_str(&format!("{}\n", attachment.data));
-      }
-    }
-    if !ocr_text.is_empty() {
-      ocr_text = format!(
-        "\nHere's text captured from my screen as context:\n{}\n",
-        ocr_text
-      );
-    }
-  }
-
-  // Create user prompt with ocr data and memory context
+  // Create user prompt with memory context
   let user_prompt = format!(
-    "{}{}Task: {}",
+    "{}Task: {}",
     if memory_context.is_empty() {
       ""
     } else {
-      &format!("{}\n", memory_context)
-    },
-    if ocr_text.is_empty() {
-      ""
-    } else {
-      &format!("{}\n", ocr_text)
+      memory_context.as_str()
     },
     event.text
   );
+
+  log::info!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 
   // Generate response
   let request = LlmRequest::new(user_prompt)

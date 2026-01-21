@@ -71,6 +71,7 @@ tauri-plugin-store = "2"
 # OCR crates
 ocrs = "0.10.4"
 rten = "0.21.0"
+pdf-extract = "0.10.0"
 
 # Crypto
 aes-gcm = "0.10"
