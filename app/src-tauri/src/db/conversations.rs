@@ -468,13 +468,43 @@ pub async fn delete_conversation(
     .as_ref()
     .ok_or("Database connection not available")?;
 
-  // Delete messages first (foreign key constraint)
-  conn
-    .execute(
-      "DELETE FROM conversation_messages WHERE conversation_id = ?1",
-      params![conversation_id],
+  // Clean up attachments associated with messages in the conversation
+  let mut stmt = conn
+    .prepare(
+      "SELECT a.file_path 
+         FROM attachments a
+         JOIN conversation_messages m ON a.message_id = m.id
+         WHERE m.conversation_id = ?1",
     )
-    .map_err(|e| format!("Failed to delete messages: {}", e))?;
+    .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+  let attachment_paths = stmt
+    .query_map(params![conversation_id], |row| row.get::<_, Option<String>>(0))
+    .map_err(|e| format!("Failed to query attachment paths: {}", e))?;
+  // Create set of parent dirs to delete later
+  let mut parent_dirs = std::collections::HashSet::new();
+  for path_result in attachment_paths {
+    if let Ok(Some(file_path)) = path_result.map(|p| p) {
+      let full_path = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+        .join(file_path);
+      if full_path.exists() {
+        std::fs::remove_file(&full_path)
+          .map_err(|e| format!("Failed to delete attachment file: {}", e))?;
+        if let Some(parent) = full_path.parent() {
+          parent_dirs.insert(parent.to_path_buf());
+        }
+      }
+    }
+  }
+  for dir in parent_dirs {
+    if dir.exists() {
+      std::fs::remove_dir_all(&dir)
+        .map_err(|e| format!("Failed to delete attachment directory: {}", e))?;
+    }
+  }
 
   // Delete conversation
   conn
@@ -548,8 +578,14 @@ pub async fn create_attachments(
           .map_err(|e| format!("Failed to create attachment directory: {}", e))?;
       }
       
+      let base64_data = if data.data.contains(",") {
+        data.data.split(",").nth(1).unwrap_or(&data.data)
+      } else {
+        &data.data
+      };
+
       let decoded_data = general_purpose::STANDARD
-        .decode(&data.data)
+        .decode(base64_data)
         .map_err(|e| format!("Failed to decode attachment data: {}", e))?;
       std::fs::write(&full_path, decoded_data)
         .map_err(|e| format!("Failed to write attachment file: {}", e))?;
@@ -571,6 +607,12 @@ pub async fn create_attachments(
     };
     attachments.push(attachment);
   }
+
+  log::info!(
+    "[conversations] Created {} attachments for message: {}",
+    attachments.len(),
+    message_id
+  );
 
   Ok(attachments)
 }

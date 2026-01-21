@@ -1,6 +1,6 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
 use crate::db::conversations::{
-  create_attachments, add_attachments, add_message, add_message_with_id, update_conversation_name, Attachment,
+  create_attachments, add_attachments, add_message, add_message_with_id, update_conversation_name,
 };
 use crate::db::core::DbState;
 use crate::db::memory::find_similar_memories;

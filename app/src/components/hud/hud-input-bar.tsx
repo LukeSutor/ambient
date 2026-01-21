@@ -192,7 +192,7 @@ export function HUDInputBar({
           autoComplete="off"
           autoFocus
         />
-        <InputGroupAddon align="block-end" className="-mb-2">
+        <InputGroupAddon align="block-end">
           {/* Plus dropdown menu */}
           <DropdownMenu onOpenChange={setIsPlusDropdownOpen}>
             <DropdownMenuTrigger asChild>
@@ -276,31 +276,23 @@ export function HUDInputBar({
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Computer Use Icon */}
+          <div
+            className={`flex items-center justify-center bg-yellow-500/30 rounded-xl shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150
+              ${conversationType === "computer_use" ? "px-2 py-1" : "p-0 w-0"}`}
+          >
+            <MousePointerClick className="!h-4 !w-4 text-black" />
+            <p className="mx-1 text-black text-xs">Computer Use</p>
+            <Button
+              variant="ghost"
+              className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent"
+              size="icon"
+              onClick={() => toggleComputerUse()}
+            >
+              <X className="!h-3 !w-3 text-black shrink-0" />
+            </Button>
+          </div>
 
-          {/* Horizonal scrollable div with computer use icon and ocr captures */}
-          <ScrollArea className="min-w-0">
-            <div className="flex w-max space-x-2 py-1">
-              <div
-                className={`flex items-center justify-center bg-yellow-500/30 rounded-xl shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150
-                  ${conversationType === "computer_use" ? "px-2 py-1" : "p-0 w-0"}`}
-              >
-                <MousePointerClick className="!h-4 !w-4 text-black" />
-                <p className="mx-1 text-black text-xs">Computer Use</p>
-                <Button
-                  variant="ghost"
-                  className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent"
-                  size="icon"
-                  onClick={() => toggleComputerUse()}
-                >
-                  <X className="!h-3 !w-3 text-black shrink-0" />
-                </Button>
-              </div>
-              <OcrCaptures hud-scrolls captures={ocrResults} ocrLoading={ocrLoading} onRemove={deleteOCRResult} />
-              {/* Make sure the height stays constant */}
-              <div className="h-6" />
-            </div>
-            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
-          </ScrollArea>
+          {/* Model selection dropdown */}
           <DropdownMenu onOpenChange={setIsModelDropdownOpen}>
             <DropdownMenuTrigger asChild>
               <InputGroupButton className="ml-auto" variant="ghost" disabled={ocrLoading || isStreaming}>
