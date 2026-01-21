@@ -15,7 +15,7 @@ const MAX_RECENT_ATTACHMENTS: usize = 3;
 async fn build_messages(
   app_handle: &AppHandle,
   system_prompt: String,
-  current_prompt: String,
+  user_prompt: String,
   conv_id: &Option<String>,
   current_message_id: &Option<String>,
 ) -> Result<Vec<Value>, String> {
@@ -43,7 +43,7 @@ async fn build_messages(
       for msg in conv_messages {
         let is_current = current_message_id.as_ref().map_or(false, |id| id == &msg.id);
         let content = if is_current {
-          &current_prompt
+          &user_prompt
         } else {
           &msg.content
         };

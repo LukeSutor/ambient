@@ -3,11 +3,16 @@ use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use base64::{Engine as _, engine::general_purpose};
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio_stream::StreamExt;
+use std::fs;
 
-// Map roles to Gemini format
+
+const MAX_RECENT_ATTACHMENTS: usize = 3;
+
+/// Map roles to Gemini format
 fn role_to_gemini(role: &str) -> &str {
   match role {
     "system" => "model",
@@ -17,33 +22,87 @@ fn role_to_gemini(role: &str) -> &str {
   }
 }
 
-// Builds messages in the Gemini API format
+/// Builds messages in the Gemini API format
 async fn build_content(
   app_handle: &AppHandle,
   user_prompt: String,
   conv_id: &Option<String>,
   current_message_id: &Option<String>,
-) -> Vec<Value> {
+) -> Result<Vec<Value>, String> {
   let mut content = Vec::new();
 
   if let Some(conversation_id) = conv_id {
-    if let Ok(mut conv_messages) =
+    if let Ok(conv_messages) =
       crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
     {
-      // Filter out the message we are currently augmenting to avoid doubling
-      if let Some(mid) = current_message_id {
-        conv_messages.retain(|m| &m.id != mid);
+      // Collect IDs of the most recent images/pdfs across all messages
+      let mut valid_attachments = Vec::new();
+      for msg in conv_messages.iter().rev() {
+        for attachment in msg.attachments.iter().rev() {
+          if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
+            valid_attachments.push(attachment.id.clone());
+          }
+        }
       }
 
       for msg in conv_messages {
-        content.push(json!({"role": role_to_gemini(msg.role.as_str()), "parts": [{"text": msg.content}]}));
+        let is_current = current_message_id.as_ref().map_or(false, |id| id == &msg.id);
+        let msg_content = if is_current {
+          &user_prompt
+        } else {
+          &msg.content
+        };
+
+        let mut content_parts = Vec::new();
+
+        for attachment in msg.attachments {
+          if !valid_attachments.contains(&attachment.id) {
+            continue;
+          }
+
+          if attachment.file_type.starts_with("image/") || attachment.file_type == "application/pdf" {
+            // Attach image as base64 data URL
+            if let Some(rel_path) = attachment.file_path {
+              let full_path = app_handle
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+                .join(rel_path);
+
+              if full_path.exists() {
+                if let Ok(bytes) = fs::read(&full_path) {
+                  let base64_data = general_purpose::STANDARD.encode(bytes);
+                  content_parts.push(json!({
+                    "inlineData": {
+                      "mimeType": attachment.file_type,
+                      "data": base64_data,
+                    },
+                  }));
+                }
+              }
+            }
+          } else if attachment.file_type == "ambient/ocr" {
+            // Attach OCR text
+            if let Some(extracted_text) = attachment.extracted_text {
+              content_parts.push(json!({
+                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
+              }));
+            }
+          }
+        }
+
+        // Add text content last
+        content_parts.push(json!({"text": msg_content}));
+
+        content.push(json!({
+          "role": role_to_gemini(msg.role.as_str()),
+          "parts": content_parts
+        }));
       }
     }
   }
-
-  // Add user prompt
-  content.push(json!({"role": "user", "parts": [{"text": user_prompt}]}));
-  content
+  log::debug!("Built content: {:?}", content);
+  Ok(content)
 }
 
 pub struct CloudflareProvider;
@@ -62,7 +121,20 @@ impl LlmProvider for CloudflareProvider {
     let model = &settings.model_selection.as_str();
 
     let should_stream = request.stream.unwrap_or(false);
-    let content = build_content(&app_handle, request.prompt.clone(), &request.conv_id, &request.current_message_id).await;
+    let mut content = build_content(
+      &app_handle,
+      request.prompt.clone(),
+      &request.conv_id,
+      &request.current_message_id
+    ).await?;
+
+    // Add user prompt if no current message id is provided
+    if request.current_message_id.is_none() {
+      content.push(json!({
+        "role": "user",
+        "parts": [{"text": request.prompt.clone()}]
+      }));
+    }
 
     // Get user access token
     let access_token = get_access_token_command()
