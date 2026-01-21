@@ -5,7 +5,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Paperclip, X } from 'lucide-react';
+import { Paperclip, SquareDashed, X } from 'lucide-react';
 import Image from 'next/image';
 
 type AttachmentPreviewProps = {
@@ -36,7 +36,15 @@ export function AttachmentPreview({
                   <p className="text-sm">PDF</p>
                 </div>
               </div>
-            ) : null}
+            ) : 
+              <div className="flex flex-col justify-center items-center space-y-2 w-full h-full px-4 bg-white/20 border border-black/20 rounded-lg">
+                <p className="font-semibold truncate max-w-32 mr-8">{attachment.data}</p>
+                <div className="flex flex-row justify-start items-center space-x-2 w-full">
+                  <SquareDashed className="!h-4 !w-4 text-black" />
+                  <p className="text-sm">Screen Capture</p>
+                </div>
+              </div>
+            }
             <Button
               variant="ghost"
               className="hidden group-hover:flex absolute top-1.5 right-1.5 h-8 w-8 p-0 rounded-full text-black bg-white/60 hover:bg-white/80 border border-black/10 shadow-sm"
@@ -50,7 +58,12 @@ export function AttachmentPreview({
             </Button>
           </div>
         </TooltipTrigger>
-        <TooltipContent>{attachment.name}</TooltipContent>
+        <TooltipContent>
+          {attachment.file_type === 'ambient/ocr' ? 
+          <p className="truncate max-w-46">{attachment.data}</p>
+          :
+          attachment.name}
+          </TooltipContent>
       </Tooltip>
     </div>
   );

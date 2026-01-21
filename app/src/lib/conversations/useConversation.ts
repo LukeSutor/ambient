@@ -175,13 +175,13 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
         // OCR Listener
         const ocrUnlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          // Add stop loading state and add successful OCR result
-          const result = event.payload;
-          dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
-          dispatch({ type: 'SET_OCR_LOADING', payload: false });
-          if (result.success) {
-            dispatch({ type: 'ADD_OCR_RESULT', payload: result });
+          const ocrData: AttachmentData = {
+            name: 'OCR Capture',
+            file_type: 'ambient/ocr',
+            data: event.payload.text,
           }
+          console.log("[useConversation] Received OCR result:", ocrData);
+          dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: ocrData });
         });
         unlisteners.push(ocrUnlisten);
 
