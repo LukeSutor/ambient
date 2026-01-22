@@ -38,11 +38,23 @@ export default function AuthLayout({
         className="fixed top-0 left-0 right-0 border-b flex justify-end items-center pr-1 py-1"
       >
         {/* Window minimize button */}
-        <Button variant="ghost" size="icon" onClick={handleMinimize}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            void handleMinimize();
+          }}
+        >
           <Minus className="!h-5 !w-5" />
         </Button>
         {/* Window close button */}
-        <Button variant="ghost" size="icon" onClick={handleClose}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            void handleClose();
+          }}
+        >
           <X className="!h-5 !w-5" />
         </Button>
       </div>

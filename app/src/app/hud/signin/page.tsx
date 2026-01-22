@@ -67,7 +67,7 @@ export default function Login() {
     null,
   );
   useEffect(() => {
-    (async () => {
+    void (async () => {
       const dimensions = await getHudDimensions();
       setHudDimensions(dimensions);
     })();
@@ -177,7 +177,9 @@ export default function Login() {
               className="hover:bg-gray-200"
               variant="ghost"
               size="icon"
-              onClick={closeHUD}
+              onClick={() => {
+                void closeHUD();
+              }}
             >
               <X className="!h-6 !w-6" />
             </Button>
@@ -214,7 +216,9 @@ export default function Login() {
               className="hover:bg-gray-200"
               variant="ghost"
               size="icon"
-              onClick={closeHUD}
+              onClick={() => {
+                void closeHUD();
+              }}
             >
               <X className="!h-6 !w-6" />
             </Button>
@@ -278,7 +282,9 @@ export default function Login() {
             </Field>
 
             <Button
-              onClick={onConfirmationSubmit}
+              onClick={() => {
+                void onConfirmationSubmit();
+              }}
               className="w-full h-11"
               disabled={isConfirming}
             >
@@ -296,7 +302,9 @@ export default function Login() {
             <p className="text-sm text-gray-500 text-center">
               Didn&apos;t receive a code?{" "}
               <button
-                onClick={handleResendCode}
+                onClick={() => {
+                  void handleResendCode();
+                }}
                 className="text-blue-600 hover:underline font-medium"
                 type="button"
               >
@@ -304,7 +312,9 @@ export default function Login() {
               </button>
             </p>
             <button
-              onClick={() => setFormStep("login")}
+              onClick={() => {
+                setFormStep("login");
+              }}
               className="text-sm text-gray-500 hover:text-gray-700"
               type="button"
             >
@@ -333,7 +343,9 @@ export default function Login() {
             className="hover:bg-gray-200"
             variant="ghost"
             size="icon"
-            onClick={closeHUD}
+            onClick={() => {
+              void closeHUD();
+            }}
           >
             <X className="!h-6 !w-6" />
           </Button>
@@ -359,7 +371,9 @@ export default function Login() {
             )}
 
             <GoogleLoginButton
-              onSignInSuccess={() => router.push("/hud")}
+              onSignInSuccess={() => {
+                router.push("/hud");
+              }}
               className="w-full"
             />
 
@@ -412,7 +426,9 @@ export default function Login() {
                       variant="ghost"
                       size="sm"
                       className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
+                      onClick={() => {
+                        setShowPassword(!showPassword);
+                      }}
                       disabled={isLoading}
                     >
                       {showPassword ? (

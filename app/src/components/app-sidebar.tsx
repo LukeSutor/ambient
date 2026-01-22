@@ -94,9 +94,9 @@ export function AppSidebar({
   // Create user object for NavUser component
   const user = userInfo
     ? {
-        name: userInfo.full_name || userInfo.email?.split("@")[0] || "User",
-        email: userInfo.email || "",
-        avatar: userInfo.avatar_url || "/",
+        name: userInfo.full_name ?? userInfo.email?.split("@")[0] ?? "User",
+        email: userInfo.email ?? "",
+        avatar: userInfo.avatar_url ?? "/",
       }
     : {
         name: "User",

@@ -69,7 +69,7 @@ const step2Schema = z.object({
     .regex(/[0-9]/, {
       message: "Password must contain at least one number",
     })
-    .regex(/[\^\$\*\.\[\]\{\}\(\)\?\-"!@#%&\/\\,><':;|_~`+=\s]/, {
+    .regex(/[\^$*.\[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
     }),
 });
@@ -273,7 +273,7 @@ export default function SignUpPage() {
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
-                  onConfirmationSubmit();
+                  void onConfirmationSubmit();
                 }}
                 className="space-y-6"
                 noValidate
@@ -346,7 +346,9 @@ export default function SignUpPage() {
                     type="button"
                     variant="outline"
                     className="w-full h-11"
-                    onClick={handleResendCode}
+                    onClick={() => {
+                      void handleResendCode();
+                    }}
                   >
                     Resend Code
                   </Button>
@@ -382,7 +384,9 @@ export default function SignUpPage() {
               )}
 
               <GoogleLoginButton
-                onSignInSuccess={() => router.push("/secondary")}
+                onSignInSuccess={() => {
+                  void router.push("/secondary");
+                }}
                 className="w-full mb-6"
               />
 
@@ -398,7 +402,9 @@ export default function SignUpPage() {
               </div>
 
               <form
-                onSubmit={step1Form.handleSubmit(onStep1Submit)}
+                onSubmit={(e) => {
+                  void step1Form.handleSubmit(onStep1Submit)(e);
+                }}
                 className="space-y-6"
                 noValidate
               >
@@ -478,7 +484,9 @@ export default function SignUpPage() {
               )}
 
               <form
-                onSubmit={step2Form.handleSubmit(onStep2Submit)}
+                onSubmit={(e) => {
+                  void step2Form.handleSubmit(onStep2Submit)(e);
+                }}
                 className="space-y-6"
                 noValidate
               >
@@ -532,7 +540,9 @@ export default function SignUpPage() {
                           variant="ghost"
                           size="sm"
                           className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => setShowPassword(!showPassword)}
+                          onClick={() => {
+                            setShowPassword(!showPassword);
+                          }}
                           disabled={isLoading}
                         >
                           {showPassword ? (

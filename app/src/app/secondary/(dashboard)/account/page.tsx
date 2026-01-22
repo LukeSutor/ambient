@@ -104,8 +104,8 @@ export default function AccountPage() {
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
               <AvatarImage
-                src={userInfo.avatar_url || ""}
-                alt={userInfo.email || "User"}
+                src={userInfo.avatar_url ?? ""}
+                alt={userInfo.email ?? "User"}
               />
               <AvatarFallback className="text-lg font-semibold">
                 {initials}
@@ -113,7 +113,7 @@ export default function AccountPage() {
             </Avatar>
             <div className="space-y-1">
               <h3 className="text-xl font-semibold">
-                {userInfo.full_name || userInfo.email || "Unknown User"}
+                {userInfo.full_name ?? userInfo.email ?? "Unknown User"}
                 {!userInfo.full_name &&
                   userInfo.providers?.includes("google") && (
                     <Tooltip>
@@ -138,7 +138,7 @@ export default function AccountPage() {
               {userInfo.full_name && (
                 <p className="text-muted-foreground flex items-center space-x-1">
                   <Mail className="h-4 w-4" />
-                  <span>{userInfo.email || "No email available"}</span>
+                  <span>{userInfo.email ?? "No email available"}</span>
                   {userInfo.providers?.includes("google") && (
                     <Tooltip>
                       <TooltipTrigger>

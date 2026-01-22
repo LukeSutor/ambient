@@ -173,7 +173,7 @@ export default function SignInPage() {
                 Verify Your Email
               </CardTitle>
               <CardDescription>
-                We've sent a code to {loginData?.email}. Enter it below to
+                We&apos;ve sent a code to {loginData?.email}. Enter it below to
                 confirm your account.
               </CardDescription>
             </CardHeader>
@@ -229,7 +229,9 @@ export default function SignInPage() {
               </Field>
 
               <Button
-                onClick={onConfirmationSubmit}
+                onClick={() => {
+                  void onConfirmationSubmit();
+                }}
                 className="w-full h-11"
                 disabled={isConfirming}
               >
@@ -245,9 +247,11 @@ export default function SignInPage() {
             </CardContent>
             <CardHeader className="pt-0 text-center">
               <p className="text-sm text-gray-500">
-                Didn't receive a code?{" "}
+                Didn&apos;t receive a code?{" "}
                 <button
-                  onClick={handleResendCode}
+                  onClick={() => {
+                    void handleResendCode();
+                  }}
                   className="text-blue-600 hover:underline font-medium"
                   type="button"
                 >
@@ -281,7 +285,9 @@ export default function SignInPage() {
           </CardHeader>
           <CardContent>
             <form
-              onSubmit={form.handleSubmit(onSubmit)}
+              onSubmit={(e) => {
+                void form.handleSubmit(onSubmit)(e);
+              }}
               className="space-y-6"
               noValidate
             >
@@ -293,7 +299,9 @@ export default function SignInPage() {
               )}
 
               <GoogleLoginButton
-                onSignInSuccess={() => router.push("/secondary")}
+                onSignInSuccess={() => {
+                  void router.push("/secondary");
+                }}
                 className="w-full mb-6"
               />
 
@@ -384,7 +392,7 @@ export default function SignInPage() {
         {/* Footer */}
         <div className="text-center">
           <p className="text-sm text-gray-600">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href="/secondary/signup"
               className="font-medium text-blue-600 hover:text-blue-500 transition-colors"

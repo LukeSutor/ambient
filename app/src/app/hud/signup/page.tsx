@@ -79,7 +79,7 @@ const step2Schema = z.object({
     .regex(/[0-9]/, {
       message: "Password must contain at least one number",
     })
-    .regex(/[\^\$\*\.\[\]\{\}\(\)\?\-"!@#%&\/\\,><':;|_~`+=\s]/, {
+    .regex(/[\^$*.\[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
     }),
 });
@@ -113,7 +113,7 @@ export default function SignUp() {
     null,
   );
   useEffect(() => {
-    (async () => {
+    void (async () => {
       const dimensions = await getHudDimensions();
       setHudDimensions(dimensions);
     })();
@@ -270,7 +270,9 @@ export default function SignUp() {
               className="hover:bg-gray-200"
               variant="ghost"
               size="icon"
-              onClick={closeHUD}
+              onClick={() => {
+                void closeHUD();
+              }}
             >
               <X className="!h-6 !w-6" />
             </Button>
@@ -313,7 +315,9 @@ export default function SignUp() {
               className="hover:bg-gray-200"
               variant="ghost"
               size="icon"
-              onClick={closeHUD}
+              onClick={() => {
+                void closeHUD();
+              }}
             >
               <X className="!h-6 !w-6" />
             </Button>
@@ -339,7 +343,7 @@ export default function SignUp() {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                onConfirmationSubmit();
+                void onConfirmationSubmit();
               }}
               className="space-y-6"
               noValidate
@@ -410,7 +414,9 @@ export default function SignUp() {
                   type="button"
                   variant="outline"
                   className="w-full h-11"
-                  onClick={handleResendCode}
+                  onClick={() => {
+                    void handleResendCode();
+                  }}
                 >
                   Resend Code
                 </Button>
@@ -440,7 +446,9 @@ export default function SignUp() {
               className="hover:bg-gray-200"
               variant="ghost"
               size="icon"
-              onClick={closeHUD}
+              onClick={() => {
+                void closeHUD();
+              }}
             >
               <X className="!h-6 !w-6" />
             </Button>
@@ -528,165 +536,166 @@ export default function SignUp() {
   }
 
   // Step 2: Personal Info & Password
-  if (formStep === "step2") {
-    return (
-      <AutoResizeContainer
-        hudDimensions={hudDimensions}
-        widthType="login"
-        className="bg-transparent"
-      >
-        <Card className="relative w-full pt-12 overflow-auto">
-          {/* Drag area and close button */}
-          <div
-            data-tauri-drag-region
-            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
+  // We don't need the if (formStep === "step2") check here because it's the only remaining step
+  return (
+    <AutoResizeContainer
+      hudDimensions={hudDimensions}
+      widthType="login"
+      className="bg-transparent"
+    >
+      <Card className="relative w-full pt-12 overflow-auto">
+        {/* Drag area and close button */}
+        <div
+          data-tauri-drag-region
+          className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
+        >
+          <Button
+            className="hover:bg-gray-200"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              void closeHUD();
+            }}
           >
-            <Button
-              className="hover:bg-gray-200"
-              variant="ghost"
-              size="icon"
-              onClick={closeHUD}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
-          </div>
+            <X className="!h-6 !w-6" />
+          </Button>
+        </div>
 
-          <CardHeader className="text-center pt-2">
-            <CardTitle className="text-3xl font-bold">
-              Create Your Account
-            </CardTitle>
-            <CardDescription>
-              Step 2 of 2: Personal Info & Password
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {error && (
-              <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="text-3xl font-bold">
+            Create Your Account
+          </CardTitle>
+          <CardDescription>
+            Step 2 of 2: Personal Info & Password
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
+              <AlertCircle className="h-4 w-4" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
 
-            <form
-              onSubmit={step2Form.handleSubmit(onStep2Submit)}
-              className="space-y-6"
-              noValidate
-            >
-              <div className="space-y-4">
-                <Controller
-                  control={step2Form.control}
-                  name="full_name"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-full-name">
-                        Full Name
-                      </FieldLabel>
-                      <Input
-                        id="signup-full-name"
-                        className="h-11"
-                        placeholder="John Doe"
-                        autoComplete="name"
-                        disabled={isLoading}
-                        aria-invalid={fieldState.invalid}
-                        {...field}
-                      />
-                      {fieldState.invalid && (
-                        <FieldError errors={[fieldState.error]} />
-                      )}
-                    </Field>
-                  )}
-                />
-              </div>
-
+          <form
+            onSubmit={step2Form.handleSubmit(onStep2Submit)}
+            className="space-y-6"
+            noValidate
+          >
+            <div className="space-y-4">
               <Controller
                 control={step2Form.control}
-                name="password"
+                name="full_name"
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="signup-password">Password</FieldLabel>
-                    <div className="relative">
-                      <Input
-                        id="signup-password"
-                        type={showPassword ? "text" : "password"}
-                        className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                        placeholder="Enter a secure password"
-                        autoComplete="new-password"
-                        aria-invalid={fieldState.invalid}
-                        disabled={isLoading}
-                        {...field}
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                        disabled={isLoading}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
-                      </Button>
-                    </div>
-                    <FieldDescription>
-                      Use at least 8 characters including uppercase, lowercase,
-                      a number, and a special character.
-                    </FieldDescription>
+                    <FieldLabel htmlFor="signup-full-name">
+                      Full Name
+                    </FieldLabel>
+                    <Input
+                      id="signup-full-name"
+                      className="h-11"
+                      placeholder="John Doe"
+                      autoComplete="name"
+                      disabled={isLoading}
+                      aria-invalid={fieldState.invalid}
+                      {...field}
+                    />
                     {fieldState.invalid && (
                       <FieldError errors={[fieldState.error]} />
                     )}
                   </Field>
                 )}
               />
+            </div>
 
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 text-base font-medium"
-                  onClick={handleBackToStep1}
-                  disabled={isLoading}
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Back
-                </Button>
-                <Button
-                  type="submit"
-                  className="flex-1 h-11 text-base font-medium"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating Account...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Create Account
-                    </>
+            <Controller
+              control={step2Form.control}
+              name="password"
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                  <div className="relative">
+                    <Input
+                      id="signup-password"
+                      type={showPassword ? "text" : "password"}
+                      className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                      placeholder="Enter a secure password"
+                      autoComplete="new-password"
+                      aria-invalid={fieldState.invalid}
+                      disabled={isLoading}
+                      {...field}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => {
+                        setShowPassword(!showPassword);
+                      }}
+                      disabled={isLoading}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400" />
+                      )}
+                    </Button>
+                  </div>
+                  <FieldDescription>
+                    Use at least 8 characters including uppercase, lowercase, a
+                    number, and a special character.
+                  </FieldDescription>
+                  {fieldState.invalid && (
+                    <FieldError errors={[fieldState.error]} />
                   )}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-          <CardFooter>
-            <p className="text-sm text-gray-600 w-full text-center">
-              Already have an account?{" "}
-              <Link
-                href="/hud/signin"
-                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-              >
-                Sign in here
-              </Link>
-            </p>
-          </CardFooter>
-        </Card>
-      </AutoResizeContainer>
-    );
-  }
+                </Field>
+              )}
+            />
 
-  return null;
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 text-base font-medium"
+                onClick={handleBackToStep1}
+                disabled={isLoading}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 h-11 text-base font-medium"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating Account...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Create Account
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+        <CardFooter>
+          <p className="text-sm text-gray-600 w-full text-center">
+            Already have an account?{" "}
+            <Link
+              href="/hud/signin"
+              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+            >
+              Sign in here
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
+    </AutoResizeContainer>
+  );
 }

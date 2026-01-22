@@ -29,8 +29,7 @@ export function useWindows() {
 
   const toggleChatHistory = useCallback(
     async (nextState?: boolean) => {
-      const willExpand =
-        nextState !== undefined ? nextState : !state.isChatHistoryExpanded;
+      const willExpand = nextState ?? !state.isChatHistoryExpanded;
 
       if (willExpand) {
         dispatch({ type: "SET_CHAT_HISTORY_EXPANDED" });

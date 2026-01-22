@@ -50,7 +50,7 @@ export default function ScreenSelectorPage() {
       }
     };
 
-    loadScreenDimensions();
+    void loadScreenDimensions();
 
     // Cleanup function
     return () => {
@@ -61,18 +61,6 @@ export default function ScreenSelectorPage() {
         document.body.classList.remove("screen-selector-transparent");
       }
     };
-  }, []);
-
-  // Handle escape key to cancel selection
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        cancelSelector();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const cancelSelector = useCallback(async () => {
@@ -91,6 +79,20 @@ export default function ScreenSelectorPage() {
       console.error("Failed to close screen selector:", error);
     }
   }, []);
+
+  // Handle escape key to cancel selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        void cancelSelector();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [cancelSelector]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const rect = overlayRef.current?.getBoundingClientRect();
@@ -135,7 +137,9 @@ export default function ScreenSelectorPage() {
     // Only process if selection has meaningful size
     if (bounds.width > 10 && bounds.height > 10) {
       try {
-        invoke<ScreenSelectionResult>("process_screen_selection", { bounds });
+        await invoke<ScreenSelectionResult>("process_screen_selection", {
+          bounds,
+        });
 
         await closeSelector();
       } catch (error) {
@@ -169,10 +173,12 @@ export default function ScreenSelectorPage() {
       className="w-full h-full bg-black/10 cursor-crosshair select-none overflow-hidden"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
+      onMouseUp={() => {
+        void handleMouseUp();
+      }}
       style={{
-        width: screenDimensions?.width || "100vw",
-        height: screenDimensions?.height || "100vh",
+        width: screenDimensions?.width ?? "100vw",
+        height: screenDimensions?.height ?? "100vh",
       }}
     >
       {/* Semi-transparent overlay */}

@@ -180,19 +180,19 @@ function ComputerUsePage() {
                 <div className="flex flex-row space-x-2 mt-4">
                   <Button
                     variant="outline"
-                    onClick={() => handleConfirmation(false)}
+                    onClick={() => void handleConfirmation(false)}
                   >
                     Cancel
                   </Button>
                   <Button
                     className="bg-blue-500 hover:bg-blue-600"
-                    onClick={() => handleConfirmation(true)}
+                    onClick={() => void handleConfirmation(true)}
                   >
                     Confirm
                   </Button>
                 </div>
               </EmptyContent>
-              <Button variant="link" onClick={openMainWindow}>
+              <Button variant="link" onClick={() => void openMainWindow()}>
                 See model steps <ArrowUpRight />
               </Button>
             </Empty>
@@ -221,7 +221,7 @@ function ComputerUsePage() {
               size="icon"
               variant="ghost"
               className="ml-2 rounded-full w-7 h-7 shrink-0"
-              onClick={closeToast}
+              onClick={() => void closeToast()}
             >
               <X className="w-4 h-4" />
             </Button>

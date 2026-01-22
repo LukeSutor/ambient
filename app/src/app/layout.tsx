@@ -30,7 +30,7 @@ export default function RootLayout({
 }>) {
   // Add BigInt serialization support
   React.useEffect(() => {
-    // @ts-ignore
+    // @ts-expect-error BigInt does not have a toJSON method by default, so we add one for JSON serialization
     BigInt.prototype.toJSON = function () {
       return this.toString();
     };

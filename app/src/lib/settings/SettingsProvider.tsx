@@ -7,8 +7,8 @@ import type {
 } from "@/types/settings";
 import type React from "react";
 import {
-  type MutableRefObject,
   type ReactNode,
+  type RefObject,
   createContext,
   useContext,
   useReducer,
@@ -20,7 +20,7 @@ import {
 interface SettingsState {
   settings: UserSettings | null;
   isLoading: boolean;
-  initializationRef: MutableRefObject<boolean>;
+  initializationRef: RefObject<boolean>;
 }
 
 /**

@@ -59,7 +59,7 @@ export default function HudPage() {
       if (!cancelled) {
         // Only update if dimensions actually changed
         setHudDimensions((prev) => {
-          if (!prev) return dimensions;
+          if (prev === null) return dimensions;
           // Deep comparison to avoid unnecessary updates
           if (JSON.stringify(prev) === JSON.stringify(dimensions)) {
             return prev;
@@ -96,7 +96,9 @@ export default function HudPage() {
 
   // Ensure drag visibility resets when pointer is released anywhere
   useEffect(() => {
-    const onUp = () => setIsDraggingWindow(false);
+    const onUp = () => {
+      setIsDraggingWindow(false);
+    };
     window.addEventListener("pointerup", onUp);
     window.addEventListener("mouseup", onUp);
     return () => {
@@ -127,17 +129,17 @@ export default function HudPage() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      void handleSubmit(e);
     }
     if (e.key === "Escape") {
-      handleNewChat();
+      void handleNewChat();
     }
   };
 
   const handleNewChat = async () => {
     // Don't create new conversation if there are no messages
     if (messages.length > 0) {
-      await setChatMinimized();
+      setChatMinimized();
       await resetConversation(500);
     }
   };
@@ -158,11 +160,21 @@ export default function HudPage() {
           messagesEndRef={messagesEndRef}
           conversations={conversations}
           hasMoreConversations={hasMoreConversations}
-          loadConversation={loadConversation}
-          deleteConversation={deleteConversation}
-          loadMoreConversations={loadMoreConversations}
-          renameConversation={renameConversation}
-          handleNewChat={handleNewChat}
+          loadConversation={(id) => {
+            void loadConversation(id);
+          }}
+          deleteConversation={(id) => {
+            void deleteConversation(id);
+          }}
+          loadMoreConversations={() => {
+            void loadMoreConversations();
+          }}
+          renameConversation={(id, name) => {
+            void renameConversation(id, name);
+          }}
+          handleNewChat={() => {
+            void handleNewChat();
+          }}
         />
 
         {/* Input Container */}
@@ -172,13 +184,21 @@ export default function HudPage() {
           setInputValue={setInput}
           handleSubmit={handleSubmit}
           onKeyDown={handleKeyDown}
-          dispatchOCRCapture={dispatchOCRCapture}
-          onDragStart={() => setIsDraggingWindow(true)}
-          onMouseLeave={handleMouseLeave}
+          dispatchOCRCapture={() => {
+            void dispatchOCRCapture();
+          }}
+          onDragStart={() => {
+            setIsDraggingWindow(true);
+          }}
+          onMouseLeave={(e) => {
+            void handleMouseLeave(e);
+          }}
           isDraggingWindow={isDraggingWindow}
           isHoveringGroup={isHoveringGroup}
           setIsHoveringGroup={setIsHoveringGroup}
-          toggleComputerUse={toggleComputerUse}
+          toggleComputerUse={() => {
+            toggleComputerUse();
+          }}
           ocrLoading={ocrLoading}
           isStreaming={isStreaming}
           conversationType={conversationType}

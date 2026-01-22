@@ -75,7 +75,7 @@ export default function SetupPage() {
   const { getHudDimensions } = useSettings();
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       const dimensions = await getHudDimensions();
       setHudDimensions(dimensions);
     })();
@@ -177,7 +177,9 @@ export default function SetupPage() {
             className="hover:bg-gray-200"
             variant="ghost"
             size="icon"
-            onClick={closeHUD}
+            onClick={() => {
+              void closeHUD();
+            }}
           >
             <X className="!h-6 !w-6" />
           </Button>
@@ -230,7 +232,9 @@ export default function SetupPage() {
         <CardFooter>
           {!isSettingUp && (
             <Button
-              onClick={handleStartSetup}
+              onClick={() => {
+                void handleStartSetup();
+              }}
               className="w-full h-11 text-base font-medium"
             >
               Start Setup
