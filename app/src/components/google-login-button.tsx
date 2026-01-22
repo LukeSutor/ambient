@@ -1,10 +1,13 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { useRoleAccess, getAuthErrorMessage } from '@/lib/role-access';
-import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { invokeIsSetupComplete, invokeEmitAuthChanged } from '@/lib/role-access/commands';
+import { Button } from "@/components/ui/button";
+import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
+import {
+  invokeEmitAuthChanged,
+  invokeIsSetupComplete,
+} from "@/lib/role-access/commands";
+import { AlertCircle, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
 const googleLogo = "/google-logo.png";
 
 // Google logo SVG component
@@ -14,18 +17,18 @@ const GoogleIcon = () => (
 
 interface GoogleLoginButtonProps {
   onSignInSuccess: () => void;
-  variant?: 'default' | 'outline' | 'secondary' | 'ghost';
-  size?: 'default' | 'sm' | 'lg' | 'icon';
+  variant?: "default" | "outline" | "secondary" | "ghost";
+  size?: "default" | "sm" | "lg" | "icon";
   className?: string;
   disabled?: boolean;
 }
 
-export function GoogleLoginButton({ 
-  onSignInSuccess, 
-  variant = 'outline',
-  size = 'default',
-  className = '',
-  disabled = false 
+export function GoogleLoginButton({
+  onSignInSuccess,
+  variant = "outline",
+  size = "default",
+  className = "",
+  disabled = false,
 }: GoogleLoginButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,24 +38,29 @@ export function GoogleLoginButton({
   useEffect(() => {
     // Listen for OAuth2 events from Tauri
     const listenToOAuth2Events = async () => {
-      const { listen } = await import('@tauri-apps/api/event');
-      
+      const { listen } = await import("@tauri-apps/api/event");
+
       // Listen for OAuth2 success
-      const unlistenSuccess = await listen('oauth2-success', async (event) => {
+      const unlistenSuccess = await listen("oauth2-success", async (event) => {
         setIsLoading(false);
         setError(null);
-        
+
         // Emit auth changed event and check setup status
         await invokeEmitAuthChanged();
-        
+
         onSignInSuccess();
       });
 
       // Listen for OAuth2 errors
-      const unlistenError = await listen('oauth2-error', (event) => {
-        console.error('[GoogleLoginButton] OAuth2 error:', event.payload);
+      const unlistenError = await listen("oauth2-error", (event) => {
+        console.error("[GoogleLoginButton] OAuth2 error:", event.payload);
         setIsLoading(false);
-        setError(getAuthErrorMessage(event.payload, 'Sign-in with Google failed. Please try again.'));
+        setError(
+          getAuthErrorMessage(
+            event.payload,
+            "Sign-in with Google failed. Please try again.",
+          ),
+        );
       });
 
       // Return cleanup function
@@ -63,14 +71,14 @@ export function GoogleLoginButton({
     };
 
     let cleanup: (() => void) | undefined;
-    listenToOAuth2Events().then((cleanupFn) => {
+    void listenToOAuth2Events().then((cleanupFn) => {
       cleanup = cleanupFn;
     });
 
     return () => {
       if (cleanup) cleanup();
     };
-  }, [onSignInSuccess, router]);
+  }, [onSignInSuccess]);
 
   const handleGoogleSignIn = async () => {
     setError(null);
@@ -82,8 +90,13 @@ export function GoogleLoginButton({
       // Note: The loading state will be cleared by the event listeners above
       // when the OAuth callback is received via deep link
     } catch (err) {
-      console.error('Failed to initiate Google sign in:', err);
-      setError(getAuthErrorMessage(err, 'Failed to start Google sign in. Please try again.'));
+      console.error("Failed to initiate Google sign in:", err);
+      setError(
+        getAuthErrorMessage(
+          err,
+          "Failed to start Google sign in. Please try again.",
+        ),
+      );
       setIsLoading(false);
     }
   };
@@ -94,7 +107,9 @@ export function GoogleLoginButton({
         type="button"
         variant={variant}
         size={size}
-        onClick={handleGoogleSignIn}
+        onClick={() => {
+          void handleGoogleSignIn();
+        }}
         disabled={disabled || isLoading}
         className={`w-full ${className}`}
       >
@@ -110,7 +125,7 @@ export function GoogleLoginButton({
           </>
         )}
       </Button>
-      
+
       {error && (
         <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md mt-2">
           <AlertCircle className="h-4 w-4" />

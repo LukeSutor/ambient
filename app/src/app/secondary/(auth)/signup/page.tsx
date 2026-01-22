@@ -1,20 +1,47 @@
 "use client";
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useRoleAccess, SignUpRequest, ConfirmSignUpRequest, SignUpResponse, getAuthErrorMessage } from '@/lib/role-access';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import { CheckCircle, UserPlus, Loader2, Mail, User, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useState } from 'react';
-import { GoogleLoginButton } from '@/components/google-login-button';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { REGEXP_ONLY_DIGITS } from 'input-otp';
+import { GoogleLoginButton } from "@/components/google-login-button";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import {
+  type ConfirmSignUpRequest,
+  type SignUpRequest,
+  type SignUpResponse,
+  getAuthErrorMessage,
+  useRoleAccess,
+} from "@/lib/role-access";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Loader2,
+  Mail,
+  User,
+  UserPlus,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useEffect } from "react";
+import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
 
 // Step 1: Email
 const step1Schema = z.object({
@@ -28,7 +55,8 @@ const step2Schema = z.object({
   full_name: z.string().min(1, {
     message: "Full name is required",
   }),
-  password: z.string()
+  password: z
+    .string()
     .min(8, {
       message: "Password must be at least 8 characters long",
     })
@@ -52,8 +80,12 @@ export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [signUpResult, setSignUpResult] = useState<SignUpResponse | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
-  const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
+  const [formStep, setFormStep] = useState<
+    "step1" | "step2" | "verify" | "success"
+  >("step1");
+  const [step1Data, setStep1Data] = useState<z.infer<
+    typeof step1Schema
+  > | null>(null);
   const [confirmationCode, setConfirmationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
 
@@ -75,50 +107,51 @@ export default function SignUpPage() {
   const router = useRouter();
 
   // Auth state
-  const { signUp, signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
+  const { signUp, signIn, confirmSignUp, resendConfirmationCode } =
+    useRoleAccess();
 
   const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
     setError(null);
     setStep1Data(values);
-    setFormStep('step2');
+    setFormStep("step2");
   };
 
   const onStep2Submit = async (values: z.infer<typeof step2Schema>) => {
     if (!step1Data) {
-      setError('Please complete step 1 first');
-      setFormStep('step1');
+      setError("Please complete step 1 first");
+      setFormStep("step1");
       return;
     }
 
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const formData: SignUpRequest = {
         email: step1Data.email,
         password: values.password,
         full_name: values.full_name,
       };
-      
+
       const result = await signUp(formData);
       setSignUpResult(result);
-      
+
       if (!result.verification_required) {
         // User is automatically confirmed, sign them in
         await signIn(step1Data.email, values.password);
-        setFormStep('success');
+        setFormStep("success");
         setTimeout(() => {
-          router.push('/secondary');
+          router.push("/secondary");
         }, 2000);
       } else {
         // User needs to verify email/phone
         setConfirmationCode("");
         setHasTriedConfirm(false);
-        setFormStep('verify');
+        setFormStep("verify");
       }
     } catch (err) {
-      console.error('Sign up failed:', err);
-      setError(getAuthErrorMessage(err, 'Sign up failed. Please try again.'));
+      console.error("Sign up failed:", err);
+      setError(getAuthErrorMessage(err, "Sign up failed. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -126,21 +159,21 @@ export default function SignUpPage() {
 
   const onConfirmationSubmit = async () => {
     if (!signUpResult) {
-      setError('Sign up data not found');
+      setError("Sign up data not found");
       return;
     }
 
     setHasTriedConfirm(true);
 
     if (confirmationCode.length !== 8) {
-      setError('Please enter the 8-digit verification code');
+      setError("Please enter the 8-digit verification code");
       return;
     }
 
     try {
       setIsConfirming(true);
       setError(null);
-      
+
       const step2Values = step2Form.getValues();
       const step1Values = step1Form.getValues();
 
@@ -148,20 +181,22 @@ export default function SignUpPage() {
         email: step1Values.email,
         confirmation_code: confirmationCode,
       };
-      
+
       // First confirm the signup
       await confirmSignUp(confirmationData);
-      
+
       // Then automatically sign in the user
       await signIn(step1Values.email, step2Values.password);
 
-      setFormStep('success');
+      setFormStep("success");
       setTimeout(() => {
-        router.push('/secondary');
+        router.push("/secondary");
       }, 2000);
     } catch (err) {
-      console.error('Verification failed:', err);
-      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
+      console.error("Verification failed:", err);
+      setError(
+        getAuthErrorMessage(err, "Verification failed. Please try again."),
+      );
     } finally {
       setIsConfirming(false);
     }
@@ -175,17 +210,19 @@ export default function SignUpPage() {
       // Show success message or update UI to indicate code was resent
       //TODO: Implement success feedback
     } catch (err) {
-      console.error('Resend code failed:', err);
-      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
+      console.error("Resend code failed:", err);
+      setError(
+        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
+      );
     }
   };
 
   const handleBackToStep1 = () => {
     setError(null);
-    setFormStep('step1');
+    setFormStep("step1");
   };
 
-  if (formStep === 'success') {
+  if (formStep === "success") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
@@ -196,7 +233,8 @@ export default function SignUpPage() {
                 Account Created Successfully!
               </CardTitle>
               <CardDescription className="text-base">
-                Your account has been created and verified. You can now access your dashboard.
+                Your account has been created and verified. You can now access
+                your dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
@@ -210,7 +248,7 @@ export default function SignUpPage() {
     );
   }
 
-  if (formStep === 'verify') {
+  if (formStep === "verify") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
@@ -231,7 +269,7 @@ export default function SignUpPage() {
                   <span className="text-red-700 text-sm">{error}</span>
                 </div>
               )}
-              
+
               <form
                 onSubmit={(event) => {
                   event.preventDefault();
@@ -240,7 +278,11 @@ export default function SignUpPage() {
                 className="space-y-6"
                 noValidate
               >
-                <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 8}>
+                <Field
+                  data-invalid={
+                    hasTriedConfirm && confirmationCode.length !== 8
+                  }
+                >
                   <FieldLabel htmlFor="signup-confirmation-code">
                     Verification Code
                   </FieldLabel>
@@ -256,7 +298,9 @@ export default function SignUpPage() {
                         setConfirmationCode(value);
                       }}
                       disabled={isConfirming}
-                      aria-invalid={hasTriedConfirm && confirmationCode.length !== 8}
+                      aria-invalid={
+                        hasTriedConfirm && confirmationCode.length !== 8
+                      }
                     >
                       <InputOTPGroup>
                         <InputOTPSlot index={0} />
@@ -272,7 +316,9 @@ export default function SignUpPage() {
                   </div>
                   {hasTriedConfirm && confirmationCode.length !== 8 && (
                     <FieldError
-                      errors={[{ message: 'Enter the 8-digit code from your email.' }]}
+                      errors={[
+                        { message: "Enter the 8-digit code from your email." },
+                      ]}
                     />
                   )}
                 </Field>
@@ -295,7 +341,7 @@ export default function SignUpPage() {
                       </>
                     )}
                   </Button>
-                  
+
                   <Button
                     type="button"
                     variant="outline"
@@ -314,7 +360,7 @@ export default function SignUpPage() {
   }
 
   // Step 1: Email
-  if (formStep === 'step1') {
+  if (formStep === "step1") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
@@ -335,8 +381,8 @@ export default function SignUpPage() {
                 </div>
               )}
 
-              <GoogleLoginButton 
-                onSignInSuccess={() => router.push('/secondary')}
+              <GoogleLoginButton
+                onSignInSuccess={() => router.push("/secondary")}
                 className="w-full mb-6"
               />
 
@@ -351,7 +397,11 @@ export default function SignUpPage() {
                 </div>
               </div>
 
-              <form onSubmit={step1Form.handleSubmit(onStep1Submit)} className="space-y-6" noValidate>
+              <form
+                onSubmit={step1Form.handleSubmit(onStep1Submit)}
+                className="space-y-6"
+                noValidate
+              >
                 <Controller
                   control={step1Form.control}
                   name="email"
@@ -370,11 +420,13 @@ export default function SignUpPage() {
                           {...field}
                         />
                       </div>
-                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
                     </Field>
                   )}
                 />
-                
+
                 <Button
                   type="submit"
                   className="w-full h-11 text-base font-medium"
@@ -389,8 +441,11 @@ export default function SignUpPage() {
           {/* Footer */}
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              Already have an account?{' '}
-              <Link href="/secondary/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              Already have an account?{" "}
+              <Link
+                href="/secondary/signin"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+              >
                 Sign in here
               </Link>
             </p>
@@ -401,7 +456,7 @@ export default function SignUpPage() {
   }
 
   // Step 2: Personal Info & Password
-  if (formStep === 'step2') {
+  if (formStep === "step2") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
@@ -422,14 +477,20 @@ export default function SignUpPage() {
                 </div>
               )}
 
-              <form onSubmit={step2Form.handleSubmit(onStep2Submit)} className="space-y-6" noValidate>
+              <form
+                onSubmit={step2Form.handleSubmit(onStep2Submit)}
+                className="space-y-6"
+                noValidate
+              >
                 <div className="space-y-4">
                   <Controller
                     control={step2Form.control}
                     name="full_name"
                     render={({ field, fieldState }) => (
                       <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="signup-full-name">Full Name</FieldLabel>
+                        <FieldLabel htmlFor="signup-full-name">
+                          Full Name
+                        </FieldLabel>
                         <Input
                           id="signup-full-name"
                           className="h-11"
@@ -439,22 +500,26 @@ export default function SignUpPage() {
                           aria-invalid={fieldState.invalid}
                           {...field}
                         />
-                        {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                        {fieldState.invalid && (
+                          <FieldError errors={[fieldState.error]} />
+                        )}
                       </Field>
                     )}
                   />
                 </div>
-                
+
                 <Controller
                   control={step2Form.control}
                   name="password"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                      <FieldLabel htmlFor="signup-password">
+                        Password
+                      </FieldLabel>
                       <div className="relative">
                         <Input
                           id="signup-password"
-                          type={showPassword ? 'text' : 'password'}
+                          type={showPassword ? "text" : "password"}
                           className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
                           placeholder="Enter a secure password"
                           autoComplete="new-password"
@@ -485,11 +550,13 @@ export default function SignUpPage() {
                           <li>1 number & 1 special character</li>
                         </ul>
                       </div>
-                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                      {fieldState.invalid && (
+                        <FieldError errors={[fieldState.error]} />
+                      )}
                     </Field>
                   )}
                 />
-                
+
                 <div className="flex gap-3">
                   <Button
                     type="button"
@@ -526,8 +593,11 @@ export default function SignUpPage() {
           {/* Footer */}
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              Already have an account?{' '}
-              <Link href="/secondary/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              Already have an account?{" "}
+              <Link
+                href="/secondary/signin"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+              >
                 Sign in here
               </Link>
             </p>

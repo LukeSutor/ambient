@@ -1,23 +1,24 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { ChatMessage, ConversationState } from './types';
-import { Attachment, Conversation } from '@/types/conversations';
-import { MemoryEntry } from '@/types/memory';
-import { AttachmentData, OcrResponseEvent } from '@/types/events';
+import type { Attachment, Conversation } from "@/types/conversations";
+import { type AttachmentData, OcrResponseEvent } from "@/types/events";
+import type { MemoryEntry } from "@/types/memory";
+import type React from "react";
+import { type ReactNode, createContext, useContext, useReducer } from "react";
+import type { ChatMessage, ConversationState } from "./types";
 
 /**
  * Initial state for conversations
  */
 const initialState: ConversationState = {
   conversationId: null,
-  conversationName: '',
-  conversationType: 'chat',
+  conversationName: "",
+  conversationType: "chat",
   messages: [],
   attachmentData: [],
   isStreaming: false,
   isLoading: false,
-  streamingContent: '',
+  streamingContent: "",
   ocrLoading: false,
   ocrTimeoutRef: { current: null },
   conversations: [],
@@ -30,78 +31,91 @@ const initialState: ConversationState = {
  * Action types for the conversation reducer
  */
 type ConversationAction =
-  | { type: 'SET_CONVERSATION_ID'; payload: string | null }
-  | { type: 'SET_CONVERSATION_TYPE'; payload: string }
-  | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
-  | { type: 'ADD_CONVERSATIONS'; payload: Conversation[] }
-  | { type: 'PREPEND_CONVERSATION'; payload: Conversation }
-  | { type: 'INCREMENT_CONVERSATION_PAGE' }
-  | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
-  | { type: 'DELETE_CONVERSATION'; payload: { id: string } }
-  | { type: 'SET_NO_MORE_CONVERSATIONS' }
-  | { type: 'LOAD_CONVERSATION'; payload: Conversation }
-  | { type: 'LOAD_MESSAGES'; payload: ChatMessage[] }
-  | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }
-  | { type: 'ADD_REASONING_MESSAGE'; payload: ChatMessage }
-  | { type: 'START_USER_MESSAGE'; payload: { id: string; conversationId: string; timestamp: string } }
-  | { type: 'FINALIZE_USER_MESSAGE'; payload: { id: string; content: string } }
-  | { type: 'START_ASSISTANT_MESSAGE'; payload: { conversationId: string } }
-  | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
-  | { type: 'FINALIZE_STREAM'; payload: string }
-  | { type: 'ADD_ATTACHMENT_DATA'; payload: AttachmentData }
-  | { type: 'REMOVE_ATTACHMENT_DATA'; payload: number }
-  | { type: 'CLEAR_ATTACHMENT_DATA' }
-  | { type: 'ADD_ATTACHMENTS_TO_MESSAGE'; payload: { messageId: string; attachments: Attachment[] } }
-  | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
-  | { type: 'SET_OCR_TIMEOUT'; payload: ReturnType<typeof setTimeout> | null }
-  | { type: 'CLEAR_OCR_TIMEOUT' }
-  | { type: 'CLEAR_MESSAGES' }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_STREAMING'; payload: boolean }
-  | { type: 'SET_OCR_LOADING'; payload: boolean };
+  | { type: "SET_CONVERSATION_ID"; payload: string | null }
+  | { type: "SET_CONVERSATION_TYPE"; payload: string }
+  | { type: "SET_CONVERSATIONS"; payload: Conversation[] }
+  | { type: "ADD_CONVERSATIONS"; payload: Conversation[] }
+  | { type: "PREPEND_CONVERSATION"; payload: Conversation }
+  | { type: "INCREMENT_CONVERSATION_PAGE" }
+  | { type: "RENAME_CONVERSATION"; payload: { id: string; newName: string } }
+  | { type: "DELETE_CONVERSATION"; payload: { id: string } }
+  | { type: "SET_NO_MORE_CONVERSATIONS" }
+  | { type: "LOAD_CONVERSATION"; payload: Conversation }
+  | { type: "LOAD_MESSAGES"; payload: ChatMessage[] }
+  | { type: "ADD_CHAT_MESSAGE"; payload: ChatMessage }
+  | { type: "ADD_REASONING_MESSAGE"; payload: ChatMessage }
+  | {
+      type: "START_USER_MESSAGE";
+      payload: { id: string; conversationId: string; timestamp: string };
+    }
+  | { type: "FINALIZE_USER_MESSAGE"; payload: { id: string; content: string } }
+  | { type: "START_ASSISTANT_MESSAGE"; payload: { conversationId: string } }
+  | { type: "UPDATE_STREAMING_CONTENT"; payload: string }
+  | { type: "FINALIZE_STREAM"; payload: string }
+  | { type: "ADD_ATTACHMENT_DATA"; payload: AttachmentData }
+  | { type: "REMOVE_ATTACHMENT_DATA"; payload: number }
+  | { type: "CLEAR_ATTACHMENT_DATA" }
+  | {
+      type: "ADD_ATTACHMENTS_TO_MESSAGE";
+      payload: { messageId: string; attachments: Attachment[] };
+    }
+  | {
+      type: "ATTACH_MEMORY";
+      payload: { messageId: string; memory: MemoryEntry };
+    }
+  | { type: "SET_OCR_TIMEOUT"; payload: ReturnType<typeof setTimeout> | null }
+  | { type: "CLEAR_OCR_TIMEOUT" }
+  | { type: "CLEAR_MESSAGES" }
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_STREAMING"; payload: boolean }
+  | { type: "SET_OCR_LOADING"; payload: boolean };
 
 /**
  * Conversation reducer - handles all state updates
  */
 function conversationReducer(
   state: ConversationState,
-  action: ConversationAction
+  action: ConversationAction,
 ): ConversationState {
   switch (action.type) {
-    case 'SET_CONVERSATION_ID':
+    case "SET_CONVERSATION_ID":
       return {
         ...state,
         conversationId: action.payload,
       };
 
-    case 'SET_CONVERSATION_TYPE':
+    case "SET_CONVERSATION_TYPE":
       return {
         ...state,
         conversationType: action.payload,
       };
 
-    case 'RENAME_CONVERSATION':
+    case "RENAME_CONVERSATION":
       return {
         ...state,
         conversationName: action.payload.newName,
         conversations: state.conversations.map((conv) =>
-          conv.id === action.payload.id ? { ...conv, name: action.payload.newName } : conv
+          conv.id === action.payload.id
+            ? { ...conv, name: action.payload.newName }
+            : conv,
         ),
       };
 
-    case 'DELETE_CONVERSATION':
+    case "DELETE_CONVERSATION":
       return {
         ...state,
-        conversations: state.conversations.filter((conv) => conv.id !== action.payload.id),
+        conversations: state.conversations.filter(
+          (conv) => conv.id !== action.payload.id,
+        ),
       };
 
-    case 'SET_CONVERSATIONS':
+    case "SET_CONVERSATIONS":
       return {
         ...state,
         conversations: action.payload,
       };
 
-    case 'ADD_CONVERSATIONS': {
+    case "ADD_CONVERSATIONS": {
       // Efficiently deduplicate and sort by updated_at
       //TODO: this needs to be fixed in a more elegant way with realtime conversation list updates, but thats an issue for future me
       const existing = state.conversations;
@@ -114,89 +128,90 @@ function conversationReducer(
       let j = 0;
 
       const compare = (a: Conversation, b: Conversation) => {
-      if (a.updated_at === b.updated_at) return 0;
-      return a.updated_at > b.updated_at ? -1 : 1;
+        if (a.updated_at === b.updated_at) return 0;
+        return a.updated_at > b.updated_at ? -1 : 1;
       };
 
       while (i < existing.length && j < incoming.length) {
-      const currentExisting = existing[i];
-      const currentIncoming = incoming[j];
+        const currentExisting = existing[i];
+        const currentIncoming = incoming[j];
 
-      if (currentExisting.id === currentIncoming.id) {
-        const chosen =
-        currentExisting.updated_at >= currentIncoming.updated_at
-          ? currentExisting
-          : currentIncoming;
+        if (currentExisting.id === currentIncoming.id) {
+          const chosen =
+            currentExisting.updated_at >= currentIncoming.updated_at
+              ? currentExisting
+              : currentIncoming;
 
-        if (!seenIds.has(chosen.id)) {
-        merged.push(chosen);
-        seenIds.add(chosen.id);
+          if (!seenIds.has(chosen.id)) {
+            merged.push(chosen);
+            seenIds.add(chosen.id);
+          }
+
+          i++;
+          j++;
+          continue;
         }
 
-        i++;
-        j++;
-        continue;
-      }
-
-      if (compare(currentExisting, currentIncoming) <= 0) {
-        if (!seenIds.has(currentExisting.id)) {
-        merged.push(currentExisting);
-        seenIds.add(currentExisting.id);
+        if (compare(currentExisting, currentIncoming) <= 0) {
+          if (!seenIds.has(currentExisting.id)) {
+            merged.push(currentExisting);
+            seenIds.add(currentExisting.id);
+          }
+          i++;
+        } else {
+          if (!seenIds.has(currentIncoming.id)) {
+            merged.push(currentIncoming);
+            seenIds.add(currentIncoming.id);
+          }
+          j++;
         }
-        i++;
-      } else {
-        if (!seenIds.has(currentIncoming.id)) {
-        merged.push(currentIncoming);
-        seenIds.add(currentIncoming.id);
-        }
-        j++;
-      }
       }
 
       while (i < existing.length) {
-      const current = existing[i];
-      if (!seenIds.has(current.id)) {
-        merged.push(current);
-        seenIds.add(current.id);
-      }
-      i++;
+        const current = existing[i];
+        if (!seenIds.has(current.id)) {
+          merged.push(current);
+          seenIds.add(current.id);
+        }
+        i++;
       }
 
       while (j < incoming.length) {
-      const current = incoming[j];
-      if (!seenIds.has(current.id)) {
-        merged.push(current);
-        seenIds.add(current.id);
-      }
-      j++;
+        const current = incoming[j];
+        if (!seenIds.has(current.id)) {
+          merged.push(current);
+          seenIds.add(current.id);
+        }
+        j++;
       }
 
       return {
-      ...state,
-      conversations: merged,
-      hasMoreConversations: merged.length === previousLength ? false : state.hasMoreConversations,
+        ...state,
+        conversations: merged,
+        hasMoreConversations:
+          merged.length === previousLength ? false : state.hasMoreConversations,
       };
     }
 
-    case 'PREPEND_CONVERSATION':
+    case "PREPEND_CONVERSATION":
       return {
         ...state,
         conversations: [action.payload, ...state.conversations],
       };
 
-    case 'INCREMENT_CONVERSATION_PAGE':
+    case "INCREMENT_CONVERSATION_PAGE":
       return {
         ...state,
         conversationPage: state.conversationPage + 1,
       };
 
-    case 'SET_NO_MORE_CONVERSATIONS':
+    case "SET_NO_MORE_CONVERSATIONS":
       return {
         ...state,
         hasMoreConversations: false,
       };
 
-    case 'LOAD_CONVERSATION':
+    case "LOAD_CONVERSATION":
       return {
         ...state,
         conversationName: action.payload.name,
@@ -204,25 +219,25 @@ function conversationReducer(
         conversationType: action.payload.conv_type,
       };
 
-    case 'LOAD_MESSAGES':
+    case "LOAD_MESSAGES":
       return {
         ...state,
         messages: action.payload,
       };
 
-    case 'ADD_CHAT_MESSAGE':
+    case "ADD_CHAT_MESSAGE":
       return {
         ...state,
         messages: [...state.messages, action.payload],
       };
 
-    case 'START_USER_MESSAGE':
+    case "START_USER_MESSAGE": {
       const newUserMessage: ChatMessage = {
         message: {
           id: action.payload.id,
           conversation_id: action.payload.conversationId,
-          role: 'user',
-          content: '',
+          role: "user",
+          content: "",
           timestamp: action.payload.timestamp,
           attachments: [],
         },
@@ -231,16 +246,17 @@ function conversationReducer(
       };
       return {
         ...state,
-        messages: [
-          ...state.messages,
-          newUserMessage,
-        ],
+        messages: [...state.messages, newUserMessage],
       };
+    }
 
-    case 'FINALIZE_USER_MESSAGE': {
+    case "FINALIZE_USER_MESSAGE": {
       // Find user message by ID and update its content
       const updatedMessages = state.messages.map((msg) => {
-        if (msg.message.id === action.payload.id && msg.message.role === 'user') {
+        if (
+          msg.message.id === action.payload.id &&
+          msg.message.role === "user"
+        ) {
           return {
             ...msg,
             message: {
@@ -258,13 +274,13 @@ function conversationReducer(
       };
     }
 
-    case 'START_ASSISTANT_MESSAGE':
+    case "START_ASSISTANT_MESSAGE": {
       const newMessage: ChatMessage = {
         message: {
           id: crypto.randomUUID(),
           conversation_id: action.payload.conversationId,
-          role: 'assistant',
-          content: '',
+          role: "assistant",
+          content: "",
           timestamp: new Date().toISOString(),
           attachments: [],
         },
@@ -273,21 +289,19 @@ function conversationReducer(
       };
       return {
         ...state,
-        messages: [
-          ...state.messages,
-          newMessage
-        ],
+        messages: [...state.messages, newMessage],
         isStreaming: true,
-        streamingContent: '',
+        streamingContent: "",
       };
+    }
 
-    case 'UPDATE_STREAMING_CONTENT': {
+    case "UPDATE_STREAMING_CONTENT": {
       // Find the last assistant message and update its content
       const updatedMessages = [...state.messages];
       const lastAssistantIndex = [...updatedMessages]
         .reverse()
-        .findIndex((m) => m.message.role === 'assistant');
-      
+        .findIndex((m) => m.message.role === "assistant");
+
       if (lastAssistantIndex !== -1) {
         const actualIndex = updatedMessages.length - 1 - lastAssistantIndex;
         updatedMessages[actualIndex] = {
@@ -306,12 +320,12 @@ function conversationReducer(
       };
     }
 
-    case 'ADD_REASONING_MESSAGE':
+    case "ADD_REASONING_MESSAGE": {
       // Find the last assistant message and add reasoning message to it
       const updatedMessages = [...state.messages];
       const lastAssistantIdx = [...updatedMessages]
         .reverse()
-        .findIndex((m) => m.message.role === 'assistant');
+        .findIndex((m) => m.message.role === "assistant");
 
       if (lastAssistantIdx !== -1) {
         const actualIdx = updatedMessages.length - 1 - lastAssistantIdx;
@@ -328,14 +342,15 @@ function conversationReducer(
         ...state,
         messages: updatedMessages,
       };
+    }
 
-    case 'FINALIZE_STREAM': {
+    case "FINALIZE_STREAM": {
       // Update the last assistant message with final content
       const finalizedMessages = [...state.messages];
       const lastAssistIdx = [...finalizedMessages]
         .reverse()
-        .findIndex((m) => m.message.role === 'assistant');
-      
+        .findIndex((m) => m.message.role === "assistant");
+
       if (lastAssistIdx !== -1) {
         const actualIdx = finalizedMessages.length - 1 - lastAssistIdx;
         finalizedMessages[actualIdx] = {
@@ -351,30 +366,32 @@ function conversationReducer(
         ...state,
         messages: finalizedMessages,
         isStreaming: false,
-        streamingContent: '',
+        streamingContent: "",
         isLoading: false,
       };
     }
 
-    case 'ADD_ATTACHMENT_DATA':
+    case "ADD_ATTACHMENT_DATA":
       return {
         ...state,
         attachmentData: [...state.attachmentData, action.payload],
       };
-    
-    case 'REMOVE_ATTACHMENT_DATA':
+
+    case "REMOVE_ATTACHMENT_DATA":
       return {
         ...state,
-        attachmentData: state.attachmentData.filter((_, idx) => idx !== action.payload),
+        attachmentData: state.attachmentData.filter(
+          (_, idx) => idx !== action.payload,
+        ),
       };
 
-    case 'CLEAR_ATTACHMENT_DATA':
+    case "CLEAR_ATTACHMENT_DATA":
       return {
         ...state,
         attachmentData: [],
       };
 
-    case 'ADD_ATTACHMENTS_TO_MESSAGE': {
+    case "ADD_ATTACHMENTS_TO_MESSAGE": {
       // Find message by ID and add attachments
       const messagesWithAttachments = state.messages.map((msg) => {
         if (msg.message.id === action.payload.messageId) {
@@ -398,10 +415,13 @@ function conversationReducer(
       };
     }
 
-    case 'ATTACH_MEMORY': {
+    case "ATTACH_MEMORY": {
       // Find user message by ID and attach memory
       const messagesWithMemory = state.messages.map((msg) => {
-        if (msg.message.id === action.payload.messageId && msg.message.role === 'user') {
+        if (
+          msg.message.id === action.payload.messageId &&
+          msg.message.role === "user"
+        ) {
           return {
             ...msg,
             memory: action.payload.memory,
@@ -416,13 +436,13 @@ function conversationReducer(
       };
     }
 
-    case 'SET_OCR_TIMEOUT':
+    case "SET_OCR_TIMEOUT":
       return {
         ...state,
         ocrTimeoutRef: { current: action.payload },
       };
 
-    case 'CLEAR_OCR_TIMEOUT':
+    case "CLEAR_OCR_TIMEOUT":
       if (state.ocrTimeoutRef.current) {
         clearTimeout(state.ocrTimeoutRef.current);
       }
@@ -431,29 +451,29 @@ function conversationReducer(
         ocrTimeoutRef: { current: null },
       };
 
-    case 'CLEAR_MESSAGES':
+    case "CLEAR_MESSAGES":
       return {
         ...state,
         messages: [],
-        conversationName: '',
+        conversationName: "",
         isStreaming: false,
         isLoading: false,
-        streamingContent: '',
+        streamingContent: "",
       };
 
-    case 'SET_LOADING':
+    case "SET_LOADING":
       return {
         ...state,
         isLoading: action.payload,
       };
 
-    case 'SET_STREAMING':
+    case "SET_STREAMING":
       return {
         ...state,
         isStreaming: action.payload,
       };
 
-    case 'SET_OCR_LOADING':
+    case "SET_OCR_LOADING":
       return {
         ...state,
         ocrLoading: action.payload,
@@ -475,7 +495,9 @@ interface ConversationContextType {
 /**
  * Conversation Context
  */
-const ConversationContext = createContext<ConversationContextType | undefined>(undefined);
+const ConversationContext = createContext<ConversationContextType | undefined>(
+  undefined,
+);
 
 /**
  * Conversation Provider Props
@@ -504,10 +526,12 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
  */
 export function useConversationContext(): ConversationContextType {
   const context = useContext(ConversationContext);
-  
+
   if (!context) {
-    throw new Error('useConversationContext must be used within a ConversationProvider');
+    throw new Error(
+      "useConversationContext must be used within a ConversationProvider",
+    );
   }
-  
+
   return context;
 }

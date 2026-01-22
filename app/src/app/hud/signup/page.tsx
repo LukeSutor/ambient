@@ -1,23 +1,57 @@
-"use client"
-import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { CheckCircle, UserPlus, Loader2, Mail, Eye, EyeOff, AlertCircle, X, ArrowRight, ArrowLeft, User } from 'lucide-react';
-import { useWindows } from '@/lib/windows/useWindows';
-import Link from 'next/link';
-import { GoogleLoginButton } from '@/components/google-login-button';
-import { useRoleAccess, SignUpRequest, SignUpResponse, ConfirmSignUpRequest, getAuthErrorMessage } from '@/lib/role-access';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { REGEXP_ONLY_DIGITS } from 'input-otp';
-import { useRouter } from 'next/navigation';
-import AutoResizeContainer from '@/components/hud/auto-resize-container';
-import { HudDimensions } from '@/types/settings';
-import { useSettings } from '@/lib/settings/useSettings';
+"use client";
+import { GoogleLoginButton } from "@/components/google-login-button";
+import AutoResizeContainer from "@/components/hud/auto-resize-container";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import {
+  type ConfirmSignUpRequest,
+  type SignUpRequest,
+  type SignUpResponse,
+  getAuthErrorMessage,
+  useRoleAccess,
+} from "@/lib/role-access";
+import { useSettings } from "@/lib/settings/useSettings";
+import { useWindows } from "@/lib/windows/useWindows";
+import type { HudDimensions } from "@/types/settings";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Loader2,
+  Mail,
+  User,
+  UserPlus,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
 
 // Step 1: Email
 const step1Schema = z.object({
@@ -31,7 +65,8 @@ const step2Schema = z.object({
   full_name: z.string().min(1, {
     message: "Full name is required",
   }),
-  password: z.string()
+  password: z
+    .string()
     .min(8, {
       message: "Password must be at least 8 characters long",
     })
@@ -55,35 +90,34 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [signUpResult, setSignUpResult] = useState<SignUpResponse | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [formStep, setFormStep] = useState<'step1' | 'step2' | 'verify' | 'success'>('step1');
-  const [step1Data, setStep1Data] = useState<z.infer<typeof step1Schema> | null>(null);
+  const [formStep, setFormStep] = useState<
+    "step1" | "step2" | "verify" | "success"
+  >("step1");
+  const [step1Data, setStep1Data] = useState<z.infer<
+    typeof step1Schema
+  > | null>(null);
   const [confirmationCode, setConfirmationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
   const router = useRouter();
 
   // Windows state
-  const { 
-    closeHUD
-  } = useWindows();
+  const { closeHUD } = useWindows();
 
   // Auth state
-  const {
-    isLoggedIn,
-    signUp,
-    signIn,
-    confirmSignUp,
-    resendConfirmationCode,
-  } = useRoleAccess();
+  const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } =
+    useRoleAccess();
 
   // Settings state
   const { settings, getHudDimensions } = useSettings();
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
+    null,
+  );
   useEffect(() => {
     (async () => {
       const dimensions = await getHudDimensions();
       setHudDimensions(dimensions);
     })();
-  }, [settings]);
+  }, [getHudDimensions]);
 
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
@@ -103,74 +137,74 @@ export default function SignUp() {
   // Redirect if already logged in
   useEffect(() => {
     if (isLoggedIn) {
-      router.push('/hud');
+      router.push("/hud");
     }
   }, [isLoggedIn, router]);
 
   const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
     setError(null);
     setStep1Data(values);
-    setFormStep('step2');
+    setFormStep("step2");
   };
 
   const onStep2Submit = async (values: z.infer<typeof step2Schema>) => {
     if (!step1Data) {
-      setError('Please complete step 1 first');
-      setFormStep('step1');
+      setError("Please complete step 1 first");
+      setFormStep("step1");
       return;
     }
 
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const formData: SignUpRequest = {
         email: step1Data.email,
         password: values.password,
         full_name: values.full_name,
       };
-      
+
       const result = await signUp(formData);
       setSignUpResult(result);
-      
+
       if (!result.verification_required) {
         // User is automatically confirmed, sign them in
         await signIn(step1Data.email, values.password);
-        setFormStep('success');
+        setFormStep("success");
         setTimeout(() => {
-          window.location.href = '/hud';
+          window.location.href = "/hud";
         }, 2000);
       } else {
         // User needs to verify email/phone
         setConfirmationCode("");
         setHasTriedConfirm(false);
-        setFormStep('verify');
+        setFormStep("verify");
       }
     } catch (err) {
-      console.error('Sign up failed:', err);
-      setError(getAuthErrorMessage(err, 'Sign up failed. Please try again.'));
+      console.error("Sign up failed:", err);
+      setError(getAuthErrorMessage(err, "Sign up failed. Please try again."));
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   const onConfirmationSubmit = async () => {
     if (!signUpResult) {
-      setError('Sign up data not found');
+      setError("Sign up data not found");
       return;
     }
 
     setHasTriedConfirm(true);
 
     if (confirmationCode.length !== 8) {
-      setError('Please enter the 8-digit verification code');
+      setError("Please enter the 8-digit verification code");
       return;
     }
 
     try {
       setIsConfirming(true);
       setError(null);
-      
+
       const step2Values = step2Form.getValues();
       const step1Values = step1Form.getValues();
 
@@ -178,20 +212,22 @@ export default function SignUp() {
         email: step1Values.email,
         confirmation_code: confirmationCode,
       };
-      
+
       // First confirm the signup
       await confirmSignUp(confirmRequest);
-      
+
       // Then automatically sign in the user
       await signIn(step1Values.email, step2Values.password);
-      
-      setFormStep('success');
+
+      setFormStep("success");
       setTimeout(() => {
-        window.location.href = '/hud';
+        window.location.href = "/hud";
       }, 2000);
     } catch (err) {
-      console.error('Verification failed:', err);
-      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
+      console.error("Verification failed:", err);
+      setError(
+        getAuthErrorMessage(err, "Verification failed. Please try again."),
+      );
     } finally {
       setIsConfirming(false);
     }
@@ -205,23 +241,37 @@ export default function SignUp() {
       // Show success message or update UI to indicate code was resent
       //TODO: Implement success feedback
     } catch (err) {
-      console.error('Resend code failed:', err);
-      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
+      console.error("Resend code failed:", err);
+      setError(
+        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
+      );
     }
   };
 
   const handleBackToStep1 = () => {
     setError(null);
-    setFormStep('step1');
+    setFormStep("step1");
   };
 
-  if (formStep === 'success') {
+  if (formStep === "success") {
     return (
-      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
+      <AutoResizeContainer
+        hudDimensions={hudDimensions}
+        widthType="login"
+        className="bg-transparent"
+      >
         <Card className="relative w-full pt-12 overflow-hidden">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
-            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div
+            data-tauri-drag-region
+            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
+          >
+            <Button
+              className="hover:bg-gray-200"
+              variant="ghost"
+              size="icon"
+              onClick={closeHUD}
+            >
               <X className="!h-6 !w-6" />
             </Button>
           </div>
@@ -232,7 +282,8 @@ export default function SignUp() {
               Account Created Successfully!
             </CardTitle>
             <CardDescription className="text-base">
-              Your account has been created and verified. You can now access your dashboard.
+              Your account has been created and verified. You can now access
+              your dashboard.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
@@ -245,13 +296,25 @@ export default function SignUp() {
     );
   }
 
-  if (formStep === 'verify') {
+  if (formStep === "verify") {
     return (
-      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
+      <AutoResizeContainer
+        hudDimensions={hudDimensions}
+        widthType="login"
+        className="bg-transparent"
+      >
         <Card className="relative w-full pt-12 overflow-hidden">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
-            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div
+            data-tauri-drag-region
+            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
+          >
+            <Button
+              className="hover:bg-gray-200"
+              variant="ghost"
+              size="icon"
+              onClick={closeHUD}
+            >
               <X className="!h-6 !w-6" />
             </Button>
           </div>
@@ -272,7 +335,7 @@ export default function SignUp() {
                 <span className="text-sm">{error}</span>
               </div>
             )}
-            
+
             <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -281,7 +344,9 @@ export default function SignUp() {
               className="space-y-6"
               noValidate
             >
-              <Field data-invalid={hasTriedConfirm && confirmationCode.length !== 8}>
+              <Field
+                data-invalid={hasTriedConfirm && confirmationCode.length !== 8}
+              >
                 <FieldLabel htmlFor="signup-confirmation-code">
                   Verification Code
                 </FieldLabel>
@@ -297,7 +362,9 @@ export default function SignUp() {
                       setConfirmationCode(value);
                     }}
                     disabled={isConfirming}
-                    aria-invalid={hasTriedConfirm && confirmationCode.length !== 8}
+                    aria-invalid={
+                      hasTriedConfirm && confirmationCode.length !== 8
+                    }
                   >
                     <InputOTPGroup>
                       <InputOTPSlot index={0} />
@@ -313,7 +380,9 @@ export default function SignUp() {
                 </div>
                 {hasTriedConfirm && confirmationCode.length !== 8 && (
                   <FieldError
-                    errors={[{ message: 'Enter the 8-digit code from your email.' }]}
+                    errors={[
+                      { message: "Enter the 8-digit code from your email." },
+                    ]}
                   />
                 )}
               </Field>
@@ -354,13 +423,25 @@ export default function SignUp() {
   }
 
   // Step 1: Email
-  if (formStep === 'step1') {
+  if (formStep === "step1") {
     return (
-      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
+      <AutoResizeContainer
+        hudDimensions={hudDimensions}
+        widthType="login"
+        className="bg-transparent"
+      >
         <Card className="relative w-full pt-12 overflow-auto">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
-            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div
+            data-tauri-drag-region
+            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
+          >
+            <Button
+              className="hover:bg-gray-200"
+              variant="ghost"
+              size="icon"
+              onClick={closeHUD}
+            >
               <X className="!h-6 !w-6" />
             </Button>
           </div>
@@ -381,8 +462,10 @@ export default function SignUp() {
               </div>
             )}
 
-            <GoogleLoginButton 
-              onSignInSuccess={() => window.location.href = '/hud'}
+            <GoogleLoginButton
+              onSignInSuccess={() => {
+                window.location.href = "/hud";
+              }}
               className="w-full mb-6"
             />
 
@@ -395,7 +478,10 @@ export default function SignUp() {
                 control={step1Form.control}
                 name="email"
                 render={({ field, fieldState }) => (
-                  <Field className="col-span-2" data-invalid={fieldState.invalid}>
+                  <Field
+                    className="col-span-2"
+                    data-invalid={fieldState.invalid}
+                  >
                     <FieldLabel htmlFor="signup-email">Email</FieldLabel>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -427,8 +513,11 @@ export default function SignUp() {
           </CardContent>
           <CardFooter>
             <p className="text-sm text-gray-600 w-full text-center">
-              Already have an account?{' '}
-              <Link href="/hud/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              Already have an account?{" "}
+              <Link
+                href="/hud/signin"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+              >
                 Sign in here
               </Link>
             </p>
@@ -439,13 +528,25 @@ export default function SignUp() {
   }
 
   // Step 2: Personal Info & Password
-  if (formStep === 'step2') {
+  if (formStep === "step2") {
     return (
-      <AutoResizeContainer hudDimensions={hudDimensions} widthType="login" className="bg-transparent">
+      <AutoResizeContainer
+        hudDimensions={hudDimensions}
+        widthType="login"
+        className="bg-transparent"
+      >
         <Card className="relative w-full pt-12 overflow-auto">
           {/* Drag area and close button */}
-          <div data-tauri-drag-region className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b">
-            <Button className="hover:bg-gray-200" variant="ghost" size="icon" onClick={closeHUD}>
+          <div
+            data-tauri-drag-region
+            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
+          >
+            <Button
+              className="hover:bg-gray-200"
+              variant="ghost"
+              size="icon"
+              onClick={closeHUD}
+            >
               <X className="!h-6 !w-6" />
             </Button>
           </div>
@@ -506,7 +607,7 @@ export default function SignUp() {
                     <div className="relative">
                       <Input
                         id="signup-password"
-                        type={showPassword ? 'text' : 'password'}
+                        type={showPassword ? "text" : "password"}
                         className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
                         placeholder="Enter a secure password"
                         autoComplete="new-password"
@@ -530,7 +631,8 @@ export default function SignUp() {
                       </Button>
                     </div>
                     <FieldDescription>
-                      Use at least 8 characters including uppercase, lowercase, a number, and a special character.
+                      Use at least 8 characters including uppercase, lowercase,
+                      a number, and a special character.
                     </FieldDescription>
                     {fieldState.invalid && (
                       <FieldError errors={[fieldState.error]} />
@@ -572,8 +674,11 @@ export default function SignUp() {
           </CardContent>
           <CardFooter>
             <p className="text-sm text-gray-600 w-full text-center">
-              Already have an account?{' '}
-              <Link href="/hud/signin" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              Already have an account?{" "}
+              <Link
+                href="/hud/signin"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+              >
                 Sign in here
               </Link>
             </p>

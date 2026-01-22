@@ -1,26 +1,28 @@
-"use client"
+"use client";
 
-import { useRoleAccess } from '@/lib/role-access'
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { 
-  User, 
-  Mail, 
-  AlertCircle,
-} from 'lucide-react'
+} from "@/components/ui/tooltip";
+import { useRoleAccess } from "@/lib/role-access";
+import { AlertCircle, Mail, User } from "lucide-react";
 const googleLogo = "/google-logo.png";
 
 export default function AccountPage() {
   // Auth state
-  const { isHydrated, userInfo } = useRoleAccess()
+  const { isHydrated, userInfo } = useRoleAccess();
 
   if (!isHydrated) {
     return (
@@ -48,7 +50,7 @@ export default function AccountPage() {
           </Card>
         </div>
       </div>
-    )
+    );
   }
 
   if (!userInfo) {
@@ -57,30 +59,33 @@ export default function AccountPage() {
         <Card>
           <CardContent className="flex items-center space-x-2 p-6">
             <AlertCircle className="h-5 w-5 text-muted-foreground" />
-            <span className="text-muted-foreground">No user information available</span>
+            <span className="text-muted-foreground">
+              No user information available
+            </span>
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
   const initials = (() => {
     if (userInfo.full_name) {
-      const parts = userInfo.full_name.split(' ')
-      if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length-1][0]}`.toUpperCase()
-      return userInfo.full_name[0].toUpperCase()
+      const parts = userInfo.full_name.split(" ");
+      if (parts.length >= 2)
+        return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+      return userInfo.full_name[0].toUpperCase();
     }
-    return userInfo.email ? userInfo.email[0].toUpperCase() : 'U'
-  })()
+    return userInfo.email ? userInfo.email[0].toUpperCase() : "U";
+  })();
 
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Account Information</h1>
-        <p className="text-muted-foreground">
-          Manage your account information
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Account Information
+        </h1>
+        <p className="text-muted-foreground">Manage your account information</p>
       </div>
 
       {/* Profile Information Card */}
@@ -98,37 +103,54 @@ export default function AccountPage() {
           {/* Avatar and Basic Info */}
           <div className="flex items-center space-x-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={userInfo.avatar_url || ""} alt={userInfo.email || 'User'} />
+              <AvatarImage
+                src={userInfo.avatar_url || ""}
+                alt={userInfo.email || "User"}
+              />
               <AvatarFallback className="text-lg font-semibold">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="space-y-1">
               <h3 className="text-xl font-semibold">
-                {userInfo.full_name || userInfo.email || 'Unknown User'}
-                {!userInfo.full_name && userInfo.providers?.includes('google') && (
-                  <Tooltip>
-
-                    <TooltipTrigger>
-                      <Badge className="ml-2 h-7 w-7 rounded-full p-1" variant="outline">
-                        <img src={googleLogo} alt="Google Logo" className="w-4 h-4" />
-                      </Badge>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <span>Authenticated via Google</span>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
+                {userInfo.full_name || userInfo.email || "Unknown User"}
+                {!userInfo.full_name &&
+                  userInfo.providers?.includes("google") && (
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Badge
+                          className="ml-2 h-7 w-7 rounded-full p-1"
+                          variant="outline"
+                        >
+                          <img
+                            src={googleLogo}
+                            alt="Google Logo"
+                            className="w-4 h-4"
+                          />
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <span>Authenticated via Google</span>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
               </h3>
               {userInfo.full_name && (
                 <p className="text-muted-foreground flex items-center space-x-1">
                   <Mail className="h-4 w-4" />
-                  <span>{userInfo.email || 'No email available'}</span>
-                  {userInfo.providers?.includes('google') && (
+                  <span>{userInfo.email || "No email available"}</span>
+                  {userInfo.providers?.includes("google") && (
                     <Tooltip>
                       <TooltipTrigger>
-                        <Badge className="ml-2 h-7 w-7 rounded-full p-1" variant="outline">
-                          <img src={googleLogo} alt="Google Logo" className="w-4 h-4" />
+                        <Badge
+                          className="ml-2 h-7 w-7 rounded-full p-1"
+                          variant="outline"
+                        >
+                          <img
+                            src={googleLogo}
+                            alt="Google Logo"
+                            className="w-4 h-4"
+                          />
                         </Badge>
                       </TooltipTrigger>
                       <TooltipContent>
@@ -143,5 +165,5 @@ export default function AccountPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

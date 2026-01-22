@@ -1,20 +1,29 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import { useRoleAccess, getAuthErrorMessage } from '@/lib/role-access';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import { Loader2, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { GoogleLoginButton } from '@/components/google-login-button';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { REGEXP_ONLY_DIGITS } from 'input-otp';
-
+import { GoogleLoginButton } from "@/components/google-login-button";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
+import { AlertCircle, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
 
 const formSchema = z.object({
   username: z.string().min(1, {
@@ -30,10 +39,15 @@ export default function SignInPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [formStep, setFormStep] = useState<'login' | 'verify' | 'success'>('login');
+  const [formStep, setFormStep] = useState<"login" | "verify" | "success">(
+    "login",
+  );
   const [verificationCode, setVerificationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
-  const [loginData, setLoginData] = useState<{email: string, password: string} | null>(null);
+  const [loginData, setLoginData] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
   const router = useRouter();
 
   const { signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
@@ -52,19 +66,27 @@ export default function SignInPage() {
 
     try {
       const result = await signIn(values.username.trim(), values.password);
-      
+
       if (result.verification_required) {
-        setLoginData({ email: values.username.trim(), password: values.password });
-        setFormStep('verify');
+        setLoginData({
+          email: values.username.trim(),
+          password: values.password,
+        });
+        setFormStep("verify");
         setVerificationCode("");
         setHasTriedConfirm(false);
       } else {
-        console.log('Sign in successful:', result.user);
-        router.push('/secondary');
+        console.log("Sign in successful:", result.user);
+        router.push("/secondary");
       }
     } catch (err) {
-      console.error('Sign in failed:', err);
-      setError(getAuthErrorMessage(err, 'Sign in failed. Please check your credentials.'));
+      console.error("Sign in failed:", err);
+      setError(
+        getAuthErrorMessage(
+          err,
+          "Sign in failed. Please check your credentials.",
+        ),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -72,33 +94,35 @@ export default function SignInPage() {
 
   const onConfirmationSubmit = async () => {
     if (!loginData) return;
-    
+
     setHasTriedConfirm(true);
-    
+
     if (verificationCode.length !== 8) {
-      setError('Please enter the 8-digit verification code');
+      setError("Please enter the 8-digit verification code");
       return;
     }
 
     try {
       setIsConfirming(true);
       setError(null);
-      
+
       await confirmSignUp({
         email: loginData.email,
         confirmation_code: verificationCode,
       });
-      
+
       // Auto sign-in after confirmation
       await signIn(loginData.email, loginData.password);
-      
-      setFormStep('success');
+
+      setFormStep("success");
       setTimeout(() => {
-        router.push('/secondary');
+        router.push("/secondary");
       }, 2000);
     } catch (err) {
-      console.error('Verification failed:', err);
-      setError(getAuthErrorMessage(err, 'Verification failed. Please try again.'));
+      console.error("Verification failed:", err);
+      setError(
+        getAuthErrorMessage(err, "Verification failed. Please try again."),
+      );
     } finally {
       setIsConfirming(false);
     }
@@ -110,12 +134,14 @@ export default function SignInPage() {
       setError(null);
       await resendConfirmationCode(loginData.email);
     } catch (err) {
-      console.error('Resend code failed:', err);
-      setError(getAuthErrorMessage(err, 'Failed to resend code. Please try again.'));
+      console.error("Resend code failed:", err);
+      setError(
+        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
+      );
     }
   };
 
-  if (formStep === 'success') {
+  if (formStep === "success") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full">
@@ -124,7 +150,9 @@ export default function SignInPage() {
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
                 <Loader2 className="h-6 w-6 text-green-600" />
               </div>
-              <CardTitle className="text-2xl font-bold">Verification Successful!</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Verification Successful!
+              </CardTitle>
               <CardDescription>
                 Your email has been verified. Redirecting you now...
               </CardDescription>
@@ -135,15 +163,18 @@ export default function SignInPage() {
     );
   }
 
-  if (formStep === 'verify') {
+  if (formStep === "verify") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
           <Card className="w-full">
             <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold">Verify Your Email</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Verify Your Email
+              </CardTitle>
               <CardDescription>
-                We've sent a code to {loginData?.email}. Enter it below to confirm your account.
+                We've sent a code to {loginData?.email}. Enter it below to
+                confirm your account.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -153,9 +184,13 @@ export default function SignInPage() {
                   <span className="text-sm">{error}</span>
                 </div>
               )}
-              
-              <Field data-invalid={hasTriedConfirm && verificationCode.length !== 8}>
-                <FieldLabel htmlFor="verification-code">Verification Code</FieldLabel>
+
+              <Field
+                data-invalid={hasTriedConfirm && verificationCode.length !== 8}
+              >
+                <FieldLabel htmlFor="verification-code">
+                  Verification Code
+                </FieldLabel>
                 <div className="flex justify-center">
                   <InputOTP
                     id="verification-code"
@@ -168,7 +203,9 @@ export default function SignInPage() {
                       setVerificationCode(value);
                     }}
                     disabled={isConfirming}
-                    aria-invalid={hasTriedConfirm && verificationCode.length !== 8}
+                    aria-invalid={
+                      hasTriedConfirm && verificationCode.length !== 8
+                    }
                   >
                     <InputOTPGroup>
                       <InputOTPSlot index={0} />
@@ -184,12 +221,14 @@ export default function SignInPage() {
                 </div>
                 {hasTriedConfirm && verificationCode.length !== 8 && (
                   <FieldError
-                    errors={[{ message: 'Enter the 8-digit code from your email.' }]}
+                    errors={[
+                      { message: "Enter the 8-digit code from your email." },
+                    ]}
                   />
                 )}
               </Field>
 
-              <Button 
+              <Button
                 onClick={onConfirmationSubmit}
                 className="w-full h-11"
                 disabled={isConfirming}
@@ -200,14 +239,14 @@ export default function SignInPage() {
                     Verifying...
                   </>
                 ) : (
-                  'Verify & Sign In'
+                  "Verify & Sign In"
                 )}
               </Button>
             </CardContent>
             <CardHeader className="pt-0 text-center">
               <p className="text-sm text-gray-500">
-                Didn't receive a code?{' '}
-                <button 
+                Didn't receive a code?{" "}
+                <button
                   onClick={handleResendCode}
                   className="text-blue-600 hover:underline font-medium"
                   type="button"
@@ -216,7 +255,7 @@ export default function SignInPage() {
                 </button>
               </p>
               <button
-                onClick={() => setFormStep('login')}
+                onClick={() => setFormStep("login")}
                 className="text-sm text-gray-500 hover:text-gray-700 mt-4"
                 type="button"
               >
@@ -241,7 +280,11 @@ export default function SignInPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" noValidate>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-6"
+              noValidate
+            >
               {error && (
                 <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
                   <AlertCircle className="h-4 w-4" />
@@ -249,8 +292,8 @@ export default function SignInPage() {
                 </div>
               )}
 
-              <GoogleLoginButton 
-                onSignInSuccess={() => router.push('/secondary')}
+              <GoogleLoginButton
+                onSignInSuccess={() => router.push("/secondary")}
                 className="w-full mb-6"
               />
 
@@ -259,7 +302,9 @@ export default function SignInPage() {
                 name="username"
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="signin-username">Username or Email</FieldLabel>
+                    <FieldLabel htmlFor="signin-username">
+                      Username or Email
+                    </FieldLabel>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                       <Input
@@ -272,7 +317,9 @@ export default function SignInPage() {
                         {...field}
                       />
                     </div>
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
                   </Field>
                 )}
               />
@@ -309,14 +356,16 @@ export default function SignInPage() {
                         )}
                       </Button>
                     </div>
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
+                    )}
                   </Field>
                 )}
               />
 
-              <Button 
-                type="submit" 
-                className="w-full h-11 text-base font-medium" 
+              <Button
+                type="submit"
+                className="w-full h-11 text-base font-medium"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -325,7 +374,7 @@ export default function SignInPage() {
                     Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  "Sign In"
                 )}
               </Button>
             </form>
@@ -335,8 +384,11 @@ export default function SignInPage() {
         {/* Footer */}
         <div className="text-center">
           <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Link href="/secondary/signup" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+            Don't have an account?{" "}
+            <Link
+              href="/secondary/signup"
+              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+            >
               Create one here
             </Link>
           </p>

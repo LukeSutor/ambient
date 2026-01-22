@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { MoreHorizontal, Edit, Trash2, CheckCircle, Clock, CalendarDays } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { TaskStatusBadge } from "@/components/task-status-badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,9 +16,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TaskStatusBadge } from "@/components/task-status-badge";
-import { TaskWithSteps } from "@/types/tasks";
-import { getTaskCompletionProgress, formatDueDate, getFrequencyDisplayName, calculateNextDueDate } from "@/lib/task-utils";
+import { Progress } from "@/components/ui/progress";
+import {
+  calculateNextDueDate,
+  formatDueDate,
+  getFrequencyDisplayName,
+  getTaskCompletionProgress,
+} from "@/lib/task-utils";
+import type { TaskWithSteps } from "@/types/tasks";
+import {
+  CalendarDays,
+  CheckCircle,
+  Clock,
+  Edit,
+  MoreHorizontal,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
 
 interface TaskCardProps {
   taskWithSteps: TaskWithSteps;
@@ -23,13 +41,23 @@ interface TaskCardProps {
   onComplete: (taskWithSteps: TaskWithSteps) => void;
 }
 
-export function TaskCard({ taskWithSteps, onEdit, onDelete, onComplete }: TaskCardProps) {
+export function TaskCard({
+  taskWithSteps,
+  onEdit,
+  onDelete,
+  onComplete,
+}: TaskCardProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { completed, total, percentage } = getTaskCompletionProgress(taskWithSteps);
+  const { completed, total, percentage } =
+    getTaskCompletionProgress(taskWithSteps);
   const { task, steps } = taskWithSteps;
-  
+
   // Calculate the next due date
-  const nextDueDate = calculateNextDueDate(task.first_scheduled_at, task.frequency, task.last_completed_at);
+  const nextDueDate = calculateNextDueDate(
+    task.first_scheduled_at,
+    task.frequency,
+    task.last_completed_at,
+  );
 
   const handleComplete = async () => {
     setIsLoading(true);
@@ -66,15 +94,12 @@ export function TaskCard({ taskWithSteps, onEdit, onDelete, onComplete }: TaskCa
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={handleComplete}
-                  disabled={isLoading}
-                >
+                <DropdownMenuItem onClick={handleComplete} disabled={isLoading}>
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Mark Complete
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   onClick={() => onDelete(taskWithSteps)}
                   className="text-red-600"
                 >
@@ -91,7 +116,9 @@ export function TaskCard({ taskWithSteps, onEdit, onDelete, onComplete }: TaskCa
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>Progress</span>
-            <span>{completed}/{total} steps</span>
+            <span>
+              {completed}/{total} steps
+            </span>
           </div>
           <Progress value={percentage} className="h-2" />
         </div>
@@ -119,8 +146,16 @@ export function TaskCard({ taskWithSteps, onEdit, onDelete, onComplete }: TaskCa
             <div className="space-y-1 max-h-20 overflow-y-auto">
               {steps.slice(0, 3).map((step) => (
                 <div key={step.id} className="flex items-center gap-2 text-sm">
-                  <div className={`h-2 w-2 rounded-full ${step.status === 'Completed' ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  <span className={step.status === 'Completed' ? 'line-through text-muted-foreground' : ''}>
+                  <div
+                    className={`h-2 w-2 rounded-full ${step.status === "Completed" ? "bg-green-500" : "bg-gray-300"}`}
+                  />
+                  <span
+                    className={
+                      step.status === "Completed"
+                        ? "line-through text-muted-foreground"
+                        : ""
+                    }
+                  >
                     {step.title}
                   </span>
                 </div>

@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import { Minus, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import Image from "next/image"
+import { Button } from "@/components/ui/button";
+import { Minus, X } from "lucide-react";
+import Image from "next/image";
 
 type SiteHeaderProps = {
   handleClose?: () => Promise<void>;
   handleMinimize?: () => Promise<void>;
-}
+};
 
 export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
   return (
@@ -15,7 +15,10 @@ export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
       <div className="flex items-center gap-2 px-4 w-full h-full">
         <Image src="/logo.png" alt="App Logo" width={32} height={32} />
         <p className="text-xl font-sora">ambient</p>
-        <div data-tauri-drag-region className="w-full h-full flex justify-end items-center">
+        <div
+          data-tauri-drag-region
+          className="w-full h-full flex justify-end items-center"
+        >
           {/* Window minimize button */}
           <Button variant="ghost" size="icon" onClick={handleMinimize}>
             <Minus className="!h-5 !w-5" />
@@ -27,5 +30,5 @@ export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
         </div>
       </div>
     </header>
-  )
+  );
 }

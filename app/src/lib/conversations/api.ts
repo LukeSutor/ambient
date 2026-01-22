@@ -1,23 +1,31 @@
-import { invoke } from '@tauri-apps/api/core';
-import { emit } from '@tauri-apps/api/event';
-import { OcrResponseEvent, HudChatEvent, AttachmentData, GenerateConversationNameEvent } from '@/types/events';
-import { Conversation } from '@/types/conversations';
+import type { Conversation } from "@/types/conversations";
+import {
+  type AttachmentData,
+  type GenerateConversationNameEvent,
+  type HudChatEvent,
+  OcrResponseEvent,
+} from "@/types/events";
+import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 
 /**
  * Creates a new conversation
  * @param name - Optional conversation name
  * @returns Promise resolving to the created Conversation
  */
-export async function createConversation(name?: string, convType?: string | null): Promise<Conversation> {
+export async function createConversation(
+  name?: string,
+  convType?: string | null,
+): Promise<Conversation> {
   try {
-    const conversation = await invoke<Conversation>('create_conversation', { 
+    const conversation = await invoke<Conversation>("create_conversation", {
       name: name || null,
-      convType: convType || null
+      convType: convType || null,
     });
     return conversation;
   } catch (error) {
-    console.error('[ConversationAPI] Failed to create conversation:', error);
-    throw new Error('Failed to create conversation');
+    console.error("[ConversationAPI] Failed to create conversation:", error);
+    throw new Error("Failed to create conversation");
   }
 }
 
@@ -33,7 +41,7 @@ export async function sendMessage(
   conversationId: string,
   content: string,
   attachmentData: AttachmentData[],
-  messageId: string
+  messageId: string,
 ): Promise<string> {
   try {
     const hudChatEvent: HudChatEvent = {
@@ -44,14 +52,14 @@ export async function sendMessage(
       attachments: attachmentData,
     };
 
-    const finalText = await invoke<string>('handle_hud_chat', {
+    const finalText = await invoke<string>("handle_hud_chat", {
       event: hudChatEvent,
     });
 
     return finalText;
   } catch (error) {
-    console.error('[ConversationAPI] Failed to send message:', error);
-    throw new Error('Failed to send message');
+    console.error("[ConversationAPI] Failed to send message:", error);
+    throw new Error("Failed to send message");
   }
 }
 
@@ -60,12 +68,18 @@ export async function sendMessage(
  * @param conversationId - ID of the conversation
  * @param prompt - The prompt to initiate computer use
  */
-export async function startComputerUseSession(conversationId: string, prompt: string): Promise<void> {  
+export async function startComputerUseSession(
+  conversationId: string,
+  prompt: string,
+): Promise<void> {
   try {
-    await invoke('start_computer_use', { conversationId, prompt });
+    await invoke("start_computer_use", { conversationId, prompt });
   } catch (error) {
-    console.error('[ConversationAPI] Failed to start computer use session:', error);
-    throw new Error('Failed to start computer use session');
+    console.error(
+      "[ConversationAPI] Failed to start computer use session:",
+      error,
+    );
+    throw new Error("Failed to start computer use session");
   }
 }
 
@@ -74,18 +88,24 @@ export async function startComputerUseSession(conversationId: string, prompt: st
  * @param conversationId - ID of the conversation
  * @param message - The message content to base the name on
  */
-export async function emitGenerateConversationName(conversationId: string, message: string): Promise<void> {
+export async function emitGenerateConversationName(
+  conversationId: string,
+  message: string,
+): Promise<void> {
   const generateConversationNameEvent: GenerateConversationNameEvent = {
     conv_id: conversationId,
     message: message,
     timestamp: Date.now().toString(),
   };
-  
+
   try {
-    await emit('generate_conversation_name', generateConversationNameEvent);
+    await emit("generate_conversation_name", generateConversationNameEvent);
   } catch (error) {
-    console.error('[ConversationAPI] Failed to generate conversation name:', error);
-    throw new Error('Failed to generate conversation name');
+    console.error(
+      "[ConversationAPI] Failed to generate conversation name:",
+      error,
+    );
+    throw new Error("Failed to generate conversation name");
   }
 }
 
@@ -93,12 +113,14 @@ export async function emitGenerateConversationName(conversationId: string, messa
  * Deletes a conversation and all its messages
  * @param conversationId - ID of the conversation to delete
  */
-export async function deleteConversation(conversationId: string): Promise<void> {
+export async function deleteConversation(
+  conversationId: string,
+): Promise<void> {
   try {
-    await invoke('delete_conversation', { conversationId });
+    await invoke("delete_conversation", { conversationId });
   } catch (error) {
-    console.error('[ConversationAPI] Failed to delete conversation:', error);
-    throw new Error('Failed to delete conversation');
+    console.error("[ConversationAPI] Failed to delete conversation:", error);
+    throw new Error("Failed to delete conversation");
   }
 }
 
@@ -108,10 +130,10 @@ export async function deleteConversation(conversationId: string): Promise<void> 
  */
 export async function resetConversation(conversationId: string): Promise<void> {
   try {
-    await invoke('reset_conversation', { conversationId });
+    await invoke("reset_conversation", { conversationId });
   } catch (error) {
-    console.error('[ConversationAPI] Failed to reset conversation:', error);
-    throw new Error('Failed to reset conversation');
+    console.error("[ConversationAPI] Failed to reset conversation:", error);
+    throw new Error("Failed to reset conversation");
   }
 }
 
@@ -120,9 +142,9 @@ export async function resetConversation(conversationId: string): Promise<void> {
  */
 export async function ensureLlamaServerRunning(): Promise<void> {
   try {
-    await invoke<string>('spawn_llama_server');
+    await invoke<string>("spawn_llama_server");
   } catch (error) {
-    console.warn('[ConversationAPI] spawn_llama_server warning:', error);
+    console.warn("[ConversationAPI] spawn_llama_server warning:", error);
     // Don't throw - this is not critical
   }
 }

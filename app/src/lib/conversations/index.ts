@@ -4,15 +4,13 @@
  */
 
 // Provider for shared conversation state
-export { ConversationProvider } from './ConversationProvider';
+export { ConversationProvider } from "./ConversationProvider";
 
 // Main hook for conversation functionality
-export { useConversation } from './useConversation';
+export { useConversation } from "./useConversation";
 
 // Type exports
-export type { 
-  ChatMessage, 
-  Conversation, 
-  ConversationState, 
-  MessageRole 
-} from './types';
+export type {
+  ChatMessage,
+  ConversationState,
+} from "./types";

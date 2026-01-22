@@ -1,17 +1,29 @@
 "use client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import type { SupabaseUser } from "@/types/auth";
+import type { OcrResponseEvent } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from '@tauri-apps/api/event';
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { OcrResponseEvent } from "@/types/events";
-import { SupabaseUser } from "@/types/auth";
+import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
+
+interface ScreenSelectionResult {
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  text_content: string;
+}
 
 export default function Dev() {
   // State for SQL execution
-  const [sqlQuery, setSqlQuery] = useState<string>("SELECT * FROM documents LIMIT 5;");
+  const [sqlQuery, setSqlQuery] = useState<string>(
+    "SELECT * FROM documents LIMIT 5;",
+  );
   const [sqlParams, setSqlParams] = useState<string>("[]"); // Store params as JSON string
   const [sqlResult, setSqlResult] = useState<string | null>(null);
   const [sqlError, setSqlError] = useState<string | null>(null);
@@ -27,13 +39,13 @@ export default function Dev() {
       await invoke("start_capture_scheduler");
       setIsSchedulerRunning(true);
       console.log("Capture scheduler started");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error starting scheduler:", error);
     } finally {
       setSchedulerLoading(false);
     }
   };
-2
+
   // Function to stop capture scheduler
   const handleStopScheduler = async () => {
     setSchedulerLoading(true);
@@ -41,7 +53,7 @@ export default function Dev() {
       await invoke("stop_capture_scheduler");
       setIsSchedulerRunning(false);
       console.log("Capture scheduler stopped");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error stopping scheduler:", error);
     } finally {
       setSchedulerLoading(false);
@@ -53,17 +65,21 @@ export default function Dev() {
     setSqlResult(null); // Clear previous result
     setSqlError(null); // Clear previous error
 
-    let parsedParams: any[] | null = null;
+    let parsedParams: unknown[] | null = null;
     try {
       // Only parse if params string is not empty and not just whitespace
       if (sqlParams.trim()) {
-        parsedParams = JSON.parse(sqlParams);
-        if (!Array.isArray(parsedParams)) {
+        const parsed = JSON.parse(sqlParams);
+        if (Array.isArray(parsed)) {
+          parsedParams = parsed as unknown[];
+        } else {
           throw new Error("Parameters must be a valid JSON array.");
         }
       }
-    } catch (e: any) {
-      setSqlError(`Invalid JSON in parameters: ${e.message}`);
+    } catch (e) {
+      setSqlError(
+        `Invalid JSON in parameters: ${e instanceof Error ? e.message : String(e)}`,
+      );
       return;
     }
 
@@ -75,9 +91,9 @@ export default function Dev() {
       });
       console.log("SQL Result:", result);
       setSqlResult(JSON.stringify(result, null, 2)); // Pretty print JSON result
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error executing SQL:", error);
-      setSqlError(typeof error === 'string' ? error : JSON.stringify(error));
+      setSqlError(typeof error === "string" ? error : JSON.stringify(error));
     }
   };
 
@@ -88,7 +104,9 @@ export default function Dev() {
 
   // --- Evaluation Data Capture ---
   const [evalCaptureLoading, setEvalCaptureLoading] = useState<boolean>(false);
-  const [evalCaptureResult, setEvalCaptureResult] = useState<string | null>(null);
+  const [evalCaptureResult, setEvalCaptureResult] = useState<string | null>(
+    null,
+  );
   const [evalCaptureError, setEvalCaptureError] = useState<string | null>(null);
 
   // --- OCR Processing ---
@@ -96,7 +114,9 @@ export default function Dev() {
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
   const [ocrResult, setOcrResult] = useState<OcrResponseEvent | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(null);
+  const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(
+    null,
+  );
 
   // --- Embedding Test ---
   const [embeddingInput, setEmbeddingInput] = useState<string>("");
@@ -105,14 +125,31 @@ export default function Dev() {
   const [embeddingError, setEmbeddingError] = useState<string | null>(null);
 
   // --- Computer Use Test ---
-  const [computerUsePrompt, setComputerUsePrompt] = useState<string>("What is the capital of France?");
-  const [computerUseResult, setComputerUseResult] = useState<string | null>(null);
+  const [computerUsePrompt, setComputerUsePrompt] = useState<string>(
+    "What is the capital of France?",
+  );
+  const [computerUseResult, setComputerUseResult] = useState<string | null>(
+    null,
+  );
   const [computerUseLoading, setComputerUseLoading] = useState<boolean>(false);
   const [computerUseError, setComputerUseError] = useState<string | null>(null);
 
   // --- Computer Use Action Testing ---
-  const [selectedAction, setSelectedAction] = useState<string>("OpenWebBrowser");
-  const [actionInputs, setActionInputs] = useState<any>({
+  const [selectedAction, setSelectedAction] =
+    useState<string>("OpenWebBrowser");
+  const [actionInputs, setActionInputs] = useState<{
+    url: string;
+    x: string | number;
+    y: string | number;
+    text: string;
+    press_enter: boolean;
+    clear_before_typing: boolean;
+    keys: string;
+    direction: string;
+    magnitude: string | number;
+    destination_x: string | number;
+    destination_y: string | number;
+  }>({
     url: "https://www.google.com",
     x: 500,
     y: 500,
@@ -125,7 +162,7 @@ export default function Dev() {
     destination_x: 600,
     destination_y: 600,
   });
-  const [actionOutput, setActionOutput] = useState<any>(null);
+  const [actionOutput, setActionOutput] = useState<unknown>(null);
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -135,10 +172,12 @@ export default function Dev() {
     setEmbeddingError(null);
     setEmbeddingArray(null);
     try {
-      const result = await invoke<number[]>("generate_embedding", { input: embeddingInput });
+      const result = await invoke<number[]>("generate_embedding", {
+        input: embeddingInput,
+      });
       setEmbeddingArray(result);
-    } catch (err: any) {
-      setEmbeddingError(typeof err === 'string' ? err : JSON.stringify(err));
+    } catch (err) {
+      setEmbeddingError(typeof err === "string" ? err : JSON.stringify(err));
     } finally {
       setEmbeddingLoading(false);
     }
@@ -150,11 +189,13 @@ export default function Dev() {
     setComputerUseError(null);
     setComputerUseResult(null);
     try {
-      const result = await invoke<string>("start_computer_use", { prompt: computerUsePrompt });
+      const result = await invoke<string>("start_computer_use", {
+        prompt: computerUsePrompt,
+      });
       setComputerUseResult(result);
       console.log("Computer Use Result:", result);
-    } catch (err: any) {
-      setComputerUseError(typeof err === 'string' ? err : JSON.stringify(err));
+    } catch (err) {
+      setComputerUseError(typeof err === "string" ? err : JSON.stringify(err));
       console.error("Error testing computer use:", err);
     } finally {
       setComputerUseLoading(false);
@@ -166,41 +207,68 @@ export default function Dev() {
     setActionOutput(null);
     setActionError(null);
 
-    let data: any = null;
+    let data: Record<string, unknown> | null = null;
     switch (selectedAction) {
-      case "Navigate": data = { url: actionInputs.url }; break;
-      case "ClickAt": data = { x: parseInt(actionInputs.x), y: parseInt(actionInputs.y) }; break;
-      case "HoverAt": data = { x: parseInt(actionInputs.x), y: parseInt(actionInputs.y) }; break;
-      case "TypeTextAt": data = { 
-        x: parseInt(actionInputs.x), 
-        y: parseInt(actionInputs.y), 
-        text: actionInputs.text,
-        press_enter: actionInputs.press_enter,
-        clear_before_typing: actionInputs.clear_before_typing
-      }; break;
-      case "KeyCombination": data = { keys: actionInputs.keys }; break;
-      case "ScrollDocument": data = { direction: actionInputs.direction }; break;
-      case "ScrollAt": data = { 
-        x: parseInt(actionInputs.x), 
-        y: parseInt(actionInputs.y), 
-        direction: actionInputs.direction,
-        magnitude: parseInt(actionInputs.magnitude)
-      }; break;
-      case "DragAndDrop": data = { 
-        x: parseInt(actionInputs.x), 
-        y: parseInt(actionInputs.y), 
-        destination_x: parseInt(actionInputs.destination_x), 
-        destination_y: parseInt(actionInputs.destination_y) 
-      }; break;
+      case "Navigate":
+        data = { url: actionInputs.url };
+        break;
+      case "ClickAt":
+        data = {
+          x: Number.parseInt(String(actionInputs.x)),
+          y: Number.parseInt(String(actionInputs.y)),
+        };
+        break;
+      case "HoverAt":
+        data = {
+          x: Number.parseInt(String(actionInputs.x)),
+          y: Number.parseInt(String(actionInputs.y)),
+        };
+        break;
+      case "TypeTextAt":
+        data = {
+          x: Number.parseInt(String(actionInputs.x)),
+          y: Number.parseInt(String(actionInputs.y)),
+          text: actionInputs.text,
+          press_enter: actionInputs.press_enter,
+          clear_before_typing: actionInputs.clear_before_typing,
+        };
+        break;
+      case "KeyCombination":
+        data = { keys: actionInputs.keys };
+        break;
+      case "ScrollDocument":
+        data = { direction: actionInputs.direction };
+        break;
+      case "ScrollAt":
+        data = {
+          x: Number.parseInt(String(actionInputs.x)),
+          y: Number.parseInt(String(actionInputs.y)),
+          direction: actionInputs.direction,
+          magnitude: Number.parseInt(String(actionInputs.magnitude)),
+        };
+        break;
+      case "DragAndDrop":
+        data = {
+          x: Number.parseInt(String(actionInputs.x)),
+          y: Number.parseInt(String(actionInputs.y)),
+          destination_x: Number.parseInt(String(actionInputs.destination_x)),
+          destination_y: Number.parseInt(String(actionInputs.destination_y)),
+        };
+        break;
     }
 
     try {
-      console.log(`Executing direct action: ${selectedAction} with data:`, data);
-      const result = await invoke("execute_computer_action", { 
-        action: data ? { action: selectedAction, data } : { action: selectedAction } 
+      console.log(
+        `Executing direct action: ${selectedAction} with data:`,
+        data,
+      );
+      const result = await invoke("execute_computer_action", {
+        action: data
+          ? { action: selectedAction, data }
+          : { action: selectedAction },
       });
       setActionOutput(result);
-    } catch (err: any) {
+    } catch (err) {
       setActionError(typeof err === "string" ? err : JSON.stringify(err));
     } finally {
       setActionLoading(false);
@@ -213,12 +281,12 @@ export default function Dev() {
       try {
         const available = await invoke<boolean>("check_ocr_models_available");
         setOcrModelsAvailable(available);
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error checking OCR models:", error);
         setOcrModelsAvailable(false);
       }
     };
-    checkOcrModels();
+    void checkOcrModels();
   }, []);
 
   // --- Supabase user object ---
@@ -227,23 +295,26 @@ export default function Dev() {
 
   const fetchSupabaseUser = async () => {
     try {
-      const accessToken = await invoke<any>("get_access_token_command");
+      const accessToken = await invoke<string>("get_access_token_command");
       console.log("Access Token:", accessToken);
       setSupabaseToken(accessToken);
       if (accessToken) {
-        const supabaseUser = await invoke<SupabaseUser>("get_user", { accessToken });
+        const supabaseUser = await invoke<SupabaseUser>("get_user", {
+          accessToken,
+        });
         console.log("Supabase User:", supabaseUser);
         setSupabaseUser(supabaseUser);
       }
-    }
-    catch (error: any) {
+    } catch (error) {
       console.error("Error fetching Supabase user:", error);
     }
   };
 
   // --- Screen Selection ---
-  const [screenSelectionResult, setScreenSelectionResult] = useState<any>(null);
-  const [screenSelectionLoading, setScreenSelectionLoading] = useState<boolean>(false);
+  const [screenSelectionResult, setScreenSelectionResult] =
+    useState<ScreenSelectionResult | null>(null);
+  const [screenSelectionLoading, setScreenSelectionLoading] =
+    useState<boolean>(false);
 
   const fetchScreenText = async () => {
     setScreenTextLoading(true);
@@ -251,7 +322,7 @@ export default function Dev() {
     try {
       const data = await invoke<string>("get_screen_text_formatted");
       setScreenTextData(data);
-    } catch (err: any) {
+    } catch (err) {
       setScreenTextError(typeof err === "string" ? err : JSON.stringify(err));
       setScreenTextData(null);
     } finally {
@@ -267,7 +338,7 @@ export default function Dev() {
       const result = await invoke<string>("capture_eval_data");
       setEvalCaptureResult(result);
       console.log("Evaluation data captured:", result);
-    } catch (err: any) {
+    } catch (err) {
       setEvalCaptureError(typeof err === "string" ? err : JSON.stringify(err));
       console.error("Error capturing eval data:", err);
     } finally {
@@ -279,9 +350,9 @@ export default function Dev() {
   const openScreenSelector = async () => {
     setScreenSelectionLoading(true);
     try {
-      await invoke('open_screen_selector');
-    } catch (error: any) {
-      console.error('Failed to open screen selector:', error);
+      await invoke("open_screen_selector");
+    } catch (error) {
+      console.error("Failed to open screen selector:", error);
       setScreenSelectionLoading(false);
     }
   };
@@ -291,19 +362,21 @@ export default function Dev() {
     let unlistenStream: (() => void) | undefined;
 
     async function listenForOcrResults() {
-      unlistenStream = await listen<OcrResponseEvent>('ocr_response', (event) => {
-        const { text } = event.payload;
-        const result = event.payload as OcrResponseEvent;
-        console.log('OCR result received:', text);
-        setOcrResult(result);
-      });
+      unlistenStream = await listen<OcrResponseEvent>(
+        "ocr_response",
+        (event) => {
+          const { text } = event.payload;
+          const result = event.payload as OcrResponseEvent;
+          console.log("OCR result received:", text);
+          setOcrResult(result);
+        },
+      );
     }
 
-    listenForOcrResults();
+    void listenForOcrResults();
 
     return () => {
-      if (unlistenStream) 
-        unlistenStream();
+      if (unlistenStream) unlistenStream();
     };
   }, []);
 
@@ -311,7 +384,7 @@ export default function Dev() {
     const file = event.target.files?.[0];
     if (file) {
       // Check if file is an image
-      if (file.type.startsWith('image/')) {
+      if (file.type.startsWith("image/")) {
         setOcrFile(file);
         setOcrError(null);
         setOcrResult(null);
@@ -337,14 +410,22 @@ export default function Dev() {
       const arrayBuffer = await ocrFile.arrayBuffer();
       const imageData = Array.from(new Uint8Array(arrayBuffer));
 
-      console.log("Processing OCR for file:", ocrFile.name, "Size:", imageData.length, "bytes");
+      console.log(
+        "Processing OCR for file:",
+        ocrFile.name,
+        "Size:",
+        imageData.length,
+        "bytes",
+      );
 
       // Call the Tauri OCR command
-      const result = await invoke<any>("process_image", { imageData });
-      
+      const result = await invoke<OcrResponseEvent>("process_image", {
+        imageData,
+      });
+
       setOcrResult(result);
       console.log("OCR processing completed:", result);
-    } catch (err: any) {
+    } catch (err) {
       setOcrError(typeof err === "string" ? err : JSON.stringify(err));
       console.error("Error processing OCR:", err);
     } finally {
@@ -356,75 +437,114 @@ export default function Dev() {
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6 max-w-[30rem]">
       {/* Capture Scheduler Controls */}
       <div className="flex gap-4 justify-center">
-        <Button 
-          onClick={handleStartScheduler} 
+        <Button
+          onClick={() => {
+            void handleStartScheduler();
+          }}
           disabled={schedulerLoading || isSchedulerRunning}
           variant={isSchedulerRunning ? "secondary" : "default"}
         >
-          {schedulerLoading && !isSchedulerRunning ? "Starting..." : "Start Capture Scheduler"}
+          {schedulerLoading && !isSchedulerRunning
+            ? "Starting..."
+            : "Start Capture Scheduler"}
         </Button>
-        <Button 
-          onClick={handleStopScheduler} 
+        <Button
+          onClick={() => {
+            void handleStopScheduler();
+          }}
           disabled={schedulerLoading || !isSchedulerRunning}
           variant={isSchedulerRunning ? "destructive" : "secondary"}
         >
-          {schedulerLoading && isSchedulerRunning ? "Stopping..." : "Stop Capture Scheduler"}
+          {schedulerLoading && isSchedulerRunning
+            ? "Stopping..."
+            : "Stop Capture Scheduler"}
         </Button>
       </div>
 
       {/* Status indicator */}
       <div className="text-sm text-center">
-        Status: <span className={isSchedulerRunning ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}>
+        Status:{" "}
+        <span
+          className={
+            isSchedulerRunning
+              ? "text-green-600 font-semibold"
+              : "text-red-600 font-semibold"
+          }
+        >
           {isSchedulerRunning ? "Running" : "Stopped"}
         </span>
       </div>
 
       {/* Screen Text Button */}
       <div className="flex justify-center">
-        <Button onClick={fetchScreenText} disabled={screenTextLoading}>
+        <Button
+          onClick={() => {
+            void fetchScreenText();
+          }}
+          disabled={screenTextLoading}
+        >
           {screenTextLoading ? "Loading..." : "Get Screen Text (Formatted)"}
         </Button>
       </div>
 
       {/* Open and close computer use window */}
       <div className="flex gap-4 justify-center">
-        <Button 
-          onClick={async () => { await invoke("open_computer_use_window"); }}
+        <Button
+          onClick={() => {
+            void (async () => {
+              await invoke("open_computer_use_window");
+            })();
+          }}
           variant="default"
         >
           Open Computer Use Window
         </Button>
-        <Button 
-          onClick={async () => { await invoke("close_computer_use_window"); }}
+        <Button
+          onClick={() => {
+            void (async () => {
+              await invoke("close_computer_use_window");
+            })();
+          }}
           variant="destructive"
         >
           Close Computer Use Window
         </Button>
-      </div>  
+      </div>
 
       {/* Screen Selection Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
         <h2 className="text-lg font-semibold">Screen Selection Tool</h2>
         <p className="text-sm text-gray-600">
-          Click to open a fullscreen overlay where you can select any area of your screen to extract text from that specific region.
+          Click to open a fullscreen overlay where you can select any area of
+          your screen to extract text from that specific region.
         </p>
-        <Button 
-          onClick={openScreenSelector} 
+        <Button
+          onClick={() => {
+            void openScreenSelector();
+          }}
           disabled={screenSelectionLoading}
           variant="default"
         >
-          {screenSelectionLoading ? "Select an area..." : "📱 Select Screen Area"}
+          {screenSelectionLoading
+            ? "Select an area..."
+            : "📱 Select Screen Area"}
         </Button>
-        
+
         {screenSelectionResult && (
           <div className="mt-4 space-y-2">
             <h3 className="text-md font-semibold">Selection Result:</h3>
             <div className="p-2 bg-gray-100 rounded text-sm">
-              <strong>Bounds:</strong> {screenSelectionResult.bounds.width}x{screenSelectionResult.bounds.height} at ({screenSelectionResult.bounds.x}, {screenSelectionResult.bounds.y})
+              <strong>Bounds:</strong> {screenSelectionResult.bounds.width}x
+              {screenSelectionResult.bounds.height} at (
+              {screenSelectionResult.bounds.x}, {screenSelectionResult.bounds.y}
+              )
             </div>
             <div className="p-2 bg-white border rounded text-sm max-h-64 overflow-y-auto">
               <strong>Extracted Text:</strong>
-              <pre className="whitespace-pre-wrap mt-2">{screenSelectionResult.text_content || "No text found in selected area"}</pre>
+              <pre className="whitespace-pre-wrap mt-2">
+                {screenSelectionResult.text_content ||
+                  "No text found in selected area"}
+              </pre>
             </div>
           </div>
         )}
@@ -434,11 +554,14 @@ export default function Dev() {
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-orange-50">
         <h2 className="text-lg font-semibold">Evaluation Data Capture</h2>
         <p className="text-sm text-gray-600">
-          Click this button when you see incorrect task detection to save the current state for evaluation. 
-          Requires at least 2 screen captures and active tasks.
+          Click this button when you see incorrect task detection to save the
+          current state for evaluation. Requires at least 2 screen captures and
+          active tasks.
         </p>
-        <Button 
-          onClick={captureEvalData} 
+        <Button
+          onClick={() => {
+            void captureEvalData();
+          }}
           disabled={evalCaptureLoading}
           variant="outline"
         >
@@ -459,7 +582,7 @@ export default function Dev() {
       {/* OCR Processing Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
         <h2 className="text-lg font-semibold">OCR Text Extraction</h2>
-        
+
         {/* OCR Models Status */}
         <div className="text-sm">
           <span className="font-medium">OCR Models Status: </span>
@@ -474,8 +597,9 @@ export default function Dev() {
 
         {ocrModelsAvailable === false && (
           <div className="p-2 bg-yellow-100 border border-yellow-300 rounded text-sm">
-            <strong>Note:</strong> OCR models not found. Please ensure text-detection.rten and text-recognition.rten 
-            are placed in the app data directory under models/ocr/
+            <strong>Note:</strong> OCR models not found. Please ensure
+            text-detection.rten and text-recognition.rten are placed in the app
+            data directory under models/ocr/
           </div>
         )}
 
@@ -496,8 +620,10 @@ export default function Dev() {
           </div>
         )}
 
-        <Button 
-          onClick={processOcrImage} 
+        <Button
+          onClick={() => {
+            void processOcrImage();
+          }}
           disabled={ocrLoading || !ocrFile || !ocrModelsAvailable}
           variant="default"
         >
@@ -530,7 +656,9 @@ export default function Dev() {
       {/* Embedding Test Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-purple-50">
         <h2 className="text-lg font-semibold">Embedding Test</h2>
-        <p className="text-sm text-gray-600">Enter text to generate an embedding using the local model.</p>
+        <p className="text-sm text-gray-600">
+          Enter text to generate an embedding using the local model.
+        </p>
         <Textarea
           value={embeddingInput}
           onChange={(e) => setEmbeddingInput(e.target.value)}
@@ -539,14 +667,18 @@ export default function Dev() {
         />
         <div className="flex items-center gap-3 flex-wrap">
           <Button
-            onClick={handleGenerateEmbedding}
+            onClick={() => {
+              void handleGenerateEmbedding();
+            }}
             disabled={embeddingLoading || !embeddingInput.trim()}
             variant="default"
           >
             {embeddingLoading ? "Generating..." : "Generate Embedding"}
           </Button>
           {embeddingArray && (
-            <span className="text-xs text-gray-700">Dims: {embeddingArray.length}</span>
+            <span className="text-xs text-gray-700">
+              Dims: {embeddingArray.length}
+            </span>
           )}
         </div>
         {embeddingError && (
@@ -556,7 +688,11 @@ export default function Dev() {
         )}
         {embeddingArray && !embeddingError && (
           <pre className="p-2 bg-white border rounded text-[10px] leading-tight max-h-40 overflow-y-auto whitespace-pre-wrap break-words">
-            {embeddingArray.slice(0, 64).map(n => n.toFixed(4)).join(', ')}{embeddingArray.length > 64 ? ' ...' : ''}
+            {embeddingArray
+              .slice(0, 64)
+              .map((n) => n.toFixed(4))
+              .join(", ")}
+            {embeddingArray.length > 64 ? " ..." : ""}
           </pre>
         )}
       </div>
@@ -564,7 +700,9 @@ export default function Dev() {
       {/* Computer Use Test Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-green-50">
         <h2 className="text-lg font-semibold">Computer Use Engine Test</h2>
-        <p className="text-sm text-gray-600">Test the Gemini Computer Use API with a custom prompt.</p>
+        <p className="text-sm text-gray-600">
+          Test the Gemini Computer Use API with a custom prompt.
+        </p>
         <Textarea
           value={computerUsePrompt}
           onChange={(e) => setComputerUsePrompt(e.target.value)}
@@ -572,7 +710,9 @@ export default function Dev() {
           placeholder="Enter a prompt for the computer use engine..."
         />
         <Button
-          onClick={handleTestComputerUse}
+          onClick={() => {
+            void handleTestComputerUse();
+          }}
           disabled={computerUseLoading || !computerUsePrompt.trim()}
           variant="default"
         >
@@ -616,7 +756,13 @@ export default function Dev() {
             rows={2}
           />
         </div>
-        <Button onClick={handleExecuteSql}>Execute SQL</Button>
+        <Button
+          onClick={() => {
+            void handleExecuteSql();
+          }}
+        >
+          Execute SQL
+        </Button>
         {(sqlResult || sqlError) && (
           <div className="mt-4">
             <h3 className="text-md font-semibold">Result:</h3>
@@ -630,11 +776,13 @@ export default function Dev() {
       {/* Direct Computer Action Test Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-red-50">
         <h2 className="text-lg font-semibold">Direct Computer Action Test</h2>
-        <p className="text-sm text-gray-600">Test individual computer use actions directly.</p>
-        
+        <p className="text-sm text-gray-600">
+          Test individual computer use actions directly.
+        </p>
+
         <div className="space-y-2">
           <Label htmlFor="action-select">Select Action</Label>
-          <select 
+          <select
             id="action-select"
             className="w-full p-2 border rounded-md bg-white text-sm"
             value={selectedAction}
@@ -658,22 +806,43 @@ export default function Dev() {
 
         {/* Dynamic Inputs based on selected action */}
         <div className="grid grid-cols-2 gap-4">
-          {(selectedAction === "Navigate") && (
+          {selectedAction === "Navigate" && (
             <div className="col-span-2 space-y-2">
               <Label>URL</Label>
-              <Input value={actionInputs.url} onChange={(e) => setActionInputs({...actionInputs, url: e.target.value})} />
+              <Input
+                value={actionInputs.url}
+                onChange={(e) =>
+                  setActionInputs({ ...actionInputs, url: e.target.value })
+                }
+              />
             </div>
           )}
 
-          {(selectedAction === "ClickAt" || selectedAction === "HoverAt" || selectedAction === "TypeTextAt" || selectedAction === "ScrollAt" || selectedAction === "DragAndDrop") && (
+          {(selectedAction === "ClickAt" ||
+            selectedAction === "HoverAt" ||
+            selectedAction === "TypeTextAt" ||
+            selectedAction === "ScrollAt" ||
+            selectedAction === "DragAndDrop") && (
             <>
               <div className="space-y-2">
                 <Label>X Coordinate</Label>
-                <Input type="number" value={actionInputs.x} onChange={(e) => setActionInputs({...actionInputs, x: e.target.value})} />
+                <Input
+                  type="number"
+                  value={actionInputs.x}
+                  onChange={(e) =>
+                    setActionInputs({ ...actionInputs, x: e.target.value })
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label>Y Coordinate</Label>
-                <Input type="number" value={actionInputs.y} onChange={(e) => setActionInputs({...actionInputs, y: e.target.value})} />
+                <Input
+                  type="number"
+                  value={actionInputs.y}
+                  onChange={(e) =>
+                    setActionInputs({ ...actionInputs, y: e.target.value })
+                  }
+                />
               </div>
             </>
           )}
@@ -682,14 +851,37 @@ export default function Dev() {
             <>
               <div className="col-span-2 space-y-2">
                 <Label>Text to Type</Label>
-                <Input value={actionInputs.text} onChange={(e) => setActionInputs({...actionInputs, text: e.target.value})} />
+                <Input
+                  value={actionInputs.text}
+                  onChange={(e) =>
+                    setActionInputs({ ...actionInputs, text: e.target.value })
+                  }
+                />
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked={actionInputs.press_enter} onChange={(e) => setActionInputs({...actionInputs, press_enter: e.target.checked})} />
+                <input
+                  type="checkbox"
+                  checked={actionInputs.press_enter}
+                  onChange={(e) =>
+                    setActionInputs({
+                      ...actionInputs,
+                      press_enter: e.target.checked,
+                    })
+                  }
+                />
                 <Label>Press Enter</Label>
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked={actionInputs.clear_before_typing} onChange={(e) => setActionInputs({...actionInputs, clear_before_typing: e.target.checked})} />
+                <input
+                  type="checkbox"
+                  checked={actionInputs.clear_before_typing}
+                  onChange={(e) =>
+                    setActionInputs({
+                      ...actionInputs,
+                      clear_before_typing: e.target.checked,
+                    })
+                  }
+                />
                 <Label>Clear Before Typing</Label>
               </div>
             </>
@@ -698,14 +890,29 @@ export default function Dev() {
           {selectedAction === "KeyCombination" && (
             <div className="col-span-2 space-y-2">
               <Label>Keys (e.g. control+c)</Label>
-              <Input value={actionInputs.keys} onChange={(e) => setActionInputs({...actionInputs, keys: e.target.value})} />
+              <Input
+                value={actionInputs.keys}
+                onChange={(e) =>
+                  setActionInputs({ ...actionInputs, keys: e.target.value })
+                }
+              />
             </div>
           )}
 
-          {(selectedAction === "ScrollDocument" || selectedAction === "ScrollAt") && (
+          {(selectedAction === "ScrollDocument" ||
+            selectedAction === "ScrollAt") && (
             <div className="space-y-2">
               <Label>Direction</Label>
-              <select className="w-full p-2 border rounded-md text-sm" value={actionInputs.direction} onChange={(e) => setActionInputs({...actionInputs, direction: e.target.value})}>
+              <select
+                className="w-full p-2 border rounded-md text-sm"
+                value={actionInputs.direction}
+                onChange={(e) =>
+                  setActionInputs({
+                    ...actionInputs,
+                    direction: e.target.value,
+                  })
+                }
+              >
                 <option value="up">Up</option>
                 <option value="down">Down</option>
                 <option value="left">Left</option>
@@ -717,7 +924,16 @@ export default function Dev() {
           {selectedAction === "ScrollAt" && (
             <div className="space-y-2">
               <Label>Magnitude</Label>
-              <Input type="number" value={actionInputs.magnitude} onChange={(e) => setActionInputs({...actionInputs, magnitude: e.target.value})} />
+              <Input
+                type="number"
+                value={actionInputs.magnitude}
+                onChange={(e) =>
+                  setActionInputs({
+                    ...actionInputs,
+                    magnitude: e.target.value,
+                  })
+                }
+              />
             </div>
           )}
 
@@ -725,18 +941,38 @@ export default function Dev() {
             <>
               <div className="space-y-2">
                 <Label>Dest X</Label>
-                <Input type="number" value={actionInputs.destination_x} onChange={(e) => setActionInputs({...actionInputs, destination_x: e.target.value})} />
+                <Input
+                  type="number"
+                  value={actionInputs.destination_x}
+                  onChange={(e) =>
+                    setActionInputs({
+                      ...actionInputs,
+                      destination_x: e.target.value,
+                    })
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label>Dest Y</Label>
-                <Input type="number" value={actionInputs.destination_y} onChange={(e) => setActionInputs({...actionInputs, destination_y: e.target.value})} />
+                <Input
+                  type="number"
+                  value={actionInputs.destination_y}
+                  onChange={(e) =>
+                    setActionInputs({
+                      ...actionInputs,
+                      destination_y: e.target.value,
+                    })
+                  }
+                />
               </div>
             </>
           )}
         </div>
 
-        <Button 
-          onClick={handleExecuteAction} 
+        <Button
+          onClick={() => {
+            void handleExecuteAction();
+          }}
           disabled={actionLoading}
           variant="destructive"
           className="w-full"
@@ -753,7 +989,9 @@ export default function Dev() {
         {actionOutput && (
           <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm overflow-auto max-h-60">
             <h3 className="font-semibold mb-1 text-xs">Result:</h3>
-            <pre className="text-[10px] leading-tight">{JSON.stringify(actionOutput, null, 2)}</pre>
+            <pre className="text-[10px] leading-tight">
+              {JSON.stringify(actionOutput, null, 2)}
+            </pre>
           </div>
         )}
       </div>
@@ -762,21 +1000,26 @@ export default function Dev() {
       <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Supabase Auth</h2>
-          <Button onClick={fetchSupabaseUser} variant="default">
+          <Button
+            onClick={() => {
+              void fetchSupabaseUser();
+            }}
+            variant="default"
+          >
             Refresh Auth Info
           </Button>
         </div>
-        
+
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Access Token</h3>
           <div className="flex gap-2">
-            <Input 
-              readOnly 
-              value={supabaseToken || "No token fetched"} 
+            <Input
+              readOnly
+              value={supabaseToken || "No token fetched"}
               className="bg-white font-mono text-xs"
             />
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => {
                 if (supabaseToken) {
@@ -793,27 +1036,38 @@ export default function Dev() {
         <div className="space-y-2">
           <h3 className="text-sm font-medium">User Profile</h3>
           <pre className="whitespace-pre-wrap text-sm bg-white p-2 rounded border max-h-60 overflow-auto">
-            {supabaseUser ? JSON.stringify(supabaseUser, null, 2) : "No user data fetched"}
+            {supabaseUser
+              ? JSON.stringify(supabaseUser, null, 2)
+              : "No user data fetched"}
           </pre>
         </div>
       </div>
 
       {/* --- Screen Text by Application Section --- */}
       <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50">
-        <h2 className="text-lg font-semibold mb-2">Screen Text by Application (Formatted)</h2>
+        <h2 className="text-lg font-semibold mb-2">
+          Screen Text by Application (Formatted)
+        </h2>
         {screenTextData && (
           <div className="mt-2 prose prose-sm max-w-none max-h-96 overflow-y-auto bg-white p-4 rounded border">
             <pre className="whitespace-pre-wrap text-sm">{screenTextData}</pre>
           </div>
         )}
         {screenTextError && (
-          <div className="mt-2 text-red-700 font-mono">Error: {screenTextError}</div>
+          <div className="mt-2 text-red-700 font-mono">
+            Error: {screenTextError}
+          </div>
         )}
         {!screenTextData && !screenTextError && !screenTextLoading && (
-          <div className="mt-2 text-gray-500">Click "Get Screen Text (Formatted)" button to fetch clean, organized application text data.</div>
+          <div className="mt-2 text-gray-500">
+            Click "Get Screen Text (Formatted)" button to fetch clean, organized
+            application text data.
+          </div>
         )}
         {screenTextLoading && (
-          <div className="mt-2 text-blue-600">Loading screen text data (this may take a moment)...</div>
+          <div className="mt-2 text-blue-600">
+            Loading screen text data (this may take a moment)...
+          </div>
         )}
       </div>
     </div>

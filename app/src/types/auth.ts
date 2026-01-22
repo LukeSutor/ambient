@@ -3,141 +3,232 @@
 /**
  * App metadata from Supabase - contains provider information
  */
-export type AppMetadata = { provider: string | null, providers: Array<string> | null, };
+export type AppMetadata = {
+  provider: string | null;
+  providers: Array<string> | null;
+};
 
 /**
  * Supabase Auth Error Response
  */
-export type AuthError = { code: any, error_code: string | null, error: string | null, error_description: string | null, msg: string | null, };
+export type AuthError = {
+  code: any;
+  error_code: string | null;
+  error: string | null;
+  error_description: string | null;
+  msg: string | null;
+};
 
 /**
  * Error codes for auth operations
  */
-export type AuthErrorCode = "network_error" | "invalid_credentials" | "email_not_confirmed" | "user_already_exists" | "invalid_otp" | "rate_limited" | "o_auth_error" | "session_expired" | "invalid_request" | "server_error" | "storage_error" | "unknown";
+export type AuthErrorCode =
+  | "network_error"
+  | "invalid_credentials"
+  | "email_not_confirmed"
+  | "user_already_exists"
+  | "invalid_otp"
+  | "rate_limited"
+  | "o_auth_error"
+  | "session_expired"
+  | "invalid_request"
+  | "server_error"
+  | "storage_error"
+  | "unknown";
 
 /**
  * Structured error response for auth operations
  */
-export type AuthErrorResponse = { 
-/**
- * Machine-readable error code
- */
-code: AuthErrorCode, 
-/**
- * Human-readable error message
- */
-message: string, 
-/**
- * Additional details (optional)
- */
-details: string | null, };
+export type AuthErrorResponse = {
+  /**
+   * Machine-readable error code
+   */
+  code: AuthErrorCode;
+  /**
+   * Human-readable error message
+   */
+  message: string;
+  /**
+   * Additional details (optional)
+   */
+  details: string | null;
+};
 
 /**
  * Sign In Response - returned after successful password sign in
  */
-export type AuthResponse = { session: Session | null, user: SupabaseUser | null, weak_password: WeakPassword | null, 
-/**
- * Whether verification is required (email confirmation) - used if sign in fails due to unconfirmed email
- */
-verification_required: boolean, 
-/**
- * Where the verification was sent (email address)
- */
-destination: string | null, 
-/**
- * Delivery medium (EMAIL, SMS)
- */
-delivery_medium: string | null, };
+export type AuthResponse = {
+  session: Session | null;
+  user: SupabaseUser | null;
+  weak_password: WeakPassword | null;
+  /**
+   * Whether verification is required (email confirmation) - used if sign in fails due to unconfirmed email
+   */
+  verification_required: boolean;
+  /**
+   * Where the verification was sent (email address)
+   */
+  destination: string | null;
+  /**
+   * Delivery medium (EMAIL, SMS)
+   */
+  delivery_medium: string | null;
+};
 
 /**
  * Combined auth state for single-request hydration
  */
-export type AuthState = { is_online: boolean, is_authenticated: boolean, is_setup_complete: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
+export type AuthState = {
+  is_online: boolean;
+  is_authenticated: boolean;
+  is_setup_complete: boolean;
+  user: UserInfo | null;
+  needs_refresh: boolean;
+  expires_at: bigint | null;
+};
 
 /**
  * OAuth URL Response
  */
-export type OAuthUrlResponse = { url: string, };
+export type OAuthUrlResponse = { url: string };
 
 /**
  * Token Refresh Response
  */
-export type RefreshTokenResponse = { session: Session, user: SupabaseUser, };
+export type RefreshTokenResponse = { session: Session; user: SupabaseUser };
 
 /**
  * Resend Confirmation Response
  */
-export type ResendConfirmationResponse = { message_id: string | null, };
+export type ResendConfirmationResponse = { message_id: string | null };
 
 /**
  * Complete session object from Supabase
  */
-export type Session = { access_token: string, token_type: string, expires_in: bigint, expires_at: bigint | null, refresh_token: string, user: SupabaseUser, };
+export type Session = {
+  access_token: string;
+  token_type: string;
+  expires_in: bigint;
+  expires_at: bigint | null;
+  refresh_token: string;
+  user: SupabaseUser;
+};
 
 /**
  * Sign Up Response - returned after user registration
  */
-export type SignUpResponse = { 
-/**
- * The user object if signup was successful
- */
-user: SupabaseUser | null, 
-/**
- * Session is null if email confirmation is required
- */
-session: Session | null, 
-/**
- * Whether verification is required (email confirmation)
- */
-verification_required: boolean, 
-/**
- * Where the verification was sent (email address)
- */
-destination: string | null, 
-/**
- * Delivery medium (EMAIL, SMS)
- */
-delivery_medium: string | null, };
+export type SignUpResponse = {
+  /**
+   * The user object if signup was successful
+   */
+  user: SupabaseUser | null;
+  /**
+   * Session is null if email confirmation is required
+   */
+  session: Session | null;
+  /**
+   * Whether verification is required (email confirmation)
+   */
+  verification_required: boolean;
+  /**
+   * Where the verification was sent (email address)
+   */
+  destination: string | null;
+  /**
+   * Delivery medium (EMAIL, SMS)
+   */
+  delivery_medium: string | null;
+};
 
 /**
  * The complete auth state that gets stored locally
  */
-export type StoredAuthState = { 
-/**
- * Current session with tokens
- */
-session: Session, 
-/**
- * Timestamp when the auth state was stored (Unix timestamp)
- */
-stored_at: bigint, };
+export type StoredAuthState = {
+  /**
+   * Current session with tokens
+   */
+  session: Session;
+  /**
+   * Timestamp when the auth state was stored (Unix timestamp)
+   */
+  stored_at: bigint;
+};
 
 /**
  * Complete Supabase User object
  */
-export type SupabaseUser = { id: string, aud: string | null, role: string | null, email: string | null, email_confirmed_at: string | null, phone: string | null, phone_confirmed_at: string | null, confirmation_sent_at: string | null, confirmed_at: string | null, last_sign_in_at: string | null, app_metadata: AppMetadata | null, user_metadata: UserMetadata | null, identities: Array<UserIdentity> | null, created_at: string | null, updated_at: string | null, is_anonymous: boolean | null, };
+export type SupabaseUser = {
+  id: string;
+  aud: string | null;
+  role: string | null;
+  email: string | null;
+  email_confirmed_at: string | null;
+  phone: string | null;
+  phone_confirmed_at: string | null;
+  confirmation_sent_at: string | null;
+  confirmed_at: string | null;
+  last_sign_in_at: string | null;
+  app_metadata: AppMetadata | null;
+  user_metadata: UserMetadata | null;
+  identities: Array<UserIdentity> | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_anonymous: boolean | null;
+};
 
 /**
  * User identity from Supabase
  */
-export type UserIdentity = { identity_id: string, id: string, user_id: string, identity_data: UserMetadata | null, provider: string, last_sign_in_at: string | null, created_at: string | null, updated_at: string | null, email: string | null, };
+export type UserIdentity = {
+  identity_id: string;
+  id: string;
+  user_id: string;
+  identity_data: UserMetadata | null;
+  provider: string;
+  last_sign_in_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  email: string | null;
+};
 
 /**
  * Simplified user info for frontend usage
  */
-export type UserInfo = { id: string, email: string | null, full_name: string | null, avatar_url: string | null, email_verified: boolean | null, provider: string | null, created_at: string | null, providers: Array<string> | null, };
+export type UserInfo = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  email_verified: boolean | null;
+  provider: string | null;
+  created_at: string | null;
+  providers: Array<string> | null;
+};
 
 /**
  * User metadata from Supabase - matches the user_metadata and identity_data fields
  */
-export type UserMetadata = { email: string | null, email_verified: boolean | null, phone_verified: boolean | null, full_name: string | null, avatar_url: string | null, sub: string | null, };
+export type UserMetadata = {
+  email: string | null;
+  email_verified: boolean | null;
+  phone_verified: boolean | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  sub: string | null;
+};
 
 /**
  * OTP Verification Response
  */
-export type VerifyOtpResponse = { session: Session | null, user: SupabaseUser | null, };
+export type VerifyOtpResponse = {
+  session: Session | null;
+  user: SupabaseUser | null;
+};
 
 /**
  * Weak password indicator from Supabase
  */
-export type WeakPassword = { message: string | null, reasons: Array<string> | null, };
+export type WeakPassword = {
+  message: string | null;
+  reasons: Array<string> | null;
+};

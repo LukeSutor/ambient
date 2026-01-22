@@ -1,17 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { TaskCard } from "@/components/task-card";
-import { TaskWithSteps, TaskFrequency } from "@/types/tasks";
-import { sortTasksByPriority, getTaskStatus, calculateNextDueDate } from "@/lib/task-utils";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  calculateNextDueDate,
+  getTaskStatus,
+  sortTasksByPriority,
+} from "@/lib/task-utils";
+import { TaskFrequency, type TaskWithSteps } from "@/types/tasks";
 import { Filter, SortDesc } from "lucide-react";
+import { useState } from "react";
 
 interface TaskListProps {
   tasks: TaskWithSteps[];
@@ -21,46 +25,75 @@ interface TaskListProps {
 }
 
 type SortOption = "priority" | "name" | "created" | "due";
-type FilterOption = "all" | "due-today" | "overdue" | "upcoming" | "once" | "daily" | "weekly" | "monthly" | "yearly";
+type FilterOption =
+  | "all"
+  | "due-today"
+  | "overdue"
+  | "upcoming"
+  | "once"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly";
 
-export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps) {
+export function TaskList({
+  tasks,
+  onEdit,
+  onDelete,
+  onComplete,
+}: TaskListProps) {
   const [sortBy, setSortBy] = useState<SortOption>("priority");
   const [filterBy, setFilterBy] = useState<FilterOption>("all");
 
   const filteredTasks = tasks.filter((taskWithSteps) => {
     if (filterBy === "all") return true;
-    
+
     const status = getTaskStatus(taskWithSteps);
     if (filterBy === "due-today") {
       return status === "due-today";
     }
-    
+
     if (filterBy === "overdue") {
       return status === "overdue";
     }
-    
+
     if (filterBy === "upcoming") {
       return status === "upcoming";
     }
-    
+
     return taskWithSteps.task.frequency === filterBy;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
     switch (sortBy) {
       case "priority":
-        return sortTasksByPriority([a, b]).indexOf(a) - sortTasksByPriority([a, b]).indexOf(b);
+        return (
+          sortTasksByPriority([a, b]).indexOf(a) -
+          sortTasksByPriority([a, b]).indexOf(b)
+        );
       case "name":
         return a.task.name.localeCompare(b.task.name);
       case "created":
-        return new Date(b.task.created_at).getTime() - new Date(a.task.created_at).getTime();
-      case "due":
-        const aDueDate = calculateNextDueDate(a.task.first_scheduled_at, a.task.frequency, a.task.last_completed_at);
-        const bDueDate = calculateNextDueDate(b.task.first_scheduled_at, b.task.frequency, b.task.last_completed_at);
+        return (
+          new Date(b.task.created_at).getTime() -
+          new Date(a.task.created_at).getTime()
+        );
+      case "due": {
+        const aDueDate = calculateNextDueDate(
+          a.task.first_scheduled_at,
+          a.task.frequency,
+          a.task.last_completed_at,
+        );
+        const bDueDate = calculateNextDueDate(
+          b.task.first_scheduled_at,
+          b.task.frequency,
+          b.task.last_completed_at,
+        );
         if (!aDueDate && !bDueDate) return 0;
         if (!aDueDate) return 1;
         if (!bDueDate) return -1;
         return aDueDate.getTime() - bDueDate.getTime();
+      }
       default:
         return 0;
     }
@@ -83,7 +116,12 @@ export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps)
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4" />
-          <Select value={filterBy} onValueChange={(value: string) => setFilterBy(value as FilterOption)}>
+          <Select
+            value={filterBy}
+            onValueChange={(value: string) =>
+              setFilterBy(value as FilterOption)
+            }
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by" />
             </SelectTrigger>
@@ -103,7 +141,10 @@ export function TaskList({ tasks, onEdit, onDelete, onComplete }: TaskListProps)
 
         <div className="flex items-center gap-2">
           <SortDesc className="h-4 w-4" />
-          <Select value={sortBy} onValueChange={(value: string) => setSortBy(value as SortOption)}>
+          <Select
+            value={sortBy}
+            onValueChange={(value: string) => setSortBy(value as SortOption)}
+          >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>

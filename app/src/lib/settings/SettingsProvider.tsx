@@ -1,7 +1,18 @@
-'use client';
+"use client";
 
-import React, { createContext, useContext, useReducer, ReactNode, MutableRefObject } from 'react';
-import { UserSettings, HudSizeOption, ModelSelection } from '@/types/settings';
+import type {
+  HudSizeOption,
+  ModelSelection,
+  UserSettings,
+} from "@/types/settings";
+import type React from "react";
+import {
+  type MutableRefObject,
+  type ReactNode,
+  createContext,
+  useContext,
+  useReducer,
+} from "react";
 
 /**
  * Settings state
@@ -25,25 +36,28 @@ const initialState: SettingsState = {
  * Action types
  */
 type SettingsAction =
-  | { type: 'SET_SETTINGS'; payload: UserSettings }
-  | { type: 'UPDATE_HUD_SIZE'; payload: HudSizeOption }
-  | { type: 'UPDATE_MODEL_SELECTION'; payload: ModelSelection }
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'INVALIDATE_CACHE' };
+  | { type: "SET_SETTINGS"; payload: UserSettings }
+  | { type: "UPDATE_HUD_SIZE"; payload: HudSizeOption }
+  | { type: "UPDATE_MODEL_SELECTION"; payload: ModelSelection }
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "INVALIDATE_CACHE" };
 
 /**
  * Settings reducer
  */
-function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
+function settingsReducer(
+  state: SettingsState,
+  action: SettingsAction,
+): SettingsState {
   switch (action.type) {
-    case 'SET_SETTINGS':
+    case "SET_SETTINGS":
       return {
         ...state,
         settings: action.payload,
         isLoading: false,
       };
 
-    case 'UPDATE_HUD_SIZE':
+    case "UPDATE_HUD_SIZE":
       if (!state.settings) return state;
       return {
         ...state,
@@ -53,7 +67,7 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
         },
       };
 
-    case 'UPDATE_MODEL_SELECTION':
+    case "UPDATE_MODEL_SELECTION":
       if (!state.settings) return state;
       return {
         ...state,
@@ -63,13 +77,13 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
         },
       };
 
-    case 'SET_LOADING':
+    case "SET_LOADING":
       return {
         ...state,
         isLoading: action.payload,
       };
 
-    case 'INVALIDATE_CACHE':
+    case "INVALIDATE_CACHE":
       return {
         ...state,
         settings: null,
@@ -91,7 +105,9 @@ interface SettingsContextType {
 /**
  * Settings Context
  */
-const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
+const SettingsContext = createContext<SettingsContextType | undefined>(
+  undefined,
+);
 
 /**
  * Settings Provider Props
@@ -120,10 +136,12 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
  */
 export function useSettingsContext(): SettingsContextType {
   const context = useContext(SettingsContext);
-  
+
   if (!context) {
-    throw new Error('useSettingsContext must be used within a SettingsProvider');
+    throw new Error(
+      "useSettingsContext must be used within a SettingsProvider",
+    );
   }
-  
+
   return context;
 }

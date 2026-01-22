@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from "react";
 import { Toaster } from "@/components/ui/sonner";
+import type * as React from "react";
 
 export default function SetupLayout({
   children,

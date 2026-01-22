@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { AppProvider } from '@/lib/providers';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { useRoleAccess } from '@/lib/role-access';
-import { useSettings } from '@/lib/settings';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { AppProvider } from "@/lib/providers";
+import { useRoleAccess } from "@/lib/role-access";
+import { useSettings } from "@/lib/settings";
 
 export default function HudLayout({
   children,
@@ -11,7 +11,7 @@ export default function HudLayout({
   children: React.ReactNode;
 }) {
   // Use role access
-  useRoleAccess('/hud');
+  useRoleAccess("/hud");
   // Use root settings
   useSettings(true);
   return (
@@ -20,7 +20,7 @@ export default function HudLayout({
         <>
           {/* Force transparent background for this window on first paint */}
           <style
-            // eslint-disable-next-line react/no-danger
+            /* biome-ignore lint/security/noDangerouslySetInnerHtml: Need to force transparent background for Tauri window */
             dangerouslySetInnerHTML={{
               __html:
                 "html,body{background:transparent!important;background-color:transparent!important;}",

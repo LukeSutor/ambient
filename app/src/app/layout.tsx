@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
-import { Geist, Geist_Mono, Sora } from "next/font/google";
 import { AppProvider } from "@/lib/providers";
+import { Geist, Geist_Mono, Sora } from "next/font/google";
+import * as React from "react";
 
 import "@/styles/globals.css";
 import "katex/dist/katex.min.css";
@@ -31,7 +31,7 @@ export default function RootLayout({
   // Add BigInt serialization support
   React.useEffect(() => {
     // @ts-ignore
-    BigInt.prototype.toJSON = function() {
+    BigInt.prototype.toJSON = function () {
       return this.toString();
     };
   }, []);

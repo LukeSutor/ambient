@@ -1,14 +1,6 @@
-'use client';
+"use client";
 
-import React, { useEffect, useRef, useState } from 'react';
-import TextareaAutosize from "react-textarea-autosize";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-} from "@/components/ui/input-group";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,22 +9,45 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
-import { Move, Plus, SquareDashedMousePointer, X, History, ArrowUpIcon, Settings2, ChevronDown, MousePointerClick, Wrench, Paperclip } from 'lucide-react';
-import { AttachmentData } from '@/types/events';
-import { HudDimensions, ModelSelection } from '@/types/settings';
-import gsap from 'gsap';
-import { useGSAP } from '@gsap/react';
-import { useWindows } from '@/lib/windows/useWindows';
-import { useSettings } from '@/lib/settings';
-import { AttachmentPreview } from './attachment-preview';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+} from "@/components/ui/input-group";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { useSettings } from "@/lib/settings";
+import { cn } from "@/lib/utils";
+import { useWindows } from "@/lib/windows/useWindows";
+import type { AttachmentData } from "@/types/events";
+import type { HudDimensions, ModelSelection } from "@/types/settings";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import {
+  ArrowUpIcon,
+  ChevronDown,
+  History,
+  MousePointerClick,
+  Move,
+  Paperclip,
+  Plus,
+  Settings2,
+  SquareDashedMousePointer,
+  Wrench,
+  X,
+} from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import TextareaAutosize from "react-textarea-autosize";
+import { AttachmentPreview } from "./attachment-preview";
 
 interface HUDInputBarProps {
   hudDimensions: HudDimensions | null;
   inputValue: string;
   setInputValue: (v: string) => void;
   handleSubmit: () => Promise<void>;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onKeyDown: (
+    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => void;
   dispatchOCRCapture: () => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
@@ -72,27 +87,23 @@ export function HUDInputBar({
   const inputRef = useRef<HTMLDivElement | null>(null);
   // Dimensions ref to check for changes
   const dimensionsRef = useRef<HudDimensions | null>(null);
-  
+
   // Track dropdown open states
   const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
   const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  
+
   // Settings hook for model selection
   const { settings, setModelSelection } = useSettings();
-  const modelSelection = settings?.model_selection ?? 'Local';
-  
+  const modelSelection = settings?.model_selection ?? "Local";
+
   // Window Manager
-  const {
-    toggleChatHistory,
-    closeHUD,
-    openSecondary,
-  } = useWindows();
+  const { toggleChatHistory, closeHUD, openSecondary } = useWindows();
 
   // Handle model selection change
   async function handleModelSelectionChange(value: string) {
     const newModel = value as ModelSelection;
-    
+
     try {
       await setModelSelection(newModel);
     } catch (error) {
@@ -104,7 +115,7 @@ export function HUDInputBar({
     const files = e.target.files;
     if (files) {
       // Load file data and add to attachmentData
-      Array.from(files).forEach((file) => {
+      for (const file of Array.from(files)) {
         const reader = new FileReader();
         reader.onload = () => {
           if (reader.result) {
@@ -117,56 +128,80 @@ export function HUDInputBar({
           }
         };
         reader.readAsDataURL(file);
-      });
+      }
     }
   };
 
   // Animate input bar appearing
   useGSAP(() => {
     // Only animate if dimensions actually changed (deep comparison)
-    if (dimensionsRef.current && hudDimensions && 
-        JSON.stringify(dimensionsRef.current) === JSON.stringify(hudDimensions)) {
+    if (
+      dimensionsRef.current &&
+      hudDimensions &&
+      JSON.stringify(dimensionsRef.current) === JSON.stringify(hudDimensions)
+    ) {
       return;
     }
-    
+
     dimensionsRef.current = hudDimensions;
-    
+
     if (hudDimensions && inputRef.current) {
       gsap.fromTo(
         inputRef.current,
-        { scale: 0, opacity: 0, transformOrigin: 'center center' },
-        { scale: 1, opacity: 1, duration: 0.25, ease: 'back.out(0.8)', delay: 0.1 }
+        { scale: 0, opacity: 0, transformOrigin: "center center" },
+        {
+          scale: 1,
+          opacity: 1,
+          duration: 0.25,
+          ease: "back.out(0.8)",
+          delay: 0.1,
+        },
       );
     }
   }, [hudDimensions]);
 
   return (
     <div
-      className='flex flex-col justify-start items-center relative p-2'
+      className="flex flex-col justify-start items-center relative p-2"
       onMouseEnter={() => setIsHoveringGroup(true)}
       onMouseLeave={onMouseLeave}
       ref={inputRef}
       style={{
-        minHeight: hudDimensions ? `${hudDimensions.input_bar_height}px` : '60px',
-        width: hudDimensions ? `${hudDimensions.chat_width}px` : '500px',
+        minHeight: hudDimensions
+          ? `${hudDimensions.input_bar_height}px`
+          : "60px",
+        width: hudDimensions ? `${hudDimensions.chat_width}px` : "500px",
         opacity: hudDimensions ? 1 : 0,
-        transform: hudDimensions ? 'scale(1)' : 'scale(0)'
+        transform: hudDimensions ? "scale(1)" : "scale(0)",
       }}
     >
-      <InputGroup className={cn(
-        "bg-white/60 border border-black/20 transition-all",
-        "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
-        isStreaming && "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent"
-      )}>
+      <InputGroup
+        className={cn(
+          "bg-white/60 border border-black/20 transition-all",
+          "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
+          isStreaming &&
+            "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent",
+        )}
+      >
         {/* File upload container */}
-        {attachmentData.length > 0 && <ScrollArea className="flex justify-start items-center w-full space-x-2 py-1 px-3">
+        {attachmentData.length > 0 && (
+          <ScrollArea className="flex justify-start items-center w-full space-x-2 py-1 px-3">
             <div className="flex w-max space-x-2 py-1">
-            {attachmentData.map((attachment, index) => (
-              <AttachmentPreview attachment={attachment} index={index} removeAttachmentData={removeAttachmentData} key={index} />
-            ))}
+              {attachmentData.map((attachment, index) => (
+                <AttachmentPreview
+                  attachment={attachment}
+                  index={index}
+                  removeAttachmentData={removeAttachmentData}
+                  key={`${attachment.name}-${index}`}
+                />
+              ))}
             </div>
-            <ScrollBar orientation="horizontal" className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30" />
-        </ScrollArea>}
+            <ScrollBar
+              orientation="horizontal"
+              className="[&_[data-slot='scroll-area-thumb']]:bg-black/25 [&_[data-slot='scroll-area-thumb']]:hover:bg-black/30"
+            />
+          </ScrollArea>
+        )}
 
         {/* Text input area */}
         <TextareaAutosize
@@ -202,17 +237,19 @@ export function HUDInputBar({
               alignOffset={-12}
               className="bg-white/60"
             >
-              <DropdownMenuItem 
-                className="hover:bg-white/60 cursor-pointer" 
+              <DropdownMenuItem
+                className="hover:bg-white/60 cursor-pointer"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  const input = e.currentTarget.querySelector('input');
+                  const input = e.currentTarget.querySelector("input");
                   input?.click();
                 }}
-                >
+              >
                 <Paperclip className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                <span className="text-black text-sm whitespace-nowrap">Upload files</span>
+                <span className="text-black text-sm whitespace-nowrap">
+                  Upload files
+                </span>
                 <input
                   type="file"
                   className="hidden"
@@ -223,13 +260,27 @@ export function HUDInputBar({
                 />
               </DropdownMenuItem>
               <DropdownMenuSeparator className="w-11/12 mx-auto" />
-              <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleChatHistory(); }}>
+              <DropdownMenuItem
+                className="hover:bg-white/60"
+                onClick={() => {
+                  toggleChatHistory();
+                }}
+              >
                 <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                <span className="text-black text-sm whitespace-nowrap">Previous Chats</span>
+                <span className="text-black text-sm whitespace-nowrap">
+                  Previous Chats
+                </span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="hover:bg-white/60" onClick={() => { openSecondary(); }}>
+              <DropdownMenuItem
+                className="hover:bg-white/60"
+                onClick={() => {
+                  openSecondary();
+                }}
+              >
                 <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                <span className="text-black text-sm whitespace-nowrap">Dashboard</span>
+                <span className="text-black text-sm whitespace-nowrap">
+                  Dashboard
+                </span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -240,7 +291,9 @@ export function HUDInputBar({
                 variant="ghost"
                 disabled={ocrLoading || isStreaming}
               >
-                <Wrench className={`${conversationType === "chat" ? "mr-1" : ""}`} />
+                <Wrench
+                  className={`${conversationType === "chat" ? "mr-1" : ""}`}
+                />
                 {conversationType === "chat" && "Tools"}
               </InputGroupButton>
             </DropdownMenuTrigger>
@@ -253,13 +306,27 @@ export function HUDInputBar({
               className="bg-white/60"
             >
               <DropdownMenuGroup>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { dispatchOCRCapture(); }}>
+                <DropdownMenuItem
+                  className="hover:bg-white/60"
+                  onClick={() => {
+                    dispatchOCRCapture();
+                  }}
+                >
                   <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Capture Area</span>
+                  <span className="text-black text-sm whitespace-nowrap">
+                    Capture Area
+                  </span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="hover:bg-white/60" onClick={() => { toggleComputerUse(); }}>
+                <DropdownMenuItem
+                  className="hover:bg-white/60"
+                  onClick={() => {
+                    toggleComputerUse();
+                  }}
+                >
                   <MousePointerClick className="!w-4 !h-4 text-black shrink-0 mr-2" />
-                  <span className="text-black text-sm whitespace-nowrap">Computer Use</span>
+                  <span className="text-black text-sm whitespace-nowrap">
+                    Computer Use
+                  </span>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>
@@ -284,7 +351,11 @@ export function HUDInputBar({
           {/* Model selection dropdown */}
           <DropdownMenu onOpenChange={setIsModelDropdownOpen}>
             <DropdownMenuTrigger asChild>
-              <InputGroupButton className="ml-auto" variant="ghost" disabled={ocrLoading || isStreaming}>
+              <InputGroupButton
+                className="ml-auto"
+                variant="ghost"
+                disabled={ocrLoading || isStreaming}
+              >
                 {modelSelection === "Local" && "Local"}
                 {modelSelection === "Fast" && "Gemini 3 Flash"}
                 {modelSelection === "Pro" && "Gemini 3 Pro"}
@@ -300,8 +371,8 @@ export function HUDInputBar({
               className="w-full bg-white/60"
             >
               <DropdownMenuGroup>
-                <DropdownMenuItem 
-                  onClick={() => handleModelSelectionChange('Local')}
+                <DropdownMenuItem
+                  onClick={() => handleModelSelectionChange("Local")}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
                   <span className="font-medium text-sm">Local</span>
@@ -309,8 +380,8 @@ export function HUDInputBar({
                     Ultimate privacy. Runs on your device.
                   </span>
                 </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={() => handleModelSelectionChange('Fast')}
+                <DropdownMenuItem
+                  onClick={() => handleModelSelectionChange("Fast")}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
                   <span className="font-medium text-sm">Gemini 3 Flash</span>
@@ -319,7 +390,7 @@ export function HUDInputBar({
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => handleModelSelectionChange('Pro')}
+                  onClick={() => handleModelSelectionChange("Pro")}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
                   <span className="font-medium text-sm">Gemini 3 Pro</span>
@@ -342,40 +413,47 @@ export function HUDInputBar({
             <span className="sr-only">Send</span>
           </InputGroupButton>
         </InputGroupAddon>
-          {/* Close icon */}
-          <button
-            className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-              ' absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none'}
-            onClick={closeHUD}
-            title="Close Window"
-          >
-            <X className="w-full h-full p-1 text-black pointer-events-none" />
-          </button>
-          {/* Move handle */}
+        {/* Close icon */}
+        <button
+          type="button"
+          className={`${
+            isDraggingWindow || isHoveringGroup
+              ? "scale-100 opacity-100"
+              : "scale-0 opacity-0"
+          } absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none`}
+          onClick={closeHUD}
+          title="Close Window"
+        >
+          <X className="w-full h-full p-1 text-black pointer-events-none" />
+        </button>
+        {/* Move handle */}
 
-          <div
-            data-tauri-drag-region
-            id="drag-area"
-            className={(isDraggingWindow || isHoveringGroup ? 'scale-100 opacity-100' : 'scale-0 opacity-0') +
-              ' hover:cursor-grab select-none absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100'}
-            onPointerDown={onDragStart}
-            draggable={false}
-            title="Drag Window"
-          >
-            <Move className="w-full h-full p-1 text-black pointer-events-none" />
-          </div>
-        </InputGroup>
+        <div
+          data-tauri-drag-region
+          id="drag-area"
+          className={`${
+            isDraggingWindow || isHoveringGroup
+              ? "scale-100 opacity-100"
+              : "scale-0 opacity-0"
+          } hover:cursor-grab select-none absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100`}
+          onPointerDown={onDragStart}
+          draggable={false}
+          title="Drag Window"
+        >
+          <Move className="w-full h-full p-1 text-black pointer-events-none" />
+        </div>
+      </InputGroup>
 
       {/* Hidden spacer to expand window when dropdowns are open */}
-      <div 
+      <div
         className={`pointer-events-none overflow-hidden ${
           isPlusDropdownOpen
-            ? 'h-[112px] transition-none'
+            ? "h-[112px] transition-none"
             : isToolsDropdownOpen
-            ? 'h-[70px] transition-none'
-            : isModelDropdownOpen
-            ? 'h-[155px] transition-none'
-            : 'h-0 transition-all duration-0 delay-[50ms]'
+              ? "h-[70px] transition-none"
+              : isModelDropdownOpen
+                ? "h-[155px] transition-none"
+                : "h-0 transition-all duration-0 delay-[50ms]"
         }`}
       />
     </div>
