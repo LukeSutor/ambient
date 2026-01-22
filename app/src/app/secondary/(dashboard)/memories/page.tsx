@@ -132,7 +132,6 @@ export default function MemoriesPage() {
                       messageId: mem.message_id,
                     },
                   );
-                  if (!mounted) return;
                   messageContent = msg.content ?? "";
                 } catch (err) {
                   // If fetching fails, proceed without message content
@@ -140,7 +139,6 @@ export default function MemoriesPage() {
                 }
               }
 
-              if (!mounted) return;
               const newItem: MemoryListItem = {
                 id: mem.id,
                 message_id: mem.message_id,
@@ -248,7 +246,9 @@ export default function MemoriesPage() {
                             <DialogClose asChild>
                               <Button
                                 variant="destructive"
-                                onClick={() => onDeleteOne(m.id)}
+                                onClick={() => {
+                                  void onDeleteOne(m.id);
+                                }}
                               >
                                 Delete
                               </Button>
@@ -313,7 +313,12 @@ export default function MemoriesPage() {
                     <Button variant="secondary">Cancel</Button>
                   </DialogClose>
                   <DialogClose asChild>
-                    <Button variant="destructive" onClick={onDeleteAll}>
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        void onDeleteAll();
+                      }}
+                    >
                       Delete all
                     </Button>
                   </DialogClose>

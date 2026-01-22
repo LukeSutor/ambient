@@ -171,7 +171,9 @@ export const markdownComponents: Components = {
     const match = /language-(\w+)/.exec(className || "");
     const language = match ? match[1] : "";
     const isInline =
-      !className?.includes("language-") && !String(children).includes("\n");
+      !className?.includes("language-") &&
+      typeof children === "string" &&
+      !children.includes("\n");
 
     if (isInline) {
       return (
@@ -381,7 +383,9 @@ export const darkMarkdownComponents: Components = {
     const match = /language-(\w+)/.exec(className || "");
     const language = match ? match[1] : "";
     const isInline =
-      !className?.includes("language-") && !String(children).includes("\n");
+      !className?.includes("language-") &&
+      typeof children === "string" &&
+      !children.includes("\n");
 
     if (isInline) {
       return (

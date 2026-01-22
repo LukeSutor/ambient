@@ -61,7 +61,7 @@ export function MessageList({
                 variant="ghost"
                 className="pointer-events-auto"
                 onClick={() => {
-                  toggleChatHistory();
+                  void toggleChatHistory();
                 }}
               >
                 <Menu className="w-5 h-5" />
@@ -107,7 +107,7 @@ export function MessageList({
           }}
         >
           <div className="flex flex-col space-y-2">
-            {messages.map((m) => (
+            {messages.map((m, i) => (
               <div
                 key={m.message.id}
                 className={
@@ -126,7 +126,9 @@ export function MessageList({
                     messages={messages}
                     m={m}
                     i={i}
-                    openSecondary={openSecondary}
+                    openSecondary={() => {
+                      void openSecondary();
+                    }}
                     toggleReasoning={toggleReasoning}
                     showReasoning={showReasoning.has(i)}
                   />

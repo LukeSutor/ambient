@@ -198,7 +198,12 @@ export default function SetupPage() {
         <CardFooter>
           {/* Button logic remains similar, but no isSetupComplete check needed here */}
           {!isSettingUp && (
-            <Button onClick={handleStartSetup} className="w-full">
+            <Button
+              onClick={() => {
+                void handleStartSetup();
+              }}
+              className="w-full"
+            >
               Start Setup
             </Button>
           )}

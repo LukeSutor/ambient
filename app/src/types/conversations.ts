@@ -3,38 +3,16 @@
 /**
  * Attachment structure
  */
-export type Attachment = {
-  id: string;
-  message_id: string;
-  file_type: string;
-  file_name: string;
-  file_path: string | null;
-  extracted_text: string | null;
-  created_at: string;
-};
+export type Attachment = { id: string, message_id: string, file_type: string, file_name: string, file_path: string | null, extracted_text: string | null, created_at: string, };
 
 /**
  * Conversation structure
  */
-export type Conversation = {
-  id: string;
-  name: string;
-  conv_type: string;
-  created_at: string;
-  updated_at: string;
-  message_count: number;
-};
+export type Conversation = { id: string, name: string, conv_type: string, created_at: string, updated_at: string, message_count: number, };
 
 /**
  * Message structure
  */
-export type Message = {
-  id: string;
-  conversation_id: string;
-  role: Role;
-  content: string;
-  timestamp: string;
-  attachments: Array<Attachment>;
-};
+export type Message = { id: string, conversation_id: string, role: Role, content: string, timestamp: string, attachments: Array<Attachment>, };
 
 export type Role = "system" | "user" | "assistant" | "functioncall";

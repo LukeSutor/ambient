@@ -20,11 +20,23 @@ export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
           className="w-full h-full flex justify-end items-center"
         >
           {/* Window minimize button */}
-          <Button variant="ghost" size="icon" onClick={handleMinimize}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              void handleMinimize();
+            }}
+          >
             <Minus className="!h-5 !w-5" />
           </Button>
           {/* Window close button */}
-          <Button variant="ghost" size="icon" onClick={handleClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              void handleClose();
+            }}
+          >
             <X className="!h-5 !w-5" />
           </Button>
         </div>

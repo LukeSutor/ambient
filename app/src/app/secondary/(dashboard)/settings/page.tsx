@@ -85,7 +85,9 @@ export default function Settings() {
           </div>
           <Select
             value={modelSelection}
-            onValueChange={handleModelSelectionChange}
+            onValueChange={(v) => {
+              void handleModelSelectionChange(v);
+            }}
             disabled={isLoading}
           >
             <SelectTrigger className="">
@@ -113,9 +115,6 @@ export default function Settings() {
                     </div>
                     <span className="font-medium">Gemini 3 Pro</span>
                   </div>
-                )}
-                {!modelSelection && (
-                  <span className="text-muted-foreground">Select model</span>
                 )}
               </SelectValue>
             </SelectTrigger>
@@ -231,7 +230,9 @@ export default function Settings() {
           </div>
           <Select
             value={hudSize}
-            onValueChange={handleHudSizeChange}
+            onValueChange={(v) => {
+              void handleHudSizeChange(v);
+            }}
             disabled={isLoading}
           >
             <SelectTrigger className="w-32">

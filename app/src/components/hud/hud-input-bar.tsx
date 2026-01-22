@@ -269,7 +269,7 @@ export function HUDInputBar({
               <DropdownMenuItem
                 className="hover:bg-white/60"
                 onClick={() => {
-                  toggleChatHistory();
+                  void toggleChatHistory();
                 }}
               >
                 <History className="!w-4 !h-4 text-black shrink-0 mr-2" />
@@ -280,7 +280,7 @@ export function HUDInputBar({
               <DropdownMenuItem
                 className="hover:bg-white/60"
                 onClick={() => {
-                  openSecondary();
+                  void openSecondary();
                 }}
               >
                 <Settings2 className="!w-4 !h-4 text-black shrink-0 mr-2" />

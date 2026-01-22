@@ -156,11 +156,6 @@ impl LlmProvider for LocalProvider {
       }));
     }
 
-    log::debug!(
-      "[llama_server] Building messages for conv_id: {:?}",
-      messages
-    );
-
     // Build request body
     let mut request_body = json!({
         "model": "gemini-7",

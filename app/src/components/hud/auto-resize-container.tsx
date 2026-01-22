@@ -32,8 +32,6 @@ export function AutoResizeContainer({
     const container = containerRef.current;
 
     const resizeWindow = async () => {
-      if (!container || !hudDimensions) return;
-
       // Get container height
       const rect = container.getBoundingClientRect();
       const contentHeight = Math.ceil(rect.height);
@@ -62,14 +60,14 @@ export function AutoResizeContainer({
     };
 
     // Set up ResizeObserver to watch for content changes
-    const observer = new ResizeObserver((entries) => {
-      resizeWindow();
+    const observer = new ResizeObserver((_entries) => {
+      void resizeWindow();
     });
 
     observer.observe(container);
 
     // Initial resize
-    resizeWindow();
+    void resizeWindow();
 
     // Cleanup
     return () => {

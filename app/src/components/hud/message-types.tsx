@@ -54,7 +54,7 @@ function PreviewAttachment({ a }: { a: Attachment }) {
         setFileSrc(convertFileSrc(fullPath));
       }
     };
-    resolvePath();
+    void resolvePath();
   }, [a.file_path]);
 
   if (a.file_type.startsWith("image/") && fileSrc) {

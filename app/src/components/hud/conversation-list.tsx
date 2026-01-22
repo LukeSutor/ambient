@@ -104,7 +104,7 @@ export function ConversationList({
         ) {
           isLoadingRef.current = true;
           setLoadingMore(true);
-          loadMoreConversations().finally(() => {
+          void loadMoreConversations().finally(() => {
             isLoadingRef.current = false;
             setLoadingMore(false);
           });
@@ -236,7 +236,9 @@ export function ConversationList({
                 <div key={conv.id}>
                   <Form {...form}>
                     <form
-                      onSubmit={form.handleSubmit(handleUpdateConversationName)}
+                      onSubmit={(e) => {
+                        void form.handleSubmit(handleUpdateConversationName)(e);
+                      }}
                       className="space-y-2"
                     >
                       <FormField
@@ -255,7 +257,7 @@ export function ConversationList({
                                     Object.keys(form.formState.errors)
                                       .length === 0
                                   ) {
-                                    form.handleSubmit(
+                                    void form.handleSubmit(
                                       handleUpdateConversationName,
                                     )();
                                   }
@@ -263,7 +265,7 @@ export function ConversationList({
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
-                                    form.handleSubmit(
+                                    void form.handleSubmit(
                                       handleUpdateConversationName,
                                     )();
                                   }

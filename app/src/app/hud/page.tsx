@@ -53,24 +53,18 @@ export default function HudPage() {
 
   // Load HUD dimensions only once on mount or when settings change
   useEffect(() => {
-    let cancelled = false;
     void (async () => {
       const dimensions = await getHudDimensions();
-      if (!cancelled) {
-        // Only update if dimensions actually changed
-        setHudDimensions((prev) => {
-          if (prev === null) return dimensions;
-          // Deep comparison to avoid unnecessary updates
-          if (JSON.stringify(prev) === JSON.stringify(dimensions)) {
-            return prev;
-          }
-          return dimensions;
-        });
-      }
+      // Only update if dimensions actually changed
+      setHudDimensions((prev) => {
+        if (prev === null) return dimensions;
+        // Deep comparison to avoid unnecessary updates
+        if (JSON.stringify(prev) === JSON.stringify(dimensions)) {
+          return prev;
+        }
+        return dimensions;
+      });
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [getHudDimensions]);
 
   const handleMouseLeave = async (e: React.MouseEvent) => {
