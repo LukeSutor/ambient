@@ -87,7 +87,9 @@ async fn build_messages(
 
               if full_path.exists() {
                 if let Ok(bytes) = fs::read(&full_path) {
-                  let pdf_text = pdf_extract::extract_text_from_mem(&bytes).unwrap();
+                  let Ok(pdf_text) = pdf_extract::extract_text_from_mem(&bytes) else {
+                  continue;
+                  };
                   content_blocks.push(json!({
                     "type": "text",
                     "text": format!("Extracted text from {}:\n{}", attachment.file_name, pdf_text)
@@ -153,6 +155,11 @@ impl LlmProvider for LocalProvider {
         "content": request.prompt
       }));
     }
+
+    log::debug!(
+      "[llama_server] Building messages for conv_id: {:?}",
+      messages
+    );
 
     // Build request body
     let mut request_body = json!({

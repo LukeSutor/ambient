@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use ts_rs::TS;
 use uuid::Uuid;
+use rusqlite::Connection;
 use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
@@ -101,10 +102,13 @@ pub async fn create_conversation(
   conv_type: Option<String>,
 ) -> Result<Conversation, String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let conversation_id = Uuid::new_v4().to_string();
   let now = Utc::now();
@@ -162,10 +166,13 @@ pub async fn add_message_with_id(
   message_id: Option<String>,
 ) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let message_id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
   let now = Utc::now();
@@ -231,10 +238,13 @@ pub async fn get_messages(
   conversation_id: String,
 ) -> Result<Vec<Message>, String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let mut stmt = conn
     .prepare(
@@ -290,10 +300,13 @@ pub async fn get_messages(
 #[tauri::command]
 pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let mut stmt = conn
     .prepare(
@@ -352,10 +365,13 @@ pub async fn get_conversation(
   conversation_id: String,
 ) -> Result<Conversation, String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let conversation = conn
     .query_row(
@@ -388,10 +404,13 @@ pub async fn list_conversations(
   offset: usize,
 ) -> Result<Vec<Conversation>, String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let mut stmt = conn
     .prepare(
@@ -430,10 +449,13 @@ pub async fn reset_conversation(
   conversation_id: String,
 ) -> Result<(), String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   // Delete all messages
   conn
@@ -463,10 +485,22 @@ pub async fn delete_conversation(
   conversation_id: String,
 ) -> Result<(), String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
+
+  // Ensure conversation exists
+  let _conversation_exists: String = conn
+    .query_row(
+      "SELECT id FROM conversations WHERE id = ?1",
+      params![conversation_id],
+      |row| row.get(0),
+    )
+    .map_err(|_| format!("Conversation not found: {}", conversation_id))?;
 
   // Clean up attachments associated with messages in the conversation
   let mut stmt = conn
@@ -526,10 +560,13 @@ pub async fn update_conversation_name(
   name: String,
 ) -> Result<(), String> {
   let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
     .as_ref()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let now = Utc::now();
   conn
@@ -624,10 +661,13 @@ pub async fn add_attachments(
   attachments: Vec<Attachment>,
 ) -> Result<Vec<Attachment>, String> {
   let state = app_handle.state::<DbState>();
-  let mut db_guard = state.0.lock().unwrap();
-  let conn = db_guard
+  let mut conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn: &mut Connection = conn_guard
     .as_mut()
-    .ok_or("Database connection not available")?;
+    .ok_or("Database connection not available.".to_string())?;
 
   let now = Utc::now();
   let mut created_attachments = Vec::new();

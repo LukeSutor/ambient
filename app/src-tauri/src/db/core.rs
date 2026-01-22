@@ -13,8 +13,6 @@ use tauri::Manager;
 
 pub struct DbState(pub Mutex<Option<Connection>>);
 
-pub static GLOBAL_DB_STATE: Lazy<DbState> = Lazy::new(|| DbState(Mutex::new(None)));
-
 // Database schema migrations
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
   Migrations::new(vec![M::up(

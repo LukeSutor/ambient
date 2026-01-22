@@ -35,6 +35,7 @@ type ConversationAction =
   | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'ADD_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'PREPEND_CONVERSATION'; payload: Conversation }
+  | { type: 'INCREMENT_CONVERSATION_PAGE' }
   | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
   | { type: 'DELETE_CONVERSATION'; payload: { id: string } }
   | { type: 'SET_NO_MORE_CONVERSATIONS' }
@@ -181,6 +182,12 @@ function conversationReducer(
       return {
         ...state,
         conversations: [action.payload, ...state.conversations],
+      };
+
+    case 'INCREMENT_CONVERSATION_PAGE':
+      return {
+        ...state,
+        conversationPage: state.conversationPage + 1,
       };
 
     case 'SET_NO_MORE_CONVERSATIONS':

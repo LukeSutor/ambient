@@ -24,6 +24,10 @@ const OCR_TIMEOUT_MS = 10000;
  * Extracts and removes <think> tags from LLM responses
  */
 function extractThinkingContent(text: string): string {
+  // Return early if no <think> tags
+  if (!text.includes('<think>')) {
+    return text;
+  }
   const thinkStartIndex = text.indexOf('<think>');
   const thinkEndIndex = text.indexOf('</think>');
   
@@ -99,7 +103,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   useEffect(() => {
     let isMounted = true;
     const unlisteners: UnlistenFn[] = [];
-    let streamContent = '';
 
     const setupEvents = async () => {
       // Clean up previous listeners
@@ -126,16 +129,14 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
 
             if (is_finished) {
               // Stream is complete
-              const finalText = extractThinkingContent(full_response ?? streamContent);
+              const finalText = extractThinkingContent(full_response);
               dispatch({ type: 'FINALIZE_STREAM', payload: finalText });
-              streamContent = '';
               return;
             }
 
             if (delta) {
-              // Accumulate stream content
-              streamContent += delta;
-              const cleanContent = extractThinkingContent(streamContent);
+              // Update content
+              const cleanContent = extractThinkingContent(full_response);
               dispatch({ type: 'UPDATE_STREAMING_CONTENT', payload: cleanContent });
 
               // Auto-scroll to bottom
@@ -187,6 +188,10 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
               data: event.payload.text,
             }
             dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: ocrData });
+
+            // Stop OCR loading state and clear timeout
+            dispatch({ type: 'SET_OCR_LOADING', payload: false });
+            dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
           }),
 
           // Attachments created listener
@@ -467,6 +472,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
       }
       dispatch({ type: 'ADD_CONVERSATIONS', payload: conversations });
+      dispatch({ type: 'INCREMENT_CONVERSATION_PAGE' });
     } catch (error) {
       console.error('[useConversation] Failed to load more conversations:', error);
     } finally {
