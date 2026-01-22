@@ -186,14 +186,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
               file_type: 'ambient/ocr',
               data: event.payload.text,
             }
-            console.log("[useConversation] Received OCR result:", ocrData);
             dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: ocrData });
           }),
 
           // Attachments created listener
           listen<AttachmentsCreatedEvent>('attachments_created', (event) => {
             const { attachments } = event.payload;
-            console.log("[useConversation] Received attachments created event:", attachments);
             dispatch({ type: 'ADD_ATTACHMENTS_TO_MESSAGE', payload: { messageId: event.payload.message_id, attachments } });
           }),
 
@@ -328,7 +326,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
    * Loads messages for a specific conversation
    */
   const loadMessages = useCallback(async (conversation: Conversation): Promise<void> => {
-    console.log('[useConversation] Loading messages for conversation:', conversation);
     try {
       const backendMessages = await invoke<Message[]>('get_messages', { 
         conversationId: conversation.id
@@ -336,7 +333,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       let messages = backendMessages.map(transformBackendMessage);
       // Load messages depending on conversation type
       if (conversation.conv_type === 'computer_use') {
-        console.log('Loading computer use messages with reasoning grouping');
         // Collect all assistant/function messages into the last assistant message's reasoningMessages
         let finalizedMessages: ChatMessage[] = [];
         let currentAssistantMessage: ChatMessage | null = null;
@@ -394,12 +390,10 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       // Create conversation and generate name if first message
       let activeConversationId = conversationId;
       if (!activeConversationId) {
-        console.log('[useConversation] Creating conversation for first message');
         const conversation = await createConversation(undefined, state.conversationType);
         activeConversationId = conversation.id;
         dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
         dispatch({ type: 'PREPEND_CONVERSATION', payload: conversation });
-        console.log('[useConversation] Created conversation:', conversation);
         await emitGenerateConversationName(conversation.id, content);
       }
 
@@ -453,7 +447,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   /**
    * Get all conversations
    */
-  const loadMoreConversations = useCallback(async (): Promise<void> => {//TODO: fix this getting duplicate ids
+  const loadMoreConversations = useCallback(async (): Promise<void> => {
     // Prevent concurrent calls
     if (isLoadingMoreRef.current || !state.hasMoreConversations) {
       return;
@@ -468,7 +462,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         limit: CONVERSATION_LIMIT, 
         offset 
       });
-      console.log('[useConversation] Loaded more conversations:', conversations);
       if (conversations.length < CONVERSATION_LIMIT) {
         // No more conversations to load
         dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
@@ -541,7 +534,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     } else {
       dispatch({ type: 'SET_CONVERSATION_TYPE', payload: "chat" })
     }
-    console.log(state.conversationType)
   }, [dispatch, state.conversationType])
 
   /**

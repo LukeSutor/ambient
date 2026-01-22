@@ -101,7 +101,6 @@ async fn build_content(
       }
     }
   }
-  log::debug!("Built content: {:?}", content);
   Ok(content)
 }
 

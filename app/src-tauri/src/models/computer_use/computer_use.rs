@@ -470,8 +470,8 @@ impl ComputerUseEngine {
 
         // Check for blocked response
         if let Some(prompt_feedback) = response.get("promptFeedback") {
-            if let Some(block_reason) = prompt_feedback.get("blockReason") {
-                log::warn!("[computer_use] Model response blocked due to: {}", block_reason);
+            if let Some(_block_reason) = prompt_feedback.get("blockReason") {
+                log::warn!("[computer_use] Model response blocked");
                 self.final_response = "For safety reasons, the model is unable to complete this request.".to_string();
                 let _ = self.save_contents_to_db().await;
                 return Ok(true);
@@ -520,7 +520,8 @@ impl ComputerUseEngine {
         let mut args = Vec::new();
         let mut parts = Vec::new();
         for function_call in function_calls {
-            log::info!("[computer_use] Handling function call: {}", function_call);
+            let name = function_call.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
+            log::info!("[computer_use] Handling function call: {}", name);
 
             // Check for safety
             let mut safety_required = false;
@@ -558,7 +559,7 @@ impl ComputerUseEngine {
             // Create part with function call result
             let mut func_result = json!({
                 "functionResponse": {
-                    "name": function_call.get("name").and_then(|n| n.as_str()).unwrap_or("unknown"),
+                    "name": name,
                     "response": {
                         "url": "current_url"
                     },
