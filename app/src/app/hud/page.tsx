@@ -154,17 +154,17 @@ export default function HudPage() {
           messagesEndRef={messagesEndRef}
           conversations={conversations}
           hasMoreConversations={hasMoreConversations}
-          loadConversation={(id) => {
-            void loadConversation(id);
+          loadConversation={async (id) => {
+            await loadConversation(id);
           }}
-          deleteConversation={(id) => {
-            void deleteConversation(id);
+          deleteConversation={async (id) => {
+            await deleteConversation(id);
           }}
-          loadMoreConversations={() => {
-            void loadMoreConversations();
+          loadMoreConversations={async () => {
+            await loadMoreConversations();
           }}
-          renameConversation={(id, name) => {
-            void renameConversation(id, name);
+          renameConversation={async (id, name) => {
+            await renameConversation(id, name);
           }}
           handleNewChat={() => {
             void handleNewChat();

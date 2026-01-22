@@ -990,13 +990,13 @@ export default function Dev() {
           {actionLoading ? "Executing..." : `Execute ${selectedAction}`}
         </Button>
 
-        {actionError && (
+        {!!actionError && (
           <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm whitespace-pre-wrap">
-            Error: {actionError}
+            Error: {String(actionError)}
           </div>
         )}
 
-        {actionOutput && (
+        {!!actionOutput && (
           <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm overflow-auto max-h-60">
             <h3 className="font-semibold mb-1 text-xs">Result:</h3>
             <pre className="text-[10px] leading-tight">

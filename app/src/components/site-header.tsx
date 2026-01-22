@@ -24,7 +24,7 @@ export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
             variant="ghost"
             size="icon"
             onClick={() => {
-              void handleMinimize();
+              void handleMinimize?.();
             }}
           >
             <Minus className="!h-5 !w-5" />
@@ -34,7 +34,7 @@ export function SiteHeader({ handleClose, handleMinimize }: SiteHeaderProps) {
             variant="ghost"
             size="icon"
             onClick={() => {
-              void handleClose();
+              void handleClose?.();
             }}
           >
             <X className="!h-5 !w-5" />

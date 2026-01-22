@@ -93,7 +93,7 @@ function PreviewAttachment({ a }: { a: Attachment }) {
               <img
                 src={fileSrc}
                 alt={a.file_name}
-                className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                className="max-w-full max-h-full object-contain rounded-lg"
               />
             </div>
           </DialogContent>
