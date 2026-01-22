@@ -170,7 +170,7 @@ export default function Settings() {
                           </Badge>
                         </div>
                         <span className="text-xs text-muted-foreground text-left">
-                          More powerful. Google's fast model with advanced
+                          More powerful. Google&apos;s fast model with advanced
                           capabilities.
                         </span>
                       </div>
@@ -269,12 +269,18 @@ export default function Settings() {
               <DialogHeader>
                 <DialogTitle>Are you sure?</DialogTitle>
                 <DialogDescription>
-                  Once you delete your data, you won't be able to get it back!
+                  Once you delete your data, you won&apos;t be able to get it
+                  back!
                 </DialogDescription>
               </DialogHeader>
               {/* Removed type="submit" as it's not submitting a form */}
               <DialogClose asChild>
-                <Button variant="destructive" onClick={handleReset}>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    void handleReset();
+                  }}
+                >
                   Delete data
                 </Button>
               </DialogClose>

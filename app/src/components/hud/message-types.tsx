@@ -218,7 +218,7 @@ function PreviewAttachment({ a }: { a: Attachment }) {
 export function UserMessage({ m }: { m: ChatMessage }) {
   return (
     <>
-      {m.message.attachments?.map((a) => (
+      {m.message.attachments.map((a) => (
         <PreviewAttachment key={a.id} a={a} />
       ))}
       <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto w-fit max-w-full">
@@ -263,7 +263,12 @@ export function ReasoningMessages({
 
   return (
     <div className="mt-4 -mb-4">
-      <Button variant="ghost" onClick={() => toggleReasoning(i)}>
+      <Button
+        variant="ghost"
+        onClick={() => {
+          toggleReasoning(i);
+        }}
+      >
         {showReasoning ? "Hide" : "Show"} Thinking
         <ChevronDown
           className={`${showReasoning ? "rotate-180" : ""} transition-transform`}

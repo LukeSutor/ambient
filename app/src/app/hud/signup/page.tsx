@@ -79,7 +79,7 @@ const step2Schema = z.object({
     .regex(/[0-9]/, {
       message: "Password must contain at least one number",
     })
-    .regex(/[\^$*.\[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
+    .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
     }),
 });
@@ -478,7 +478,9 @@ export default function SignUp() {
             />
 
             <form
-              onSubmit={step1Form.handleSubmit(onStep1Submit)}
+              onSubmit={(e) => {
+                void step1Form.handleSubmit(onStep1Submit)(e);
+              }}
               className="space-y-6"
               noValidate
             >
@@ -578,7 +580,9 @@ export default function SignUp() {
           )}
 
           <form
-            onSubmit={step2Form.handleSubmit(onStep2Submit)}
+            onSubmit={(e) => {
+              void step2Form.handleSubmit(onStep2Submit)(e);
+            }}
             className="space-y-6"
             noValidate
           >

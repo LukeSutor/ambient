@@ -69,7 +69,7 @@ const step2Schema = z.object({
     .regex(/[0-9]/, {
       message: "Password must contain at least one number",
     })
-    .regex(/[\^$*.\[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
+    .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
     }),
 });
@@ -385,7 +385,7 @@ export default function SignUpPage() {
 
               <GoogleLoginButton
                 onSignInSuccess={() => {
-                  void router.push("/secondary");
+                  router.push("/secondary");
                 }}
                 className="w-full mb-6"
               />
@@ -462,160 +462,155 @@ export default function SignUpPage() {
   }
 
   // Step 2: Personal Info & Password
-  if (formStep === "step2") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
-          <Card className="w-full">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl font-bold">
-                Create Your Account
-              </CardTitle>
-              <CardDescription>
-                Step 2 of 2: Personal Info & Password
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
-                  <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                  <span className="text-red-700 text-sm">{error}</span>
-                </div>
-              )}
+  // if (formStep === "step2") {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <Card className="w-full">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold">
+              Create Your Account
+            </CardTitle>
+            <CardDescription>
+              Step 2 of 2: Personal Info & Password
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
+                <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                <span className="text-red-700 text-sm">{error}</span>
+              </div>
+            )}
 
-              <form
-                onSubmit={(e) => {
-                  void step2Form.handleSubmit(onStep2Submit)(e);
-                }}
-                className="space-y-6"
-                noValidate
-              >
-                <div className="space-y-4">
-                  <Controller
-                    control={step2Form.control}
-                    name="full_name"
-                    render={({ field, fieldState }) => (
-                      <Field data-invalid={fieldState.invalid}>
-                        <FieldLabel htmlFor="signup-full-name">
-                          Full Name
-                        </FieldLabel>
-                        <Input
-                          id="signup-full-name"
-                          className="h-11"
-                          placeholder="John Doe"
-                          autoComplete="name"
-                          disabled={isLoading}
-                          aria-invalid={fieldState.invalid}
-                          {...field}
-                        />
-                        {fieldState.invalid && (
-                          <FieldError errors={[fieldState.error]} />
-                        )}
-                      </Field>
-                    )}
-                  />
-                </div>
-
+            <form
+              onSubmit={(e) => {
+                void step2Form.handleSubmit(onStep2Submit)(e);
+              }}
+              className="space-y-6"
+              noValidate
+            >
+              <div className="space-y-4">
                 <Controller
                   control={step2Form.control}
-                  name="password"
+                  name="full_name"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="signup-password">
-                        Password
+                      <FieldLabel htmlFor="signup-full-name">
+                        Full Name
                       </FieldLabel>
-                      <div className="relative">
-                        <Input
-                          id="signup-password"
-                          type={showPassword ? "text" : "password"}
-                          className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                          placeholder="Enter a secure password"
-                          autoComplete="new-password"
-                          disabled={isLoading}
-                          aria-invalid={fieldState.invalid}
-                          {...field}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="absolute right-0 top-0 h-full px-3"
-                          onClick={() => {
-                            setShowPassword(!showPassword);
-                          }}
-                          disabled={isLoading}
-                        >
-                          {showPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                      <div className="text-muted-foreground text-sm mt-2">
-                        Password must contain:
-                        <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
-                          <li>At least 8 characters</li>
-                          <li>1 uppercase & 1 lowercase letter</li>
-                          <li>1 number & 1 special character</li>
-                        </ul>
-                      </div>
+                      <Input
+                        id="signup-full-name"
+                        className="h-11"
+                        placeholder="John Doe"
+                        autoComplete="name"
+                        disabled={isLoading}
+                        aria-invalid={fieldState.invalid}
+                        {...field}
+                      />
                       {fieldState.invalid && (
                         <FieldError errors={[fieldState.error]} />
                       )}
                     </Field>
                   )}
                 />
+              </div>
 
-                <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 text-base font-medium"
-                    onClick={handleBackToStep1}
-                    disabled={isLoading}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1 h-11 text-base font-medium"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creating Account...
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Create Account
-                      </>
+              <Controller
+                control={step2Form.control}
+                name="password"
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+                    <div className="relative">
+                      <Input
+                        id="signup-password"
+                        type={showPassword ? "text" : "password"}
+                        className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
+                        placeholder="Enter a secure password"
+                        autoComplete="new-password"
+                        disabled={isLoading}
+                        aria-invalid={fieldState.invalid}
+                        {...field}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => {
+                          setShowPassword(!showPassword);
+                        }}
+                        disabled={isLoading}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <div className="text-muted-foreground text-sm mt-2">
+                      Password must contain:
+                      <ul className="list-disc list-inside text-xs text-gray-500 mt-1 space-y-1">
+                        <li>At least 8 characters</li>
+                        <li>1 uppercase & 1 lowercase letter</li>
+                        <li>1 number & 1 special character</li>
+                      </ul>
+                    </div>
+                    {fieldState.invalid && (
+                      <FieldError errors={[fieldState.error]} />
                     )}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                  </Field>
+                )}
+              />
 
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Already have an account?{" "}
-              <Link
-                href="/secondary/signin"
-                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-              >
-                Sign in here
-              </Link>
-            </p>
-          </div>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 text-base font-medium"
+                  onClick={handleBackToStep1}
+                  disabled={isLoading}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 h-11 text-base font-medium"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating Account...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Create Account
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className="text-center">
+          <p className="text-sm text-gray-600">
+            Already have an account?{" "}
+            <Link
+              href="/secondary/signin"
+              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+            >
+              Sign in here
+            </Link>
+          </p>
         </div>
       </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }

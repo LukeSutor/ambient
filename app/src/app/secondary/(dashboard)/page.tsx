@@ -127,7 +127,7 @@ export default function Home() {
       );
       setConsumptionData(data);
     }
-    fetchConsumptionData();
+    void fetchConsumptionData();
   }, []);
 
   // Fetch chart data
@@ -138,7 +138,7 @@ export default function Home() {
       });
       setChartData(data);
     }
-    fetchData();
+    void fetchData();
   }, [timeFilter]);
 
   const openURL = async (url: string) => {
@@ -181,9 +181,11 @@ export default function Home() {
                   <Button
                     className="p-0 mx-1.5 h-min"
                     variant="link"
-                    onClick={() =>
-                      openURL("https://ai.google.dev/gemini-api/docs/pricing")
-                    }
+                    onClick={() => {
+                      void openURL(
+                        "https://ai.google.dev/gemini-api/docs/pricing",
+                      );
+                    }}
                   >
                     Gemini
                   </Button>
@@ -196,11 +198,11 @@ export default function Home() {
                   <Button
                     className="p-0 mx-1.5 h-min"
                     variant="link"
-                    onClick={() =>
-                      openURL(
+                    onClick={() => {
+                      void openURL(
                         "https://cloud.google.com/blog/products/infrastructure/measuring-the-environmental-impact-of-ai-inference",
-                      )
-                    }
+                      );
+                    }}
                   >
                     according to Google
                   </Button>
@@ -213,11 +215,11 @@ export default function Home() {
                   <Button
                     className="p-0 mx-1.5 h-min"
                     variant="link"
-                    onClick={() =>
-                      openURL(
+                    onClick={() => {
+                      void openURL(
                         "https://cloud.google.com/blog/products/infrastructure/measuring-the-environmental-impact-of-ai-inference",
-                      )
-                    }
+                      );
+                    }}
                   >
                     according to Google
                   </Button>
@@ -232,7 +234,7 @@ export default function Home() {
           <CardHeader className="text-sm">Cost</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
             <p className="text-4xl text-black font-bold mr-1">
-              {consumptionData?.cost_amount?.toFixed(2)}
+              {consumptionData?.cost_amount.toFixed(2)}
             </p>
             <p className="text-xl">{consumptionData?.cost_unit}</p>
           </CardContent>
@@ -241,7 +243,7 @@ export default function Home() {
           <CardHeader className="text-sm block">Water</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
             <p className="text-4xl text-black font-bold mr-1">
-              {consumptionData?.water_amount?.toFixed(2)}
+              {consumptionData?.water_amount.toFixed(2)}
             </p>
             <p className="text-xl">{consumptionData?.water_unit}</p>
           </CardContent>
@@ -250,7 +252,7 @@ export default function Home() {
           <CardHeader className="text-sm">Energy</CardHeader>
           <CardContent className="flex flex-row items-baseline justify-center mt-auto">
             <p className="text-4xl text-black font-bold mr-1">
-              {consumptionData?.energy_amount?.toFixed(2)}
+              {consumptionData?.energy_amount.toFixed(2)}
             </p>
             <p className="text-xl">{consumptionData?.energy_unit}</p>
           </CardContent>
@@ -265,22 +267,28 @@ export default function Home() {
             <ButtonGroup>
               <ButtonGroup>
                 <Button
-                  className={`${timeFilter === "Last3Months" ? "bg-gray-100" : ""}`}
-                  onClick={() => setTimeFilter("Last3Months")}
+                  className={timeFilter === "Last3Months" ? "bg-gray-100" : ""}
+                  onClick={() => {
+                    setTimeFilter("Last3Months");
+                  }}
                   variant="outline"
                 >
                   Last 3 Months
                 </Button>
                 <Button
-                  className={`${timeFilter === "Last30Days" ? "bg-gray-100" : ""}`}
-                  onClick={() => setTimeFilter("Last30Days")}
+                  className={timeFilter === "Last30Days" ? "bg-gray-100" : ""}
+                  onClick={() => {
+                    setTimeFilter("Last30Days");
+                  }}
                   variant="outline"
                 >
                   Last 30 Days
                 </Button>
                 <Button
-                  className={`${timeFilter === "Last7Days" ? "bg-gray-100" : ""}`}
-                  onClick={() => setTimeFilter("Last7Days")}
+                  className={timeFilter === "Last7Days" ? "bg-gray-100" : ""}
+                  onClick={() => {
+                    setTimeFilter("Last7Days");
+                  }}
                   variant="outline"
                 >
                   Last 7 Days
@@ -289,7 +297,9 @@ export default function Home() {
               <ButtonGroup>
                 <Toggle
                   pressed={logScale}
-                  onPressedChange={(pressed) => setLogScale(pressed)}
+                  onPressedChange={(pressed) => {
+                    setLogScale(pressed);
+                  }}
                   aria-label="Toggle bookmark"
                   variant="outline"
                   className="data-[state=on]:bg-gray-100 data-[state=on]:*:[svg]:stroke-blue-500"
@@ -322,7 +332,7 @@ export default function Home() {
                   key={model}
                   dataKey={model}
                   fill={
-                    chartConfig[model as keyof typeof chartConfig]?.color ||
+                    chartConfig[model as keyof typeof chartConfig].color ||
                     "gray"
                   }
                   radius={4}

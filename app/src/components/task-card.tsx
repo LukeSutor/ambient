@@ -36,9 +36,9 @@ import { useState } from "react";
 
 interface TaskCardProps {
   taskWithSteps: TaskWithSteps;
-  onEdit: (taskWithSteps: TaskWithSteps) => void;
-  onDelete: (taskWithSteps: TaskWithSteps) => void;
-  onComplete: (taskWithSteps: TaskWithSteps) => void;
+  onEdit: (taskWithSteps: TaskWithSteps) => void | Promise<void>;
+  onDelete: (taskWithSteps: TaskWithSteps) => void | Promise<void>;
+  onComplete: (taskWithSteps: TaskWithSteps) => void | Promise<void>;
 }
 
 export function TaskCard({
@@ -90,17 +90,28 @@ export function TaskCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(taskWithSteps)}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    void onEdit(taskWithSteps);
+                  }}
+                >
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleComplete} disabled={isLoading}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    void handleComplete();
+                  }}
+                  disabled={isLoading}
+                >
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Mark Complete
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => onDelete(taskWithSteps)}
+                  onClick={() => {
+                    void onDelete(taskWithSteps);
+                  }}
                   className="text-red-600"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />

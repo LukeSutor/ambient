@@ -63,7 +63,7 @@ export default function MemoriesPage() {
           limit: PAGE_SIZE,
         },
       );
-      const page = result || [];
+      const page = result;
       // Deduplicate by id in case effects fire twice in dev or observer overlaps
       setItems((prev) => {
         const prevIds = new Set(prev.map((i) => i.id));
@@ -89,7 +89,7 @@ export default function MemoriesPage() {
   useEffect(() => {
     if (didInitRef.current) return;
     didInitRef.current = true; // guard against React StrictMode double-invoke
-    loadPage();
+    void loadPage();
   }, [loadPage]);
 
   // infinite scroll observer
@@ -100,27 +100,29 @@ export default function MemoriesPage() {
       (entries) => {
         const first = entries[0];
         if (first.isIntersecting) {
-          loadPage();
+          void loadPage();
         }
       },
       { rootMargin: "600px" },
     );
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [loadPage]);
 
   // listen for memory_extracted events and prepend new item
   useEffect(() => {
     let unlisten: UnlistenFn | null = null;
     let mounted = true;
-    (async () => {
+    void (async () => {
       try {
         unlisten = await listen<{ memory: MemoryEntry; timestamp: string }>(
           "memory_extracted",
           (e) => {
             if (!mounted) return;
             const mem = e.payload.memory;
-            (async () => {
+            void (async () => {
               let messageContent: string | null = null;
               if (mem.message_id) {
                 try {
@@ -131,7 +133,7 @@ export default function MemoriesPage() {
                     },
                   );
                   if (!mounted) return;
-                  messageContent = msg?.content ?? "";
+                  messageContent = msg.content ?? "";
                 } catch (err) {
                   // If fetching fails, proceed without message content
                   console.warn("get_message failed for", mem.message_id, err);

@@ -107,7 +107,9 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem
-                onClick={() => router.push("/secondary/account")}
+                onClick={() => {
+                  router.push("/secondary/account");
+                }}
               >
                 <BadgeCheck />
                 Account

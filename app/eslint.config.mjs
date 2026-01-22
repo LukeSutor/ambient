@@ -112,6 +112,7 @@ const eslintConfig = tseslint.config(
       "@typescript-eslint/prefer-namespace-keyword": "off",
       "@typescript-eslint/prefer-optional-chain": "off",
       "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
       // Custom rules
       "@typescript-eslint/restrict-template-expressions": [
         "error",

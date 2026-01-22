@@ -69,7 +69,7 @@ export default function Dev() {
     try {
       // Only parse if params string is not empty and not just whitespace
       if (sqlParams.trim()) {
-        const parsed = JSON.parse(sqlParams);
+        const parsed: unknown = JSON.parse(sqlParams);
         if (Array.isArray(parsed)) {
           parsedParams = parsed as unknown[];
         } else {
@@ -366,7 +366,7 @@ export default function Dev() {
         "ocr_response",
         (event) => {
           const { text } = event.payload;
-          const result = event.payload as OcrResponseEvent;
+          const result = event.payload;
           console.log("OCR result received:", text);
           setOcrResult(result);
         },
@@ -661,7 +661,9 @@ export default function Dev() {
         </p>
         <Textarea
           value={embeddingInput}
-          onChange={(e) => setEmbeddingInput(e.target.value)}
+          onChange={(e) => {
+            setEmbeddingInput(e.target.value);
+          }}
           rows={3}
           placeholder="Type a sentence or short paragraph..."
         />
@@ -705,7 +707,9 @@ export default function Dev() {
         </p>
         <Textarea
           value={computerUsePrompt}
-          onChange={(e) => setComputerUsePrompt(e.target.value)}
+          onChange={(e) => {
+            setComputerUsePrompt(e.target.value);
+          }}
           rows={3}
           placeholder="Enter a prompt for the computer use engine..."
         />
@@ -741,7 +745,9 @@ export default function Dev() {
           <Textarea
             id="sql-query"
             value={sqlQuery}
-            onChange={(e) => setSqlQuery(e.target.value)}
+            onChange={(e) => {
+              setSqlQuery(e.target.value);
+            }}
             placeholder="Enter SQL query (e.g., SELECT * FROM documents)"
             rows={4}
           />
@@ -751,7 +757,9 @@ export default function Dev() {
           <Textarea
             id="sql-params"
             value={sqlParams}
-            onChange={(e) => setSqlParams(e.target.value)}
+            onChange={(e) => {
+              setSqlParams(e.target.value);
+            }}
             placeholder='Enter parameters as JSON array (e.g., ["value1", 123]) or leave empty'
             rows={2}
           />
@@ -786,7 +794,9 @@ export default function Dev() {
             id="action-select"
             className="w-full p-2 border rounded-md bg-white text-sm"
             value={selectedAction}
-            onChange={(e) => setSelectedAction(e.target.value)}
+            onChange={(e) => {
+              setSelectedAction(e.target.value);
+            }}
           >
             <option value="OpenWebBrowser">Open Web Browser</option>
             <option value="Wait5Seconds">Wait 5 Seconds</option>
@@ -811,9 +821,9 @@ export default function Dev() {
               <Label>URL</Label>
               <Input
                 value={actionInputs.url}
-                onChange={(e) =>
-                  setActionInputs({ ...actionInputs, url: e.target.value })
-                }
+                onChange={(e) => {
+                  setActionInputs({ ...actionInputs, url: e.target.value });
+                }}
               />
             </div>
           )}
@@ -829,9 +839,9 @@ export default function Dev() {
                 <Input
                   type="number"
                   value={actionInputs.x}
-                  onChange={(e) =>
-                    setActionInputs({ ...actionInputs, x: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setActionInputs({ ...actionInputs, x: e.target.value });
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -839,9 +849,9 @@ export default function Dev() {
                 <Input
                   type="number"
                   value={actionInputs.y}
-                  onChange={(e) =>
-                    setActionInputs({ ...actionInputs, y: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setActionInputs({ ...actionInputs, y: e.target.value });
+                  }}
                 />
               </div>
             </>
@@ -853,21 +863,21 @@ export default function Dev() {
                 <Label>Text to Type</Label>
                 <Input
                   value={actionInputs.text}
-                  onChange={(e) =>
-                    setActionInputs({ ...actionInputs, text: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setActionInputs({ ...actionInputs, text: e.target.value });
+                  }}
                 />
               </div>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={actionInputs.press_enter}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setActionInputs({
                       ...actionInputs,
                       press_enter: e.target.checked,
-                    })
-                  }
+                    });
+                  }}
                 />
                 <Label>Press Enter</Label>
               </div>
@@ -875,12 +885,12 @@ export default function Dev() {
                 <input
                   type="checkbox"
                   checked={actionInputs.clear_before_typing}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setActionInputs({
                       ...actionInputs,
                       clear_before_typing: e.target.checked,
-                    })
-                  }
+                    });
+                  }}
                 />
                 <Label>Clear Before Typing</Label>
               </div>
@@ -892,9 +902,9 @@ export default function Dev() {
               <Label>Keys (e.g. control+c)</Label>
               <Input
                 value={actionInputs.keys}
-                onChange={(e) =>
-                  setActionInputs({ ...actionInputs, keys: e.target.value })
-                }
+                onChange={(e) => {
+                  setActionInputs({ ...actionInputs, keys: e.target.value });
+                }}
               />
             </div>
           )}
@@ -906,12 +916,12 @@ export default function Dev() {
               <select
                 className="w-full p-2 border rounded-md text-sm"
                 value={actionInputs.direction}
-                onChange={(e) =>
+                onChange={(e) => {
                   setActionInputs({
                     ...actionInputs,
                     direction: e.target.value,
-                  })
-                }
+                  });
+                }}
               >
                 <option value="up">Up</option>
                 <option value="down">Down</option>
@@ -927,12 +937,12 @@ export default function Dev() {
               <Input
                 type="number"
                 value={actionInputs.magnitude}
-                onChange={(e) =>
+                onChange={(e) => {
                   setActionInputs({
                     ...actionInputs,
                     magnitude: e.target.value,
-                  })
-                }
+                  });
+                }}
               />
             </div>
           )}
@@ -944,12 +954,12 @@ export default function Dev() {
                 <Input
                   type="number"
                   value={actionInputs.destination_x}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setActionInputs({
                       ...actionInputs,
                       destination_x: e.target.value,
-                    })
-                  }
+                    });
+                  }}
                 />
               </div>
               <div className="space-y-2">
@@ -957,12 +967,12 @@ export default function Dev() {
                 <Input
                   type="number"
                   value={actionInputs.destination_y}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setActionInputs({
                       ...actionInputs,
                       destination_y: e.target.value,
-                    })
-                  }
+                    });
+                  }}
                 />
               </div>
             </>
@@ -1023,7 +1033,7 @@ export default function Dev() {
               size="sm"
               onClick={() => {
                 if (supabaseToken) {
-                  navigator.clipboard.writeText(supabaseToken);
+                  void navigator.clipboard.writeText(supabaseToken);
                 }
               }}
               disabled={!supabaseToken}
@@ -1060,8 +1070,8 @@ export default function Dev() {
         )}
         {!screenTextData && !screenTextError && !screenTextLoading && (
           <div className="mt-2 text-gray-500">
-            Click "Get Screen Text (Formatted)" button to fetch clean, organized
-            application text data.
+            Click &quot;Get Screen Text (Formatted)&quot; button to fetch clean,
+            organized application text data.
           </div>
         )}
         {screenTextLoading && (

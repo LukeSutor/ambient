@@ -41,14 +41,16 @@ export function GoogleLoginButton({
       const { listen } = await import("@tauri-apps/api/event");
 
       // Listen for OAuth2 success
-      const unlistenSuccess = await listen("oauth2-success", async (event) => {
-        setIsLoading(false);
-        setError(null);
+      const unlistenSuccess = await listen("oauth2-success", () => {
+        void (async () => {
+          setIsLoading(false);
+          setError(null);
 
-        // Emit auth changed event and check setup status
-        await invokeEmitAuthChanged();
+          // Emit auth changed event and check setup status
+          await invokeEmitAuthChanged();
 
-        onSignInSuccess();
+          onSignInSuccess();
+        })();
       });
 
       // Listen for OAuth2 errors

@@ -152,7 +152,9 @@ export function ConversationList({
             Chat History
           </p>
           <Button
-            onClick={() => toggleChatHistory(false)}
+            onClick={() => {
+              void toggleChatHistory(false);
+            }}
             variant="ghost"
             size="icon"
             className="!p-2"
@@ -185,7 +187,9 @@ export function ConversationList({
                   className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg"
                 >
                   <Button
-                    onClick={handleLoadConversation(conv.id)}
+                    onClick={() => {
+                      void handleLoadConversation(conv.id)();
+                    }}
                     variant="ghost"
                     className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent"
                   >
@@ -207,14 +211,18 @@ export function ConversationList({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuGroup>
-                        <DropdownMenuItem onClick={() => startEditing(conv)}>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            startEditing(conv);
+                          }}
+                        >
                           <Pen className="mr-2" />
                           Rename
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           variant="destructive"
                           onClick={() => {
-                            deleteConversation(conv.id);
+                            void deleteConversation(conv.id);
                           }}
                         >
                           <Trash2 className="mr-2" />

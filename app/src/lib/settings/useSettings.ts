@@ -61,22 +61,28 @@ export function useSettings(isRoot = false) {
     const setupEvents = async () => {
       try {
         // Listen for settings changes from other windows/sources
-        const unlisten = await listen("settings_changed", async () => {
-          console.log(
-            "[useSettings] Settings changed event received, invalidating cache",
-          );
+        const unlisten = await listen("settings_changed", () => {
+          void (async () => {
+            console.log(
+              "[useSettings] Settings changed event received, invalidating cache",
+            );
 
-          // Invalidate cache and reload
-          dispatch({ type: "INVALIDATE_CACHE" });
+            // Invalidate cache and reload
+            dispatch({ type: "INVALIDATE_CACHE" });
 
-          if (isMounted) {
-            try {
-              const settings = await invoke<UserSettings>("load_user_settings");
-              dispatch({ type: "SET_SETTINGS", payload: settings });
-            } catch (error) {
-              console.error("[useSettings] Failed to reload settings:", error);
+            if (isMounted) {
+              try {
+                const settings =
+                  await invoke<UserSettings>("load_user_settings");
+                dispatch({ type: "SET_SETTINGS", payload: settings });
+              } catch (error) {
+                console.error(
+                  "[useSettings] Failed to reload settings:",
+                  error,
+                );
+              }
             }
-          }
+          })();
         });
 
         return unlisten;
@@ -87,7 +93,7 @@ export function useSettings(isRoot = false) {
     };
 
     let cleanup: UnlistenFn | null = null;
-    setupEvents().then((fn) => {
+    void setupEvents().then((fn) => {
       if (isMounted) {
         cleanup = fn;
       } else if (fn) {
@@ -135,7 +141,7 @@ export function useSettings(isRoot = false) {
       }
     };
 
-    initialize();
+    void initialize();
   }, [state.initializationRef, state.settings, dispatch, isRoot]);
 
   // ============================================================

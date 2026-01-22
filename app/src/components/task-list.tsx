@@ -118,9 +118,9 @@ export function TaskList({
           <Filter className="h-4 w-4" />
           <Select
             value={filterBy}
-            onValueChange={(value: string) =>
-              setFilterBy(value as FilterOption)
-            }
+            onValueChange={(value: string) => {
+              setFilterBy(value as FilterOption);
+            }}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by" />
@@ -143,7 +143,9 @@ export function TaskList({
           <SortDesc className="h-4 w-4" />
           <Select
             value={sortBy}
-            onValueChange={(value: string) => setSortBy(value as SortOption)}
+            onValueChange={(value: string) => {
+              setSortBy(value as SortOption);
+            }}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by" />

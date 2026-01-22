@@ -163,7 +163,9 @@ export function HUDInputBar({
   return (
     <div
       className="flex flex-col justify-start items-center relative p-2"
-      onMouseEnter={() => setIsHoveringGroup(true)}
+      onMouseEnter={() => {
+        setIsHoveringGroup(true);
+      }}
       onMouseLeave={onMouseLeave}
       ref={inputRef}
       style={{
@@ -209,7 +211,9 @@ export function HUDInputBar({
           maxRows={4}
           minRows={2}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+          }}
           onKeyDown={onKeyDown}
           className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
           placeholder="Ask anything"
@@ -255,7 +259,9 @@ export function HUDInputBar({
                   className="hidden"
                   multiple
                   accept=".jpg, .jpeg, .png, .pdf"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
                   onChange={handleUploadFiles}
                 />
               </DropdownMenuItem>
@@ -291,9 +297,7 @@ export function HUDInputBar({
                 variant="ghost"
                 disabled={ocrLoading || isStreaming}
               >
-                <Wrench
-                  className={`${conversationType === "chat" ? "mr-1" : ""}`}
-                />
+                <Wrench className={conversationType === "chat" ? "mr-1" : ""} />
                 {conversationType === "chat" && "Tools"}
               </InputGroupButton>
             </DropdownMenuTrigger>
@@ -342,7 +346,9 @@ export function HUDInputBar({
               variant="ghost"
               className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent"
               size="icon"
-              onClick={() => toggleComputerUse()}
+              onClick={() => {
+                toggleComputerUse();
+              }}
             >
               <X className="!h-3 !w-3 text-black shrink-0" />
             </Button>
@@ -372,7 +378,9 @@ export function HUDInputBar({
             >
               <DropdownMenuGroup>
                 <DropdownMenuItem
-                  onClick={() => handleModelSelectionChange("Local")}
+                  onClick={() => {
+                    void handleModelSelectionChange("Local");
+                  }}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
                   <span className="font-medium text-sm">Local</span>
@@ -381,7 +389,9 @@ export function HUDInputBar({
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => handleModelSelectionChange("Fast")}
+                  onClick={() => {
+                    void handleModelSelectionChange("Fast");
+                  }}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
                   <span className="font-medium text-sm">Gemini 3 Flash</span>
@@ -390,7 +400,9 @@ export function HUDInputBar({
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => handleModelSelectionChange("Pro")}
+                  onClick={() => {
+                    void handleModelSelectionChange("Pro");
+                  }}
                   className="py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60"
                 >
                   <span className="font-medium text-sm">Gemini 3 Pro</span>
@@ -406,7 +418,9 @@ export function HUDInputBar({
             className="rounded-full bg-black/80 hover:bg-black"
             size="icon-xs"
             type="submit"
-            onClick={handleSubmit}
+            onClick={() => {
+              void handleSubmit();
+            }}
             disabled={ocrLoading || isStreaming}
           >
             <ArrowUpIcon />
@@ -421,7 +435,9 @@ export function HUDInputBar({
               ? "scale-100 opacity-100"
               : "scale-0 opacity-0"
           } absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none`}
-          onClick={closeHUD}
+          onClick={() => {
+            void closeHUD();
+          }}
           title="Close Window"
         >
           <X className="w-full h-full p-1 text-black pointer-events-none" />

@@ -259,7 +259,9 @@ export default function SignInPage() {
                 </button>
               </p>
               <button
-                onClick={() => setFormStep("login")}
+                onClick={() => {
+                  setFormStep("login");
+                }}
                 className="text-sm text-gray-500 hover:text-gray-700 mt-4"
                 type="button"
               >
@@ -300,7 +302,7 @@ export default function SignInPage() {
 
               <GoogleLoginButton
                 onSignInSuccess={() => {
-                  void router.push("/secondary");
+                  router.push("/secondary");
                 }}
                 className="w-full mb-6"
               />
@@ -354,7 +356,9 @@ export default function SignInPage() {
                         variant="ghost"
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
+                        onClick={() => {
+                          setShowPassword(!showPassword);
+                        }}
                         disabled={isLoading}
                       >
                         {showPassword ? (
