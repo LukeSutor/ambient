@@ -27,7 +27,11 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co"
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co; img-src 'self' asset: http://asset.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/attachments/**"]
+      }
     }
   },
   "bundle": {

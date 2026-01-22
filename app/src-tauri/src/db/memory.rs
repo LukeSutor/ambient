@@ -397,6 +397,13 @@ fn bytes_to_f32_vec(blob: &[u8]) -> Result<Vec<f32>, String> {
       blob.len()
     ));
   }
+  // Ensure correct dimension of 768
+  if blob.len() / 4 != 768 {
+    return Err(format!(
+      "Invalid embedding dimension: {} (expected 768)",
+      blob.len() / 4
+    ));
+  }
   let mut out = Vec::with_capacity(blob.len() / 4);
   for chunk in blob.chunks_exact(4) {
     let arr = <[u8; 4]>::try_from(chunk)

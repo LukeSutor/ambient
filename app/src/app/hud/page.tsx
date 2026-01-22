@@ -27,7 +27,7 @@ export default function HudPage() {
     conversationType,
     hasMoreConversations,
     conversationId,
-    ocrResults,
+    attachmentData,
     ocrLoading,
     isLoading,
     isStreaming,
@@ -38,8 +38,9 @@ export default function HudPage() {
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
-    deleteOCRResult,
     toggleComputerUse,
+    addAttachmentData,
+    removeAttachmentData,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
@@ -163,7 +164,6 @@ export default function HudPage() {
             handleSubmit={handleSubmit}
             onKeyDown={handleKeyDown}
             dispatchOCRCapture={dispatchOCRCapture}
-            deleteOCRResult={deleteOCRResult}
             onDragStart={() => setIsDraggingWindow(true)}
             onMouseLeave={handleMouseLeave}
             isDraggingWindow={isDraggingWindow}
@@ -171,9 +171,11 @@ export default function HudPage() {
             setIsHoveringGroup={setIsHoveringGroup}
             toggleComputerUse={toggleComputerUse}
             ocrLoading={ocrLoading}
-            ocrResults={ocrResults}
             isStreaming={isStreaming}
             conversationType={conversationType}
+            attachmentData={attachmentData}
+            addAttachmentData={addAttachmentData}
+            removeAttachmentData={removeAttachmentData}
           />
         </div>
     </AutoResizeContainer>

@@ -6,7 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { useConversationContext } from './ConversationProvider';
 import { Conversation, Message, Role } from '@/types/conversations';
 import { ChatMessage } from './types';
-import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent } from '@/types/events';
+import { ChatStreamEvent, MemoryExtractedEvent, OcrResponseEvent, RenameConversationEvent, ComputerUseUpdateEvent, AttachmentData, AttachmentsCreatedEvent } from '@/types/events';
 import { MemoryEntry } from '@/types/memory';
 import { 
   startComputerUseSession, 
@@ -24,6 +24,10 @@ const OCR_TIMEOUT_MS = 10000;
  * Extracts and removes <think> tags from LLM responses
  */
 function extractThinkingContent(text: string): string {
+  // Return early if no <think> tags
+  if (!text.includes('<think>')) {
+    return text;
+  }
   const thinkStartIndex = text.indexOf('<think>');
   const thinkEndIndex = text.indexOf('</think>');
   
@@ -66,6 +70,7 @@ function createUserMessage(content: string, conversationId: string, memory: Memo
     role: 'user' as Role,
     content,
     timestamp: new Date().toISOString(),
+    attachments: [],
   };
   return {
     message,
@@ -85,6 +90,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   const cleanupRef = useRef<(() => void) | null>(null);
   const isLoadingMoreRef = useRef(false);
 
+  // Use refs for values needed in listeners to avoid re-registering
+  const convIdRef = useRef(state.conversationId);
+  useEffect(() => {
+    convIdRef.current = state.conversationId;
+  }, [state.conversationId]);
+
   // ============================================================
   // Event Listeners Setup
   // ============================================================
@@ -92,7 +103,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   useEffect(() => {
     let isMounted = true;
     const unlisteners: UnlistenFn[] = [];
-    let streamContent = '';
 
     const setupEvents = async () => {
       // Clean up previous listeners
@@ -104,92 +114,101 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       if (!isMounted) return;
 
       try {
-        // Stream Listener
-        const streamUnlisten = await listen<ChatStreamEvent>('chat_stream', (event) => {
-          const { delta, full_response, is_finished, conv_id } = event.payload;
+        console.log('[useConversation] Setting up event listeners...');
+        
+        // Register all listeners in parallel to avoid race conditions
+        const listenerPromises = [
+          // Stream Listener
+          listen<ChatStreamEvent>('chat_stream', (event) => {
+            const { delta, full_response, is_finished, conv_id } = event.payload;
 
-          // Filter by conversation ID to prevent corruption
-          if (conv_id !== state.conversationId) {
-            return;
-          }
+            // Filter by conversation ID using ref to prevent corruption
+            if (conv_id && conv_id !== convIdRef.current) {
+              return;
+            }
 
-          if (is_finished) {
-            // Stream is complete
-            const finalText = extractThinkingContent(full_response ?? streamContent);
-            dispatch({ type: 'FINALIZE_STREAM', payload: finalText });
-            streamContent = '';
-            return;
-          }
+            if (is_finished) {
+              // Stream is complete
+              const finalText = extractThinkingContent(full_response);
+              dispatch({ type: 'FINALIZE_STREAM', payload: finalText });
+              return;
+            }
 
-          if (delta) {
-            // Accumulate stream content
-            streamContent += delta;
-            const cleanContent = extractThinkingContent(streamContent);
-            dispatch({ type: 'UPDATE_STREAMING_CONTENT', payload: cleanContent });
+            if (delta) {
+              // Update content
+              const cleanContent = extractThinkingContent(full_response);
+              dispatch({ type: 'UPDATE_STREAMING_CONTENT', payload: cleanContent });
 
-            // Auto-scroll to bottom
-            if (messagesEndRef?.current) {
-              queueMicrotask(() => {
-                messagesEndRef.current?.scrollIntoView({ 
-                  behavior: 'smooth', 
-                  block: 'end' 
+              // Auto-scroll to bottom
+              if (messagesEndRef?.current) {
+                queueMicrotask(() => {
+                  messagesEndRef.current?.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'end' 
+                  });
                 });
+              }
+            }
+          }),
+
+          // Computer Use Listener
+          listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
+            // Create message from event
+            const chatMessage: ChatMessage = {
+              message: event.payload.message,
+              reasoningMessages: [],
+              memory: null,
+            };
+            
+            if (event.payload.status === 'completed') {
+              dispatch({ type: 'FINALIZE_STREAM', payload: event.payload.message.content });
+            } else {
+              dispatch({ type: 'ADD_REASONING_MESSAGE', payload: chatMessage });
+            }
+          }),
+
+          // Memory Listener
+          listen<MemoryExtractedEvent>('memory_extracted', (event) => {
+            const { memory } = event.payload;
+            
+            // Attach memory to the message with matching message_id
+            if (memory.message_id) {
+              dispatch({ 
+                type: 'ATTACH_MEMORY', 
+                payload: { messageId: memory.message_id, memory } 
               });
             }
-          }
-        });
-        unlisteners.push(streamUnlisten);
+          }),
 
-        // Computer Use Listener
-        const computerUseUnlisten = await listen<ComputerUseUpdateEvent>('computer_use_update', (event) => {
-          // Create message from event
-          const chatMessage: ChatMessage = {
-            message: event.payload.message,
-            reasoningMessages: [],
-            memory: null,
-          };
-          
-          if (event.payload.status === 'completed') {
-            dispatch({ type: 'FINALIZE_STREAM', payload: event.payload.message.content });
-          } else {
-            dispatch({ type: 'ADD_REASONING_MESSAGE', payload: chatMessage });
-          }
+          // OCR Listener
+          listen<OcrResponseEvent>('ocr_response', (event) => {
+            const ocrData: AttachmentData = {
+              name: 'Screen Capture',
+              file_type: 'ambient/ocr',
+              data: event.payload.text,
+            }
+            dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: ocrData });
 
-        });
-        unlisteners.push(computerUseUnlisten);
+            // Stop OCR loading state and clear timeout
+            dispatch({ type: 'SET_OCR_LOADING', payload: false });
+            dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
+          }),
 
-        // Memory Listener
-        const memoryUnlisten = await listen<MemoryExtractedEvent>('memory_extracted', (event) => {
-          const { memory } = event.payload;
-          
-          // Attach memory to the message with matching message_id
-          if (memory.message_id) {
-            dispatch({ 
-              type: 'ATTACH_MEMORY', 
-              payload: { messageId: memory.message_id, memory } 
-            });
-          }
-        });
-        unlisteners.push(memoryUnlisten);
+          // Attachments created listener
+          listen<AttachmentsCreatedEvent>('attachments_created', (event) => {
+            const { attachments } = event.payload;
+            dispatch({ type: 'ADD_ATTACHMENTS_TO_MESSAGE', payload: { messageId: event.payload.message_id, attachments } });
+          }),
 
-        // OCR Listener
-        const ocrUnlisten = await listen<OcrResponseEvent>('ocr_response', (event) => {
-          // Add stop loading state and add successful OCR result
-          const result = event.payload;
-          dispatch({ type: 'CLEAR_OCR_TIMEOUT' });
-          dispatch({ type: 'SET_OCR_LOADING', payload: false });
-          if (result.success) {
-            dispatch({ type: 'ADD_OCR_RESULT', payload: result });
-          }
-        });
-        unlisteners.push(ocrUnlisten);
+          // Rename conversation listener
+          listen<RenameConversationEvent>('rename_conversation', (event) => {
+            const { conv_id, new_name } = event.payload;
+            dispatch({ type: 'RENAME_CONVERSATION', payload: { id: conv_id, newName: new_name } });
+          })
+        ];
 
-        // Rename conversation listener
-        const renameUnlisten = await listen<RenameConversationEvent>('rename_conversation', (event) => {
-          const { conv_id, new_name } = event.payload;
-          dispatch({ type: 'RENAME_CONVERSATION', payload: { id: conv_id, newName: new_name } });
-        });
-        unlisteners.push(renameUnlisten);
+        const results = await Promise.all(listenerPromises);
+        unlisteners.push(...results);
 
         console.log('[useConversation] Event listeners initialized');
       } catch (error) {
@@ -223,7 +242,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         cleanupRef.current = null;
       }
     };
-  }, [state.conversationId, dispatch, messagesEndRef]);
+  }, [dispatch, messagesEndRef]); // Removed state.conversationId from dependencies
 
   // ============================================================
   // Initialization Effect
@@ -312,16 +331,13 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
    * Loads messages for a specific conversation
    */
   const loadMessages = useCallback(async (conversation: Conversation): Promise<void> => {
-    console.log('[useConversation] Loading messages for conversation:', conversation);
     try {
       const backendMessages = await invoke<Message[]>('get_messages', { 
         conversationId: conversation.id
       });
       let messages = backendMessages.map(transformBackendMessage);
-      console.log({messages});
       // Load messages depending on conversation type
       if (conversation.conv_type === 'computer_use') {
-        console.log('Loading computer use messages with reasoning grouping');
         // Collect all assistant/function messages into the last assistant message's reasoningMessages
         let finalizedMessages: ChatMessage[] = [];
         let currentAssistantMessage: ChatMessage | null = null;
@@ -379,17 +395,19 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       // Create conversation and generate name if first message
       let activeConversationId = conversationId;
       if (!activeConversationId) {
-        console.log('[useConversation] Creating conversation for first message');
         const conversation = await createConversation(undefined, state.conversationType);
         activeConversationId = conversation.id;
         dispatch({ type: 'SET_CONVERSATION_ID', payload: conversation.id });
         dispatch({ type: 'PREPEND_CONVERSATION', payload: conversation });
-        console.log('[useConversation] Created conversation:', conversation);
         await emitGenerateConversationName(conversation.id, content);
       }
 
       // Create user message with ID and timestamp
       const userMessage = createUserMessage(content, activeConversationId);
+
+      // Clear attachment data
+      const attachmentData = state.attachmentData;
+      dispatch({ type: 'CLEAR_ATTACHMENT_DATA' });
 
       // Start user message with empty content (for animation)
       dispatch({ 
@@ -417,7 +435,7 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         await sendChatApiMessage(
           activeConversationId,
           content,
-          state.ocrResults,
+          attachmentData,
           userMessage.message.id
         );
       }
@@ -429,12 +447,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
       dispatch({ type: 'SET_LOADING', payload: false });
       dispatch({ type: 'SET_STREAMING', payload: false });
     }
-  }, [dispatch, state.conversationId, state.conversationType, state.ocrResults]);
+  }, [dispatch, state.conversationId, state.conversationType, state.attachmentData]);
 
   /**
    * Get all conversations
    */
-  const loadMoreConversations = useCallback(async (): Promise<void> => {//TODO: fix this getting duplicate ids
+  const loadMoreConversations = useCallback(async (): Promise<void> => {
     // Prevent concurrent calls
     if (isLoadingMoreRef.current || !state.hasMoreConversations) {
       return;
@@ -449,12 +467,12 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
         limit: CONVERSATION_LIMIT, 
         offset 
       });
-      console.log('[useConversation] Loaded more conversations:', conversations);
       if (conversations.length < CONVERSATION_LIMIT) {
         // No more conversations to load
         dispatch({ type: 'SET_NO_MORE_CONVERSATIONS' });
       }
       dispatch({ type: 'ADD_CONVERSATIONS', payload: conversations });
+      dispatch({ type: 'INCREMENT_CONVERSATION_PAGE' });
     } catch (error) {
       console.error('[useConversation] Failed to load more conversations:', error);
     } finally {
@@ -514,13 +532,6 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
   }, [dispatch]);
 
   /**
-   * Delete an OCR result by its index
-   */
-  const deleteOCRResult = useCallback((index: number): void => {
-    dispatch({ type: 'DELETE_OCR_RESULT', payload: index });
-  }, [dispatch]);
-
-  /**
    * Toggle Computer Use mode
    */
   const toggleComputerUse = useCallback((): void => {
@@ -529,8 +540,21 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     } else {
       dispatch({ type: 'SET_CONVERSATION_TYPE', payload: "chat" })
     }
-    console.log(state.conversationType)
   }, [dispatch, state.conversationType])
+
+  /**
+   * Add attachment data
+   */
+  const addAttachmentData = useCallback((attachment: AttachmentData): void => {
+    dispatch({ type: 'ADD_ATTACHMENT_DATA', payload: attachment });
+  }, [dispatch]);
+
+  /**
+   * Remove attachment data by index
+   */
+  const removeAttachmentData = useCallback((index: number): void => {
+    dispatch({ type: 'REMOVE_ATTACHMENT_DATA', payload: index });
+  }, [dispatch]);
 
   // ============================================================
   // Return API
@@ -549,7 +573,8 @@ export function useConversation(messagesEndRef?: React.RefObject<HTMLDivElement 
     loadMoreConversations,
     renameConversation,
     dispatchOCRCapture,
-    deleteOCRResult,
     toggleComputerUse,
+    addAttachmentData,
+    removeAttachmentData,
   };
 }

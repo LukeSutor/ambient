@@ -1,10 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useReducer, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 import { ChatMessage, ConversationState } from './types';
-import { Conversation } from '@/types/conversations';
+import { Attachment, Conversation } from '@/types/conversations';
 import { MemoryEntry } from '@/types/memory';
-import { OcrResponseEvent } from '@/types/events';
+import { AttachmentData, OcrResponseEvent } from '@/types/events';
 
 /**
  * Initial state for conversations
@@ -14,10 +14,10 @@ const initialState: ConversationState = {
   conversationName: '',
   conversationType: 'chat',
   messages: [],
+  attachmentData: [],
   isStreaming: false,
   isLoading: false,
   streamingContent: '',
-  ocrResults: [],
   ocrLoading: false,
   ocrTimeoutRef: { current: null },
   conversations: [],
@@ -35,6 +35,7 @@ type ConversationAction =
   | { type: 'SET_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'ADD_CONVERSATIONS'; payload: Conversation[] }
   | { type: 'PREPEND_CONVERSATION'; payload: Conversation }
+  | { type: 'INCREMENT_CONVERSATION_PAGE' }
   | { type: 'RENAME_CONVERSATION'; payload: { id: string; newName: string } }
   | { type: 'DELETE_CONVERSATION'; payload: { id: string } }
   | { type: 'SET_NO_MORE_CONVERSATIONS' }
@@ -47,10 +48,11 @@ type ConversationAction =
   | { type: 'START_ASSISTANT_MESSAGE'; payload: { conversationId: string } }
   | { type: 'UPDATE_STREAMING_CONTENT'; payload: string }
   | { type: 'FINALIZE_STREAM'; payload: string }
+  | { type: 'ADD_ATTACHMENT_DATA'; payload: AttachmentData }
+  | { type: 'REMOVE_ATTACHMENT_DATA'; payload: number }
+  | { type: 'CLEAR_ATTACHMENT_DATA' }
+  | { type: 'ADD_ATTACHMENTS_TO_MESSAGE'; payload: { messageId: string; attachments: Attachment[] } }
   | { type: 'ATTACH_MEMORY'; payload: { messageId: string; memory: MemoryEntry } }
-  | { type: 'ADD_OCR_RESULT'; payload: OcrResponseEvent }
-  | { type: 'DELETE_OCR_RESULT'; payload: number }
-  | { type: 'CLEAR_OCR_RESULTS' }
   | { type: 'SET_OCR_TIMEOUT'; payload: ReturnType<typeof setTimeout> | null }
   | { type: 'CLEAR_OCR_TIMEOUT' }
   | { type: 'CLEAR_MESSAGES' }
@@ -182,6 +184,12 @@ function conversationReducer(
         conversations: [action.payload, ...state.conversations],
       };
 
+    case 'INCREMENT_CONVERSATION_PAGE':
+      return {
+        ...state,
+        conversationPage: state.conversationPage + 1,
+      };
+
     case 'SET_NO_MORE_CONVERSATIONS':
       return {
         ...state,
@@ -216,6 +224,7 @@ function conversationReducer(
           role: 'user',
           content: '',
           timestamp: action.payload.timestamp,
+          attachments: [],
         },
         reasoningMessages: [],
         memory: null,
@@ -257,6 +266,7 @@ function conversationReducer(
           role: 'assistant',
           content: '',
           timestamp: new Date().toISOString(),
+          attachments: [],
         },
         reasoningMessages: [],
         memory: null,
@@ -346,6 +356,48 @@ function conversationReducer(
       };
     }
 
+    case 'ADD_ATTACHMENT_DATA':
+      return {
+        ...state,
+        attachmentData: [...state.attachmentData, action.payload],
+      };
+    
+    case 'REMOVE_ATTACHMENT_DATA':
+      return {
+        ...state,
+        attachmentData: state.attachmentData.filter((_, idx) => idx !== action.payload),
+      };
+
+    case 'CLEAR_ATTACHMENT_DATA':
+      return {
+        ...state,
+        attachmentData: [],
+      };
+
+    case 'ADD_ATTACHMENTS_TO_MESSAGE': {
+      // Find message by ID and add attachments
+      const messagesWithAttachments = state.messages.map((msg) => {
+        if (msg.message.id === action.payload.messageId) {
+          return {
+            ...msg,
+            message: {
+              ...msg.message,
+              attachments: [
+                ...msg.message.attachments,
+                ...action.payload.attachments,
+              ],
+            },
+          };
+        }
+        return msg;
+      });
+
+      return {
+        ...state,
+        messages: messagesWithAttachments,
+      };
+    }
+
     case 'ATTACH_MEMORY': {
       // Find user message by ID and attach memory
       const messagesWithMemory = state.messages.map((msg) => {
@@ -363,24 +415,6 @@ function conversationReducer(
         messages: messagesWithMemory,
       };
     }
-
-    case 'ADD_OCR_RESULT':
-      return {
-        ...state,
-        ocrResults: [...state.ocrResults, action.payload],
-      };
-
-    case 'CLEAR_OCR_RESULTS':
-      return {
-        ...state,
-        ocrResults: [],
-      };
-
-    case 'DELETE_OCR_RESULT':
-      return {
-        ...state,
-        ocrResults: state.ocrResults.filter((_, idx) => idx !== action.payload),
-      };
 
     case 'SET_OCR_TIMEOUT':
       return {

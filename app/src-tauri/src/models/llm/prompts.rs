@@ -117,7 +117,9 @@ Examples:
 
 You may receive:
 - Memories: Past facts about the user
+- Images: Screenshots or photos provided by the user
 - OCR: Text from user's screen
+- PDFs: Documents provided by the user
 - Task: The user's current request
 
 Be helpful and use the memories and OCR when relevant. Use markdown for formatting. You are responding directly to the user."#,

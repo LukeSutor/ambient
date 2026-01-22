@@ -204,7 +204,6 @@ pub fn run() {
       os_utils::handlers::capture_eval_data,
       models::llm::server::spawn_llama_server,
       models::llm::server::stop_llama_server,
-      models::llm::server::generate,
       models::llm::handlers::handle_hud_chat,
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,

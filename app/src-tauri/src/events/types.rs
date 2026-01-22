@@ -1,5 +1,6 @@
 use crate::memory::types::MemoryEntry;
 use crate::os_utils::windows::window::ApplicationTextData;
+use crate::db::conversations::Attachment;
 use crate::db::conversations::Message;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -52,12 +53,28 @@ pub struct ChatStreamEvent {
 pub const HUD_CHAT: &str = "hud_chat";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
+pub struct AttachmentData {
+  pub name: String,
+  pub file_type: String,
+  pub data: String,
+}
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
 pub struct HudChatEvent {
   pub text: String,
-  pub ocr_responses: Vec<OcrResponseEvent>,
   pub timestamp: String,
   pub conv_id: String,
   pub message_id: String,
+  pub attachments: Vec<AttachmentData>,
+}
+
+pub const ATTACHMENTS_CREATED: &str = "attachments_created";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct AttachmentsCreatedEvent {
+  pub message_id: String,
+  pub attachments: Vec<Attachment>,
+  pub timestamp: String,
 }
 
 pub const OCR_RESPONSE: &str = "ocr_response";

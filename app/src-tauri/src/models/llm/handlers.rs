@@ -1,5 +1,7 @@
 use crate::db::activity::{get_latest_activity_summary, insert_activity_summary};
-use crate::db::conversations::{add_message, add_message_with_id, update_conversation_name};
+use crate::db::conversations::{
+  create_attachments, add_attachments, add_message, add_message_with_id, update_conversation_name,
+};
 use crate::db::core::DbState;
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
@@ -198,8 +200,44 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     }
   };
 
+  // Create attachments and save them to the database
+  let attachments = create_attachments(
+    &app_handle.clone(),
+    event.message_id.clone(),
+    event.attachments.clone(),
+  )
+  .await;
+  
+  match attachments {
+    Ok(att_records) => {
+      log::info!("emitting attachments created event");
+      // Emit attachments created event
+      let now = chrono::Utc::now();
+      let attachments_event = AttachmentsCreatedEvent {
+        message_id: event.message_id.clone(),
+        attachments: att_records.clone(),
+        timestamp: now.to_rfc3339(),
+      };
+      let _ = emit(ATTACHMENTS_CREATED, attachments_event);
+
+      // Link attachments to the message
+      if let Err(e) = add_attachments(
+        &app_handle.clone(),
+        event.message_id.clone(),
+        att_records,
+      )
+      .await
+      {
+        log::error!("[hud_chat] Failed to link attachments to message: {}", e);
+      }
+    }
+    Err(e) => {
+      log::error!("[hud_chat] Failed to create attachments: {}", e);
+    }
+  }
+
   // Get the current date time YYYY-MM-DD format
-  let current_date_time = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+  let current_date_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
   let system_prompt = system_prompt_template.replace("{currentDateTime}", &current_date_time);
 
@@ -216,42 +254,25 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   // Create memory context string
   let mut memory_context = String::new();
   if !relevant_memories.is_empty() {
-    memory_context.push_str("Here are some relevant memories you have of our past interactions:\n");
+    memory_context.push_str("Relevant memories from past interactions:\n");
     for memory in relevant_memories {
       memory_context.push_str(&format!("- {}\n", memory.text));
     }
     memory_context.push_str("\n");
   }
 
-  // Combine OCR responses into a single string
-  let mut ocr_text = String::new();
-  if !event.ocr_responses.is_empty() {
-    for ocr_response in event.ocr_responses.iter() {
-      ocr_text.push_str(&format!("{}\n", ocr_response.text));
-    }
-    if !ocr_text.is_empty() {
-      ocr_text = format!(
-        "\nHere's text captured from my screen as context:\n{}\n",
-        ocr_text
-      );
-    }
-  }
-
-  // Create user prompt with ocr data and memory context
+  // Create user prompt with memory context
   let user_prompt = format!(
-    "{}{}Task: {}",
+    "{}Task: {}",
     if memory_context.is_empty() {
       ""
     } else {
-      &format!("{}\n", memory_context)
-    },
-    if ocr_text.is_empty() {
-      ""
-    } else {
-      &format!("{}\n", ocr_text)
+      memory_context.as_str()
     },
     event.text
   );
+
+  log::info!("[hud_chat] Generated user prompt:\n{}", user_prompt);
 
   // Generate response
   let request = LlmRequest::new(user_prompt)

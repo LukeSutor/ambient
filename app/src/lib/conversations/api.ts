@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emit } from '@tauri-apps/api/event';
-import { OcrResponseEvent, HudChatEvent, GenerateConversationNameEvent } from '@/types/events';
+import { OcrResponseEvent, HudChatEvent, AttachmentData, GenerateConversationNameEvent } from '@/types/events';
 import { Conversation } from '@/types/conversations';
 
 /**
@@ -32,16 +32,16 @@ export async function createConversation(name?: string, convType?: string | null
 export async function sendMessage(
   conversationId: string,
   content: string,
-  ocrResults: OcrResponseEvent[],
+  attachmentData: AttachmentData[],
   messageId: string
 ): Promise<string> {
   try {
     const hudChatEvent: HudChatEvent = {
       text: content,
-      ocr_responses: ocrResults,
       conv_id: conversationId,
       timestamp: Date.now().toString(),
       message_id: messageId,
+      attachments: attachmentData,
     };
 
     const finalText = await invoke<string>('handle_hud_chat', {
