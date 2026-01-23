@@ -12,6 +12,7 @@ use crate::windows::{open_main_window, close_main_window, open_computer_use_wind
 use crate::db::computer_use::{get_computer_use_session, save_computer_use_session};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
+use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use chrono;
 
 fn transform_function_call(function_name: String, args: Vec<String>) -> (String, String) {
@@ -158,11 +159,8 @@ impl ComputerUseEngine {
         let mut prompt_tokens = 0u64;
         let mut completion_tokens = 0u64;
 
-        let url = std::env::var("CLOUDFLARE_COMPLETIONS_WORKER_URL")
-            .map_err(|_| "Missing CLOUDFLARE_COMPLETIONS_WORKER_URL environment variable".to_string())?;
-
         let resp = client
-            .post(&url)
+            .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
             .headers(headers)
             .json(&body)
             .send()

@@ -2,6 +2,7 @@ use crate::models::llm::types::{LlmRequest, LlmProvider};
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
+use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use base64::{Engine as _, engine::general_purpose};
 use serde_json::{json, Value};
@@ -166,12 +167,9 @@ impl LlmProvider for CloudflareProvider {
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
 
-    let url = std::env::var("CLOUDFLARE_COMPLETIONS_WORKER_URL")
-        .map_err(|_| "Missing CLOUDFLARE_COMPLETIONS_WORKER_URL environment variable".to_string())?;
-
     if should_stream {
       let resp = client
-        .post(&url)
+        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
         .headers(headers)
         .json(&body)
         .send()
@@ -273,7 +271,7 @@ impl LlmProvider for CloudflareProvider {
       Ok(full)
     } else {
       let resp = client
-        .post(&url)
+        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
         .headers(headers)
         .json(&body)
         .send()

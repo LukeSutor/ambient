@@ -4,9 +4,10 @@ use crate::auth::types::{
 use crate::auth::storage::{
     retrieve_auth_state, clear_auth_state,
 };
-use crate::auth::auth_flow::{get_env_vars, refresh_token, fetch_user_profile};
+use crate::auth::auth_flow::{refresh_token, fetch_user_profile};
 use crate::auth::security::HTTP_CLIENT;
 use tauri::{AppHandle, Emitter};
+use crate::constants::{SUPABASE_URL, SUPABASE_ANON_KEY};
 
 /// Combined auth state fetch to reduce redundant API calls
 #[tauri::command]
@@ -95,12 +96,11 @@ async fn check_online() -> bool {
 
 #[tauri::command]
 pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/auth/v1/user", base_url);
+    let endpoint = format!("{}/auth/v1/user", SUPABASE_URL);
     
     let response = HTTP_CLIENT
         .get(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .await

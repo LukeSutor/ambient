@@ -27,7 +27,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co http://ipc.localhost; img-src 'self' asset: http://asset.localhost https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'",
+      "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co http://ipc.localhost; img-src 'self' asset: http://asset.localhost https://*.googleusercontent.com data: blob:; style-src 'self' 'unsafe-inline'",
+      "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/attachments/**"]

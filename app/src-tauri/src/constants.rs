@@ -38,6 +38,13 @@ pub const KEYRING_ENCRYPTION_KEY: &str = "supabase_storage_key";
 pub const KEYRING_SERVICE: &str = "ambient";
 pub const KEYRING_AUTH_KEY: &str = "supabase_auth";
 
+// Supabase configuration
+pub const SUPABASE_URL: &str = "https://sipccjuzzgcjaulkvwkg.supabase.co";
+pub const SUPABASE_ANON_KEY: &str = "sb_publishable_LxTjFAXSpnDlB9d_8pYWAg_vs87qhqE";
+
+// Cloudflare configuration
+pub const CLOUDFLARE_COMPLETIONS_WORKER_URL: &str = "https://llm-completions.lukesutor.workers.dev/";
+
 // Server setup
 pub const MAX_PORT: u16 = 9999;
 pub const MIN_PORT: u16 = 8000;

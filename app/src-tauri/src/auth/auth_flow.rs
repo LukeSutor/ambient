@@ -11,22 +11,9 @@ use crate::auth::security::{
 use serde_json::json;
 use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
+use crate::constants::{SUPABASE_URL, SUPABASE_ANON_KEY};
 
 extern crate dotenv;
-
-/// Get Supabase environment variables
-pub fn get_env_vars() -> Result<(String, String), String> {
-    if let Err(e) = dotenv::dotenv() {
-        log::warn!("[supabase_auth] Warning: Could not load .env file: {}", e);
-    }
-    
-    let url = std::env::var("SUPABASE_URL")
-        .map_err(|_| "Missing SUPABASE_URL environment variable".to_string())?;
-    let key = std::env::var("SUPABASE_ANON_KEY")
-        .map_err(|_| "Missing SUPABASE_ANON_KEY environment variable".to_string())?;
-    
-    Ok((url, key))
-}
 
 #[tauri::command]
 pub async fn sign_up(
@@ -39,8 +26,7 @@ pub async fn sign_up(
     check_rate_limit(RateLimitOp::SignUp, &email)?;
     record_attempt(RateLimitOp::SignUp, &email);
     
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/auth/v1/signup", base_url);
+    let endpoint = format!("{}/auth/v1/signup", SUPABASE_URL);
     
     // Build user metadata
     let mut user_meta = serde_json::Map::new();
@@ -57,7 +43,7 @@ pub async fn sign_up(
     
     let response = HTTP_CLIENT
         .post(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -120,8 +106,7 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     check_rate_limit(RateLimitOp::SignIn, &email)?;
     record_attempt(RateLimitOp::SignIn, &email);
     
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/auth/v1/token?grant_type=password", base_url);
+    let endpoint = format!("{}/auth/v1/token?grant_type=password", SUPABASE_URL);
     
     let body = json!({
         "email": email,
@@ -130,7 +115,7 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
     
     let response = HTTP_CLIENT
         .post(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -221,8 +206,7 @@ pub async fn refresh_token() -> Result<RefreshTokenResponse, String> {
 }
 
 pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTokenResponse, String> {
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/auth/v1/token?grant_type=refresh_token", base_url);
+    let endpoint = format!("{}/auth/v1/token?grant_type=refresh_token", SUPABASE_URL);
     
     let body = json!({
         "refresh_token": refresh_token
@@ -230,7 +214,7 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
     
     let response = HTTP_CLIENT
         .post(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -281,8 +265,7 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
     check_rate_limit(RateLimitOp::VerifyOtp, &email)?;
     record_attempt(RateLimitOp::VerifyOtp, &email);
     
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/auth/v1/verify", base_url);
+    let endpoint = format!("{}/auth/v1/verify", SUPABASE_URL);
     
     let body = json!({
         "email": email,
@@ -292,7 +275,7 @@ pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) 
     
     let response = HTTP_CLIENT
         .post(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -350,8 +333,7 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
     check_rate_limit(RateLimitOp::ResendConfirmation, &email)?;
     record_attempt(RateLimitOp::ResendConfirmation, &email);
     
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/auth/v1/resend", base_url);
+    let endpoint = format!("{}/auth/v1/resend", SUPABASE_URL);
     
     let body = json!({
         "email": email,
@@ -360,7 +342,7 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
     
     let response = HTTP_CLIENT
         .post(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -403,12 +385,11 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
     
     // Try to invalidate the session on the server
     if let Some(token) = access_token {
-        let (base_url, api_key) = get_env_vars()?;
-        let endpoint = format!("{}/auth/v1/logout", base_url);
+        let endpoint = format!("{}/auth/v1/logout", SUPABASE_URL);
         
         let _ = HTTP_CLIENT
             .post(&endpoint)
-            .header("apikey", &api_key)
+            .header("apikey", SUPABASE_ANON_KEY)
             .header("Authorization", format!("Bearer {}", token))
             .send()
             .await;
@@ -432,7 +413,6 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 #[tauri::command]
 pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     log::info!("[supabase_auth] Initiating Google OAuth sign in");
-    let (base_url, _) = get_env_vars()?;
     
     // Build the OAuth authorization URL
     let redirect_uri = "ambient://auth/callback";
@@ -440,7 +420,7 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     
     let auth_url = format!(
         "{}/auth/v1/authorize?provider={}&redirect_to={}",
-        base_url,
+        SUPABASE_URL,
         provider,
         urlencoding::encode(redirect_uri)
     );
@@ -452,12 +432,11 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
 
 /// Fetch user profile from the public.profiles table
 pub async fn fetch_user_profile(user_id: &str, access_token: &str) -> Result<serde_json::Value, String> {
-    let (base_url, api_key) = get_env_vars()?;
-    let endpoint = format!("{}/rest/v1/profiles?id=eq.{}&select=*", base_url, user_id);
+    let endpoint = format!("{}/rest/v1/profiles?id=eq.{}&select=*", SUPABASE_URL, user_id);
     
     let response = HTTP_CLIENT
         .get(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Authorization", format!("Bearer {}", access_token))
         .header("Range", "0-0") // Just get one
         .send()
@@ -544,14 +523,12 @@ async fn handle_tokens_from_fragment(
         return Err(AuthErrorResponse::oauth_error("Invalid token format received").to_string());
     }
     
-    let (base_url, api_key) = get_env_vars()?;
-    
     // Get user info using the access token - this validates the token server-side
-    let endpoint = format!("{}/auth/v1/user", base_url);
+    let endpoint = format!("{}/auth/v1/user", SUPABASE_URL);
     
     let response = HTTP_CLIENT
         .get(&endpoint)
-        .header("apikey", &api_key)
+        .header("apikey", SUPABASE_ANON_KEY)
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .await
