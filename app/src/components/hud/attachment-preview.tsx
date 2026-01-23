@@ -30,11 +30,11 @@ export function AttachmentPreview({
   removeAttachmentData,
 }: AttachmentPreviewProps) {
   const [preview, setPreview] = useState(false);
-  const { isChatExpanded } = useWindows();
+  const { isChatExpanded, isChatHistoryExpanded } = useWindows();
   return (
     <div
       key={index}
-      className={`group relative h-20 flex flex-col items-center shrink-0 ${preview && !isChatExpanded ? "mb-[300px]" : ""}`}
+      className={`group relative h-20 flex flex-col items-center shrink-0 ${preview && !(isChatExpanded || isChatHistoryExpanded) ? "mb-[300px]" : ""}`}
     >
       <Dialog open={preview} onOpenChange={setPreview}>
         <Tooltip>

@@ -33,21 +33,6 @@ const data = {
       icon: House,
     },
     {
-      title: "Activity",
-      url: "/secondary/activity",
-      icon: SquareTerminal,
-      items: [
-        {
-          title: "Recent",
-          url: "/secondary/activity/recent",
-        },
-        {
-          title: "Recurring",
-          url: "/secondary/activity/recurring",
-        },
-      ],
-    },
-    {
       title: "Memories",
       url: "/secondary/memories",
       icon: NotebookPen,

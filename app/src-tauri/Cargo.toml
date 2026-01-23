@@ -61,7 +61,6 @@ windows = { version = "0.60.0", features = [
 
 # Auth crates
 keyring = { version = "3.6.3", features = ["windows-native", "apple-native"] }
-dotenv = "0.15"
 base64 = "0.22"
 tauri-plugin-deep-link = "2"
 urlencoding = "2.1"

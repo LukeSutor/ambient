@@ -123,7 +123,7 @@ pub async fn process_screen_selection(
 
   // Take screenshot and crop
   let filename = Uuid::new_v4().to_string() + ".png";
-  let screenshot_path = save_screenshot(app_handle.clone(), filename.clone());
+  let screenshot_path = save_screenshot(&app_handle, filename.clone());
   let pathbuf = std::path::PathBuf::from(screenshot_path.clone());
   crop_image_selection(pathbuf.clone(), bounds);
 
@@ -172,23 +172,4 @@ pub async fn get_screen_dimensions(app_handle: AppHandle) -> Result<(u32, u32), 
   let size = monitor.size();
 
   Ok((size.width, size.height))
-}
-
-/// Convert client coordinates to screen coordinates
-#[tauri::command]
-pub async fn client_to_screen_coords(
-  app_handle: AppHandle,
-  window_label: String,
-  x: f64,
-  y: f64,
-) -> Result<(i32, i32), String> {
-  if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let position = window.outer_position().map_err(|e| e.to_string())?;
-    let screen_x = position.x + x as i32;
-    let screen_y = position.y + y as i32;
-
-    Ok((screen_x, screen_y))
-  } else {
-    Err(format!("Window '{}' not found", window_label))
-  }
 }

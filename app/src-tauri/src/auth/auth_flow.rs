@@ -13,8 +13,6 @@ use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
 use crate::constants::{SUPABASE_URL, SUPABASE_ANON_KEY};
 
-extern crate dotenv;
-
 #[tauri::command]
 pub async fn sign_up(
     email: String,

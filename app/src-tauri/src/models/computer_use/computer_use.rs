@@ -380,7 +380,7 @@ impl ComputerUseEngine {
 
     async fn save_user_message(&self, content: String) -> Result<(), String> {
         let user_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "user".to_string(),
             content,
@@ -398,7 +398,7 @@ impl ComputerUseEngine {
         }
 
         let reasoning_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "assistant".to_string(),
             reasoning.clone(),
@@ -430,7 +430,7 @@ impl ComputerUseEngine {
         let _ = emit(COMPUTER_USE_TOAST, toast_event);
 
         let func_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "functioncall".to_string(),
             function_call_message.clone(),
@@ -648,7 +648,7 @@ impl ComputerUseEngine {
 
         // Emit final update event
         let final_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "assistant".to_string(),
             self.final_response.clone(),

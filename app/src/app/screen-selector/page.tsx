@@ -1,6 +1,8 @@
 "use client";
 
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface SelectionBounds {
@@ -69,6 +71,13 @@ export default function ScreenSelectorPage() {
       await invoke("close_screen_selector");
     } catch (error) {
       console.error("Failed to cancel screen selector:", error);
+
+      // If all else fails, just close the window
+      try {
+        await getCurrentWindow().close();
+      } catch (windowError) {
+        console.error("Failed to close window via JS fallback:", windowError);
+      }
     }
   }, []);
 
@@ -137,8 +146,14 @@ export default function ScreenSelectorPage() {
     // Only process if selection has meaningful size
     if (bounds.width > 10 && bounds.height > 10) {
       try {
-        await invoke<ScreenSelectionResult>("process_screen_selection", {
+        // Fire and forget: don't wait for background processing before closing the UI
+        void invoke<ScreenSelectionResult>("process_screen_selection", {
           bounds,
+        }).catch((error: unknown) => {
+          console.error(
+            "Failed to process screen selection background task:",
+            error,
+          );
         });
 
         await closeSelector();

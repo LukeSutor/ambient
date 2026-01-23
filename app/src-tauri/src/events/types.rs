@@ -1,44 +1,7 @@
 use crate::memory::types::MemoryEntry;
-use crate::os_utils::windows::window::ApplicationTextData;
-use crate::db::conversations::Attachment;
-use crate::db::conversations::Message;
+use crate::db::conversations::{Attachment, Message};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-
-pub const CAPTURE_SCREEN: &str = "capture_screen";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct CaptureScreenEvent {
-  pub timestamp: String,
-}
-
-pub const GET_SCREEN_DIFF: &str = "get_screen_diff";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct GetScreenDiffEvent {
-  pub data: Vec<ApplicationTextData>,
-  pub active_url: Option<String>,
-  pub timestamp: String,
-}
-
-pub const DETECT_TASKS: &str = "detect_tasks";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct DetectTasksEvent {
-  pub text: String,
-  pub active_url: Option<String>,
-  pub timestamp: String,
-}
-
-pub const SUMMARIZE_SCREEN: &str = "summarize_screen";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct SummarizeScreenEvent {
-  pub text: String,
-  pub data: Vec<ApplicationTextData>,
-  pub active_url: Option<String>,
-  pub timestamp: String,
-}
 
 pub const CHAT_STREAM: &str = "chat_stream";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
@@ -83,13 +46,6 @@ pub const OCR_RESPONSE: &str = "ocr_response";
 pub struct OcrResponseEvent {
   pub text: String,
   pub success: bool,
-  pub timestamp: String,
-}
-
-pub const UPDATE_TASKS: &str = "update_tasks";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct UpdateTasksEvent {
   pub timestamp: String,
 }
 

@@ -204,12 +204,15 @@ export function useConversation(
 
           // OCR Listener
           listen<OcrResponseEvent>("ocr_response", (event) => {
-            const ocrData: AttachmentData = {
-              name: "Screen Capture",
-              file_type: "ambient/ocr",
-              data: event.payload.text,
-            };
-            dispatch({ type: "ADD_ATTACHMENT_DATA", payload: ocrData });
+            //TODO: use the ocr loading state to show a skeleton ocr response in the input box
+            if (event.payload.success && event.payload.text) {
+              const ocrData: AttachmentData = {
+                name: "Screen Capture",
+                file_type: "ambient/ocr",
+                data: event.payload.text,
+              };
+              dispatch({ type: "ADD_ATTACHMENT_DATA", payload: ocrData });
+            }
 
             // Stop OCR loading state and clear timeout
             dispatch({ type: "SET_OCR_LOADING", payload: false });

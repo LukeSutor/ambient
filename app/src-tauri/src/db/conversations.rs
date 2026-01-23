@@ -148,9 +148,8 @@ pub async fn create_conversation(
 }
 
 /// Add a message to a conversation
-#[tauri::command]
 pub async fn add_message(
-  app_handle: AppHandle,
+  app_handle: &AppHandle,
   conversation_id: String,
   role: String,
   content: String,
@@ -159,7 +158,7 @@ pub async fn add_message(
 }
 
 pub async fn add_message_with_id(
-  app_handle: AppHandle,
+  app_handle: &AppHandle,
   conversation_id: String,
   role: String,
   content: String,
