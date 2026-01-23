@@ -3,16 +3,12 @@ use tokio::time::Duration;
 
 // Directory names
 pub const VLM_DIR: &str = "models/vlm";
-pub const LLM_DIR: &str = "models/llm";
 pub const OCR_DIR: &str = "models/ocr";
 pub const EMBEDDING_DIR: &str = "models/embedding";
 
 // VLM model filenames
 pub const TEXT_FILE: &str = "Qwen3VL-2B-Instruct-Q4_K_M.gguf";
 pub const MMPROJ_FILE: &str = "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
-
-// LLM model filename
-pub const LLM_FILE: &str = "Qwen3-1.7B-Q4_K_M.gguf";
 
 // OCR model filenames
 pub const TEXT_DETECTION_FILE: &str = "text-detection.rten";
@@ -25,8 +21,12 @@ pub const EMBEDDING_FILE: &str = "embeddinggemma-300m-Q4_0.gguf";
 pub const TEXT_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf";
 pub const MMPROJ_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 
-// Chat template for VLM
-pub const VLM_CHAT_TEMPLATE: &str = "smolvlm";
+// OCR model download links
+pub const TEXT_DETECTION_LINK: &str = "https://huggingface.co/robertknight/ocrs/resolve/main/text-detection-ssfbcj81.rten";
+pub const TEXT_RECOGNITION_LINK: &str = "https://huggingface.co/robertknight/ocrs/resolve/main/text-rec-checkpoint-s52qdbqt.rten";
+
+// Embedding model download link
+pub const EMBEDDING_LINK: &str = "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300m-Q4_0.gguf";
 
 // Settings storage
 pub const STORE_PATH: &str = "store.json";

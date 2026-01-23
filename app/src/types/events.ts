@@ -12,6 +12,14 @@ export type ComputerUseToastEvent = { message: string, timestamp: string, };
 
 export type ComputerUseUpdateEvent = { status: string, message: Message, };
 
+export type DownloadFinishedEvent = { id: bigint, };
+
+export type DownloadInformationEvent = { n_items: bigint, content_length: bigint, };
+
+export type DownloadProgressEvent = { id: bigint, total_progress: bigint, };
+
+export type DownloadStartedEvent = { id: bigint, };
+
 export type ExtractInteractiveMemoryEvent = { message: string, message_id: string, timestamp: string, };
 
 export type GenerateConversationNameEvent = { conv_id: string, message: string, timestamp: string, };

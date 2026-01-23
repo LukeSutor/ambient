@@ -11,7 +11,7 @@ pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<
   let memory_text = input.trim();
   let prompt = format!("title: none | text: {}", memory_text);
 
-  let model_path = get_embedding_model_path(app_handle.clone())
+  let model_path = get_embedding_model_path(&app_handle)
     .map_err(|e| format!("Failed to get embedding model path: {}", e))?;
 
   // Prepare sidecar command

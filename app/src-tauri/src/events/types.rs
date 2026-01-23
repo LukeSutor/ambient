@@ -3,6 +3,36 @@ use crate::db::conversations::{Attachment, Message};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub const DOWNLOAD_INFORMATION: &str = "download_information";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct DownloadInformationEvent {
+  pub n_items: u64,
+  pub content_length: u64,
+}
+
+pub const DOWNLOAD_STARTED: &str = "download_started";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct DownloadStartedEvent {
+  pub id: u64,
+}
+
+pub const DOWNLOAD_PROGRESS: &str = "download_progress";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct DownloadProgressEvent {
+  pub id: u64,
+  pub total_progress: u64,
+}
+
+pub const DOWNLOAD_FINISHED: &str = "download_finished";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct DownloadFinishedEvent {
+  pub id: u64,
+}
+
 pub const CHAT_STREAM: &str = "chat_stream";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
