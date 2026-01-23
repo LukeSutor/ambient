@@ -139,12 +139,10 @@ dependencies = [
  "tauri-plugin-store",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "ts-rs",
  "url",
  "urlencoding",
  "uuid",
- "windows 0.60.0",
  "zerocopy",
 ]
 

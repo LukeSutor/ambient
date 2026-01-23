@@ -2,13 +2,9 @@
 import type { Attachment, Message } from "./conversations";
 import type { MemoryEntry } from "./memory";
 
-export type ApplicationTextData = { process_id: number, process_name: string | null, application_name: string | null, text_content: Array<string>, };
-
 export type AttachmentData = { name: string, file_type: string, data: string, };
 
 export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<Attachment>, timestamp: string, };
-
-export type CaptureScreenEvent = { timestamp: string, };
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, };
 
@@ -16,13 +12,9 @@ export type ComputerUseToastEvent = { message: string, timestamp: string, };
 
 export type ComputerUseUpdateEvent = { status: string, message: Message, };
 
-export type DetectTasksEvent = { text: string, active_url: string | null, timestamp: string, };
-
 export type ExtractInteractiveMemoryEvent = { message: string, message_id: string, timestamp: string, };
 
 export type GenerateConversationNameEvent = { conv_id: string, message: string, timestamp: string, };
-
-export type GetScreenDiffEvent = { data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
 
 export type HudChatEvent = { text: string, timestamp: string, conv_id: string, message_id: string, attachments: Array<AttachmentData>, };
 
@@ -35,7 +27,3 @@ export type RenameConversationEvent = { conv_id: string, new_name: string, times
 export type SafetyConfirmationEvent = { reason: string, timestamp: string, };
 
 export type SafetyConfirmationResponseEvent = { user_confirmed: boolean, timestamp: string, };
-
-export type SummarizeScreenEvent = { text: string, data: Array<ApplicationTextData>, active_url: string | null, timestamp: string, };
-
-export type UpdateTasksEvent = { timestamp: string, };
