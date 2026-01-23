@@ -332,7 +332,7 @@ export default function Home() {
                   key={model}
                   dataKey={model}
                   fill={
-                    chartConfig[model as keyof typeof chartConfig].color ||
+                    chartConfig[model as keyof typeof chartConfig]?.color ||
                     "gray"
                   }
                   radius={4}
