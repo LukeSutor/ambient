@@ -1,6 +1,11 @@
 "use client";
 
-import { DownloadInformationEvent, DownloadStartedEvent, DownloadProgressEvent, DownloadFinishedEvent } from "@/types/events";
+import type {
+  DownloadFinishedEvent,
+  DownloadInformationEvent,
+  DownloadProgressEvent,
+  DownloadStartedEvent,
+} from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -43,27 +48,51 @@ export function useSetup() {
         // Listen for download events
         const listenerPromises = [
           listen<DownloadInformationEvent>("download_information", (event) => {
-            console.log({event})
-            dispatch({ type: "SET_N_MODELS", payload: Number(event.payload.n_items) });
-            dispatch({ type: "SET_TOTAL_CONTENT_LENGTH", payload: Number(event.payload.content_length) });
+            console.log({ event });
+            dispatch({
+              type: "SET_N_MODELS",
+              payload: Number(event.payload.n_items),
+            });
+            dispatch({
+              type: "SET_TOTAL_CONTENT_LENGTH",
+              payload: Number(event.payload.content_length),
+            });
           }),
           listen<DownloadStartedEvent>("download_started", (event) => {
-            console.log({event})
+            console.log({ event });
             dispatch({ type: "SET_IS_DOWNLOADING", payload: true });
-            dispatch({ type: "SET_DOWNLOADING_ID", payload: Number(event.payload.id) });
-            dispatch({ type: "SET_SETUP_MESSAGE", payload: `Downloading file ${event.payload.id} of ${stateRef.current.numModels}` });
+            dispatch({
+              type: "SET_DOWNLOADING_ID",
+              payload: Number(event.payload.id),
+            });
+            dispatch({
+              type: "SET_SETUP_MESSAGE",
+              payload: `Downloading file ${event.payload.id} of ${stateRef.current.numModels}`,
+            });
           }),
           listen<DownloadProgressEvent>("download_progress", (event) => {
-            dispatch({ type: "SET_DOWNLOADED_BYTES", payload: { model_id: Number(event.payload.id), bytes: Number(event.payload.total_progress)} });
+            dispatch({
+              type: "SET_DOWNLOADED_BYTES",
+              payload: {
+                model_id: Number(event.payload.id),
+                bytes: Number(event.payload.total_progress),
+              },
+            });
           }),
           listen<DownloadFinishedEvent>("download_finished", (event) => {
-            console.log({event})
+            console.log({ event });
             dispatch({ type: "SET_DOWNLOADING_ID", payload: null });
-            dispatch({ type: "SET_SETUP_MESSAGE", payload: `File ${event.payload.id} download complete.` });
+            dispatch({
+              type: "SET_SETUP_MESSAGE",
+              payload: `File ${event.payload.id} download complete.`,
+            });
             // If all downloads are complete, update state
-            if (Number(event.payload.id) == stateRef.current.numModels) {
+            if (Number(event.payload.id) === stateRef.current.numModels) {
               dispatch({ type: "SET_IS_DOWNLOADING", payload: false });
-              dispatch({ type: "SET_SETUP_MESSAGE", payload: "All downloads complete." });
+              dispatch({
+                type: "SET_SETUP_MESSAGE",
+                payload: "All downloads complete.",
+              });
             }
           }),
         ];
@@ -80,12 +109,20 @@ export function useSetup() {
     // Fetch total bytes needed and number of items for download
     const fetchDownloadInfo = async () => {
       try {
-        const info = await invoke<DownloadInformationEvent>("get_setup_download_info");
-        console.log({info})
+        const info = await invoke<DownloadInformationEvent>(
+          "get_setup_download_info",
+        );
+        console.log({ info });
         dispatch({ type: "SET_N_MODELS", payload: Number(info.n_items) });
-        dispatch({ type: "SET_TOTAL_CONTENT_LENGTH", payload: Number(info.content_length) });
+        dispatch({
+          type: "SET_TOTAL_CONTENT_LENGTH",
+          payload: Number(info.content_length),
+        });
       } catch (error) {
-        console.error("[useSetup] Failed to fetch download information:", error);
+        console.error(
+          "[useSetup] Failed to fetch download information:",
+          error,
+        );
       }
     };
 

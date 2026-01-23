@@ -4,8 +4,8 @@ import { ConversationProvider } from "@/lib/conversations";
 import { SettingsProvider } from "@/lib/settings";
 import type { ReactNode } from "react";
 import { RoleAccessProvider } from "../role-access/RoleAccessProvider";
-import { WindowsProvider } from "../windows/WindowsProvider";
 import { SetupProvider } from "../setup/SetupProvider";
+import { WindowsProvider } from "../windows/WindowsProvider";
 
 interface AppProviderProps {
   children: ReactNode;

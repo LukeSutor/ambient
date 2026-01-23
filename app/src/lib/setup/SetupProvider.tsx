@@ -1,12 +1,7 @@
 "use client";
 
 import type React from "react";
-import {
-  type ReactNode,
-  createContext,
-  useContext,
-  useReducer,
-} from "react";
+import { type ReactNode, createContext, useContext, useReducer } from "react";
 
 /**
  * Setup state
@@ -40,16 +35,16 @@ type SetupAction =
   | { type: "SET_SETUP_MESSAGE"; payload: string }
   | { type: "SET_N_MODELS"; payload: number }
   | { type: "SET_TOTAL_CONTENT_LENGTH"; payload: number }
-  | { type: "SET_DOWNLOADED_BYTES"; payload: { model_id: number; bytes: number } }
+  | {
+      type: "SET_DOWNLOADED_BYTES";
+      payload: { model_id: number; bytes: number };
+    }
   | { type: "SET_DOWNLOADING_ID"; payload: number | null };
 
 /**
  * Setup reducer
  */
-function setupReducer(
-  state: SetupState,
-  action: SetupAction,
-): SetupState {
+function setupReducer(state: SetupState, action: SetupAction): SetupState {
   switch (action.type) {
     case "SET_IS_DOWNLOADING":
       return {
@@ -82,7 +77,7 @@ function setupReducer(
           ...state.downloadedBytes.slice(0, action.payload.model_id),
           action.payload.bytes,
           ...state.downloadedBytes.slice(action.payload.model_id + 1),
-        ]
+        ],
       };
 
     case "SET_DOWNLOADING_ID":
@@ -107,9 +102,7 @@ interface SetupContextType {
 /**
  * Setup Context
  */
-const SetupContext = createContext<SetupContextType | undefined>(
-  undefined,
-);
+const SetupContext = createContext<SetupContextType | undefined>(undefined);
 
 /**
  * Setup Provider Props
@@ -140,9 +133,7 @@ export function useSetupContext(): SetupContextType {
   const context = useContext(SetupContext);
 
   if (!context) {
-    throw new Error(
-      "useSetupContext must be used within a SetupProvider",
-    );
+    throw new Error("useSetupContext must be used within a SetupProvider");
   }
 
   return context;

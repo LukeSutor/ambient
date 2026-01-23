@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Toaster } from "@/components/ui/sonner";
-import { useSetup } from "@/lib/setup/useSetup";
 import { useSettings } from "@/lib/settings/useSettings";
+import { useSetup } from "@/lib/setup/useSetup";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { X } from "lucide-react";
@@ -29,7 +29,16 @@ export default function SetupPage() {
   );
 
   // Setup state
-  const { isDownloading, downloadingId, formattedDownloadedBytes, formattedTotalContentLength, totalDownloadedBytes, totalContentLength, setupMessage, startSetup } = useSetup();
+  const {
+    isDownloading,
+    downloadingId,
+    formattedDownloadedBytes,
+    formattedTotalContentLength,
+    totalDownloadedBytes,
+    totalContentLength,
+    setupMessage,
+    startSetup,
+  } = useSetup();
 
   // Windows state
   const { closeHUD } = useWindows();
@@ -68,13 +77,15 @@ export default function SetupPage() {
   // Reroute if no download needed, this fixes the issue of the page sometimes freezing on setup
   // a better solution is probably needed
   useEffect(() => {
-    if (totalContentLength == 0) {
-      router.push("/secondary")
+    if (totalContentLength === 0) {
+      router.push("/secondary");
     }
-  }, [router, totalContentLength])
+  }, [router, totalContentLength]);
 
   const progressPercent =
-    totalContentLength > 0 ? (totalDownloadedBytes / totalContentLength) * 100 : 0;
+    totalContentLength > 0
+      ? (totalDownloadedBytes / totalContentLength) * 100
+      : 0;
 
   return (
     <AutoResizeContainer
@@ -110,23 +121,27 @@ export default function SetupPage() {
           <CardDescription>
             Essential files need to be downloaded before using the application.
             This might take some time depending on your internet connection. The
-            total download size is 
-            {totalContentLength > 0 ? ` ${formattedTotalContentLength}.` : <div className="inline-block h-[16px] -mb-[2px] w-12 bg-muted rounded mx-1 animate-pulse" />}
+            total download size is
+            {totalContentLength > 0 ? (
+              ` ${formattedTotalContentLength}.`
+            ) : (
+              <div className="inline-block h-[16px] -mb-[2px] w-12 bg-muted rounded mx-1 animate-pulse" />
+            )}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {setupMessage !== "" &&
+          {setupMessage !== "" && (
             <div className="text-sm text-muted-foreground">{setupMessage}</div>
-          }
+          )}
 
           {/* VLM Progress Display */}
           {isDownloading && downloadingId !== null && (
             <div className="space-y-2 pt-2">
               <div className="flex justify-between text-xs font-medium text-foreground">
                 <span>
-                  {`Model ${downloadingId}`} ({formattedDownloadedBytes}{" "}
-                  / {formattedTotalContentLength})
+                  {`Model ${downloadingId}`} ({formattedDownloadedBytes} /{" "}
+                  {formattedTotalContentLength})
                 </span>
                 <span>{progressPercent.toFixed(0)}%</span>
               </div>
