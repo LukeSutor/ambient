@@ -332,6 +332,7 @@ export default function Home() {
                   key={model}
                   dataKey={model}
                   fill={
+                    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                     chartConfig[model as keyof typeof chartConfig]?.color ||
                     "gray"
                   }
