@@ -273,7 +273,7 @@ export function useConversation(
         cleanupRef.current = null;
       }
     };
-  }, [dispatch, messagesEndRef]); // Removed state.conversationId from dependencies
+  }, [dispatch, messagesEndRef]);
 
   // ============================================================
   // Initialization Effect
