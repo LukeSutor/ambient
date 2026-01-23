@@ -159,6 +159,7 @@ pub fn run() {
       db::token_usage::get_token_usage_consumption,
       db::token_usage::get_token_usage,
       setup::setup,
+      setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
       models::llm::handlers::handle_hud_chat,

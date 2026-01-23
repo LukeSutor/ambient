@@ -5,6 +5,7 @@ import { SettingsProvider } from "@/lib/settings";
 import type { ReactNode } from "react";
 import { RoleAccessProvider } from "../role-access/RoleAccessProvider";
 import { WindowsProvider } from "../windows/WindowsProvider";
+import { SetupProvider } from "../setup/SetupProvider";
 
 interface AppProviderProps {
   children: ReactNode;
@@ -12,18 +13,16 @@ interface AppProviderProps {
 
 /**
  * Composes all app-level providers into a single component
- *
- * Provider Order (outer to inner):
- * 1. SettingsProvider - No dependencies
- * 2. ConversationProvider - May need settings in future
  */
 export function AppProvider({ children }: AppProviderProps) {
   return (
     <SettingsProvider>
       <RoleAccessProvider>
-        <ConversationProvider>
-          <WindowsProvider>{children}</WindowsProvider>
-        </ConversationProvider>
+        <SetupProvider>
+          <ConversationProvider>
+            <WindowsProvider>{children}</WindowsProvider>
+          </ConversationProvider>
+        </SetupProvider>
       </RoleAccessProvider>
     </SettingsProvider>
   );

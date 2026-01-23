@@ -12,28 +12,31 @@ import {
  * Setup state
  */
 interface SetupState {
+  isDownloading: boolean;
   setupMessage: string;
-  n_models: number;
-  total_content_length: number;
-  downloaded_bytes: number[]; // Stores the downloaded bytes for each model
-  downloading_id: number | null;
+  numModels: number;
+  totalContentLength: number;
+  downloadedBytes: number[]; // Stores the downloaded bytes for each model
+  downloadingId: number | null;
 }
 
 /**
  * Initial state
  */
 const initialState: SetupState = {
-  setupMessage: "Initializing download...",
-  n_models: 0,
-  total_content_length: 0,
-  downloaded_bytes: [],
-  downloading_id: null,
+  isDownloading: false,
+  setupMessage: "",
+  numModels: 0,
+  totalContentLength: -1,
+  downloadedBytes: [],
+  downloadingId: null,
 };
 
 /**
  * Action types
  */
 type SetupAction =
+  | { type: "SET_IS_DOWNLOADING"; payload: boolean }
   | { type: "SET_SETUP_MESSAGE"; payload: string }
   | { type: "SET_N_MODELS"; payload: number }
   | { type: "SET_TOTAL_CONTENT_LENGTH"; payload: number }
@@ -48,6 +51,12 @@ function setupReducer(
   action: SetupAction,
 ): SetupState {
   switch (action.type) {
+    case "SET_IS_DOWNLOADING":
+      return {
+        ...state,
+        isDownloading: action.payload,
+      };
+
     case "SET_SETUP_MESSAGE":
       return {
         ...state,
@@ -57,29 +66,29 @@ function setupReducer(
     case "SET_N_MODELS":
       return {
         ...state,
-        n_models: action.payload,
+        numModels: action.payload,
       };
 
     case "SET_TOTAL_CONTENT_LENGTH":
       return {
         ...state,
-        total_content_length: action.payload,
+        totalContentLength: action.payload,
       };
 
     case "SET_DOWNLOADED_BYTES":
       return {
         ...state,
-        downloaded_bytes: [
-          ...state.downloaded_bytes.slice(0, action.payload.model_id),
+        downloadedBytes: [
+          ...state.downloadedBytes.slice(0, action.payload.model_id),
           action.payload.bytes,
-          ...state.downloaded_bytes.slice(action.payload.model_id + 1),
+          ...state.downloadedBytes.slice(action.payload.model_id + 1),
         ]
       };
 
     case "SET_DOWNLOADING_ID":
       return {
         ...state,
-        downloading_id: action.payload,
+        downloadingId: action.payload,
       };
 
     default:

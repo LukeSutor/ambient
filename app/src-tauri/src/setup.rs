@@ -11,9 +11,13 @@ use crate::models::llm::server::spawn_llama_server;
 use reqwest::Client;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fs::File, io::Write};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio_stream::StreamExt;
+
+/// Global lock to prevent multiple concurrent setup processes
+static SETUP_RUNNING: AtomicBool = AtomicBool::new(false);
 
 /// Struct representing a download item
 #[derive(Clone)]
@@ -160,10 +164,12 @@ async fn get_total_content_length(items: Vec<DownloadItem>) -> Result<u64, Strin
   Ok(total_size)
 }
 
-/// Setup function to download all necessary models
+/// Setup function to get download information
 #[tauri::command]
-pub async fn setup(app_handle: AppHandle) -> Result<String, String> {
-  log::info!("[setup] Starting model setup...");
+pub async fn get_setup_download_info(
+  app_handle: AppHandle,
+) -> Result<DownloadInformationEvent, String> {
+  log::info!("[setup] Fetching download information...");
 
   // Get download items
   let download_items = create_needed_download_items(&app_handle).await?;
@@ -171,39 +177,70 @@ pub async fn setup(app_handle: AppHandle) -> Result<String, String> {
   // Get total content length
   let total_content_length = get_total_content_length(download_items.clone()).await?;
 
-  // Emit total download information
-  if let Err(e) = emit(
-    DOWNLOAD_INFORMATION,
-    DownloadInformationEvent {
-      n_items: download_items.len() as u64,
-      content_length: total_content_length,
-    },
-  ) {
-    log::error!("Failed to emit download information event: {}", e);
+  Ok(DownloadInformationEvent {
+    n_items: download_items.len() as u64,
+    content_length: total_content_length,
+  })
+}
+
+/// Setup function to download all necessary models
+#[tauri::command]
+pub async fn setup(app_handle: AppHandle) -> Result<String, String> {
+  // Check if setup is already running
+  if SETUP_RUNNING.swap(true, Ordering::SeqCst) {
+    log::warn!("[setup] Setup already in progress, ignoring request");
+    return Err("Setup is already in progress.".to_string());
   }
 
-  // Download each item sequentially
-  for item in download_items {
-    if let Err(e) = item.download().await {
-      log::error!("[setup] Failed to download model {}: {}", item.id, e);
-      return Err(format!("Failed to download model {}: {}", item.id, e));
+  // Use a helper function or block to ensure we always reset the flag
+  let setup_result = async {
+    log::info!("[setup] Starting model setup...");
+
+    // Get download items
+    let download_items = create_needed_download_items(&app_handle).await?;
+
+    // Get total content length
+    let total_content_length = get_total_content_length(download_items.clone()).await?;
+
+    // Emit total download information
+    if let Err(e) = emit(
+      DOWNLOAD_INFORMATION,
+      DownloadInformationEvent {
+        n_items: download_items.len() as u64,
+        content_length: total_content_length,
+      },
+    ) {
+      log::error!("Failed to emit download information event: {}", e);
     }
-  }
 
-  // Spawn the llama server but don't block on it
-  let app_handle_clone = app_handle.clone();
-  let _ = tokio::spawn(async move {
-    if let Err(e) = spawn_llama_server(app_handle_clone).await {
-      log::error!("[setup] Failed to spawn LLaMA server: {}", e);
+    // Download each item sequentially
+    for item in download_items {
+      if let Err(e) = item.download().await {
+        log::error!("[setup] Failed to download model {}: {}", item.id, e);
+        return Err(format!("Failed to download model {}: {}", item.id, e));
+      }
     }
-  });
 
-  // Emit auth changed event
-  app_handle
-    .emit("auth_changed", {})
-    .map_err(|e| format!("Failed to emit auth-changed event: {}", e))?;
+    // Spawn the llama server but don't block on it
+    let app_handle_clone = app_handle.clone();
+    let _ = tokio::spawn(async move {
+      if let Err(e) = spawn_llama_server(app_handle_clone).await {
+        log::error!("[setup] Failed to spawn LLaMA server: {}", e);
+      }
+    });
 
-  Ok("Setup completed successfully.".to_string()) // More accurate success message
+    // Emit auth changed event
+    app_handle
+      .emit("auth_changed", {})
+      .map_err(|e| format!("Failed to emit auth-changed event: {}", e))?;
+
+    Ok("Setup completed successfully.".to_string())
+  }.await;
+
+  // Reset the flag
+  SETUP_RUNNING.store(false, Ordering::SeqCst);
+
+  setup_result
 }
 
 /// Gets the path of the VLM text model file

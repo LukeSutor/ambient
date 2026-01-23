@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,107 +10,34 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { invoke } from "@tauri-apps/api/core";
-import { type UnlistenFn, listen } from "@tauri-apps/api/event";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-
 import { Progress } from "@/components/ui/progress";
-import { Toaster } from "@/components/ui/sonner"; // Import Toaster
-import { Loader2 } from "lucide-react";
-import { toast } from "sonner"; // Import toast
-
-// Define the structure of the event payloads based on Rust code
-interface DownloadStartedPayload {
-  id: number;
-  contentLength: number;
-}
-
-interface DownloadProgressPayload {
-  id: number;
-  totalProgress: number;
-}
-
-interface DownloadFinishedPayload {
-  id: number;
-}
-
-// Helper function for formatting bytes (remains the same)
-function formatBytes(bytes: number, decimals = 1): string {
-  if (!+bytes) return "0 Bytes";
-
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  if (i === 3 && bytes / k ** i < 10) {
-    return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
-  }
-
-  return `${Number.parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
-}
+import { Toaster } from "@/components/ui/sonner";
+import { useSetup } from "@/lib/setup/useSetup";
+import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export default function SetupPage() {
   const router = useRouter();
-  const [isSettingUp, setIsSettingUp] = useState(false);
-  const [overallStatus, setOverallStatus] = useState("");
 
-  // VLM Download specific state
-  const [vlmDownloadId, setVlmDownloadId] = useState<number | null>(null);
-  const [vlmTotalSize, setVlmTotalSize] = useState(0);
-  const [vlmCurrentProgress, setVlmCurrentProgress] = useState(0);
+  // Setup state
+  const { 
+    isDownloading, 
+    downloadingId, 
+    formattedDownloadedBytes, 
+    formattedTotalContentLength, 
+    totalDownloadedBytes, 
+    totalContentLength, 
+    setupMessage, 
+    startSetup 
+  } = useSetup();
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {
-    setIsSettingUp(true);
-    setOverallStatus("Starting setup...");
-    setVlmDownloadId(null);
-    setVlmTotalSize(0);
-    setVlmCurrentProgress(0);
-
-    const listeners: UnlistenFn[] = [];
-
+    console.log("[SetupPage] Starting setup process...");
     try {
-      // Setup listeners
-      listeners.push(
-        await listen<DownloadStartedPayload>("download-started", (event) => {
-          setVlmDownloadId(event.payload.id);
-          setVlmTotalSize(event.payload.contentLength);
-          setVlmCurrentProgress(0);
-          setOverallStatus(`Downloading Model ${event.payload.id}`);
-        }),
-      );
-
-      listeners.push(
-        await listen<DownloadProgressPayload>("download-progress", (event) => {
-          setVlmDownloadId((currentId) => {
-            if (event.payload.id === currentId) {
-              setVlmCurrentProgress(event.payload.totalProgress);
-            }
-            return currentId;
-          });
-        }),
-      );
-
-      listeners.push(
-        await listen<DownloadFinishedPayload>("download-finished", (event) => {
-          if (event.payload.id === 2) {
-            setOverallStatus("Finalizing");
-            setVlmDownloadId(null);
-            setVlmTotalSize(0);
-            setVlmCurrentProgress(0);
-          } else if (event.payload.id === 1) {
-            setOverallStatus("Model 1 complete. Starting model 2.");
-          }
-        }),
-      );
-
-      // Invoke the setup command
-      const result = await invoke<string>("setup");
-      console.log("[SetupPage] Setup command finished:", result);
-      setOverallStatus("Setup completed successfully!");
+      await startSetup();
       toast.success("Setup completed successfully!");
 
       // Redirect to dashboard after successful setup
@@ -122,93 +50,100 @@ export default function SetupPage() {
           : err instanceof Error
             ? err.message
             : "An unknown error occurred";
-      // Use toast for error instead of Alert
       toast.error(`Setup failed: ${errorMsg}`);
-      setOverallStatus("Setup process encountered an error.");
-    } finally {
-      // Set isSettingUp false only on error or completion (handled by onSetupComplete call)
-      // If an error occurs, we might want the user to be able to retry
-      if (!overallStatus.includes("successfully")) {
-        // Keep button disabled only if setup didn't succeed
-        setIsSettingUp(false);
-      }
-      for (const unlisten of listeners) {
-        unlisten();
-      }
-      console.log("[SetupPage] Event listeners cleaned up.");
     }
-    // Remove onSetupComplete from dependency array
-  }, [router, overallStatus]);
+  }, [router, startSetup]);
+
+  // Reroute if no download needed, this fixes the issue of the page sometimes freezing on setup
+  // a better solution is probably needed
+  useEffect(() => {
+    if (totalContentLength == 0) {
+      router.push("/secondary")
+    }
+  }, [router, totalContentLength])
 
   const progressPercent =
-    vlmTotalSize > 0 ? (vlmCurrentProgress / vlmTotalSize) * 100 : 0;
+    totalContentLength > 0 ? (totalDownloadedBytes / totalContentLength) * 100 : 0;
 
-  // Render the setup card directly. The parent (RootLayout) handles centering/layout.
+  const closeWindow = useCallback(async () => {
+    try {
+      await getCurrentWindow().close();
+    } catch (error) {
+      console.error("Failed to close window:", error);
+    }
+  }, []);
+
   return (
-    <div className="flex items-center justify-center w-screen h-screen bg-background">
-      {" "}
-      {/* Use theme background */}
+    <div className="flex items-center justify-center w-screen h-screen bg-background p-4">
       <Toaster richColors position="top-center" />
-      <Card className="w-[450px] shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Application Setup Required</CardTitle>
+
+      {/* Setup Card */}
+      <Card className="relative w-full max-w-[450px] pt-12 shadow-lg">
+        {/* Drag area and close button */}
+        <div
+          data-tauri-drag-region
+          className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b"
+        >
+          <Button
+            className="hover:bg-gray-200"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              void closeWindow();
+            }}
+          >
+            <X className="!h-6 !w-6" />
+          </Button>
+        </div>
+
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="text-2xl font-bold">
+            Application Setup Required
+          </CardTitle>
           <CardDescription>
-            Essential models need to be downloaded before using the application.
+            Essential files need to be downloaded before using the application.
             This might take some time depending on your internet connection. The
-            total download size is approximately 1.5 GB.
+            total download size is 
+            {totalContentLength > 0 ? ` ${formattedTotalContentLength}.` : <div className="inline-block h-[16px] -mb-[2px] w-12 bg-muted rounded mx-1 animate-pulse" />}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {overallStatus !== "" ? (
-            <div className="text-sm text-muted-foreground">
-              {" "}
-              {/* Use theme text color */}
-              {overallStatus}
-            </div>
-          ) : (
-            <div className="h-[20px]" />
-          )}
 
-          {/* VLM Progress Display */}
-          {isSettingUp && vlmDownloadId !== null && (
+        <CardContent className="space-y-4">
+          {setupMessage !== "" &&
+            <div className="text-sm text-muted-foreground">{setupMessage}</div>
+          }
+
+          {/* Progress Display */}
+          {isDownloading && downloadingId !== null && (
             <div className="space-y-2 pt-2">
               <div className="flex justify-between text-xs font-medium text-foreground">
-                {" "}
-                {/* Use theme text color */}
                 <span>
-                  {`Model ${vlmDownloadId}`} ({formatBytes(vlmCurrentProgress)}{" "}
-                  / {formatBytes(vlmTotalSize)})
+                  {`Model ${downloadingId}`} ({formattedDownloadedBytes}{" "}
+                  / {formattedTotalContentLength})
                 </span>
                 <span>{progressPercent.toFixed(0)}%</span>
               </div>
               <Progress value={progressPercent} className="w-full h-2" />
             </div>
           )}
-          {/* Embedding Model Status Display */}
-          {isSettingUp &&
-            vlmDownloadId === null &&
-            overallStatus.includes("Finalizing") && (
-              <div className="space-y-2 pt-2 flex flex-row items-center justify-center">
-                <div className="animate-spin">
-                  <Loader2 />
-                </div>
-              </div>
-            )}
         </CardContent>
+
         <CardFooter>
-          {/* Button logic remains similar, but no isSetupComplete check needed here */}
-          {!isSettingUp && (
+          {!isDownloading && (
             <Button
               onClick={() => {
                 void handleStartSetup();
               }}
-              className="w-full"
+              className="w-full h-11 text-base font-medium"
             >
               Start Setup
             </Button>
           )}
-          {isSettingUp && (
-            <Button className="w-full" disabled={true}>
+          {isDownloading && (
+            <Button
+              className="w-full h-11 text-base font-medium"
+              disabled={true}
+            >
               Setting Up...
             </Button>
           )}
@@ -217,3 +152,4 @@ export default function SetupPage() {
     </div>
   );
 }
+
