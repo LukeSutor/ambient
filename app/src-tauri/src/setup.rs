@@ -1,13 +1,13 @@
 use crate::constants::*;
 use crate::models::llm::server::spawn_llama_server;
 use reqwest::Client;
-use tokio::time::Duration;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use std::{fs::File, io::Write};
 use tauri::{Emitter, Manager};
 use tokio_stream::StreamExt;
+use tauri::AppHandle;
 
 /// Objects for download progress
 #[derive(Clone, Serialize)]
@@ -28,25 +28,6 @@ struct DownloadProgress {
 #[serde(rename_all = "camelCase")]
 struct DownloadFinished {
   id: u64,
-}
-
-/// Check if the user is online
-#[tauri::command]
-pub async fn is_online() -> bool {
-  let client = Client::builder()
-    .timeout(Duration::from_secs(5))
-    .build()
-    .expect("Failed to build request client");
-
-  match client.get("www.google.com").send().await {
-    Ok(response) => {
-      response.status().is_success()
-    }
-    Err(_) => {
-      false
-    }
-  }
-
 }
 
 /// Setup function to download vlm and fastembed models
@@ -151,8 +132,7 @@ async fn initialize_vlm(app_handle: tauri::AppHandle) -> Result<String, String> 
 }
 
 /// Gets the path of the VLM text model file
-#[tauri::command]
-pub fn get_vlm_text_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn get_vlm_text_model_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
@@ -162,8 +142,7 @@ pub fn get_vlm_text_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, 
 }
 
 /// Gets the path of the VLM mmproj model file
-#[tauri::command]
-pub fn get_vlm_mmproj_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn get_vlm_mmproj_model_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
@@ -173,9 +152,8 @@ pub fn get_vlm_mmproj_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf
 }
 
 /// Checks if the VLM text model file is downloaded
-#[tauri::command]
-pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
-  match get_vlm_text_model_path(app_handle) {
+pub fn check_vlm_text_model_download(app_handle: &AppHandle) -> Result<bool, String> {
+  match get_vlm_text_model_path(&app_handle) {
     Ok(path) => Ok(path.exists()),
     Err(e) => {
       log::error!("[check_setup] Failed to get VLM text model path: {}", e);
@@ -186,9 +164,8 @@ pub fn check_vlm_text_model_download(app_handle: tauri::AppHandle) -> Result<boo
 }
 
 /// Checks if the VLM mmproj model file is downloaded
-#[tauri::command]
-pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<bool, String> {
-  match get_vlm_mmproj_model_path(app_handle) {
+pub fn check_vlm_mmproj_model_download(app_handle: &AppHandle) -> Result<bool, String> {
+  match get_vlm_mmproj_model_path(&app_handle) {
     Ok(path) => Ok(path.exists()),
     Err(e) => {
       log::error!("[check_setup] Failed to get VLM mmproj model path: {}", e);
@@ -199,8 +176,7 @@ pub fn check_vlm_mmproj_model_download(app_handle: tauri::AppHandle) -> Result<b
 }
 
 /// Gets the path of the OCR text detection model file
-#[tauri::command]
-pub fn get_ocr_text_detection_model_path(app_handle: tauri::AppHandle) -> Result<PathBuf, String> {
+pub fn get_ocr_text_detection_model_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
@@ -210,9 +186,8 @@ pub fn get_ocr_text_detection_model_path(app_handle: tauri::AppHandle) -> Result
 }
 
 /// Gets the path of the OCR text recognition model file
-#[tauri::command]
 pub fn get_ocr_text_recognition_model_path(
-  app_handle: tauri::AppHandle,
+  app_handle: &AppHandle,
 ) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
@@ -223,9 +198,8 @@ pub fn get_ocr_text_recognition_model_path(
 }
 
 /// Checks if the OCR text detection model file exists
-#[tauri::command]
 pub fn check_ocr_text_detection_model_download(
-  app_handle: tauri::AppHandle,
+  app_handle: &AppHandle,
 ) -> Result<bool, String> {
   match get_ocr_text_detection_model_path(app_handle) {
     Ok(path) => Ok(path.exists()),
@@ -240,9 +214,8 @@ pub fn check_ocr_text_detection_model_download(
 }
 
 /// Checks if the OCR text recognition model file exists
-#[tauri::command]
 pub fn check_ocr_text_recognition_model_download(
-  app_handle: tauri::AppHandle,
+  app_handle: &AppHandle,
 ) -> Result<bool, String> {
   match get_ocr_text_recognition_model_path(app_handle) {
     Ok(path) => Ok(path.exists()),
@@ -280,7 +253,7 @@ pub fn check_embedding_model_download(app_handle: tauri::AppHandle) -> Result<bo
 #[tauri::command]
 pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String> {
   // Check VLM text model
-  let vlm_text_downloaded = match check_vlm_text_model_download(app_handle.clone()) {
+  let vlm_text_downloaded = match check_vlm_text_model_download(&app_handle) {
     Ok(downloaded) => downloaded,
     Err(e) => {
       log::error!(
@@ -298,7 +271,7 @@ pub fn check_setup_complete(app_handle: tauri::AppHandle) -> Result<bool, String
   }
 
   // Check VLM mmproj model
-  let vlm_mmproj_downloaded = match check_vlm_mmproj_model_download(app_handle.clone()) {
+  let vlm_mmproj_downloaded = match check_vlm_mmproj_model_download(&app_handle) {
     Ok(downloaded) => downloaded,
     Err(e) => {
       log::error!(

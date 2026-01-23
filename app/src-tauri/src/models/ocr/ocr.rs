@@ -27,10 +27,10 @@ impl OcrService {
   /// Create OCR engine with loaded models
   pub async fn create_ocr_engine(app_handle: &AppHandle) -> Result<OcrEngine, String> {
     // Get model paths
-    let detection_model_path = get_ocr_text_detection_model_path(app_handle.clone())
+    let detection_model_path = get_ocr_text_detection_model_path(&app_handle)
       .map_err(|e| format!("Failed to get detection model path: {}", e))?;
 
-    let recognition_model_path = get_ocr_text_recognition_model_path(app_handle.clone())
+    let recognition_model_path = get_ocr_text_recognition_model_path(&app_handle)
       .map_err(|e| format!("Failed to get recognition model path: {}", e))?;
 
     // Check if model files exist
@@ -48,11 +48,7 @@ impl OcrService {
       ));
     }
 
-    log::info!(
-      "[OCR] Loading models from:\n  Detection: {}\n  Recognition: {}",
-      detection_model_path.display(),
-      recognition_model_path.display()
-    );
+    log::info!("[OCR] Loading models");
 
     // Load models using rten
     let detection_model = Model::load_file(&detection_model_path)
@@ -141,10 +137,7 @@ pub async fn process_image_from_file(
 ) -> Result<OcrResult, String> {
   let start_time = Instant::now();
 
-  log::info!(
-    "[OCR] Starting OCR processing for image file: {}",
-    file_path
-  );
+  log::info!("[OCR] Starting OCR processing");
 
   // Load the image from file path
   let image = image::open(&file_path)
@@ -159,22 +152,12 @@ pub async fn process_image_from_file(
   let processing_time = start_time.elapsed();
 
   log::info!(
-    "[OCR] Processing completed in {}ms from file: {}",
+    "[OCR] Processing completed in {}ms",
     processing_time.as_millis(),
-    file_path
   );
 
   Ok(OcrResult {
     text,
     processing_time_ms: processing_time.as_millis() as u64,
   })
-}
-
-/// Check if OCR models are available
-#[tauri::command]
-pub fn check_ocr_models_available(app_handle: AppHandle) -> Result<bool, String> {
-  let detection_path = get_ocr_text_detection_model_path(app_handle.clone())?;
-  let recognition_path = get_ocr_text_recognition_model_path(app_handle)?;
-
-  Ok(detection_path.exists() && recognition_path.exists())
 }

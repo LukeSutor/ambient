@@ -441,42 +441,6 @@ pub async fn list_conversations(
   Ok(conversations)
 }
 
-/// Reset a conversation (delete all messages)
-#[tauri::command]
-pub async fn reset_conversation(
-  app_handle: AppHandle,
-  conversation_id: String,
-) -> Result<(), String> {
-  let state = app_handle.state::<DbState>();
-  let conn_guard = state
-    .0
-    .lock()
-    .map_err(|_| "Failed to acquire DB lock".to_string())?;
-  let conn = conn_guard
-    .as_ref()
-    .ok_or("Database connection not available.".to_string())?;
-
-  // Delete all messages
-  conn
-    .execute(
-      "DELETE FROM conversation_messages WHERE conversation_id = ?1",
-      params![conversation_id],
-    )
-    .map_err(|e| format!("Failed to delete messages: {}", e))?;
-
-  // Reset message count
-  let now = Utc::now();
-  conn
-    .execute(
-      "UPDATE conversations SET message_count = 0, updated_at = ?1 WHERE id = ?2",
-      params![now.to_rfc3339(), conversation_id],
-    )
-    .map_err(|e| format!("Failed to reset conversation: {}", e))?;
-
-  log::info!("[conversations] Reset conversation: {}", conversation_id);
-  Ok(())
-}
-
 /// Delete a conversation completely
 #[tauri::command]
 pub async fn delete_conversation(

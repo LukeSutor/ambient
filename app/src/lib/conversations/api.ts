@@ -125,19 +125,6 @@ export async function deleteConversation(
 }
 
 /**
- * Resets a conversation (clears all messages but keeps the conversation)
- * @param conversationId - ID of the conversation to reset
- */
-export async function resetConversation(conversationId: string): Promise<void> {
-  try {
-    await invoke("reset_conversation", { conversationId });
-  } catch (error) {
-    console.error("[ConversationAPI] Failed to reset conversation:", error);
-    throw new Error("Failed to reset conversation");
-  }
-}
-
-/**
  * Ensures the llama server is running
  */
 export async function ensureLlamaServerRunning(): Promise<void> {

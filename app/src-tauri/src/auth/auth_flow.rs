@@ -174,7 +174,6 @@ pub async fn sign_in_with_password(email: String, password: String) -> Result<Au
 
 static REFRESH_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-#[tauri::command]
 pub async fn refresh_token() -> Result<RefreshTokenResponse, String> {
     log::info!("[supabase_auth] Attempting to refresh session");
     

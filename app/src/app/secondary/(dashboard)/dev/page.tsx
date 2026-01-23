@@ -114,9 +114,6 @@ export default function Dev() {
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
   const [ocrResult, setOcrResult] = useState<OcrResponseEvent | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  const [ocrModelsAvailable, setOcrModelsAvailable] = useState<boolean | null>(
-    null,
-  );
 
   // --- Embedding Test ---
   const [embeddingInput, setEmbeddingInput] = useState<string>("");
@@ -274,20 +271,6 @@ export default function Dev() {
       setActionLoading(false);
     }
   };
-
-  // Check OCR models availability on component mount
-  useEffect(() => {
-    const checkOcrModels = async () => {
-      try {
-        const available = await invoke<boolean>("check_ocr_models_available");
-        setOcrModelsAvailable(available);
-      } catch (error) {
-        console.error("Error checking OCR models:", error);
-        setOcrModelsAvailable(false);
-      }
-    };
-    void checkOcrModels();
-  }, []);
 
   // --- Supabase user object ---
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null);
@@ -583,26 +566,6 @@ export default function Dev() {
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-blue-50">
         <h2 className="text-lg font-semibold">OCR Text Extraction</h2>
 
-        {/* OCR Models Status */}
-        <div className="text-sm">
-          <span className="font-medium">OCR Models Status: </span>
-          {ocrModelsAvailable === null ? (
-            <span className="text-gray-500">Checking...</span>
-          ) : ocrModelsAvailable ? (
-            <span className="text-green-600 font-semibold">Available ✓</span>
-          ) : (
-            <span className="text-red-600 font-semibold">Not Available ✗</span>
-          )}
-        </div>
-
-        {ocrModelsAvailable === false && (
-          <div className="p-2 bg-yellow-100 border border-yellow-300 rounded text-sm">
-            <strong>Note:</strong> OCR models not found. Please ensure
-            text-detection.rten and text-recognition.rten are placed in the app
-            data directory under models/ocr/
-          </div>
-        )}
-
         <div className="space-y-2">
           <Label htmlFor="ocr-file">Select Image File</Label>
           <Input
@@ -610,7 +573,6 @@ export default function Dev() {
             type="file"
             accept="image/*"
             onChange={handleFileUpload}
-            disabled={!ocrModelsAvailable}
           />
         </div>
 
@@ -624,7 +586,7 @@ export default function Dev() {
           onClick={() => {
             void processOcrImage();
           }}
-          disabled={ocrLoading || !ocrFile || !ocrModelsAvailable}
+          disabled={ocrLoading || !ocrFile}
           variant="default"
         >
           {ocrLoading ? "Processing..." : "Extract Text"}

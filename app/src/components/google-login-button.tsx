@@ -1,10 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
-import {
-  invokeEmitAuthChanged,
-  invokeIsSetupComplete,
-} from "@/lib/role-access/commands";
+import { invokeEmitAuthChanged } from "@/lib/role-access/commands";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import React, { useState, useEffect } from "react";

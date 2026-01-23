@@ -83,9 +83,9 @@ impl ServerConfig {
 
     // Get model and mmproj path
     let text_model_path =
-      setup::get_vlm_text_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+      setup::get_vlm_text_model_path(&app_handle).map_err(|e| ServerError::ModelNotFound(e))?;
     let mmproj_model_path =
-      setup::get_vlm_mmproj_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+      setup::get_vlm_mmproj_model_path(&app_handle).map_err(|e| ServerError::ModelNotFound(e))?;
 
     // Check if model files exist
     if !text_model_path.exists() || !mmproj_model_path.exists() {
@@ -172,9 +172,9 @@ pub fn get_current_server_config(app_handle: &AppHandle) -> Result<ServerConfig,
 
   // Get model path
   let text_model_path =
-    setup::get_vlm_text_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+    setup::get_vlm_text_model_path(&app_handle).map_err(|e| ServerError::ModelNotFound(e))?;
   let mmproj_model_path =
-    setup::get_vlm_mmproj_model_path(app_handle.clone()).map_err(|e| ServerError::ModelNotFound(e))?;
+    setup::get_vlm_mmproj_model_path(&app_handle).map_err(|e| ServerError::ModelNotFound(e))?;
 
   let text_model_path_str = text_model_path
     .to_str()
@@ -273,7 +273,6 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
   Ok(format!("Server started on port {}", config.port))
 }
 
-#[tauri::command]
 pub async fn stop_llama_server() -> Result<String, String> {
   log::info!("[llama_server] Stopping llama.cpp server...");
 
