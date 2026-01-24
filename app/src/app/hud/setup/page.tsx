@@ -78,7 +78,7 @@ export default function SetupPage() {
   // a better solution is probably needed
   useEffect(() => {
     if (totalContentLength === 0) {
-      router.push("/secondary");
+      router.push("/hud");
     }
   }, [router, totalContentLength]);
 

@@ -22,8 +22,8 @@ pub const TEXT_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GG
 pub const MMPROJ_LINK: &str = "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf";
 
 // OCR model download links
-pub const TEXT_DETECTION_LINK: &str = "https://huggingface.co/robertknight/ocrs/resolve/main/text-detection-ssfbcj81.rten";
-pub const TEXT_RECOGNITION_LINK: &str = "https://huggingface.co/robertknight/ocrs/resolve/main/text-rec-checkpoint-s52qdbqt.rten";
+pub const TEXT_DETECTION_LINK: &str = "https://huggingface.co/lukesutor/ocrs/resolve/main/text-detection.rten";
+pub const TEXT_RECOGNITION_LINK: &str = "https://huggingface.co/lukesutor/ocrs/resolve/main/text-recognition.rten";
 
 // Embedding model download link
 pub const EMBEDDING_LINK: &str = "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/main/embeddinggemma-300m-Q4_0.gguf";
