@@ -47,7 +47,7 @@
     "resources": [
       "../public/favicon.ico"
     ],
-    "externalBin": ["binaries/server", "binaries/embedding"]
+    "externalBin": ["binaries/server"]
   },
   "plugins": {
     "deep-link": {
