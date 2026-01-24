@@ -15,7 +15,7 @@ pub const TEXT_DETECTION_FILE: &str = "text-detection.rten";
 pub const TEXT_RECOGNITION_FILE: &str = "text-recognition.rten";
 
 // Embedding model filenames
-pub const EMBEDDING_FILE: &str = "bge-base-en-v1.5.onnx";
+pub const EMBEDDING_FILE: &str = "snowflake-arctic-embed-m-v1.5-quantized.onnx";
 pub const EMBEDDING_TOKENIZER_FILE: &str = "tokenizer.json";
 
 // VLM model download links
@@ -27,8 +27,8 @@ pub const TEXT_DETECTION_LINK: &str = "https://huggingface.co/lukesutor/ocrs/res
 pub const TEXT_RECOGNITION_LINK: &str = "https://huggingface.co/lukesutor/ocrs/resolve/main/text-recognition.rten";
 
 // Embedding model download links
-pub const EMBEDDING_LINK: &str = "https://huggingface.co/BAAI/bge-base-en-v1.5/resolve/main/onnx/model.onnx";
-pub const EMBEDDING_TOKENIZER_LINK: &str = "https://huggingface.co/BAAI/bge-base-en-v1.5/resolve/main/tokenizer.json";
+pub const EMBEDDING_LINK: &str = "https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v1.5/resolve/main/onnx/model_quantized.onnx";
+pub const EMBEDDING_TOKENIZER_LINK: &str = "https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v1.5/resolve/main/tokenizer.json";
 
 // Settings storage
 pub const STORE_PATH: &str = "store.json";

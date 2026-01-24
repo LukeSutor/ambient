@@ -57,45 +57,25 @@ pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<
   }
 
   // Run model
-  // We try to find the output node. For many sentence-transformers it's "last_hidden_state"
-  // or "output_0".
   let output_id = model
-    .find_node("last_hidden_state")
-    .or_else(|| model.find_node("output_0"))
+    .find_node("sentence_embedding")
     .ok_or("Could not find output node in model")?;
 
   let outputs = model
     .run_n(inputs, [output_id], None)
     .map_err(|e| format!("Model execution failed: {}", e))?;
 
-  // Convert output (batch, seq, embed_dim) to tensor
-  let last_hidden_state: Tensor<f32> = outputs[0]
+  // Convert output (batch, embed_dim) to vector.
+  let output_2d: NdTensorView<f32, 2> = outputs[0]
     .as_view()
     .try_into()
-    .map(|v: NdTensorView<f32, 3>| v.to_tensor().into())
-    .map_err(|_| "Failed to convert output to float tensor")?;
+    .map_err(|_| format!("Expected rank 2 output [batch, dim], got {:?}", outputs[0].shape().to_vec()))?;
 
-  // Perform mean pooling
-  let shape = last_hidden_state.shape();
-  if shape.len() != 3 {
-    return Err(format!("Unexpected output shape: {:?}", shape));
-  }
-
-  let seq_len = shape[1];
-  let embed_dim = shape[2];
-
-  let mut mean_embedding = vec![0.0f32; embed_dim];
-  let data = last_hidden_state.data().ok_or("Failed to get tensor data")?;
-
-  for i in 0..seq_len {
-    for j in 0..embed_dim {
-      mean_embedding[j] += data[i * embed_dim + j];
-    }
-  }
-
-  for val in mean_embedding.iter_mut() {
-    *val /= seq_len as f32;
-  }
+  let mut mean_embedding: Vec<f32> = output_2d
+    .to_tensor()
+    .data()
+    .ok_or("Failed to get tensor data")?
+    .to_vec();
 
   // L2 Normalize the embedding
   let norm = mean_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
