@@ -1,0 +1,33 @@
+{
+    "bundle": {
+      "resources": {
+        "binaries/linux/libggml.so.0": "libggml.so.0",
+        "binaries/linux/libmtmd.so": "libmtmd.so",
+        "binaries/linux/libllama.so": "libllama.so",
+        "binaries/linux/libggml-rpc.so": "libggml-rpc.so",
+        "binaries/linux/libggml-cpu-zen4.so": "libggml-cpu-zen4.so",
+        "binaries/linux/libggml-cpu-x64.so": "libggml-cpu-x64.so",
+        "binaries/linux/libggml-cpu-sse42.so": "libggml-cpu-sse42.so",
+        "binaries/linux/libggml-cpu-skylakex.so": "libggml-cpu-skylakex.so",
+        "binaries/linux/libggml-cpu-sapphirerapids.so": "libggml-cpu-sapphirerapids.so",
+        "binaries/linux/libggml-cpu-sandybridge.so": "libggml-cpu-sandybridge.so",
+        "binaries/linux/libggml-cpu-piledriver.so": "libggml-cpu-piledriver.so",
+        "binaries/linux/libggml-cpu-ivybridge.so": "libggml-cpu-ivybridge.so",
+        "binaries/linux/libggml-cpu-icelake.so": "libggml-cpu-icelake.so",
+        "binaries/linux/libggml-cpu-haswell.so": "libggml-cpu-haswell.so",
+        "binaries/linux/libggml-cpu-cooperlake.so": "libggml-cpu-cooperlake.so",
+        "binaries/linux/libggml-cpu-cascadelake.so": "libggml-cpu-cascadelake.so",
+        "binaries/linux/libggml-cpu-cannonlake.so": "libggml-cpu-cannonlake.so",
+        "binaries/linux/libggml-cpu-alderlake.so": "libggml-cpu-alderlake.so",
+        "binaries/linux/libggml-base.so": "libggml-base.so",
+        "binaries/linux/libggml.so": "libggml.so",
+        "binaries/linux/libmtmd.so.0.0.7710": "libmtmd.so.0.0.7710",
+        "binaries/linux/libllama.so.0.0.7710": "libllama.so.0.0.7710",
+        "binaries/linux/libggml-base.so.0.9.5": "libggml-base.so.0.9.5",
+        "binaries/linux/libggml.so.0.9.5": "libggml.so.0.9.5",
+        "binaries/linux/libmtmd.so.0": "libmtmd.so.0",
+        "binaries/linux/libllama.so.0": "libllama.so.0",
+        "binaries/linux/libggml-base.so.0": "libggml-base.so.0"
+      }
+    }
+}
