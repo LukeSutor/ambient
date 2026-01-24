@@ -28,38 +28,6 @@ export default function Dev() {
   const [sqlResult, setSqlResult] = useState<string | null>(null);
   const [sqlError, setSqlError] = useState<string | null>(null);
 
-  // State for capture scheduler
-  const [isSchedulerRunning, setIsSchedulerRunning] = useState<boolean>(false);
-  const [schedulerLoading, setSchedulerLoading] = useState<boolean>(false);
-
-  // Function to start capture scheduler
-  const handleStartScheduler = async () => {
-    setSchedulerLoading(true);
-    try {
-      await invoke("start_capture_scheduler");
-      setIsSchedulerRunning(true);
-      console.log("Capture scheduler started");
-    } catch (error) {
-      console.error("Error starting scheduler:", error);
-    } finally {
-      setSchedulerLoading(false);
-    }
-  };
-
-  // Function to stop capture scheduler
-  const handleStopScheduler = async () => {
-    setSchedulerLoading(true);
-    try {
-      await invoke("stop_capture_scheduler");
-      setIsSchedulerRunning(false);
-      console.log("Capture scheduler stopped");
-    } catch (error) {
-      console.error("Error stopping scheduler:", error);
-    } finally {
-      setSchedulerLoading(false);
-    }
-  };
-
   // Function to execute SQL
   const handleExecuteSql = async () => {
     setSqlResult(null); // Clear previous result
@@ -96,18 +64,6 @@ export default function Dev() {
       setSqlError(typeof error === "string" ? error : JSON.stringify(error));
     }
   };
-
-  // --- Screen Text by Application ---
-  const [screenTextData, setScreenTextData] = useState<string | null>(null);
-  const [screenTextError, setScreenTextError] = useState<string | null>(null);
-  const [screenTextLoading, setScreenTextLoading] = useState<boolean>(false);
-
-  // --- Evaluation Data Capture ---
-  const [evalCaptureLoading, setEvalCaptureLoading] = useState<boolean>(false);
-  const [evalCaptureResult, setEvalCaptureResult] = useState<string | null>(
-    null,
-  );
-  const [evalCaptureError, setEvalCaptureError] = useState<string | null>(null);
 
   // --- OCR Processing ---
   const [ocrFile, setOcrFile] = useState<File | null>(null);
@@ -299,36 +255,6 @@ export default function Dev() {
   const [screenSelectionLoading, setScreenSelectionLoading] =
     useState<boolean>(false);
 
-  const fetchScreenText = async () => {
-    setScreenTextLoading(true);
-    setScreenTextError(null);
-    try {
-      const data = await invoke<string>("get_screen_text_formatted");
-      setScreenTextData(data);
-    } catch (err) {
-      setScreenTextError(typeof err === "string" ? err : JSON.stringify(err));
-      setScreenTextData(null);
-    } finally {
-      setScreenTextLoading(false);
-    }
-  };
-
-  const captureEvalData = async () => {
-    setEvalCaptureLoading(true);
-    setEvalCaptureError(null);
-    setEvalCaptureResult(null);
-    try {
-      const result = await invoke<string>("capture_eval_data");
-      setEvalCaptureResult(result);
-      console.log("Evaluation data captured:", result);
-    } catch (err) {
-      setEvalCaptureError(typeof err === "string" ? err : JSON.stringify(err));
-      console.error("Error capturing eval data:", err);
-    } finally {
-      setEvalCaptureLoading(false);
-    }
-  };
-
   // Screen Selection Functions
   const openScreenSelector = async () => {
     setScreenSelectionLoading(true);
@@ -418,58 +344,6 @@ export default function Dev() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6 max-w-[30rem]">
-      {/* Capture Scheduler Controls */}
-      <div className="flex gap-4 justify-center">
-        <Button
-          onClick={() => {
-            void handleStartScheduler();
-          }}
-          disabled={schedulerLoading || isSchedulerRunning}
-          variant={isSchedulerRunning ? "secondary" : "default"}
-        >
-          {schedulerLoading && !isSchedulerRunning
-            ? "Starting..."
-            : "Start Capture Scheduler"}
-        </Button>
-        <Button
-          onClick={() => {
-            void handleStopScheduler();
-          }}
-          disabled={schedulerLoading || !isSchedulerRunning}
-          variant={isSchedulerRunning ? "destructive" : "secondary"}
-        >
-          {schedulerLoading && isSchedulerRunning
-            ? "Stopping..."
-            : "Stop Capture Scheduler"}
-        </Button>
-      </div>
-
-      {/* Status indicator */}
-      <div className="text-sm text-center">
-        Status:{" "}
-        <span
-          className={
-            isSchedulerRunning
-              ? "text-green-600 font-semibold"
-              : "text-red-600 font-semibold"
-          }
-        >
-          {isSchedulerRunning ? "Running" : "Stopped"}
-        </span>
-      </div>
-
-      {/* Screen Text Button */}
-      <div className="flex justify-center">
-        <Button
-          onClick={() => {
-            void fetchScreenText();
-          }}
-          disabled={screenTextLoading}
-        >
-          {screenTextLoading ? "Loading..." : "Get Screen Text (Formatted)"}
-        </Button>
-      </div>
-
       {/* Open and close computer use window */}
       <div className="flex gap-4 justify-center">
         <Button
@@ -529,35 +403,6 @@ export default function Dev() {
                   "No text found in selected area"}
               </pre>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Evaluation Data Capture Section */}
-      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-orange-50">
-        <h2 className="text-lg font-semibold">Evaluation Data Capture</h2>
-        <p className="text-sm text-gray-600">
-          Click this button when you see incorrect task detection to save the
-          current state for evaluation. Requires at least 2 screen captures and
-          active tasks.
-        </p>
-        <Button
-          onClick={() => {
-            void captureEvalData();
-          }}
-          disabled={evalCaptureLoading}
-          variant="outline"
-        >
-          {evalCaptureLoading ? "Capturing..." : "Capture Eval Data"}
-        </Button>
-        {evalCaptureResult && (
-          <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm">
-            <strong>Success:</strong> {evalCaptureResult}
-          </div>
-        )}
-        {evalCaptureError && (
-          <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm">
-            <strong>Error:</strong> {evalCaptureError}
           </div>
         )}
       </div>
@@ -1013,34 +858,6 @@ export default function Dev() {
               : "No user data fetched"}
           </pre>
         </div>
-      </div>
-
-      {/* --- Screen Text by Application Section --- */}
-      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-yellow-50">
-        <h2 className="text-lg font-semibold mb-2">
-          Screen Text by Application (Formatted)
-        </h2>
-        {screenTextData && (
-          <div className="mt-2 prose prose-sm max-w-none max-h-96 overflow-y-auto bg-white p-4 rounded border">
-            <pre className="whitespace-pre-wrap text-sm">{screenTextData}</pre>
-          </div>
-        )}
-        {screenTextError && (
-          <div className="mt-2 text-red-700 font-mono">
-            Error: {screenTextError}
-          </div>
-        )}
-        {!screenTextData && !screenTextError && !screenTextLoading && (
-          <div className="mt-2 text-gray-500">
-            Click &quot;Get Screen Text (Formatted)&quot; button to fetch clean,
-            organized application text data.
-          </div>
-        )}
-        {screenTextLoading && (
-          <div className="mt-2 text-blue-600">
-            Loading screen text data (this may take a moment)...
-          </div>
-        )}
       </div>
     </div>
   );

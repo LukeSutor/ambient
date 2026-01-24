@@ -2,8 +2,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-
+import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
 
 interface SelectionBounds {
   x: number;
@@ -198,6 +200,25 @@ export default function ScreenSelectorPage() {
     >
       {/* Semi-transparent overlay */}
       <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+
+      {/* Close button */}
+      <div className="absolute top-4 right-4 z-50">
+        <Button
+          variant="secondary"
+          size="icon"
+          className="rounded-full shadow-md cursor-default"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            void cancelSelector();
+          }}
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </Button>
+      </div>
 
       {/* Instructions */}
       <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
