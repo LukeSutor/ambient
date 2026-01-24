@@ -24,14 +24,6 @@ export default function AuthLayout({
 
   return (
     <div className="relative h-full max-h-[800px] w-full rounded-xl overflow-hidden border bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      {/* Force transparent background for this window on first paint */}
-      <style
-        /* biome-ignore lint/security/noDangerouslySetInnerHtml: Need to force transparent background for Tauri window */
-        dangerouslySetInnerHTML={{
-          __html:
-            "html,body{background:transparent!important;background-color:transparent!important;}",
-        }}
-      />
       {/* Minimize, close, and drag region */}
       <div
         data-tauri-drag-region

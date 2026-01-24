@@ -17,19 +17,9 @@ export default function HudLayout({
   return (
     <AppProvider>
       <TooltipProvider>
-        <>
-          {/* Force transparent background for this window on first paint */}
-          <style
-            /* biome-ignore lint/security/noDangerouslySetInnerHtml: Need to force transparent background for Tauri window */
-            dangerouslySetInnerHTML={{
-              __html:
-                "html,body{background:transparent!important;background-color:transparent!important;}",
-            }}
-          />
-          <div className="w-screen h-screen overflow-hidden bg-transparent antialiased font-sans">
-            {children}
-          </div>
-        </>
+        <div className="w-screen h-screen overflow-hidden bg-transparent antialiased font-sans">
+          {children}
+        </div>
       </TooltipProvider>
     </AppProvider>
   );

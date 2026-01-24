@@ -1,5 +1,6 @@
 "use client";
 
+import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -67,36 +68,13 @@ export default function SetupPage() {
       ? (totalDownloadedBytes / totalContentLength) * 100
       : 0;
 
-  const closeWindow = useCallback(async () => {
-    try {
-      await getCurrentWindow().close();
-    } catch (error) {
-      console.error("Failed to close window:", error);
-    }
-  }, []);
-
   return (
     <div className="flex items-center justify-center w-screen h-screen bg-background p-4">
+      <SiteHeader includeMinimize />
       <Toaster richColors position="top-center" />
 
       {/* Setup Card */}
       <Card className="relative w-full max-w-[450px] pt-12 shadow-lg">
-        {/* Drag area and close button */}
-        <div
-          data-tauri-drag-region
-          className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b"
-        >
-          <Button
-            className="hover:bg-gray-200"
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              void closeWindow();
-            }}
-          >
-            <X className="!h-6 !w-6" />
-          </Button>
-        </div>
 
         <CardHeader className="text-center pt-2">
           <CardTitle className="text-2xl font-bold">

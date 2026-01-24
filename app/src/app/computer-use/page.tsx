@@ -143,14 +143,6 @@ function ComputerUsePage() {
 
   return (
     <div ref={containerRef} className="w-fit h-fit overflow-hidden">
-      {/* Force transparent background for this window on first paint */}
-      <style
-        /* biome-ignore lint/security/noDangerouslySetInnerHtml: Need to force transparent background for Tauri window */
-        dangerouslySetInnerHTML={{
-          __html:
-            "html,body{background:transparent!important;background-color:transparent!important;overflow:hidden!important;}}",
-        }}
-      />
       <ContentContainer className="flex flex-col items-center min-w-[300px] whitespace-nowrap overflow-hidden">
         {confirmationRequired ? (
           <div className="overflow-hidden">

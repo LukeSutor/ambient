@@ -42,6 +42,14 @@ export default function RootLayout({
         <body
           className={`${geistSans.variable} ${geistMono.variable} ${sora.variable} antialiased`}
         >
+          {/* Force transparent background for this window on first paint */}
+          <style
+            /* biome-ignore lint/security/noDangerouslySetInnerHtml: Need to force transparent background for Tauri window */
+            dangerouslySetInnerHTML={{
+              __html:
+                "html,body{background:transparent!important;background-color:transparent!important;}",
+            }}
+          />
           {children}
         </body>
       </html>

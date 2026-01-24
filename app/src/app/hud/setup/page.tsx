@@ -12,11 +12,11 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Toaster } from "@/components/ui/sonner";
+import { SiteHeader } from "@/components/site-header";
 import { useSettings } from "@/lib/settings/useSettings";
 import { useSetup } from "@/lib/setup/useSetup";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
-import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -93,26 +93,11 @@ export default function SetupPage() {
       widthType="login"
       className="bg-transparent"
     >
+      <SiteHeader />
       <Toaster richColors position="top-center" />
 
       {/* Setup Card */}
       <Card className="relative w-full pt-12">
-        {/* Drag area and close button */}
-        <div
-          data-tauri-drag-region
-          className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b"
-        >
-          <Button
-            className="hover:bg-gray-200"
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              void closeHUD();
-            }}
-          >
-            <X className="!h-6 !w-6" />
-          </Button>
-        </div>
 
         <CardHeader className="text-center pt-2">
           <CardTitle className="text-2xl font-bold">

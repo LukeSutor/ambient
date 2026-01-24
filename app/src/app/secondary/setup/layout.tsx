@@ -9,7 +9,7 @@ export default function SetupLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="relative h-full max-h-[800px] w-full rounded-lg overflow-hidden border">
       {children}
       <Toaster richColors position="top-center" />
     </div>
