@@ -392,17 +392,25 @@ function conversationReducer(
       };
 
     case "ADD_ATTACHMENTS_TO_MESSAGE": {
-      // Find message by ID and add attachments
+      // Find message by ID and add attachments, don't duplicate
+      const { messageId, attachments } = action.payload;
+
       const messagesWithAttachments = state.messages.map((msg) => {
-        if (msg.message.id === action.payload.messageId) {
+        if (msg.message.id === messageId) {
+          const existingIds = new Set(msg.message.attachments.map((a) => a.id));
+          const filteredNew = attachments.filter((attachment) => {
+            if (existingIds.has(attachment.id)) return false;
+            existingIds.add(attachment.id);
+            return true;
+          });
+
+          if (filteredNew.length === 0) return msg;
+
           return {
             ...msg,
             message: {
               ...msg.message,
-              attachments: [
-                ...msg.message.attachments,
-                ...action.payload.attachments,
-              ],
+              attachments: [...msg.message.attachments, ...filteredNew],
             },
           };
         }
