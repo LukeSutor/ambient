@@ -3,6 +3,7 @@
 import { AutoResizeContainer } from "@/components/hud/auto-resize-container";
 import { DynamicChatContent } from "@/components/hud/dynamic-chat-content";
 import HUDInputBar from "@/components/hud/hud-input-bar";
+import { Toaster } from "@/components/ui/sonner";
 import { useConversation } from "@/lib/conversations";
 import { useSettings } from "@/lib/settings";
 import { useWindows } from "@/lib/windows/useWindows";
@@ -144,6 +145,8 @@ export default function HudPage() {
       widthType="chat"
       className="bg-transparent"
     >
+      <Toaster richColors position="top-center" />
+
       {/* Glass Container */}
       <div className="flex flex-col">
         {/* Dynamic Chat Content Area */}

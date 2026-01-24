@@ -24,6 +24,7 @@ import {
   startComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
+import { toast } from "sonner";
 
 const CONVERSATION_LIMIT = 20;
 const OCR_TIMEOUT_MS = 10000;
@@ -637,9 +638,17 @@ export function useConversation(
    */
   const addAttachmentData = useCallback(
     (attachment: AttachmentData): void => {
+      // Check if attachment with same name already exists
+      const exists = state.attachmentData.some(
+        (att) => att.name === attachment.name,
+      );
+      if (exists) {
+        toast.error(`Attachment "${attachment.name}" already added.`);
+        return;
+      }
       dispatch({ type: "ADD_ATTACHMENT_DATA", payload: attachment });
     },
-    [dispatch],
+    [dispatch, state.attachmentData],
   );
 
   /**
