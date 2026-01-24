@@ -51,8 +51,10 @@ url = "2.4"
 tauri-plugin-store = "2"
 
 # OCR crates
-ocrs = "0.10.4"
-rten = "0.21.0"
+ocrs = "0.12.0"
+rten = "0.24.0"
+rten-text = "0.24.0"
+rten-tensor = "0.24.0"
 pdf-extract = "0.10.0"
 
 # Crypto

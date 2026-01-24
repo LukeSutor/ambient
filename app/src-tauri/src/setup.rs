@@ -1,5 +1,5 @@
 use crate::constants::{
-  EMBEDDING_DIR, EMBEDDING_FILE, EMBEDDING_LINK, MMPROJ_FILE, MMPROJ_LINK, OCR_DIR, TEXT_DETECTION_FILE,
+  EMBEDDING_DIR, EMBEDDING_FILE, EMBEDDING_LINK, EMBEDDING_TOKENIZER_FILE, EMBEDDING_TOKENIZER_LINK, MMPROJ_FILE, MMPROJ_LINK, OCR_DIR, TEXT_DETECTION_FILE,
   TEXT_DETECTION_LINK, TEXT_FILE, TEXT_LINK, TEXT_RECOGNITION_FILE, TEXT_RECOGNITION_LINK,
   VLM_DIR,
 };
@@ -122,9 +122,10 @@ async fn create_needed_download_items(
   for (download_link, model_dir, file_name) in &[
     (TEXT_LINK, &vlm_model_path, TEXT_FILE),
     (MMPROJ_LINK, &vlm_model_path, MMPROJ_FILE),
+    (EMBEDDING_LINK, &embedding_model_path, EMBEDDING_FILE),
+    (EMBEDDING_TOKENIZER_LINK, &embedding_model_path, EMBEDDING_TOKENIZER_FILE),
     (TEXT_DETECTION_LINK, &ocr_model_path, TEXT_DETECTION_FILE),
     (TEXT_RECOGNITION_LINK, &ocr_model_path, TEXT_RECOGNITION_FILE),
-    (EMBEDDING_LINK, &embedding_model_path, EMBEDDING_FILE),
   ] {
     // Only add download item if file does not already exist
     let full_out_path = model_dir.join(file_name);
@@ -351,12 +352,21 @@ pub fn get_embedding_model_path(app_handle: &AppHandle) -> Result<PathBuf, Strin
   Ok(embedding_models_dir.join(EMBEDDING_FILE))
 }
 
+pub fn get_embedding_tokenizer_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
+  let app_data_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("App data directory could not be resolved: {}", e))?;
+  let embedding_models_dir = app_data_path.join(EMBEDDING_DIR);
+  Ok(embedding_models_dir.join(crate::constants::EMBEDDING_TOKENIZER_FILE))
+}
+
 /// Checks if the embedding model file is downloaded
 pub fn check_embedding_model_download(app_handle: &AppHandle) -> Result<bool, String> {
-  match get_embedding_model_path(app_handle) {
-    Ok(path) => Ok(path.exists() && path.is_file()),
-    Err(e) => Err(e),
-  }
+  let model_path = get_embedding_model_path(app_handle)?;
+  let tokenizer_path = get_embedding_tokenizer_path(app_handle)?;
+  Ok(model_path.exists() && model_path.is_file() && 
+     tokenizer_path.exists() && tokenizer_path.is_file())
 }
 
 /// General function to check if all required models (VLM and FastEmbed) are downloaded.
