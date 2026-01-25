@@ -1,6 +1,5 @@
 "use client";
 
-import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,16 +10,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Toaster } from "@/components/ui/sonner";
+import { useRoleAccess } from "@/lib/role-access/useRoleAccess";
 import { useSetup } from "@/lib/setup/useSetup";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 export default function SetupPage() {
   const router = useRouter();
+  const { isSetupComplete } = useRoleAccess();
 
   // Setup state
   const {
@@ -55,13 +53,11 @@ export default function SetupPage() {
     }
   }, [router, startSetup]);
 
-  // Reroute if no download needed, this fixes the issue of the page sometimes freezing on setup
-  // a better solution is probably needed
   useEffect(() => {
-    if (totalContentLength === 0) {
+    if (isSetupComplete) {
       router.push("/secondary");
     }
-  }, [router, totalContentLength]);
+  }, [router, isSetupComplete]);
 
   const progressPercent =
     totalContentLength > 0
@@ -70,9 +66,6 @@ export default function SetupPage() {
 
   return (
     <div className="flex items-center justify-center w-screen h-screen bg-background p-4">
-      <SiteHeader includeMinimize />
-      <Toaster richColors position="top-center" />
-
       {/* Setup Card */}
       <Card className="relative w-full max-w-[450px] pt-12 shadow-lg">
 

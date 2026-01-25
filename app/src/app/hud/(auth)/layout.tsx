@@ -31,8 +31,8 @@ export default function AuthLayout({
       widthType="login"
       className="bg-transparent"
     >
-      <div className="relative w-full h-full flex flex-col">
-        <SiteHeader includeMinimize />
+      <div className="relative w-full h-full flex flex-col rounded-xl overflow-hidden">
+        <SiteHeader />
         {children}
         <Toaster richColors position="top-center" />
       </div>

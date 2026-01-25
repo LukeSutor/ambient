@@ -11,12 +11,14 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useSetup } from "@/lib/setup/useSetup";
+import { useRoleAccess } from "@/lib/role-access";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 export default function SetupPage() {
   const router = useRouter();
+  const { isSetupComplete } = useRoleAccess();
 
   // Setup state
   const {
@@ -51,13 +53,11 @@ export default function SetupPage() {
     }
   }, [router, startSetup]);
 
-  // Reroute if no download needed, this fixes the issue of the page sometimes freezing on setup
-  // a better solution is probably needed
   useEffect(() => {
-    if (totalContentLength === 0) {
+    if (isSetupComplete) {
       router.push("/hud");
     }
-  }, [router, totalContentLength]);
+  }, [router, isSetupComplete]);
 
   const progressPercent =
     totalContentLength > 0
