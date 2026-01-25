@@ -10,7 +10,7 @@ interface AuthFooterProps {
 
 export function AuthFooter({ text, linkText, linkHref }: AuthFooterProps) {
   return (
-    <div className="text-center">
+    <div className="text-center w-full">
       <p className="text-sm text-gray-600">
         {text}{" "}
         <Link

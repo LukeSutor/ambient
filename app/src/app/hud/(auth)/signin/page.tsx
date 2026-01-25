@@ -1,68 +1,55 @@
 "use client";
+
+import {
+  AuthFooter,
+  AuthFormWrapper,
+  ErrorAlert,
+  PasswordInput,
+  SuccessCard,
+  VerificationForm,
+} from "@/components/auth";
 import { GoogleLoginButton } from "@/components/google-login-button";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { CardFooter } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { REGEXP_ONLY_DIGITS } from "input-otp";
-import { AlertCircle, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
-import Link from "next/link";
+import { Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useState } from "react";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 const formSchema = z.object({
-  username: z.string().min(1, {
-    message: "Username or email is required",
-  }),
-  password: z.string().min(1, {
-    message: "Password is required",
-  }),
+  username: z.string().min(1, { message: "Username or email is required" }),
+  password: z.string().min(1, { message: "Password is required" }),
 });
 
-export default function Login() {
+type FormValues = z.infer<typeof formSchema>;
+type FormStep = "login" | "verify" | "success";
+
+export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [formStep, setFormStep] = useState<"login" | "verify" | "success">(
-    "login",
-  );
+  const [formStep, setFormStep] = useState<FormStep>("login");
   const [verificationCode, setVerificationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
   const [loginData, setLoginData] = useState<{
     email: string;
     password: string;
   } | null>(null);
-  const router = useRouter();
 
-  // Auth state
+  const router = useRouter();
   const { signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      username: "",
-      password: "",
-    },
+    defaultValues: { username: "", password: "" },
   });
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: FormValues) => {
     setError(null);
     setIsLoading(true);
 
@@ -70,10 +57,7 @@ export default function Login() {
       const result = await signIn(values.username.trim(), values.password);
 
       if (result.verification_required) {
-        setLoginData({
-          email: values.username.trim(),
-          password: values.password,
-        });
+        setLoginData({ email: values.username.trim(), password: values.password });
         setFormStep("verify");
         setVerificationCode("");
         setHasTriedConfirm(false);
@@ -82,12 +66,7 @@ export default function Login() {
       }
     } catch (err) {
       console.error("Sign in failed:", err);
-      setError(
-        getAuthErrorMessage(
-          err,
-          "Sign in failed. Please check your credentials.",
-        ),
-      );
+      setError(getAuthErrorMessage(err, "Sign in failed. Please check your credentials."));
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +74,6 @@ export default function Login() {
 
   const onConfirmationSubmit = async () => {
     if (!loginData) return;
-
     setHasTriedConfirm(true);
 
     if (verificationCode.length !== 8) {
@@ -106,24 +84,13 @@ export default function Login() {
     try {
       setIsConfirming(true);
       setError(null);
-
-      await confirmSignUp({
-        email: loginData.email,
-        confirmation_code: verificationCode,
-      });
-
-      // Auto sign-in after confirmation
+      await confirmSignUp({ email: loginData.email, confirmation_code: verificationCode });
       await signIn(loginData.email, loginData.password);
-
       setFormStep("success");
-      setTimeout(() => {
-        router.push("/hud");
-      }, 2000);
+      setTimeout(() => router.push("/hud"), 2000);
     } catch (err) {
       console.error("Verification failed:", err);
-      setError(
-        getAuthErrorMessage(err, "Verification failed. Please try again."),
-      );
+      setError(getAuthErrorMessage(err, "Verification failed. Please try again."));
     } finally {
       setIsConfirming(false);
     }
@@ -136,260 +103,125 @@ export default function Login() {
       await resendConfirmationCode(loginData.email);
     } catch (err) {
       console.error("Resend code failed:", err);
-      setError(
-        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
-      );
+      setError(getAuthErrorMessage(err, "Failed to resend code. Please try again."));
     }
+  };
+
+  const handleCodeChange = (value: string) => {
+    setError(null);
+    setHasTriedConfirm(false);
+    setVerificationCode(value);
   };
 
   if (formStep === "success") {
     return (
-      <Card className="relative w-full pt-12 text-center p-8">
-        <CardHeader>
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-            <Loader2 className="h-6 w-6 text-green-600" />
-          </div>
-          <CardTitle className="text-2xl font-bold">
-            Verification Successful!
-          </CardTitle>
-          <CardDescription>
-            Your email has been verified. Redirecting you now...
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <SuccessCard
+        title="Verification Successful!"
+        description="Your email has been verified. Redirecting you now..."
+        icon="loader"
+        variant="hud"
+      />
     );
   }
 
   if (formStep === "verify") {
     return (
-      <Card className="relative w-full pt-12">
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="text-3xl font-bold">Verify Email</CardTitle>
-          <CardDescription>
-            We&apos;ve sent a code to {loginData?.email}. Enter it below to
-            confirm your account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-            {error && (
-              <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-
-            <Field
-              data-invalid={hasTriedConfirm && verificationCode.length !== 8}
-            >
-              <FieldLabel htmlFor="verification-code">
-                Verification Code
-              </FieldLabel>
-              <div className="flex justify-center">
-                <InputOTP
-                  id="verification-code"
-                  maxLength={8}
-                  pattern={REGEXP_ONLY_DIGITS}
-                  value={verificationCode}
-                  onChange={(value) => {
-                    setError(null);
-                    setHasTriedConfirm(false);
-                    setVerificationCode(value);
-                  }}
-                  disabled={isConfirming}
-                  aria-invalid={
-                    hasTriedConfirm && verificationCode.length !== 8
-                  }
-                >
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                    <InputOTPSlot index={6} />
-                    <InputOTPSlot index={7} />
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
-              {hasTriedConfirm && verificationCode.length !== 8 && (
-                <FieldError
-                  errors={[
-                    { message: "Enter the 8-digit code from your email." },
-                  ]}
-                />
-              )}
-            </Field>
-
-            <Button
-              onClick={() => {
-                void onConfirmationSubmit();
-              }}
-              className="w-full h-11"
-              disabled={isConfirming}
-            >
-              {isConfirming ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                "Verify & Sign In"
-              )}
-            </Button>
-          </CardContent>
-          <CardFooter className="flex-col gap-4">
-            <p className="text-sm text-gray-500 text-center">
-              Didn&apos;t receive a code?{" "}
-              <button
-                onClick={() => {
-                  void handleResendCode();
-                }}
-                className="text-blue-600 hover:underline font-medium"
-                type="button"
-              >
-                Resend Code
-              </button>
-            </p>
-            <button
-              onClick={() => {
-                setFormStep("login");
-              }}
-              className="text-sm text-gray-500 hover:text-gray-700"
-              type="button"
-            >
-              Back to Sign In
-            </button>
-          </CardFooter>
-        </Card>
+      <VerificationForm
+        email={loginData?.email || ""}
+        code={verificationCode}
+        onCodeChange={handleCodeChange}
+        onSubmit={onConfirmationSubmit}
+        onResendCode={handleResendCode}
+        onBack={() => setFormStep("login")}
+        isSubmitting={isConfirming}
+        hasTriedSubmit={hasTriedConfirm}
+        error={error}
+        submitLabel="Verify & Sign In"
+        variant="hud"
+      />
     );
   }
 
   return (
-    <Card className="relative w-full pt-12">
-      <CardHeader className="text-center pt-2">
-        <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
-        <CardDescription>
-          Welcome back! Enter your credentials to continue
-        </CardDescription>
-      </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={(e) => {
-              void form.handleSubmit(onSubmit)(e);
-            }}
-            className="space-y-6"
-            noValidate
-          >
-            {error && (
-              <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-
-            <GoogleLoginButton
-              onSignInSuccess={() => {
-                router.push("/hud");
-              }}
-              className="w-full"
-            />
-
-            <Controller
-              control={form.control}
-              name="username"
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="login-username">
-                    Username or Email
-                  </FieldLabel>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="login-username"
-                      className="pl-10 h-11"
-                      placeholder="jane@example.com"
-                      autoComplete="username"
-                      disabled={isLoading}
-                      aria-invalid={fieldState.invalid}
-                      {...field}
-                    />
-                  </div>
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            <Controller
-              control={form.control}
-              name="password"
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="login-password">Password</FieldLabel>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="login-password"
-                      type={showPassword ? "text" : "password"}
-                      className="pl-10 pr-10 h-11 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                      disabled={isLoading}
-                      autoComplete="current-password"
-                      aria-invalid={fieldState.invalid}
-                      {...field}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => {
-                        setShowPassword(!showPassword);
-                      }}
-                      disabled={isLoading}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                  </div>
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            <Button
-              type="submit"
-              className="w-full h-11 text-base font-medium"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </Button>
-          </form>
-        </CardContent>
+    <AuthFormWrapper
+      title="Sign In"
+      description="Welcome back! Enter your credentials to continue"
+      variant="hud"
+      footer={
         <CardFooter>
-          <p className="text-sm text-gray-600 w-full text-center">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/hud/signup"
-              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-            >
-              Create one here
-            </Link>
-          </p>
+          <AuthFooter
+            text="Don't have an account?"
+            linkText="Create one here"
+            linkHref="/hud/signup"
+          />
         </CardFooter>
-      </Card>
+      }
+    >
+      <form
+        onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+        className="space-y-6"
+        noValidate
+      >
+        <ErrorAlert error={error} />
+
+        <GoogleLoginButton
+          onSignInSuccess={() => router.push("/hud")}
+          className="w-full"
+        />
+
+        <Controller
+          control={form.control}
+          name="username"
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor="login-username">Username or Email</FieldLabel>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <Input
+                  id="login-username"
+                  className="pl-10 h-11"
+                  placeholder="jane@example.com"
+                  autoComplete="username"
+                  disabled={isLoading}
+                  aria-invalid={fieldState.invalid}
+                  {...field}
+                />
+              </div>
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
+        />
+
+        <Controller
+          control={form.control}
+          name="password"
+          render={({ field, fieldState }) => (
+            <PasswordInput
+              id="login-password"
+              label="Password"
+              field={field}
+              fieldState={fieldState}
+              disabled={isLoading}
+              autoComplete="current-password"
+            />
+          )}
+        />
+
+        <Button
+          type="submit"
+          className="w-full h-11 text-base font-medium"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            "Sign In"
+          )}
+        </Button>
+      </form>
+    </AuthFormWrapper>
   );
 }

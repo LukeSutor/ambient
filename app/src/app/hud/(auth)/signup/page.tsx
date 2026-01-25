@@ -1,26 +1,18 @@
 "use client";
+
+import {
+  AuthFooter,
+  AuthFormWrapper,
+  ErrorAlert,
+  PasswordInput,
+  SuccessCard,
+  VerificationForm,
+} from "@/components/auth";
 import { GoogleLoginButton } from "@/components/google-login-button";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "@/components/ui/field";
+import { CardFooter } from "@/components/ui/card";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
 import {
   type ConfirmSignUpRequest,
   type SignUpRequest,
@@ -29,104 +21,77 @@ import {
   useRoleAccess,
 } from "@/lib/role-access";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { REGEXP_ONLY_DIGITS } from "input-otp";
-import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
-  CheckCircle,
-  Eye,
-  EyeOff,
-  Loader2,
-  Mail,
-  UserPlus,
-} from "lucide-react";
-import Link from "next/link";
+import { ArrowLeft, ArrowRight, Loader2, Mail, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
-// Step 1: Email
 const step1Schema = z.object({
-  email: z.string().email({
-    message: "Please enter a valid email address",
-  }),
+  email: z.string().email({ message: "Please enter a valid email address" }),
 });
 
-// Step 2: Personal Info & Password
 const step2Schema = z.object({
-  full_name: z.string().min(1, {
-    message: "Full name is required",
-  }),
+  full_name: z.string().min(1, { message: "Full name is required" }),
   password: z
     .string()
-    .min(8, {
-      message: "Password must be at least 8 characters long",
-    })
-    .regex(/[A-Z]/, {
-      message: "Password must contain at least one uppercase letter",
-    })
-    .regex(/[a-z]/, {
-      message: "Password must contain at least one lowercase letter",
-    })
-    .regex(/[0-9]/, {
-      message: "Password must contain at least one number",
-    })
+    .min(8, { message: "Password must be at least 8 characters long" })
+    .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
+    .regex(/[a-z]/, { message: "Password must contain at least one lowercase letter" })
+    .regex(/[0-9]/, { message: "Password must contain at least one number" })
     .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
     }),
 });
 
-export default function SignUp() {
+type Step1Values = z.infer<typeof step1Schema>;
+type Step2Values = z.infer<typeof step2Schema>;
+type FormStep = "step1" | "step2" | "verify" | "success";
+
+function PasswordHelpText() {
+  return (
+    <div className="text-muted-foreground text-sm mt-2">
+      Use at least 8 characters including uppercase, lowercase, a number, and a special character.
+    </div>
+  );
+}
+
+export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
   const [signUpResult, setSignUpResult] = useState<SignUpResponse | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
-  const [formStep, setFormStep] = useState<
-    "step1" | "step2" | "verify" | "success"
-  >("step1");
-  const [step1Data, setStep1Data] = useState<z.infer<
-    typeof step1Schema
-  > | null>(null);
+  const [formStep, setFormStep] = useState<FormStep>("step1");
+  const [step1Data, setStep1Data] = useState<Step1Values | null>(null);
   const [confirmationCode, setConfirmationCode] = useState("");
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
+
   const router = useRouter();
+  const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
 
-  // Auth state
-  const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } =
-    useRoleAccess();
-
-  const step1Form = useForm<z.infer<typeof step1Schema>>({
+  const step1Form = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
-    defaultValues: {
-      email: "",
-    },
+    defaultValues: { email: "" },
   });
 
-  const step2Form = useForm<z.infer<typeof step2Schema>>({
+  const step2Form = useForm<Step2Values>({
     resolver: zodResolver(step2Schema),
-    defaultValues: {
-      full_name: "",
-      password: "",
-    },
+    defaultValues: { full_name: "", password: "" },
   });
 
-  // Redirect if already logged in
   useEffect(() => {
     if (isLoggedIn) {
       router.push("/hud");
     }
   }, [isLoggedIn, router]);
 
-  const onStep1Submit = async (values: z.infer<typeof step1Schema>) => {
+  const onStep1Submit = async (values: Step1Values) => {
     setError(null);
     setStep1Data(values);
     setFormStep("step2");
   };
 
-  const onStep2Submit = async (values: z.infer<typeof step2Schema>) => {
+  const onStep2Submit = async (values: Step2Values) => {
     if (!step1Data) {
       setError("Please complete step 1 first");
       setFormStep("step1");
@@ -147,14 +112,12 @@ export default function SignUp() {
       setSignUpResult(result);
 
       if (!result.verification_required) {
-        // User is automatically confirmed, sign them in
         await signIn(step1Data.email, values.password);
         setFormStep("success");
         setTimeout(() => {
           window.location.href = "/hud";
         }, 2000);
       } else {
-        // User needs to verify email/phone
         setConfirmationCode("");
         setHasTriedConfirm(false);
         setFormStep("verify");
@@ -192,10 +155,7 @@ export default function SignUp() {
         confirmation_code: confirmationCode,
       };
 
-      // First confirm the signup
       await confirmSignUp(confirmRequest);
-
-      // Then automatically sign in the user
       await signIn(step1Values.email, step2Values.password);
 
       setFormStep("success");
@@ -204,9 +164,7 @@ export default function SignUp() {
       }, 2000);
     } catch (err) {
       console.error("Verification failed:", err);
-      setError(
-        getAuthErrorMessage(err, "Verification failed. Please try again."),
-      );
+      setError(getAuthErrorMessage(err, "Verification failed. Please try again."));
     } finally {
       setIsConfirming(false);
     }
@@ -217,14 +175,16 @@ export default function SignUp() {
       setError(null);
       const step1Values = step1Form.getValues();
       await resendConfirmationCode(step1Values.email);
-      // Show success message or update UI to indicate code was resent
-      //TODO: Implement success feedback
     } catch (err) {
       console.error("Resend code failed:", err);
-      setError(
-        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
-      );
+      setError(getAuthErrorMessage(err, "Failed to resend code. Please try again."));
     }
+  };
+
+  const handleCodeChange = (value: string) => {
+    setError(null);
+    setHasTriedConfirm(false);
+    setConfirmationCode(value);
   };
 
   const handleBackToStep1 = () => {
@@ -234,359 +194,185 @@ export default function SignUp() {
 
   if (formStep === "success") {
     return (
-      <Card className="relative w-full pt-12 overflow-hidden">
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="flex items-center justify-center text-green-600 text-2xl">
-            <CheckCircle className="h-6 w-6 mr-2" />
-            Account Created Successfully!
-          </CardTitle>
-          <CardDescription className="text-base">
-            Your account has been created and verified. You can now access
-            your dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-center">
-          <div className="animate-pulse text-sm text-gray-500">
-            Redirecting to dashboard...
-          </div>
-        </CardContent>
-      </Card>
+      <SuccessCard
+        title="Account Created Successfully!"
+        description="Your account has been created and verified. You can now access your dashboard."
+        variant="hud"
+      />
     );
   }
 
   if (formStep === "verify") {
     return (
-      <Card className="relative w-full pt-12 overflow-hidden">
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="flex items-center justify-center text-2xl">
-            <Mail className="h-5 w-5 mr-2 text-3xl font-bold" />
-            Verify Your Email
-          </CardTitle>
-          <CardDescription>
-            Enter the verification code sent to {signUpResult?.destination}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-            {error && (
-              <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                void onConfirmationSubmit();
-              }}
-              className="space-y-6"
-              noValidate
-            >
-              <Field
-                data-invalid={hasTriedConfirm && confirmationCode.length !== 8}
-              >
-                <FieldLabel htmlFor="signup-confirmation-code">
-                  Verification Code
-                </FieldLabel>
-                <div className="flex justify-center">
-                  <InputOTP
-                    id="signup-confirmation-code"
-                    maxLength={8}
-                    pattern={REGEXP_ONLY_DIGITS}
-                    value={confirmationCode}
-                    onChange={(value) => {
-                      setError(null);
-                      setHasTriedConfirm(false);
-                      setConfirmationCode(value);
-                    }}
-                    disabled={isConfirming}
-                    aria-invalid={
-                      hasTriedConfirm && confirmationCode.length !== 8
-                    }
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                      <InputOTPSlot index={6} />
-                      <InputOTPSlot index={7} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-                {hasTriedConfirm && confirmationCode.length !== 8 && (
-                  <FieldError
-                    errors={[
-                      { message: "Enter the 8-digit code from your email." },
-                    ]}
-                  />
-                )}
-              </Field>
-
-              <div className="space-y-3">
-                <Button
-                  type="submit"
-                  className="w-full h-11 text-base font-medium"
-                  disabled={isConfirming}
-                >
-                  {isConfirming ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Verifying...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Verify Account
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11"
-                  onClick={() => {
-                    void handleResendCode();
-                  }}
-                >
-                  Resend Code
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+      <VerificationForm
+        email={signUpResult?.destination || ""}
+        code={confirmationCode}
+        onCodeChange={handleCodeChange}
+        onSubmit={onConfirmationSubmit}
+        onResendCode={handleResendCode}
+        isSubmitting={isConfirming}
+        hasTriedSubmit={hasTriedConfirm}
+        error={error}
+        submitLabel="Verify Account"
+        showIcon
+        variant="hud"
+      />
     );
   }
 
-  // Step 1: Email
   if (formStep === "step1") {
     return (
-      <Card className="relative w-full pt-12 overflow-auto">
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="text-3xl font-bold">
-            Create Your Account
-          </CardTitle>
-          <CardDescription>
-            Step 1 of 2: Start with your email
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-            {error && (
-              <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
-                <AlertCircle className="h-4 w-4" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-
-            <GoogleLoginButton
-              onSignInSuccess={() => {
-                window.location.href = "/hud";
-              }}
-              className="w-full mb-6"
-            />
-
-            <form
-              onSubmit={(e) => {
-                void step1Form.handleSubmit(onStep1Submit)(e);
-              }}
-              className="space-y-6"
-              noValidate
-            >
-              <Controller
-                control={step1Form.control}
-                name="email"
-                render={({ field, fieldState }) => (
-                  <Field
-                    className="col-span-2"
-                    data-invalid={fieldState.invalid}
-                  >
-                    <FieldLabel htmlFor="signup-email">Email</FieldLabel>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        className="h-11 pl-10"
-                        placeholder="john.doe@example.com"
-                        autoComplete="email"
-                        aria-invalid={fieldState.invalid}
-                        {...field}
-                      />
-                    </div>
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-
-              <Button
-                type="submit"
-                className="w-full h-11 text-base font-medium"
-              >
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </form>
-          </CardContent>
+      <AuthFormWrapper
+        title="Create Your Account"
+        description="Step 1 of 2: Start with your email"
+        variant="hud"
+        footer={
           <CardFooter>
-            <p className="text-sm text-gray-600 w-full text-center">
-              Already have an account?{" "}
-              <Link
-                href="/hud/signin"
-                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-              >
-                Sign in here
-              </Link>
-            </p>
+            <AuthFooter
+              text="Already have an account?"
+              linkText="Sign in here"
+              linkHref="/hud/signin"
+            />
           </CardFooter>
-        </Card>
+        }
+      >
+        <ErrorAlert error={error} />
+
+        <GoogleLoginButton
+          onSignInSuccess={() => {
+            window.location.href = "/hud";
+          }}
+          className="w-full mb-6"
+        />
+
+        <form
+          onSubmit={(e) => void step1Form.handleSubmit(onStep1Submit)(e)}
+          className="space-y-6"
+          noValidate
+        >
+          <Controller
+            control={step1Form.control}
+            name="email"
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="signup-email">Email</FieldLabel>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    className="h-11 pl-10"
+                    placeholder="john.doe@example.com"
+                    autoComplete="email"
+                    aria-invalid={fieldState.invalid}
+                    {...field}
+                  />
+                </div>
+                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+              </Field>
+            )}
+          />
+
+          <Button type="submit" className="w-full h-11 text-base font-medium">
+            Continue
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </form>
+      </AuthFormWrapper>
     );
   }
 
   // Step 2: Personal Info & Password
-  // We don't need the if (formStep === "step2") check here because it's the only remaining step
   return (
-    <Card className="relative w-full pt-12 overflow-auto">
-      <CardHeader className="text-center pt-2">
-        <CardTitle className="text-3xl font-bold">
-          Create Your Account
-        </CardTitle>
-        <CardDescription>
-          Step 2 of 2: Personal Info & Password
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-          {error && (
-            <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-sm">{error}</span>
-            </div>
-          )}
-
-          <form
-            onSubmit={(e) => {
-              void step2Form.handleSubmit(onStep2Submit)(e);
-            }}
-            className="space-y-6"
-            noValidate
-          >
-            <div className="space-y-4">
-              <Controller
-                control={step2Form.control}
-                name="full_name"
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="signup-full-name">
-                      Full Name
-                    </FieldLabel>
-                    <Input
-                      id="signup-full-name"
-                      className="h-11"
-                      placeholder="John Doe"
-                      autoComplete="name"
-                      disabled={isLoading}
-                      aria-invalid={fieldState.invalid}
-                      {...field}
-                    />
-                    {fieldState.invalid && (
-                      <FieldError errors={[fieldState.error]} />
-                    )}
-                  </Field>
-                )}
-              />
-            </div>
-
-            <Controller
-              control={step2Form.control}
-              name="password"
-              render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel htmlFor="signup-password">Password</FieldLabel>
-                  <div className="relative">
-                    <Input
-                      id="signup-password"
-                      type={showPassword ? "text" : "password"}
-                      className="h-11 pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden"
-                      placeholder="Enter a secure password"
-                      autoComplete="new-password"
-                      aria-invalid={fieldState.invalid}
-                      disabled={isLoading}
-                      {...field}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => {
-                        setShowPassword(!showPassword);
-                      }}
-                      disabled={isLoading}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      )}
-                    </Button>
-                  </div>
-                  <FieldDescription>
-                    Use at least 8 characters including uppercase, lowercase, a
-                    number, and a special character.
-                  </FieldDescription>
-                  {fieldState.invalid && (
-                    <FieldError errors={[fieldState.error]} />
-                  )}
-                </Field>
-              )}
-            />
-
-            <div className="flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 text-base font-medium"
-                onClick={handleBackToStep1}
-                disabled={isLoading}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-              <Button
-                type="submit"
-                className="flex-1 h-11 text-base font-medium"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating Account...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Create Account
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
+    <AuthFormWrapper
+      title="Create Your Account"
+      description="Step 2 of 2: Personal Info & Password"
+      variant="hud"
+      footer={
         <CardFooter>
-          <p className="text-sm text-gray-600 w-full text-center">
-            Already have an account?{" "}
-            <Link
-              href="/hud/signin"
-              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-            >
-              Sign in here
-            </Link>
-          </p>
+          <AuthFooter
+            text="Already have an account?"
+            linkText="Sign in here"
+            linkHref="/hud/signin"
+          />
         </CardFooter>
-      </Card>
+      }
+    >
+      <ErrorAlert error={error} />
+
+      <form
+        onSubmit={(e) => void step2Form.handleSubmit(onStep2Submit)(e)}
+        className="space-y-6"
+        noValidate
+      >
+        <Controller
+          control={step2Form.control}
+          name="full_name"
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor="signup-full-name">Full Name</FieldLabel>
+              <Input
+                id="signup-full-name"
+                className="h-11"
+                placeholder="John Doe"
+                autoComplete="name"
+                disabled={isLoading}
+                aria-invalid={fieldState.invalid}
+                {...field}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
+        />
+
+        <Controller
+          control={step2Form.control}
+          name="password"
+          render={({ field, fieldState }) => (
+            <PasswordInput
+              id="signup-password"
+              label="Password"
+              field={field}
+              fieldState={fieldState}
+              disabled={isLoading}
+              placeholder="Enter a secure password"
+              autoComplete="new-password"
+              showIcon={false}
+              helpText={<PasswordHelpText />}
+            />
+          )}
+        />
+
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 text-base font-medium"
+            onClick={handleBackToStep1}
+            disabled={isLoading}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+          <Button
+            type="submit"
+            className="flex-1 h-11 text-base font-medium"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating Account...
+              </>
+            ) : (
+              <>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Create Account
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </AuthFormWrapper>
   );
 }

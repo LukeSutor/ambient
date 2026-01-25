@@ -1,6 +1,5 @@
 "use client";
 
-import { GoogleLoginButton } from "@/components/google-login-button";
 import {
   AuthFooter,
   AuthFormWrapper,
@@ -8,7 +7,8 @@ import {
   PasswordInput,
   SuccessCard,
   VerificationForm,
-} from "@/components/secondary/auth";
+} from "@/components/auth";
+import { GoogleLoginButton } from "@/components/google-login-button";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
