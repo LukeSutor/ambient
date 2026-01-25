@@ -28,7 +28,7 @@ export function AuthFormWrapper({
 }: AuthFormWrapperProps) {
   if (variant === "hud") {
     return (
-      <Card className="relative w-full pt-12 border-none shadow-none rounded-none">
+      <Card className="relative w-full pt-16 border-none shadow-none rounded-none">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
