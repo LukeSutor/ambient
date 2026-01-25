@@ -47,7 +47,7 @@ export default function HudPage() {
   } = useConversation(messagesEndRef);
 
   // Settings Manager
-  const { settings, getHudDimensions } = useSettings(true);
+  const { getHudDimensions } = useSettings(true);
 
   // Window Manager
   const { setChatMinimized, setChatExpanded } = useWindows();
@@ -141,9 +141,7 @@ export default function HudPage() {
 
   return (
     <AutoResizeContainer
-      hudDimensions={hudDimensions}
       widthType="chat"
-      className="bg-transparent"
     >
       <Toaster richColors position="top-center" />
 

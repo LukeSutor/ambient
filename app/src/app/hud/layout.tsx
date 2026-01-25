@@ -13,7 +13,7 @@ export default function HudLayout({
   // Use root settings
   useSettings(true);
   return (
-    <div className="w-screen h-screen overflow-hidden bg-transparent antialiased font-sans">
+    <div className="w-screen h-screen overflow-hidden">
       {children}
     </div>
   );

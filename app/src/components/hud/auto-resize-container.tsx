@@ -1,12 +1,12 @@
 "use client";
 
+import { useSettings } from "@/lib/settings/useSettings";
 import type { HudDimensions } from "@/types/settings";
 import { invoke } from "@tauri-apps/api/core";
-import React, { useEffect, useRef, type ReactNode } from "react";
+import React, { useEffect, useRef, useState, type ReactNode } from "react";
 
 interface AutoResizeContainerProps {
   children: ReactNode;
-  hudDimensions: HudDimensions | null;
   widthType: string;
   className?: string;
 }
@@ -17,12 +17,23 @@ interface AutoResizeContainerProps {
  */
 export function AutoResizeContainer({
   children,
-  hudDimensions,
   widthType,
   className = "",
 }: AutoResizeContainerProps) {
+  const { getHudDimensions } = useSettings();
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
+    null,
+  );
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastHeightRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const dimensions = await getHudDimensions();
+      setHudDimensions(dimensions);
+    })();
+  }, [getHudDimensions]);
 
   useEffect(() => {
     if (!containerRef.current || !hudDimensions) {
