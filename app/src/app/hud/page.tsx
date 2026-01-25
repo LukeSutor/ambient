@@ -8,7 +8,7 @@ import { useConversation } from "@/lib/conversations";
 import { useSettings } from "@/lib/settings";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 export default function HudPage() {
   // UI State

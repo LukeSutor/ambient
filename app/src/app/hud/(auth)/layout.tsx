@@ -13,7 +13,7 @@ export default function AuthLayout({
     <AutoResizeContainer
       widthType="login"
     >
-      <div className="relative w-full h-full flex flex-col rounded-xl overflow-hidden">
+      <div className="relative w-full h-full flex flex-col rounded-lg overflow-hidden">
         <SiteHeader />
         {children}
         <Toaster richColors position="top-center" />
