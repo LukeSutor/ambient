@@ -1,6 +1,7 @@
 "use client";
 import { GoogleLoginButton } from "@/components/google-login-button";
 import AutoResizeContainer from "@/components/hud/auto-resize-container";
+import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -168,22 +169,8 @@ export default function Login() {
         widthType="login"
         className="bg-transparent"
       >
+        <SiteHeader />
         <Card className="relative w-full pt-12 text-center p-8">
-          <div
-            data-tauri-drag-region
-            className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b"
-          >
-            <Button
-              className="hover:bg-gray-200"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void closeHUD();
-              }}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
-          </div>
           <CardHeader>
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
               <Loader2 className="h-6 w-6 text-green-600" />
@@ -207,22 +194,8 @@ export default function Login() {
         widthType="login"
         className="bg-transparent"
       >
+        <SiteHeader />
         <Card className="relative w-full pt-12">
-          <div
-            data-tauri-drag-region
-            className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b"
-          >
-            <Button
-              className="hover:bg-gray-200"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void closeHUD();
-              }}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
-          </div>
           <CardHeader className="text-center pt-2">
             <CardTitle className="text-3xl font-bold">Verify Email</CardTitle>
             <CardDescription>
@@ -332,25 +305,9 @@ export default function Login() {
       widthType="login"
       className="bg-transparent"
     >
+      <SiteHeader />
       {/* Sign In Form */}
       <Card className="relative w-full pt-12">
-        {/* Drag area and close button */}
-        <div
-          data-tauri-drag-region
-          className="fixed top-0 right-0 left-0 flex justify-end py-1 pr-1 items-center border-b"
-        >
-          <Button
-            className="hover:bg-gray-200"
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              void closeHUD();
-            }}
-          >
-            <X className="!h-6 !w-6" />
-          </Button>
-        </div>
-
         <CardHeader className="text-center pt-2">
           <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
           <CardDescription>

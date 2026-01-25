@@ -1,5 +1,6 @@
 "use client";
 import { GoogleLoginButton } from "@/components/google-login-button";
+import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,

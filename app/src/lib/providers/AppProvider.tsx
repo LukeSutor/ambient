@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { RoleAccessProvider } from "../role-access/RoleAccessProvider";
 import { SetupProvider } from "../setup/SetupProvider";
 import { WindowsProvider } from "../windows/WindowsProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface AppProviderProps {
   children: ReactNode;
@@ -20,7 +21,11 @@ export function AppProvider({ children }: AppProviderProps) {
       <RoleAccessProvider>
         <SetupProvider>
           <ConversationProvider>
-            <WindowsProvider>{children}</WindowsProvider>
+            <WindowsProvider>
+              <TooltipProvider>
+                {children}
+              </TooltipProvider>
+            </WindowsProvider>
           </ConversationProvider>
         </SetupProvider>
       </RoleAccessProvider>
