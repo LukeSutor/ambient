@@ -48,11 +48,11 @@ export function SiteHeader({ includeMinimize }: SiteHeaderProps) {
                 void minimizeWindow();
               }}
             >
-              <Minus className="!h-5 !w-5" />
+              <Minus className="!h-6 !w-6" />
             </Button>
           )}
           <Button
-              className="hover:bg-gray-200"
+              className="hover:bg-red-500 hover:text-white"
               variant="ghost"
               size="icon"
               onClick={() => {

@@ -22,13 +22,13 @@ export default function DashboardLayout({
   useSettings(true);
 
   return (
-    <div className="relative h-full max-h-[800px] w-full rounded-lg overflow-hidden border bg-white [--header-height:calc(--spacing(16))]">
-      <SidebarProvider>
-        <SiteHeader />
-        <div className="flex flex-1">
+    <div className="relative h-screen w-full rounded-lg overflow-hidden border bg-white [--header-height:calc(--spacing(16))]">
+      <SidebarProvider className="h-full">
+        <SiteHeader includeMinimize />
+        <div className="flex flex-1 h-full overflow-hidden">
           <AppSidebar />
-          <SidebarInset>
-            <main className="flex flex-1 flex-col overflow-y-auto min-h-0 max-h-[800px]">
+          <SidebarInset className="flex flex-1 flex-col min-h-0 overflow-hidden">
+            <main className="flex-1 overflow-y-auto">
               <div className="h-(--header-height) shrink-0" />
               <div className="p-4">{children}</div>
             </main>

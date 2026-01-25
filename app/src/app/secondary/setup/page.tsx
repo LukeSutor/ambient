@@ -65,7 +65,7 @@ export default function SetupPage() {
       : 0;
 
   return (
-    <div className="flex items-center justify-center w-screen h-screen bg-background p-4">
+    <div className="flex items-center justify-center w-full h-full bg-background p-4">
       {/* Setup Card */}
       <Card className="relative w-full max-w-[450px] pt-12 shadow-lg">
 

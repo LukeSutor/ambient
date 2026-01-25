@@ -10,9 +10,11 @@ export default function SetupLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <div className="relative h-full max-h-[800px] w-full rounded-lg overflow-hidden border">
+    <div className="relative bg-background h-screen w-full rounded-lg overflow-hidden border flex flex-col pt-16">
       <SiteHeader includeMinimize />
-      {children}
+      <div className="flex-1 overflow-auto">
+        {children}
+      </div>
       <Toaster richColors position="top-center" />
     </div>
   );
