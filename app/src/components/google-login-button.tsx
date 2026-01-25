@@ -1,13 +1,13 @@
 "use client";
+
 import { Button } from "@/components/ui/button";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
 import { invokeEmitAuthChanged } from "@/lib/role-access/commands";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+
 const googleLogo = "/google-logo.png";
 
-// Google logo SVG component
 const GoogleIcon = () => (
   <img src={googleLogo} alt="Google Logo" className="w-5 h-5" />
 );
@@ -30,39 +30,31 @@ export function GoogleLoginButton({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signInWithGoogle } = useRoleAccess();
-  const router = useRouter();
 
   useEffect(() => {
-    // Listen for OAuth2 events from Tauri
     const listenToOAuth2Events = async () => {
       const { listen } = await import("@tauri-apps/api/event");
 
-      // Listen for OAuth2 success
       const unlistenSuccess = await listen("oauth2-success", () => {
         void (async () => {
           setIsLoading(false);
           setError(null);
-
-          // Emit auth changed event and check setup status
           await invokeEmitAuthChanged();
-
           onSignInSuccess();
         })();
       });
 
-      // Listen for OAuth2 errors
       const unlistenError = await listen("oauth2-error", (event) => {
         console.error("[GoogleLoginButton] OAuth2 error:", event.payload);
         setIsLoading(false);
         setError(
           getAuthErrorMessage(
             event.payload,
-            "Sign-in with Google failed. Please try again.",
-          ),
+            "Sign-in with Google failed. Please try again."
+          )
         );
       });
 
-      // Return cleanup function
       return () => {
         unlistenSuccess();
         unlistenError();
@@ -84,17 +76,14 @@ export function GoogleLoginButton({
     setIsLoading(true);
 
     try {
-      // This will open the Google OAuth URL in the system browser
       await signInWithGoogle();
-      // Note: The loading state will be cleared by the event listeners above
-      // when the OAuth callback is received via deep link
     } catch (err) {
       console.error("Failed to initiate Google sign in:", err);
       setError(
         getAuthErrorMessage(
           err,
-          "Failed to start Google sign in. Please try again.",
-        ),
+          "Failed to start Google sign in. Please try again."
+        )
       );
       setIsLoading(false);
     }
@@ -106,9 +95,7 @@ export function GoogleLoginButton({
         type="button"
         variant={variant}
         size={size}
-        onClick={() => {
-          void handleGoogleSignIn();
-        }}
+        onClick={() => void handleGoogleSignIn()}
         disabled={disabled || isLoading}
         className={`w-full ${className}`}
       >
