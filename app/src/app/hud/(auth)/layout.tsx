@@ -10,9 +10,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AutoResizeContainer
-      widthType="login"
-    >
+    <AutoResizeContainer widthType="login">
       <div className="relative w-full h-full flex flex-col border rounded-lg overflow-hidden">
         <SiteHeader />
         {children}

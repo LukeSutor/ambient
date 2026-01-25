@@ -56,7 +56,10 @@ export default function SignInPage() {
       const result = await signIn(values.username.trim(), values.password);
 
       if (result.verification_required) {
-        setLoginData({ email: values.username.trim(), password: values.password });
+        setLoginData({
+          email: values.username.trim(),
+          password: values.password,
+        });
         setFormStep("verify");
         setVerificationCode("");
         setHasTriedConfirm(false);
@@ -65,7 +68,12 @@ export default function SignInPage() {
       }
     } catch (err) {
       console.error("Sign in failed:", err);
-      setError(getAuthErrorMessage(err, "Sign in failed. Please check your credentials."));
+      setError(
+        getAuthErrorMessage(
+          err,
+          "Sign in failed. Please check your credentials.",
+        ),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -83,13 +91,20 @@ export default function SignInPage() {
     try {
       setIsConfirming(true);
       setError(null);
-      await confirmSignUp({ email: loginData.email, confirmation_code: verificationCode });
+      await confirmSignUp({
+        email: loginData.email,
+        confirmation_code: verificationCode,
+      });
       await signIn(loginData.email, loginData.password);
       setFormStep("success");
-      setTimeout(() => router.push("/secondary"), 2000);
+      setTimeout(() => {
+        router.push("/secondary");
+      }, 2000);
     } catch (err) {
       console.error("Verification failed:", err);
-      setError(getAuthErrorMessage(err, "Verification failed. Please try again."));
+      setError(
+        getAuthErrorMessage(err, "Verification failed. Please try again."),
+      );
     } finally {
       setIsConfirming(false);
     }
@@ -102,7 +117,9 @@ export default function SignInPage() {
       await resendConfirmationCode(loginData.email);
     } catch (err) {
       console.error("Resend code failed:", err);
-      setError(getAuthErrorMessage(err, "Failed to resend code. Please try again."));
+      setError(
+        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
+      );
     }
   };
 
@@ -128,9 +145,15 @@ export default function SignInPage() {
         email={loginData?.email || ""}
         code={verificationCode}
         onCodeChange={handleCodeChange}
-        onSubmit={onConfirmationSubmit}
-        onResendCode={handleResendCode}
-        onBack={() => setFormStep("login")}
+        onSubmit={() => {
+          void onConfirmationSubmit();
+        }}
+        onResendCode={() => {
+          void handleResendCode();
+        }}
+        onBack={() => {
+          setFormStep("login");
+        }}
         isSubmitting={isConfirming}
         hasTriedSubmit={hasTriedConfirm}
         error={error}
@@ -152,14 +175,18 @@ export default function SignInPage() {
       }
     >
       <form
-        onSubmit={(e) => void form.handleSubmit(onSubmit)(e)}
+        onSubmit={(e) => {
+          void form.handleSubmit(onSubmit)(e);
+        }}
         className="space-y-6"
         noValidate
       >
         <ErrorAlert error={error} />
 
         <GoogleLoginButton
-          onSignInSuccess={() => router.push("/secondary")}
+          onSignInSuccess={() => {
+            router.push("/secondary");
+          }}
           className="w-full mb-6"
         />
 
@@ -168,7 +195,9 @@ export default function SignInPage() {
           name="username"
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="signin-username">Username or Email</FieldLabel>
+              <FieldLabel htmlFor="signin-username">
+                Username or Email
+              </FieldLabel>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
                 <Input

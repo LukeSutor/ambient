@@ -41,7 +41,8 @@ const MODEL_CONFIGS: ModelConfig[] = [
   {
     value: "Fast",
     name: "Gemini 3 Flash",
-    description: "More powerful. Google's fast model with advanced capabilities.",
+    description:
+      "More powerful. Google's fast model with advanced capabilities.",
     icon: <Zap className="h-4 w-4 m-1.5 text-blue-600" />,
     iconBgClass: "bg-blue-100",
     badge: { label: "Enhanced", variant: "outline" },
@@ -101,7 +102,9 @@ export function ModelSelector({
   return (
     <Select
       value={value}
-      onValueChange={(v) => onChange(v as ModelSelection)}
+      onValueChange={(v) => {
+        onChange(v as ModelSelection);
+      }}
       disabled={disabled}
     >
       <SelectTrigger>

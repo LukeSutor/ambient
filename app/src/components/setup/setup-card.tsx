@@ -97,10 +97,7 @@ export function SetupCard({
           </Button>
         )}
         {isDownloading && (
-          <Button
-            className="w-full h-11 text-base font-medium"
-            disabled={true}
-          >
+          <Button className="w-full h-11 text-base font-medium" disabled={true}>
             Setting Up...
           </Button>
         )}

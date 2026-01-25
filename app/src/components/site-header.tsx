@@ -6,7 +6,7 @@ import { Minus, X } from "lucide-react";
 import Image from "next/image";
 
 interface SiteHeaderProps {
-  includeMinimize?: boolean
+  includeMinimize?: boolean;
 }
 
 export function SiteHeader({ includeMinimize }: SiteHeaderProps) {
@@ -25,43 +25,46 @@ export function SiteHeader({ includeMinimize }: SiteHeaderProps) {
       console.error("Failed to minimize window:", error);
     }
   };
-  
+
   return (
-    <header data-tauri-drag-region className="bg-background/80 backdrop-blur-md absolute top-0 left-0 right-0 z-50 border-b select-none flex justify-between items-center px-1 md:px-4 py-1 md:py-0 h-auto md:h-16">
-        <div className="flex items-center">
-          <Image 
-            data-tauri-drag-region
-            src="/logo.png" 
-            alt="App Logo" 
-            width={32} 
-            height={32} 
-            className="pointer-events-none"
-          />
-          <p className="ml-2 text-xl font-sora hidden md:block">ambient</p>
-        </div>
-        <div className="flex items-center">
-          {includeMinimize && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void minimizeWindow();
-              }}
-            >
-              <Minus className="!h-6 !w-6" />
-            </Button>
-          )}
+    <header
+      data-tauri-drag-region
+      className="bg-background/80 backdrop-blur-md absolute top-0 left-0 right-0 z-50 border-b select-none flex justify-between items-center px-1 md:px-4 py-1 md:py-0 h-auto md:h-16"
+    >
+      <div className="flex items-center">
+        <Image
+          data-tauri-drag-region
+          src="/logo.png"
+          alt="App Logo"
+          width={32}
+          height={32}
+          className="pointer-events-none"
+        />
+        <p className="ml-2 text-xl font-sora hidden md:block">ambient</p>
+      </div>
+      <div className="flex items-center">
+        {includeMinimize && (
           <Button
-              className="hover:bg-red-500 hover:text-white"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void closeWindow();
-              }}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
-        </div>
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              void minimizeWindow();
+            }}
+          >
+            <Minus className="!h-6 !w-6" />
+          </Button>
+        )}
+        <Button
+          className="hover:bg-red-500 hover:text-white"
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            void closeWindow();
+          }}
+        >
+          <X className="!h-6 !w-6" />
+        </Button>
+      </div>
     </header>
-  )
+  );
 }

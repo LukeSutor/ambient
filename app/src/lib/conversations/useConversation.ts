@@ -14,6 +14,7 @@ import type { MemoryEntry } from "@/types/memory";
 import { invoke } from "@tauri-apps/api/core";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useConversationContext } from "./ConversationProvider";
 import {
   createConversation,
@@ -24,7 +25,6 @@ import {
   startComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
-import { toast } from "sonner";
 
 const CONVERSATION_LIMIT = 20;
 const OCR_TIMEOUT_MS = 10000;

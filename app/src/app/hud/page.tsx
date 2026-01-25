@@ -15,7 +15,9 @@ export default function HudPage() {
   const [input, setInput] = useState("");
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
+    null,
+  );
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -65,7 +67,9 @@ export default function HudPage() {
 
   // Reset drag state on pointer/mouse up
   useEffect(() => {
-    const handlePointerUp = () => setIsDraggingWindow(false);
+    const handlePointerUp = () => {
+      setIsDraggingWindow(false);
+    };
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("mouseup", handlePointerUp);
     return () => {
@@ -147,7 +151,9 @@ export default function HudPage() {
           deleteConversation={deleteConversation}
           loadMoreConversations={loadMoreConversations}
           renameConversation={renameConversation}
-          handleNewChat={handleNewChat}
+          handleNewChat={() => {
+            void handleNewChat();
+          }}
         />
 
         {/* Input Container */}

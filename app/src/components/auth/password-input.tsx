@@ -5,12 +5,19 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Lock } from "lucide-react";
 import { useState } from "react";
-import type { ControllerFieldState, ControllerRenderProps } from "react-hook-form";
+import type {
+  ControllerFieldState,
+  ControllerRenderProps,
+} from "react-hook-form";
+import type { FieldPath, FieldValues } from "react-hook-form";
 
-interface PasswordInputProps {
+interface PasswordInputProps<
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
+> {
   id: string;
   label: string;
-  field: ControllerRenderProps<any, any>;
+  field: ControllerRenderProps<TFieldValues, TName>;
   fieldState: ControllerFieldState;
   disabled?: boolean;
   placeholder?: string;
@@ -54,7 +61,9 @@ export function PasswordInput({
           variant="ghost"
           size="sm"
           className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-          onClick={() => setShowPassword(!showPassword)}
+          onClick={() => {
+            setShowPassword(!showPassword);
+          }}
           disabled={disabled}
         >
           {showPassword ? (

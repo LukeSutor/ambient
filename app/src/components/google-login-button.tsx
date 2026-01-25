@@ -50,8 +50,8 @@ export function GoogleLoginButton({
         setError(
           getAuthErrorMessage(
             event.payload,
-            "Sign-in with Google failed. Please try again."
-          )
+            "Sign-in with Google failed. Please try again.",
+          ),
         );
       });
 
@@ -82,8 +82,8 @@ export function GoogleLoginButton({
       setError(
         getAuthErrorMessage(
           err,
-          "Failed to start Google sign in. Please try again."
-        )
+          "Failed to start Google sign in. Please try again.",
+        ),
       );
       setIsLoading(false);
     }

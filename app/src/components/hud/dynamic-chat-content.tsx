@@ -42,11 +42,14 @@ export function DynamicChatContent({
 
   const isVisible = isChatExpanded || isChatHistoryExpanded;
   const showBothPanels = isChatExpanded && isChatHistoryExpanded;
-  const maxHeight = hudDimensions ? `${hudDimensions.chat_max_height}px` : "500px";
+  const maxHeight = hudDimensions
+    ? `${hudDimensions.chat_max_height}px`
+    : "500px";
 
   // Memoized class computations
   const conversationsClass = useMemo(() => {
-    if (!isChatHistoryExpanded) return "w-0 max-h-0 opacity-0 pointer-events-none";
+    if (!isChatHistoryExpanded)
+      return "w-0 max-h-0 opacity-0 pointer-events-none";
     if (!isChatExpanded) return "w-full max-h-96 opacity-100";
     return "w-[60%] min-h-32 max-h-full opacity-100";
   }, [isChatExpanded, isChatHistoryExpanded]);

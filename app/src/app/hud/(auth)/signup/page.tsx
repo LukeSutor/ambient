@@ -36,8 +36,12 @@ const step2Schema = z.object({
   password: z
     .string()
     .min(8, { message: "Password must be at least 8 characters long" })
-    .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
-    .regex(/[a-z]/, { message: "Password must contain at least one lowercase letter" })
+    .regex(/[A-Z]/, {
+      message: "Password must contain at least one uppercase letter",
+    })
+    .regex(/[a-z]/, {
+      message: "Password must contain at least one lowercase letter",
+    })
     .regex(/[0-9]/, { message: "Password must contain at least one number" })
     .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
@@ -51,7 +55,8 @@ type FormStep = "step1" | "step2" | "verify" | "success";
 function PasswordHelpText() {
   return (
     <div className="text-muted-foreground text-sm mt-2">
-      Use at least 8 characters including uppercase, lowercase, a number, and a special character.
+      Use at least 8 characters including uppercase, lowercase, a number, and a
+      special character.
     </div>
   );
 }
@@ -67,7 +72,8 @@ export default function SignUpPage() {
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
 
   const router = useRouter();
-  const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
+  const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } =
+    useRoleAccess();
 
   const step1Form = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -164,7 +170,9 @@ export default function SignUpPage() {
       }, 2000);
     } catch (err) {
       console.error("Verification failed:", err);
-      setError(getAuthErrorMessage(err, "Verification failed. Please try again."));
+      setError(
+        getAuthErrorMessage(err, "Verification failed. Please try again."),
+      );
     } finally {
       setIsConfirming(false);
     }
@@ -177,7 +185,9 @@ export default function SignUpPage() {
       await resendConfirmationCode(step1Values.email);
     } catch (err) {
       console.error("Resend code failed:", err);
-      setError(getAuthErrorMessage(err, "Failed to resend code. Please try again."));
+      setError(
+        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
+      );
     }
   };
 
@@ -208,8 +218,12 @@ export default function SignUpPage() {
         email={signUpResult?.destination || ""}
         code={confirmationCode}
         onCodeChange={handleCodeChange}
-        onSubmit={onConfirmationSubmit}
-        onResendCode={handleResendCode}
+        onSubmit={() => {
+          void onConfirmationSubmit();
+        }}
+        onResendCode={() => {
+          void handleResendCode();
+        }}
         isSubmitting={isConfirming}
         hasTriedSubmit={hasTriedConfirm}
         error={error}
@@ -268,7 +282,9 @@ export default function SignUpPage() {
                     {...field}
                   />
                 </div>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
               </Field>
             )}
           />

@@ -40,7 +40,9 @@ export default function Home() {
   const [greeting, setGreeting] = useState<string>("");
   const [consumptionData, setConsumptionData] =
     useState<TokenUsageConsumptionResult | null>(null);
-  const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(null);
+  const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(
+    null,
+  );
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
 
   const { userInfo, getFirstName } = useRoleAccess();
@@ -56,7 +58,7 @@ export default function Home() {
   useEffect(() => {
     const fetchConsumptionData = async () => {
       const data = await invoke<TokenUsageConsumptionResult>(
-        "get_token_usage_consumption"
+        "get_token_usage_consumption",
       );
       setConsumptionData(data);
     };

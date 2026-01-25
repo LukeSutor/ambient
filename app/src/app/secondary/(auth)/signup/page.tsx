@@ -35,8 +35,12 @@ const step2Schema = z.object({
   password: z
     .string()
     .min(8, { message: "Password must be at least 8 characters long" })
-    .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
-    .regex(/[a-z]/, { message: "Password must contain at least one lowercase letter" })
+    .regex(/[A-Z]/, {
+      message: "Password must contain at least one uppercase letter",
+    })
+    .regex(/[a-z]/, {
+      message: "Password must contain at least one lowercase letter",
+    })
     .regex(/[0-9]/, { message: "Password must contain at least one number" })
     .regex(/[\^$*.[\]{}()?\-"!@#%&/\\,><':;|_~`+=\s]/, {
       message: "Password must contain at least one special character",
@@ -92,7 +96,8 @@ export default function SignUpPage() {
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
 
   const router = useRouter();
-  const { signUp, signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
+  const { signUp, signIn, confirmSignUp, resendConfirmationCode } =
+    useRoleAccess();
 
   const step1Form = useForm<Step1Values>({
     resolver: zodResolver(step1Schema),
@@ -133,7 +138,9 @@ export default function SignUpPage() {
       if (!result.verification_required) {
         await signIn(step1Data.email, values.password);
         setFormStep("success");
-        setTimeout(() => router.push("/secondary"), 2000);
+        setTimeout(() => {
+          router.push("/secondary");
+        }, 2000);
       } else {
         setConfirmationCode("");
         setHasTriedConfirm(false);
@@ -176,10 +183,14 @@ export default function SignUpPage() {
       await signIn(step1Values.email, step2Values.password);
 
       setFormStep("success");
-      setTimeout(() => router.push("/secondary"), 2000);
+      setTimeout(() => {
+        router.push("/secondary");
+      }, 2000);
     } catch (err) {
       console.error("Verification failed:", err);
-      setError(getAuthErrorMessage(err, "Verification failed. Please try again."));
+      setError(
+        getAuthErrorMessage(err, "Verification failed. Please try again."),
+      );
     } finally {
       setIsConfirming(false);
     }
@@ -192,7 +203,9 @@ export default function SignUpPage() {
       await resendConfirmationCode(step1Values.email);
     } catch (err) {
       console.error("Resend code failed:", err);
-      setError(getAuthErrorMessage(err, "Failed to resend code. Please try again."));
+      setError(
+        getAuthErrorMessage(err, "Failed to resend code. Please try again."),
+      );
     }
   };
 
@@ -222,8 +235,12 @@ export default function SignUpPage() {
         email={signUpResult?.destination || ""}
         code={confirmationCode}
         onCodeChange={handleCodeChange}
-        onSubmit={onConfirmationSubmit}
-        onResendCode={handleResendCode}
+        onSubmit={() => {
+          void onConfirmationSubmit();
+        }}
+        onResendCode={() => {
+          void handleResendCode();
+        }}
         isSubmitting={isConfirming}
         hasTriedSubmit={hasTriedConfirm}
         error={error}
@@ -249,14 +266,18 @@ export default function SignUpPage() {
         <ErrorAlert error={error} />
 
         <GoogleLoginButton
-          onSignInSuccess={() => router.push("/secondary")}
+          onSignInSuccess={() => {
+            router.push("/secondary");
+          }}
           className="w-full mb-6"
         />
 
         <OrDivider />
 
         <form
-          onSubmit={(e) => void step1Form.handleSubmit(onStep1Submit)(e)}
+          onSubmit={(e) => {
+            void step1Form.handleSubmit(onStep1Submit)(e);
+          }}
           className="space-y-6"
           noValidate
         >
@@ -278,7 +299,9 @@ export default function SignUpPage() {
                     {...field}
                   />
                 </div>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                {fieldState.invalid && (
+                  <FieldError errors={[fieldState.error]} />
+                )}
               </Field>
             )}
           />
@@ -308,7 +331,9 @@ export default function SignUpPage() {
       <ErrorAlert error={error} />
 
       <form
-        onSubmit={(e) => void step2Form.handleSubmit(onStep2Submit)(e)}
+        onSubmit={(e) => {
+          void step2Form.handleSubmit(onStep2Submit)(e);
+        }}
         className="space-y-6"
         noValidate
       >

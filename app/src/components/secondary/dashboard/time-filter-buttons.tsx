@@ -25,7 +25,9 @@ export function TimeFilterButtons({
         <Button
           key={value}
           className={currentFilter === value ? "bg-gray-100" : ""}
-          onClick={() => onFilterChange(value)}
+          onClick={() => {
+            onFilterChange(value);
+          }}
           variant="outline"
         >
           {label}

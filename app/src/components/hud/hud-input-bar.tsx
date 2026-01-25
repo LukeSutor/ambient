@@ -148,7 +148,13 @@ export function HUDInputBar({
       gsap.fromTo(
         inputRef.current,
         { scale: 0, opacity: 0, transformOrigin: "center center" },
-        { scale: 1, opacity: 1, duration: 0.25, ease: "back.out(0.8)", delay: 0.1 },
+        {
+          scale: 1,
+          opacity: 1,
+          duration: 0.25,
+          ease: "back.out(0.8)",
+          delay: 0.1,
+        },
       );
     }
   }, [hudDimensions]);

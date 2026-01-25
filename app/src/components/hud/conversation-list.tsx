@@ -61,7 +61,9 @@ export function ConversationList({
   loadMoreConversations,
   renameConversation,
 }: ConversationListProps) {
-  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
+  const [editingConversationId, setEditingConversationId] = useState<
+    string | null
+  >(null);
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
 
@@ -80,14 +82,20 @@ export function ConversationList({
       }
     };
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMoreConversations && !isLoadingRef.current) {
+        if (
+          entries[0].isIntersecting &&
+          hasMoreConversations &&
+          !isLoadingRef.current
+        ) {
           isLoadingRef.current = true;
           void loadMoreConversations().finally(() => {
             isLoadingRef.current = false;
@@ -176,7 +184,9 @@ export function ConversationList({
                   className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg"
                 >
                   <Button
-                    onClick={() => void handleLoadConversation(conv.id)}
+                    onClick={() => {
+                      void handleLoadConversation(conv.id);
+                    }}
                     variant="ghost"
                     className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent"
                   >
@@ -198,13 +208,19 @@ export function ConversationList({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuGroup>
-                        <DropdownMenuItem onClick={() => startEditing(conv)}>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            startEditing(conv);
+                          }}
+                        >
                           <Pen className="mr-2" />
                           Rename
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           variant="destructive"
-                          onClick={() => void deleteConversation(conv.id)}
+                          onClick={() => {
+                            void deleteConversation(conv.id);
+                          }}
                         >
                           <Trash2 className="mr-2" />
                           Delete
@@ -217,7 +233,9 @@ export function ConversationList({
                 <div key={conv.id}>
                   <Form {...form}>
                     <form
-                      onSubmit={(e) => void form.handleSubmit(handleUpdateConversationName)(e)}
+                      onSubmit={(e) => {
+                        void form.handleSubmit(handleUpdateConversationName)(e);
+                      }}
                       className="space-y-2"
                     >
                       <FormField
@@ -231,14 +249,21 @@ export function ConversationList({
                                 className="text-sm font-semibold h-8"
                                 autoFocus
                                 onBlur={() => {
-                                  if (Object.keys(form.formState.errors).length === 0) {
-                                    void form.handleSubmit(handleUpdateConversationName)();
+                                  if (
+                                    Object.keys(form.formState.errors)
+                                      .length === 0
+                                  ) {
+                                    void form.handleSubmit(
+                                      handleUpdateConversationName,
+                                    )();
                                   }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
-                                    void form.handleSubmit(handleUpdateConversationName)();
+                                    void form.handleSubmit(
+                                      handleUpdateConversationName,
+                                    )();
                                   }
                                 }}
                               />

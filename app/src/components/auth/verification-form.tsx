@@ -59,7 +59,9 @@ export function VerificationForm({
   const cardContent = (
     <Card className={variant === "hud" ? "relative w-full pt-12" : "w-full"}>
       <CardHeader className="text-center">
-        <CardTitle className={`flex items-center justify-center ${variant === "hud" ? "text-xl" : "text-2xl"} font-bold`}>
+        <CardTitle
+          className={`flex items-center justify-center ${variant === "hud" ? "text-xl" : "text-2xl"} font-bold`}
+        >
           {showIcon && <Mail className="h-5 w-5 mr-2" />}
           Verify Your Email
         </CardTitle>
@@ -88,6 +90,7 @@ export function VerificationForm({
               >
                 <InputOTPGroup>
                   {Array.from({ length: 8 }).map((_, index) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: OTP slots are stable and don't reorder
                     <InputOTPSlot key={index} index={index} />
                   ))}
                 </InputOTPGroup>
@@ -153,9 +156,7 @@ export function VerificationForm({
 
   return (
     <div className="min-h-full flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        {cardContent}
-      </div>
+      <div className="max-w-md w-full space-y-8">{cardContent}</div>
     </div>
   );
 }

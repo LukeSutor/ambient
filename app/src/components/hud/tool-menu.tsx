@@ -8,7 +8,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
-import { MousePointerClick, SquareDashedMousePointer, Wrench } from "lucide-react";
+import {
+  MousePointerClick,
+  SquareDashedMousePointer,
+  Wrench,
+} from "lucide-react";
 
 interface ToolMenuProps {
   onOpenChange: (open: boolean) => void;
@@ -44,13 +48,19 @@ export function ToolMenu({
         className="bg-white/60"
       >
         <DropdownMenuGroup>
-          <DropdownMenuItem className="hover:bg-white/60" onClick={dispatchOCRCapture}>
+          <DropdownMenuItem
+            className="hover:bg-white/60"
+            onClick={dispatchOCRCapture}
+          >
             <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
             <span className="text-black text-sm whitespace-nowrap">
               Capture Area
             </span>
           </DropdownMenuItem>
-          <DropdownMenuItem className="hover:bg-white/60" onClick={toggleComputerUse}>
+          <DropdownMenuItem
+            className="hover:bg-white/60"
+            onClick={toggleComputerUse}
+          >
             <MousePointerClick className="!w-4 !h-4 text-black shrink-0 mr-2" />
             <span className="text-black text-sm whitespace-nowrap">
               Computer Use

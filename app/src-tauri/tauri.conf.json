@@ -44,9 +44,7 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "resources": [
-      "../public/favicon.ico"
-    ],
+    "resources": ["../public/favicon.ico"],
     "externalBin": ["binaries/server"]
   },
   "plugins": {

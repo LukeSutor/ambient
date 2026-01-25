@@ -27,7 +27,9 @@ export function SuccessCard({
   variant = "secondary",
 }: SuccessCardProps) {
   const cardContent = (
-    <Card className={`text-center ${variant === "hud" ? "relative w-full pt-12 p-6" : "p-8"}`}>
+    <Card
+      className={`text-center ${variant === "hud" ? "relative w-full pt-12 p-6" : "p-8"}`}
+    >
       <CardHeader>
         <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
           {icon === "check" ? (
@@ -36,7 +38,9 @@ export function SuccessCard({
             <Loader2 className="h-6 w-6 text-green-600" />
           )}
         </div>
-        <CardTitle className={`${variant === "hud" ? "text-xl" : "text-2xl"} font-bold`}>
+        <CardTitle
+          className={`${variant === "hud" ? "text-xl" : "text-2xl"} font-bold`}
+        >
           {title}
         </CardTitle>
         <CardDescription>{description}</CardDescription>
@@ -57,9 +61,7 @@ export function SuccessCard({
 
   return (
     <div className="min-h-full flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        {cardContent}
-      </div>
+      <div className="max-w-md w-full">{cardContent}</div>
     </div>
   );
 }

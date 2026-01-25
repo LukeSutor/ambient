@@ -38,7 +38,8 @@ export function MessageList({
   handleNewChat,
 }: MessageListProps) {
   const [showReasoning, setShowReasoning] = useState(new Set<number>());
-  const { isChatHistoryExpanded, openSecondary, toggleChatHistory } = useWindows();
+  const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =
+    useWindows();
 
   const toggleReasoning = useCallback((index: number) => {
     setShowReasoning((prev) => {
@@ -132,7 +133,9 @@ export function MessageList({
                       ? "max-w-[85%] w-full ml-auto"
                       : "max-w-[95%] w-full text-left ml-2 mb-0",
                   )}
-                  style={{ gridTemplateRows: m.message.content ? "1fr" : "0fr" }}
+                  style={{
+                    gridTemplateRows: m.message.content ? "1fr" : "0fr",
+                  }}
                 >
                   {isUser ? (
                     <UserMessage m={m} />
