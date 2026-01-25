@@ -1,6 +1,5 @@
 "use client";
 
-import AutoResizeContainer from "@/components/hud/auto-resize-container";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,22 +10,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Toaster } from "@/components/ui/sonner";
-import { SiteHeader } from "@/components/site-header";
-import { useSettings } from "@/lib/settings/useSettings";
 import { useSetup } from "@/lib/setup/useSetup";
-import { useWindows } from "@/lib/windows/useWindows";
-import type { HudDimensions } from "@/types/settings";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
 export default function SetupPage() {
   const router = useRouter();
-
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
-    null,
-  );
 
   // Setup state
   const {
@@ -39,19 +29,6 @@ export default function SetupPage() {
     setupMessage,
     startSetup,
   } = useSetup();
-
-  // Windows state
-  const { closeHUD } = useWindows();
-
-  // Settings state
-  const { getHudDimensions } = useSettings();
-
-  useEffect(() => {
-    void (async () => {
-      const dimensions = await getHudDimensions();
-      setHudDimensions(dimensions);
-    })();
-  }, [getHudDimensions]);
 
   // Function to start the setup process
   const handleStartSetup = useCallback(async () => {
@@ -88,21 +65,11 @@ export default function SetupPage() {
       : 0;
 
   return (
-    <AutoResizeContainer
-      hudDimensions={hudDimensions}
-      widthType="login"
-      className="bg-transparent"
-    >
-      <SiteHeader />
-      <Toaster richColors position="top-center" />
-
-      {/* Setup Card */}
-      <Card className="relative w-full pt-12">
-
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="text-2xl font-bold">
-            Application Setup Required
-          </CardTitle>
+    <Card className="relative w-full pt-12">
+      <CardHeader className="text-center pt-2">
+        <CardTitle className="text-2xl font-bold">
+          Application Setup Required
+        </CardTitle>
           <CardDescription>
             Essential files need to be downloaded before using the application.
             This might take some time depending on your internet connection. The
@@ -156,6 +123,5 @@ export default function SetupPage() {
           )}
         </CardFooter>
       </Card>
-    </AutoResizeContainer>
   );
 }

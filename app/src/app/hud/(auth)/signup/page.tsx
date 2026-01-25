@@ -1,6 +1,5 @@
 "use client";
 import { GoogleLoginButton } from "@/components/google-login-button";
-import AutoResizeContainer from "@/components/hud/auto-resize-container";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,9 +28,6 @@ import {
   getAuthErrorMessage,
   useRoleAccess,
 } from "@/lib/role-access";
-import { useSettings } from "@/lib/settings/useSettings";
-import { useWindows } from "@/lib/windows/useWindows";
-import type { HudDimensions } from "@/types/settings";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import {
@@ -43,9 +39,7 @@ import {
   EyeOff,
   Loader2,
   Mail,
-  User,
   UserPlus,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -100,24 +94,9 @@ export default function SignUp() {
   const [hasTriedConfirm, setHasTriedConfirm] = useState(false);
   const router = useRouter();
 
-  // Windows state
-  const { closeHUD } = useWindows();
-
   // Auth state
   const { isLoggedIn, signUp, signIn, confirmSignUp, resendConfirmationCode } =
     useRoleAccess();
-
-  // Settings state
-  const { settings, getHudDimensions } = useSettings();
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
-    null,
-  );
-  useEffect(() => {
-    void (async () => {
-      const dimensions = await getHudDimensions();
-      setHudDimensions(dimensions);
-    })();
-  }, [getHudDimensions]);
 
   const step1Form = useForm<z.infer<typeof step1Schema>>({
     resolver: zodResolver(step1Schema),
@@ -255,84 +234,39 @@ export default function SignUp() {
 
   if (formStep === "success") {
     return (
-      <AutoResizeContainer
-        hudDimensions={hudDimensions}
-        widthType="login"
-        className="bg-transparent"
-      >
-        <Card className="relative w-full pt-12 overflow-hidden">
-          {/* Drag area and close button */}
-          <div
-            data-tauri-drag-region
-            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
-          >
-            <Button
-              className="hover:bg-gray-200"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void closeHUD();
-              }}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
+      <Card className="relative w-full pt-12 overflow-hidden">
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="flex items-center justify-center text-green-600 text-2xl">
+            <CheckCircle className="h-6 w-6 mr-2" />
+            Account Created Successfully!
+          </CardTitle>
+          <CardDescription className="text-base">
+            Your account has been created and verified. You can now access
+            your dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center">
+          <div className="animate-pulse text-sm text-gray-500">
+            Redirecting to dashboard...
           </div>
-
-          <CardHeader className="text-center pt-2">
-            <CardTitle className="flex items-center justify-center text-green-600 text-2xl">
-              <CheckCircle className="h-6 w-6 mr-2" />
-              Account Created Successfully!
-            </CardTitle>
-            <CardDescription className="text-base">
-              Your account has been created and verified. You can now access
-              your dashboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <div className="animate-pulse text-sm text-gray-500">
-              Redirecting to dashboard...
-            </div>
-          </CardContent>
-        </Card>
-      </AutoResizeContainer>
+        </CardContent>
+      </Card>
     );
   }
 
   if (formStep === "verify") {
     return (
-      <AutoResizeContainer
-        hudDimensions={hudDimensions}
-        widthType="login"
-        className="bg-transparent"
-      >
-        <Card className="relative w-full pt-12 overflow-hidden">
-          {/* Drag area and close button */}
-          <div
-            data-tauri-drag-region
-            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
-          >
-            <Button
-              className="hover:bg-gray-200"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void closeHUD();
-              }}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
-          </div>
-
-          <CardHeader className="text-center pt-2">
-            <CardTitle className="flex items-center justify-center text-2xl">
-              <Mail className="h-5 w-5 mr-2 text-3xl font-bold" />
-              Verify Your Email
-            </CardTitle>
-            <CardDescription>
-              Enter the verification code sent to {signUpResult?.destination}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card className="relative w-full pt-12 overflow-hidden">
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="flex items-center justify-center text-2xl">
+            <Mail className="h-5 w-5 mr-2 text-3xl font-bold" />
+            Verify Your Email
+          </CardTitle>
+          <CardDescription>
+            Enter the verification code sent to {signUpResult?.destination}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
             {error && (
               <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
                 <AlertCircle className="h-4 w-4" />
@@ -424,45 +358,22 @@ export default function SignUp() {
             </form>
           </CardContent>
         </Card>
-      </AutoResizeContainer>
     );
   }
 
   // Step 1: Email
   if (formStep === "step1") {
     return (
-      <AutoResizeContainer
-        hudDimensions={hudDimensions}
-        widthType="login"
-        className="bg-transparent"
-      >
-        <Card className="relative w-full pt-12 overflow-auto">
-          {/* Drag area and close button */}
-          <div
-            data-tauri-drag-region
-            className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
-          >
-            <Button
-              className="hover:bg-gray-200"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                void closeHUD();
-              }}
-            >
-              <X className="!h-6 !w-6" />
-            </Button>
-          </div>
-
-          <CardHeader className="text-center pt-2">
-            <CardTitle className="text-3xl font-bold">
-              Create Your Account
-            </CardTitle>
-            <CardDescription>
-              Step 1 of 2: Start with your email
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <Card className="relative w-full pt-12 overflow-auto">
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="text-3xl font-bold">
+            Create Your Account
+          </CardTitle>
+          <CardDescription>
+            Step 1 of 2: Start with your email
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
             {error && (
               <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
                 <AlertCircle className="h-4 w-4" />
@@ -533,45 +444,22 @@ export default function SignUp() {
             </p>
           </CardFooter>
         </Card>
-      </AutoResizeContainer>
     );
   }
 
   // Step 2: Personal Info & Password
   // We don't need the if (formStep === "step2") check here because it's the only remaining step
   return (
-    <AutoResizeContainer
-      hudDimensions={hudDimensions}
-      widthType="login"
-      className="bg-transparent"
-    >
-      <Card className="relative w-full pt-12 overflow-auto">
-        {/* Drag area and close button */}
-        <div
-          data-tauri-drag-region
-          className="absolute top-0 right-0 left-0 flex justify-end items-center py-1 pr-1 border-b"
-        >
-          <Button
-            className="hover:bg-gray-200"
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              void closeHUD();
-            }}
-          >
-            <X className="!h-6 !w-6" />
-          </Button>
-        </div>
-
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="text-3xl font-bold">
-            Create Your Account
-          </CardTitle>
-          <CardDescription>
-            Step 2 of 2: Personal Info & Password
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <Card className="relative w-full pt-12 overflow-auto">
+      <CardHeader className="text-center pt-2">
+        <CardTitle className="text-3xl font-bold">
+          Create Your Account
+        </CardTitle>
+        <CardDescription>
+          Step 2 of 2: Personal Info & Password
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
           {error && (
             <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200 mb-6">
               <AlertCircle className="h-4 w-4" />
@@ -700,6 +588,5 @@ export default function SignUp() {
           </p>
         </CardFooter>
       </Card>
-    </AutoResizeContainer>
   );
 }

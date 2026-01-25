@@ -1,7 +1,5 @@
 "use client";
 import { GoogleLoginButton } from "@/components/google-login-button";
-import AutoResizeContainer from "@/components/hud/auto-resize-container";
-import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,15 +17,12 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
-import { useSettings } from "@/lib/settings/useSettings";
-import { useWindows } from "@/lib/windows/useWindows";
-import type { HudDimensions } from "@/types/settings";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
-import { AlertCircle, Eye, EyeOff, Loader2, Lock, Mail, X } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -56,23 +51,8 @@ export default function Login() {
   } | null>(null);
   const router = useRouter();
 
-  // Windows state
-  const { closeHUD } = useWindows();
-
   // Auth state
   const { signIn, confirmSignUp, resendConfirmationCode } = useRoleAccess();
-
-  // Settings state
-  const { settings, getHudDimensions } = useSettings();
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
-    null,
-  );
-  useEffect(() => {
-    void (async () => {
-      const dimensions = await getHudDimensions();
-      setHudDimensions(dimensions);
-    })();
-  }, [getHudDimensions]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -164,46 +144,33 @@ export default function Login() {
 
   if (formStep === "success") {
     return (
-      <AutoResizeContainer
-        hudDimensions={hudDimensions}
-        widthType="login"
-        className="bg-transparent"
-      >
-        <SiteHeader />
-        <Card className="relative w-full pt-12 text-center p-8">
-          <CardHeader>
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-              <Loader2 className="h-6 w-6 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl font-bold">
-              Verification Successful!
-            </CardTitle>
-            <CardDescription>
-              Your email has been verified. Redirecting you now...
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </AutoResizeContainer>
+      <Card className="relative w-full pt-12 text-center p-8">
+        <CardHeader>
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+            <Loader2 className="h-6 w-6 text-green-600" />
+          </div>
+          <CardTitle className="text-2xl font-bold">
+            Verification Successful!
+          </CardTitle>
+          <CardDescription>
+            Your email has been verified. Redirecting you now...
+          </CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
 
   if (formStep === "verify") {
     return (
-      <AutoResizeContainer
-        hudDimensions={hudDimensions}
-        widthType="login"
-        className="bg-transparent"
-      >
-        <SiteHeader />
-        <Card className="relative w-full pt-12">
-          <CardHeader className="text-center pt-2">
-            <CardTitle className="text-3xl font-bold">Verify Email</CardTitle>
-            <CardDescription>
-              We&apos;ve sent a code to {loginData?.email}. Enter it below to
-              confirm your account.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+      <Card className="relative w-full pt-12">
+        <CardHeader className="text-center pt-2">
+          <CardTitle className="text-3xl font-bold">Verify Email</CardTitle>
+          <CardDescription>
+            We&apos;ve sent a code to {loginData?.email}. Enter it below to
+            confirm your account.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
             {error && (
               <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md border border-red-200">
                 <AlertCircle className="h-4 w-4" />
@@ -295,25 +262,17 @@ export default function Login() {
             </button>
           </CardFooter>
         </Card>
-      </AutoResizeContainer>
     );
   }
 
   return (
-    <AutoResizeContainer
-      hudDimensions={hudDimensions}
-      widthType="login"
-      className="bg-transparent"
-    >
-      <SiteHeader />
-      {/* Sign In Form */}
-      <Card className="relative w-full pt-12">
-        <CardHeader className="text-center pt-2">
-          <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
-          <CardDescription>
-            Welcome back! Enter your credentials to continue
-          </CardDescription>
-        </CardHeader>
+    <Card className="relative w-full pt-12">
+      <CardHeader className="text-center pt-2">
+        <CardTitle className="text-3xl font-bold">Sign In</CardTitle>
+        <CardDescription>
+          Welcome back! Enter your credentials to continue
+        </CardDescription>
+      </CardHeader>
         <CardContent>
           <form
             onSubmit={(e) => {
@@ -432,6 +391,5 @@ export default function Login() {
           </p>
         </CardFooter>
       </Card>
-    </AutoResizeContainer>
   );
 }
