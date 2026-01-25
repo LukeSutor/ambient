@@ -25,7 +25,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import type { Conversation } from "@/types/conversations";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Ellipsis, Loader2, Pen, Trash2, X } from "lucide-react";
-import React, { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ContentContainer } from "./content-container";
@@ -38,6 +38,8 @@ const conversationNameSchema = z.object({
     .min(1, "Name cannot be empty")
     .max(100, "Name must be less than 100 characters"),
 });
+
+type ConversationNameFormValues = z.infer<typeof conversationNameSchema>;
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -59,28 +61,18 @@ export function ConversationList({
   loadMoreConversations,
   renameConversation,
 }: ConversationListProps) {
-  // State
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [editingConversationId, setEditingConversationId] = useState<
-    string | null
-  >(null);
-
-  // Form setup
-  const form = useForm<z.infer<typeof conversationNameSchema>>({
-    resolver: zodResolver(conversationNameSchema),
-    defaultValues: {
-      name: "",
-    },
-  });
-
-  // Refs
+  const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
 
-  // Window Manager
   const { setChatExpanded, toggleChatHistory } = useWindows();
 
-  // Set editing conversation ID to null when escape key is pressed
+  const form = useForm<ConversationNameFormValues>({
+    resolver: zodResolver(conversationNameSchema),
+    defaultValues: { name: "" },
+  });
+
+  // Escape key handler for editing
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -88,61 +80,60 @@ export function ConversationList({
       }
     };
     document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Intersection Observer for infinite scroll
+  // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          hasMoreConversations &&
-          !isLoadingRef.current
-        ) {
+        if (entries[0].isIntersecting && hasMoreConversations && !isLoadingRef.current) {
           isLoadingRef.current = true;
-          setLoadingMore(true);
           void loadMoreConversations().finally(() => {
             isLoadingRef.current = false;
-            setLoadingMore(false);
           });
         }
       },
       { threshold: 0.1 },
     );
 
-    const currentTarget = observerTarget.current;
-    if (currentTarget) {
-      observer.observe(currentTarget);
-    }
+    const target = observerTarget.current;
+    if (target) observer.observe(target);
 
     return () => {
-      if (currentTarget) {
-        observer.unobserve(currentTarget);
-      }
+      if (target) observer.unobserve(target);
     };
   }, [hasMoreConversations, loadMoreConversations]);
 
-  const handleLoadConversation = (id: string) => async () => {
-    await loadConversation(id);
-    setChatExpanded();
-  };
+  const handleLoadConversation = useCallback(
+    async (id: string) => {
+      await loadConversation(id);
+      setChatExpanded();
+    },
+    [loadConversation, setChatExpanded],
+  );
 
-  const handleUpdateConversationName = async (
-    values: z.infer<typeof conversationNameSchema>,
-  ) => {
-    if (editingConversationId) {
-      await renameConversation(editingConversationId, values.name);
-    }
-    setEditingConversationId(null);
-  };
+  const handleUpdateConversationName = useCallback(
+    async (values: ConversationNameFormValues) => {
+      if (editingConversationId) {
+        await renameConversation(editingConversationId, values.name);
+      }
+      setEditingConversationId(null);
+    },
+    [editingConversationId, renameConversation],
+  );
 
-  const startEditing = (conv: Conversation) => {
-    setEditingConversationId(conv.id);
-    form.reset({ name: conv.name || "" });
-  };
+  const startEditing = useCallback(
+    (conv: Conversation) => {
+      setEditingConversationId(conv.id);
+      form.reset({ name: conv.name || "" });
+    },
+    [form],
+  );
+
+  const handleCloseChatHistory = useCallback(() => {
+    void toggleChatHistory(false);
+  }, [toggleChatHistory]);
 
   return (
     <ContentContainer>
@@ -152,9 +143,7 @@ export function ConversationList({
             Chat History
           </p>
           <Button
-            onClick={() => {
-              void toggleChatHistory(false);
-            }}
+            onClick={handleCloseChatHistory}
             variant="ghost"
             size="icon"
             className="!p-2"
@@ -187,9 +176,7 @@ export function ConversationList({
                   className="flex flex-row items-center min-w-0 group hover:bg-white/20 px-3 rounded-lg"
                 >
                   <Button
-                    onClick={() => {
-                      void handleLoadConversation(conv.id)();
-                    }}
+                    onClick={() => void handleLoadConversation(conv.id)}
                     variant="ghost"
                     className="p-0 text-sm font-semibold flex-1 min-w-0 justify-start hover:bg-transparent"
                   >
@@ -211,19 +198,13 @@ export function ConversationList({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            startEditing(conv);
-                          }}
-                        >
+                        <DropdownMenuItem onClick={() => startEditing(conv)}>
                           <Pen className="mr-2" />
                           Rename
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           variant="destructive"
-                          onClick={() => {
-                            void deleteConversation(conv.id);
-                          }}
+                          onClick={() => void deleteConversation(conv.id)}
                         >
                           <Trash2 className="mr-2" />
                           Delete
@@ -236,9 +217,7 @@ export function ConversationList({
                 <div key={conv.id}>
                   <Form {...form}>
                     <form
-                      onSubmit={(e) => {
-                        void form.handleSubmit(handleUpdateConversationName)(e);
-                      }}
+                      onSubmit={(e) => void form.handleSubmit(handleUpdateConversationName)(e)}
                       className="space-y-2"
                     >
                       <FormField
@@ -252,22 +231,14 @@ export function ConversationList({
                                 className="text-sm font-semibold h-8"
                                 autoFocus
                                 onBlur={() => {
-                                  // Submit on blur if there are no errors
-                                  if (
-                                    Object.keys(form.formState.errors)
-                                      .length === 0
-                                  ) {
-                                    void form.handleSubmit(
-                                      handleUpdateConversationName,
-                                    )();
+                                  if (Object.keys(form.formState.errors).length === 0) {
+                                    void form.handleSubmit(handleUpdateConversationName)();
                                   }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     e.preventDefault();
-                                    void form.handleSubmit(
-                                      handleUpdateConversationName,
-                                    )();
+                                    void form.handleSubmit(handleUpdateConversationName)();
                                   }
                                 }}
                               />

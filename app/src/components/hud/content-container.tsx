@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import type React from "react";
 
 interface ContentContainerProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -11,7 +12,10 @@ export function ContentContainer({
 }: ContentContainerProps) {
   return (
     <div
-      className={`h-full text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-md overflow-hidden ${className}`}
+      className={cn(
+        "h-full text-black/90 text-sm leading-relaxed bg-white/60 border border-black/20 rounded-md overflow-hidden",
+        className,
+      )}
       {...props}
     >
       {children}

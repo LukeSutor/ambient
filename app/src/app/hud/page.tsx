@@ -8,16 +8,14 @@ import { useConversation } from "@/lib/conversations";
 import { useSettings } from "@/lib/settings";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function HudPage() {
   // UI State
   const [input, setInput] = useState("");
   const [isDraggingWindow, setIsDraggingWindow] = useState(false);
   const [isHoveringGroup, setIsHoveringGroup] = useState(false);
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
-    null,
-  );
+  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(null);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -52,63 +50,49 @@ export default function HudPage() {
   // Window Manager
   const { setChatMinimized, setChatExpanded } = useWindows();
 
-  // Load HUD dimensions only once on mount or when settings change
+  // Load HUD dimensions on mount or when settings change
   useEffect(() => {
-    void (async () => {
+    const loadDimensions = async () => {
       const dimensions = await getHudDimensions();
-      // Only update if dimensions actually changed
       setHudDimensions((prev) => {
         if (prev === null) return dimensions;
-        // Deep comparison to avoid unnecessary updates
-        if (JSON.stringify(prev) === JSON.stringify(dimensions)) {
-          return prev;
-        }
+        if (JSON.stringify(prev) === JSON.stringify(dimensions)) return prev;
         return dimensions;
       });
-    })();
+    };
+    void loadDimensions();
   }, [getHudDimensions]);
 
-  const handleMouseLeave = async (e: React.MouseEvent) => {
-    setIsHoveringGroup(false);
-    // Get the bounding box of drag area
-    const dragArea = document.getElementById("drag-area");
-    if (!dragArea) return;
-
-    // See if mouse is within bounding box
-    const rect = dragArea.getBoundingClientRect();
-    const mouseCoords = { x: e.clientX, y: e.clientY };
-    const isWithinBox =
-      mouseCoords.x >= rect.left &&
-      mouseCoords.x <= rect.right &&
-      mouseCoords.y >= rect.top &&
-      mouseCoords.y <= rect.bottom;
-
-    // set dragging off if not within bounding box
-    if (!isWithinBox) {
-      setIsDraggingWindow(false);
-    }
-  };
-
-  // Ensure drag visibility resets when pointer is released anywhere
+  // Reset drag state on pointer/mouse up
   useEffect(() => {
-    const onUp = () => {
-      setIsDraggingWindow(false);
-    };
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("mouseup", onUp);
+    const handlePointerUp = () => setIsDraggingWindow(false);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("mouseup", handlePointerUp);
     return () => {
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("mouseup", handlePointerUp);
     };
   }, []);
 
-  async function handleSubmit(e?: React.FormEvent | React.KeyboardEvent) {
-    if (e) {
-      e.preventDefault();
+  const handleMouseLeave = useCallback((e: React.MouseEvent) => {
+    setIsHoveringGroup(false);
+    const dragArea = document.getElementById("drag-area");
+    if (!dragArea) return;
+
+    const rect = dragArea.getBoundingClientRect();
+    const isWithinDragArea =
+      e.clientX >= rect.left &&
+      e.clientX <= rect.right &&
+      e.clientY >= rect.top &&
+      e.clientY <= rect.bottom;
+
+    if (!isWithinDragArea) {
+      setIsDraggingWindow(false);
     }
+  }, []);
 
+  const handleSubmit = useCallback(async () => {
     const query = input.trim();
-
     if (!query || isLoading) return;
 
     setChatExpanded();
@@ -119,33 +103,37 @@ export default function HudPage() {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
     }
-  }
+  }, [input, isLoading, conversationId, sendMessage, setChatExpanded]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void handleSubmit(e);
-    }
-    if (e.key === "Escape") {
-      void handleNewChat();
-    }
-  };
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void handleSubmit();
+      }
+    },
+    [handleSubmit],
+  );
 
-  const handleNewChat = async () => {
-    // Don't create new conversation if there are no messages
+  const handleNewChat = useCallback(async () => {
     if (messages.length > 0) {
       setChatMinimized();
       await resetConversation(500);
     }
-  };
+  }, [messages.length, setChatMinimized, resetConversation]);
+
+  const handleDragStart = useCallback(() => {
+    setIsDraggingWindow(true);
+  }, []);
+
+  const handleDispatchOCRCapture = useCallback(() => {
+    void dispatchOCRCapture();
+  }, [dispatchOCRCapture]);
 
   return (
-    <AutoResizeContainer
-      widthType="chat"
-    >
+    <AutoResizeContainer widthType="chat">
       <Toaster richColors position="top-center" />
 
-      {/* Glass Container */}
       <div className="flex flex-col">
         {/* Dynamic Chat Content Area */}
         <DynamicChatContent
@@ -155,21 +143,11 @@ export default function HudPage() {
           messagesEndRef={messagesEndRef}
           conversations={conversations}
           hasMoreConversations={hasMoreConversations}
-          loadConversation={async (id) => {
-            await loadConversation(id);
-          }}
-          deleteConversation={async (id) => {
-            await deleteConversation(id);
-          }}
-          loadMoreConversations={async () => {
-            await loadMoreConversations();
-          }}
-          renameConversation={async (id, name) => {
-            await renameConversation(id, name);
-          }}
-          handleNewChat={() => {
-            void handleNewChat();
-          }}
+          loadConversation={loadConversation}
+          deleteConversation={deleteConversation}
+          loadMoreConversations={loadMoreConversations}
+          renameConversation={renameConversation}
+          handleNewChat={handleNewChat}
         />
 
         {/* Input Container */}
@@ -179,21 +157,13 @@ export default function HudPage() {
           setInputValue={setInput}
           handleSubmit={handleSubmit}
           onKeyDown={handleKeyDown}
-          dispatchOCRCapture={() => {
-            void dispatchOCRCapture();
-          }}
-          onDragStart={() => {
-            setIsDraggingWindow(true);
-          }}
-          onMouseLeave={(e) => {
-            void handleMouseLeave(e);
-          }}
+          dispatchOCRCapture={handleDispatchOCRCapture}
+          onDragStart={handleDragStart}
+          onMouseLeave={handleMouseLeave}
           isDraggingWindow={isDraggingWindow}
           isHoveringGroup={isHoveringGroup}
           setIsHoveringGroup={setIsHoveringGroup}
-          toggleComputerUse={() => {
-            toggleComputerUse();
-          }}
+          toggleComputerUse={toggleComputerUse}
           ocrLoading={ocrLoading}
           isStreaming={isStreaming}
           conversationType={conversationType}

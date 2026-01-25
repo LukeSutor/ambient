@@ -8,10 +8,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { ChatMessage } from "@/lib/conversations/types";
+import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   AssistantMessage,
   FunctionMessage,
@@ -25,20 +26,21 @@ interface MessageListProps {
   handleNewChat: () => void;
 }
 
-// Container element forwards ref to the tail sentinel to support scrollIntoView
+const SCROLL_MASK_STYLE = {
+  maskImage: "linear-gradient(to bottom, transparent 40px, black 40px)",
+  WebkitMaskImage: "linear-gradient(to bottom, transparent 40px, black 40px)",
+} as const;
+
 export function MessageList({
   conversationName,
   messages,
   messagesEndRef,
   handleNewChat,
 }: MessageListProps) {
-  const [showReasoning, setShowReasoning] = useState(new Set<number>([]));
+  const [showReasoning, setShowReasoning] = useState(new Set<number>());
+  const { isChatHistoryExpanded, openSecondary, toggleChatHistory } = useWindows();
 
-  // Window state
-  const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =
-    useWindows();
-
-  const toggleReasoning = (index: number) => {
+  const toggleReasoning = useCallback((index: number) => {
     setShowReasoning((prev) => {
       const next = new Set(prev);
       if (next.has(index)) {
@@ -48,11 +50,25 @@ export function MessageList({
       }
       return next;
     });
-  };
+  }, []);
+
+  const handleToggleChatHistory = useCallback(() => {
+    void toggleChatHistory();
+  }, [toggleChatHistory]);
+
+  const handleOpenSecondary = useCallback(
+    (dest: string) => {
+      void openSecondary(dest);
+    },
+    [openSecondary],
+  );
+
+  const isLoading = conversationName === "";
 
   return (
     <ContentContainer>
       <div className="relative w-full h-full overflow-hidden">
+        {/* Header */}
         <div className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 pointer-events-none">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -60,9 +76,7 @@ export function MessageList({
                 size="icon"
                 variant="ghost"
                 className="pointer-events-auto"
-                onClick={() => {
-                  void toggleChatHistory();
-                }}
+                onClick={handleToggleChatHistory}
               >
                 <Menu className="w-5 h-5" />
               </Button>
@@ -74,20 +88,20 @@ export function MessageList({
               <p>{isChatHistoryExpanded ? "Hide" : "Expand"} Chat History</p>
             </TooltipContent>
           </Tooltip>
-          {conversationName === "" ? (
+
+          {isLoading ? (
             <div className="h-6 w-40 rounded-lg bg-white/20 animate-pulse" />
           ) : (
             <p className="font-bold text-center">{conversationName}</p>
           )}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 size="icon"
                 variant="ghost"
                 className="pointer-events-auto"
-                onClick={() => {
-                  handleNewChat();
-                }}
+                onClick={handleNewChat}
               >
                 <MessageSquarePlus className="w-5 h-5" />
               </Button>
@@ -97,46 +111,46 @@ export function MessageList({
             </TooltipContent>
           </Tooltip>
         </div>
+
+        {/* Message List */}
         <div
           className="w-full h-full flex flex-col hud-scroll overflow-y-auto p-4 pt-12"
-          style={{
-            maskImage:
-              "linear-gradient(to bottom, transparent 40px, black 40px)",
-            WebkitMaskImage:
-              "linear-gradient(to bottom, transparent 40px, black 40px)",
-          }}
+          style={SCROLL_MASK_STYLE}
         >
           <div className="flex flex-col space-y-2">
-            {messages.map((m, i) => (
-              <div
-                key={m.message.id}
-                className={
-                  m.message.role.toLowerCase() === "user"
-                    ? "max-w-[85%] w-full ml-auto grid transition-[grid-template-rows] duration-300 ease-out"
-                    : "max-w-[95%] w-full text-left ml-2 mb-0 grid transition-[grid-template-rows] duration-300 ease-out"
-                }
-                style={{
-                  gridTemplateRows: m.message.content ? "1fr" : "0fr",
-                }}
-              >
-                {m.message.role.toLowerCase() === "user" ? (
-                  <UserMessage m={m} />
-                ) : m.message.role.toLowerCase() === "assistant" ? (
-                  <AssistantMessage
-                    messages={messages}
-                    m={m}
-                    i={i}
-                    openSecondary={() => {
-                      void openSecondary();
-                    }}
-                    toggleReasoning={toggleReasoning}
-                    showReasoning={showReasoning.has(i)}
-                  />
-                ) : (
-                  <FunctionMessage m={m} />
-                )}
-              </div>
-            ))}
+            {messages.map((m, i) => {
+              const role = m.message.role.toLowerCase();
+              const isUser = role === "user";
+              const isAssistant = role === "assistant";
+
+              return (
+                <div
+                  key={m.message.id}
+                  className={cn(
+                    "grid transition-[grid-template-rows] duration-300 ease-out",
+                    isUser
+                      ? "max-w-[85%] w-full ml-auto"
+                      : "max-w-[95%] w-full text-left ml-2 mb-0",
+                  )}
+                  style={{ gridTemplateRows: m.message.content ? "1fr" : "0fr" }}
+                >
+                  {isUser ? (
+                    <UserMessage m={m} />
+                  ) : isAssistant ? (
+                    <AssistantMessage
+                      messages={messages}
+                      m={m}
+                      i={i}
+                      openSecondary={handleOpenSecondary}
+                      toggleReasoning={toggleReasoning}
+                      showReasoning={showReasoning.has(i)}
+                    />
+                  ) : (
+                    <FunctionMessage m={m} />
+                  )}
+                </div>
+              );
+            })}
             <div ref={messagesEndRef} />
           </div>
         </div>
