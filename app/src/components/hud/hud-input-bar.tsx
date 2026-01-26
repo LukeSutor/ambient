@@ -6,9 +6,9 @@ import {
   InputGroupAddon,
   InputGroupButton,
 } from "@/components/ui/input-group";
+import { useConversation } from "@/lib/conversations";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
-import type { AttachmentData } from "@/types/events";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
@@ -29,19 +29,11 @@ interface HUDInputBarProps {
   onKeyDown: (
     e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => void;
-  dispatchOCRCapture: () => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
   isDraggingWindow: boolean;
   isHoveringGroup: boolean;
   setIsHoveringGroup: (b: boolean) => void;
-  toggleComputerUse: () => void;
-  ocrLoading: boolean;
-  isStreaming: boolean;
-  conversationType: string;
-  attachmentData: AttachmentData[];
-  addAttachmentData: (attachment: AttachmentData) => void;
-  removeAttachmentData: (index: number) => void;
 }
 
 export function HUDInputBar({
@@ -50,19 +42,11 @@ export function HUDInputBar({
   setInputValue,
   handleSubmit,
   onKeyDown,
-  dispatchOCRCapture,
   onDragStart,
   onMouseLeave,
   isDraggingWindow,
   isHoveringGroup,
   setIsHoveringGroup,
-  toggleComputerUse,
-  ocrLoading,
-  isStreaming,
-  conversationType,
-  attachmentData,
-  addAttachmentData,
-  removeAttachmentData,
 }: HUDInputBarProps) {
   const inputRef = useRef<HTMLDivElement | null>(null);
   const dimensionsRef = useRef<HudDimensions | null>(null);
@@ -72,6 +56,13 @@ export function HUDInputBar({
   const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
+  const {
+    ocrLoading,
+    isStreaming,
+    conversationType,
+    addAttachmentData,
+    toggleComputerUse,
+  } = useConversation();
   const { closeHUD } = useWindows();
 
   // Computed values
@@ -124,6 +115,10 @@ export function HUDInputBar({
     [addAttachmentData],
   );
 
+  const handleToggleComputerUse = useCallback(() => {
+    toggleComputerUse();
+  }, [toggleComputerUse]);
+
   const handleCloseWindow = useCallback(() => {
     void closeHUD();
   }, [closeHUD]);
@@ -175,10 +170,7 @@ export function HUDInputBar({
             "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent",
         )}
       >
-        <AttachmentList
-          attachmentData={attachmentData}
-          removeAttachmentData={removeAttachmentData}
-        />
+        <AttachmentList />
 
         <TextareaAutosize
           data-slot="input-group-control"
@@ -206,9 +198,6 @@ export function HUDInputBar({
           <ToolMenu
             onOpenChange={setIsToolsDropdownOpen}
             disabled={isLoading}
-            conversationType={conversationType}
-            dispatchOCRCapture={dispatchOCRCapture}
-            toggleComputerUse={toggleComputerUse}
           />
 
           {isComputerUseActive && (
@@ -221,7 +210,7 @@ export function HUDInputBar({
                 variant="ghost"
                 className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
                 size="icon"
-                onClick={toggleComputerUse}
+                onClick={handleToggleComputerUse}
               >
                 <X className="!h-3 !w-3 text-black shrink-0" />
               </Button>

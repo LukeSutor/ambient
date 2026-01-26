@@ -1,18 +1,12 @@
 "use client";
 
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import type { AttachmentData } from "@/types/events";
+import { useConversation } from "@/lib/conversations";
 import { AttachmentPreview } from "./attachment-preview";
 
-interface AttachmentListProps {
-  attachmentData: AttachmentData[];
-  removeAttachmentData: (index: number) => void;
-}
+export function AttachmentList() {
+  const { attachmentData, removeAttachmentData } = useConversation();
 
-export function AttachmentList({
-  attachmentData,
-  removeAttachmentData,
-}: AttachmentListProps) {
   if (attachmentData.length === 0) return null;
 
   return (

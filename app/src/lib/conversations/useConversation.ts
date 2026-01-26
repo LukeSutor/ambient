@@ -1,18 +1,9 @@
 "use client";
 
 import type { Conversation, Message, Role } from "@/types/conversations";
-import type {
-  AttachmentData,
-  AttachmentsCreatedEvent,
-  ChatStreamEvent,
-  ComputerUseUpdateEvent,
-  MemoryExtractedEvent,
-  OcrResponseEvent,
-  RenameConversationEvent,
-} from "@/types/events";
+import type { AttachmentData } from "@/types/events";
 import type { MemoryEntry } from "@/types/memory";
 import { invoke } from "@tauri-apps/api/core";
-import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useConversationContext } from "./ConversationProvider";
@@ -28,33 +19,6 @@ import type { ChatMessage } from "./types";
 
 const CONVERSATION_LIMIT = 20;
 const OCR_TIMEOUT_MS = 10000;
-
-/**
- * Extracts and removes <think> tags from LLM responses
- */
-function extractThinkingContent(text: string): string {
-  // Return early if no <think> tags
-  if (!text.includes("<think>")) {
-    return text;
-  }
-  const thinkStartIndex = text.indexOf("<think>");
-  const thinkEndIndex = text.indexOf("</think>");
-
-  let cleanText = text;
-
-  if (thinkStartIndex !== -1) {
-    if (thinkEndIndex !== -1) {
-      // Remove complete thinking block
-      cleanText =
-        text.substring(0, thinkStartIndex) + text.substring(thinkEndIndex + 8);
-    } else {
-      // Remove incomplete thinking block
-      cleanText = text.substring(0, thinkStartIndex);
-    }
-  }
-
-  return cleanText;
-}
 
 /**
  * Transforms a backend message format to frontend ChatMessage format
@@ -103,178 +67,21 @@ export function useConversation(
   messagesEndRef?: React.RefObject<HTMLDivElement | null>,
 ) {
   const { state, dispatch } = useConversationContext();
-  const cleanupRef = useRef<(() => void) | null>(null);
   const isLoadingMoreRef = useRef(false);
 
-  // Use refs for values needed in listeners to avoid re-registering
-  const convIdRef = useRef(state.conversationId);
-  useEffect(() => {
-    convIdRef.current = state.conversationId;
-  }, [state.conversationId]);
-
   // ============================================================
-  // Event Listeners Setup
+  // Auto-scroll effect for streaming messages
   // ============================================================
-
   useEffect(() => {
-    let isMounted = true;
-    const unlisteners: UnlistenFn[] = [];
-
-    const setupEvents = async () => {
-      // Clean up previous listeners
-      if (cleanupRef.current) {
-        cleanupRef.current();
-        cleanupRef.current = null;
-      }
-
-      if (!isMounted) return;
-
-      try {
-        console.log("[useConversation] Setting up event listeners...");
-
-        // Register all listeners in parallel to avoid race conditions
-        const listenerPromises = [
-          // Stream Listener
-          listen<ChatStreamEvent>("chat_stream", (event) => {
-            const { delta, full_response, is_finished, conv_id } =
-              event.payload;
-
-            // Filter by conversation ID using ref to prevent corruption
-            if (conv_id && conv_id !== convIdRef.current) {
-              return;
-            }
-
-            if (is_finished) {
-              // Stream is complete
-              const finalText = extractThinkingContent(full_response);
-              dispatch({ type: "FINALIZE_STREAM", payload: finalText });
-              return;
-            }
-
-            if (delta) {
-              // Update content
-              const cleanContent = extractThinkingContent(full_response);
-              dispatch({
-                type: "UPDATE_STREAMING_CONTENT",
-                payload: cleanContent,
-              });
-
-              // Auto-scroll to bottom
-              if (messagesEndRef?.current) {
-                queueMicrotask(() => {
-                  messagesEndRef.current?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "end",
-                  });
-                });
-              }
-            }
-          }),
-
-          // Computer Use Listener
-          listen<ComputerUseUpdateEvent>("computer_use_update", (event) => {
-            // Create message from event
-            const chatMessage: ChatMessage = {
-              message: event.payload.message,
-              reasoningMessages: [],
-              memory: null,
-            };
-
-            if (event.payload.status === "completed") {
-              dispatch({
-                type: "FINALIZE_STREAM",
-                payload: event.payload.message.content,
-              });
-            } else {
-              dispatch({ type: "ADD_REASONING_MESSAGE", payload: chatMessage });
-            }
-          }),
-
-          // Memory Listener
-          listen<MemoryExtractedEvent>("memory_extracted", (event) => {
-            const { memory } = event.payload;
-
-            // Attach memory to the message with matching message_id
-            if (memory.message_id) {
-              dispatch({
-                type: "ATTACH_MEMORY",
-                payload: { messageId: memory.message_id, memory },
-              });
-            }
-          }),
-
-          // OCR Listener
-          listen<OcrResponseEvent>("ocr_response", (event) => {
-            //TODO: use the ocr loading state to show a skeleton ocr response in the input box
-            if (event.payload.success && event.payload.text) {
-              const ocrData: AttachmentData = {
-                name: "Screen Capture",
-                file_type: "ambient/ocr",
-                data: event.payload.text,
-              };
-              dispatch({ type: "ADD_ATTACHMENT_DATA", payload: ocrData });
-            }
-
-            // Stop OCR loading state and clear timeout
-            dispatch({ type: "SET_OCR_LOADING", payload: false });
-            dispatch({ type: "CLEAR_OCR_TIMEOUT" });
-          }),
-
-          // Attachments created listener
-          listen<AttachmentsCreatedEvent>("attachments_created", (event) => {
-            const { attachments } = event.payload;
-            dispatch({
-              type: "ADD_ATTACHMENTS_TO_MESSAGE",
-              payload: { messageId: event.payload.message_id, attachments },
-            });
-          }),
-
-          // Rename conversation listener
-          listen<RenameConversationEvent>("rename_conversation", (event) => {
-            const { conv_id, new_name } = event.payload;
-            dispatch({
-              type: "RENAME_CONVERSATION",
-              payload: { id: conv_id, newName: new_name },
-            });
-          }),
-        ];
-
-        const results = await Promise.all(listenerPromises);
-        unlisteners.push(...results);
-
-        console.log("[useConversation] Event listeners initialized");
-      } catch (error) {
-        console.error("[useConversation] Failed to setup events:", error);
-      }
-    };
-
-    void setupEvents();
-
-    // Store cleanup function
-    cleanupRef.current = () => {
-      // Clear any existing OCR timeout
-      dispatch({ type: "CLEAR_OCR_TIMEOUT" });
-
-      for (const unlisten of unlisteners) {
-        try {
-          unlisten();
-        } catch (error) {
-          console.error("[useConversation] Error during cleanup:", error);
-        }
-      }
-      console.log("[useConversation] Event listeners cleaned up");
-    };
-
-    // Cleanup on unmount
-    return () => {
-      isMounted = false;
-
-      if (cleanupRef.current) {
-        cleanupRef.current();
-        cleanupRef.current = null;
-      }
-    };
-  }, [dispatch, messagesEndRef]);
+    if (state.isStreaming && messagesEndRef?.current) {
+      queueMicrotask(() => {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "end",
+        });
+      });
+    }
+  }, [state.streamingContent, state.isStreaming, messagesEndRef]);
 
   // ============================================================
   // Initialization Effect

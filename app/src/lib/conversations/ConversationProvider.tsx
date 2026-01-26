@@ -1,15 +1,55 @@
 "use client";
 
 import type { Attachment, Conversation } from "@/types/conversations";
-import { type AttachmentData, OcrResponseEvent } from "@/types/events";
+import type {
+  AttachmentData,
+  AttachmentsCreatedEvent,
+  ChatStreamEvent,
+  ComputerUseUpdateEvent,
+  MemoryExtractedEvent,
+  OcrResponseEvent,
+  RenameConversationEvent,
+} from "@/types/events";
 import type { MemoryEntry } from "@/types/memory";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import type React from "react";
-import { type ReactNode, createContext, useContext, useReducer } from "react";
+import {
+  type ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useReducer,
+  useRef,
+} from "react";
 import type { ChatMessage, ConversationState } from "./types";
 
 /**
  * Initial state for conversations
  */
+/**
+ * Extracts and removes <think> tags from LLM responses
+ */
+function extractThinkingContent(text: string): string {
+  if (!text.includes("<think>")) {
+    return text;
+  }
+  const thinkStartIndex = text.indexOf("<think>");
+  const thinkEndIndex = text.indexOf("</think>");
+
+  let cleanText = text;
+
+  if (thinkStartIndex !== -1) {
+    if (thinkEndIndex !== -1) {
+      cleanText =
+        text.substring(0, thinkStartIndex) + text.substring(thinkEndIndex + 8);
+    } else {
+      cleanText = text.substring(0, thinkStartIndex);
+    }
+  }
+
+  return cleanText;
+}
+
 const initialState: ConversationState = {
   conversationId: null,
   conversationName: "",
@@ -449,6 +489,142 @@ interface ConversationProviderProps {
  */
 export function ConversationProvider({ children }: ConversationProviderProps) {
   const [state, dispatch] = useReducer(conversationReducer, initialState);
+
+  // Use ref to track conversationId for event filtering without re-registering listeners
+  const convIdRef = useRef(state.conversationId);
+  useEffect(() => {
+    convIdRef.current = state.conversationId;
+  }, [state.conversationId]);
+
+  // ============================================================
+  // Event Listeners Setup - runs once when provider mounts
+  // ============================================================
+  useEffect(() => {
+    let isMounted = true;
+    const unlisteners: UnlistenFn[] = [];
+
+    const setupEvents = async () => {
+      if (!isMounted) return;
+
+      try {
+        console.log("[ConversationProvider] Setting up event listeners...");
+
+        const listenerPromises = [
+          // Stream Listener
+          listen<ChatStreamEvent>("chat_stream", (event) => {
+            const { delta, full_response, is_finished, conv_id } =
+              event.payload;
+
+            // Filter by conversation ID using ref
+            if (conv_id && conv_id !== convIdRef.current) {
+              return;
+            }
+
+            if (is_finished) {
+              const finalText = extractThinkingContent(full_response);
+              dispatch({ type: "FINALIZE_STREAM", payload: finalText });
+              return;
+            }
+
+            if (delta) {
+              const cleanContent = extractThinkingContent(full_response);
+              dispatch({
+                type: "UPDATE_STREAMING_CONTENT",
+                payload: cleanContent,
+              });
+            }
+          }),
+
+          // Computer Use Listener
+          listen<ComputerUseUpdateEvent>("computer_use_update", (event) => {
+            const chatMessage: ChatMessage = {
+              message: event.payload.message,
+              reasoningMessages: [],
+              memory: null,
+            };
+
+            if (event.payload.status === "completed") {
+              dispatch({
+                type: "FINALIZE_STREAM",
+                payload: event.payload.message.content,
+              });
+            } else {
+              dispatch({ type: "ADD_REASONING_MESSAGE", payload: chatMessage });
+            }
+          }),
+
+          // Memory Listener
+          listen<MemoryExtractedEvent>("memory_extracted", (event) => {
+            const { memory } = event.payload;
+
+            if (memory.message_id) {
+              dispatch({
+                type: "ATTACH_MEMORY",
+                payload: { messageId: memory.message_id, memory },
+              });
+            }
+          }),
+
+          // OCR Listener
+          listen<OcrResponseEvent>("ocr_response", (event) => {
+            if (event.payload.success && event.payload.text) {
+              const ocrData: AttachmentData = {
+                name: "Screen Capture",
+                file_type: "ambient/ocr",
+                data: event.payload.text,
+              };
+              dispatch({ type: "ADD_ATTACHMENT_DATA", payload: ocrData });
+            }
+
+            dispatch({ type: "SET_OCR_LOADING", payload: false });
+            dispatch({ type: "CLEAR_OCR_TIMEOUT" });
+          }),
+
+          // Attachments created listener
+          listen<AttachmentsCreatedEvent>("attachments_created", (event) => {
+            const { attachments } = event.payload;
+            dispatch({
+              type: "ADD_ATTACHMENTS_TO_MESSAGE",
+              payload: { messageId: event.payload.message_id, attachments },
+            });
+          }),
+
+          // Rename conversation listener
+          listen<RenameConversationEvent>("rename_conversation", (event) => {
+            const { conv_id, new_name } = event.payload;
+            dispatch({
+              type: "RENAME_CONVERSATION",
+              payload: { id: conv_id, newName: new_name },
+            });
+          }),
+        ];
+
+        const results = await Promise.all(listenerPromises);
+        unlisteners.push(...results);
+
+        console.log("[ConversationProvider] Event listeners initialized");
+      } catch (error) {
+        console.error("[ConversationProvider] Failed to setup events:", error);
+      }
+    };
+
+    void setupEvents();
+
+    // Cleanup on unmount
+    return () => {
+      isMounted = false;
+      dispatch({ type: "CLEAR_OCR_TIMEOUT" });
+
+      for (const unlisten of unlisteners) {
+        try {
+          unlisten();
+        } catch (error) {
+          console.error("[ConversationProvider] Error during cleanup:", error);
+        }
+      }
+      console.log("[ConversationProvider] Event listeners cleaned up");
+    };
+  }, []);
 
   return (
     <ConversationContext.Provider value={{ state, dispatch }}>

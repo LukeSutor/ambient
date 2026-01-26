@@ -7,8 +7,7 @@ import type {
   UserSettings,
 } from "@/types/settings";
 import { invoke } from "@tauri-apps/api/core";
-import { type UnlistenFn, listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useSettingsContext } from "./SettingsProvider";
 
 /**
@@ -45,104 +44,10 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
 
 /**
  * Main settings hook - provides all settings functionality
- * @param isRoot Whether this hook is used in the root context and should setup event listeners
  * @returns Settings state and operations
  */
-export function useSettings(isRoot = false) {
+export function useSettings() {
   const { state, dispatch } = useSettingsContext();
-
-  // ============================================================
-  // Event Listener Setup
-  // ============================================================
-  useEffect(() => {
-    if (!isRoot) return;
-    let isMounted = true;
-
-    const setupEvents = async () => {
-      try {
-        // Listen for settings changes from other windows/sources
-        const unlisten = await listen("settings_changed", () => {
-          void (async () => {
-            console.log(
-              "[useSettings] Settings changed event received, invalidating cache",
-            );
-
-            // Invalidate cache and reload
-            dispatch({ type: "INVALIDATE_CACHE" });
-
-            if (isMounted) {
-              try {
-                const settings =
-                  await invoke<UserSettings>("load_user_settings");
-                dispatch({ type: "SET_SETTINGS", payload: settings });
-              } catch (error) {
-                console.error(
-                  "[useSettings] Failed to reload settings:",
-                  error,
-                );
-              }
-            }
-          })();
-        });
-
-        return unlisten;
-      } catch (error) {
-        console.error("[useSettings] Failed to setup event listener:", error);
-        return null;
-      }
-    };
-
-    let cleanup: UnlistenFn | null = null;
-    void setupEvents().then((fn) => {
-      if (isMounted) {
-        cleanup = fn;
-      } else if (fn) {
-        fn();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      if (cleanup) {
-        cleanup();
-      }
-    };
-  }, [dispatch, isRoot]);
-
-  // ============================================================
-  // Initialization Effect
-  // ============================================================
-
-  useEffect(() => {
-    if (!isRoot) return;
-    // Check shared initialization ref to prevent multiple initializations
-    if (state.initializationRef.current || state.settings) {
-      return;
-    }
-
-    state.initializationRef.current = true;
-
-    const initialize = async () => {
-      console.log("[useSettings] Initializing settings...");
-
-      try {
-        dispatch({ type: "SET_LOADING", payload: true });
-        const settings = await invoke<UserSettings>("load_user_settings");
-        dispatch({ type: "SET_SETTINGS", payload: settings });
-      } catch (error) {
-        console.error("[useSettings] Failed to load settings:", error);
-
-        // Set defaults on error
-        const defaults: UserSettings = {
-          hud_size: "Normal",
-          model_selection: "Local",
-        };
-        dispatch({ type: "SET_SETTINGS", payload: defaults });
-      }
-    };
-
-    void initialize();
-  }, [state.initializationRef, state.settings, dispatch, isRoot]);
 
   // ============================================================
   // Operations

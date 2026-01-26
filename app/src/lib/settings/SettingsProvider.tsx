@@ -5,13 +5,17 @@ import type {
   ModelSelection,
   UserSettings,
 } from "@/types/settings";
+import { invoke } from "@tauri-apps/api/core";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import type React from "react";
 import {
   type ReactNode,
   type RefObject,
   createContext,
   useContext,
+  useEffect,
   useReducer,
+  useRef,
 } from "react";
 
 /**
@@ -122,6 +126,85 @@ interface SettingsProviderProps {
  */
 export function SettingsProvider({ children }: SettingsProviderProps) {
   const [state, dispatch] = useReducer(settingsReducer, initialState);
+
+  // Initialization effect
+  useEffect(() => {
+    if (state.initializationRef.current || state.settings) {
+      return;
+    }
+    state.initializationRef.current = true;
+
+    const initialize = async () => {
+      console.log("[SettingsProvider] Initializing settings...");
+
+      try {
+        dispatch({ type: "SET_LOADING", payload: true });
+        const settings = await invoke<UserSettings>("load_user_settings");
+        dispatch({ type: "SET_SETTINGS", payload: settings });
+      } catch (error) {
+        console.error("[SettingsProvider] Failed to load settings:", error);
+
+        const defaults: UserSettings = {
+          hud_size: "Normal",
+          model_selection: "Local",
+        };
+        dispatch({ type: "SET_SETTINGS", payload: defaults });
+      }
+    };
+
+    void initialize();
+  }, [state.initializationRef, state.settings]);
+
+  // Event listeners setup
+  useEffect(() => {
+    let isMounted = true;
+    let cleanup: UnlistenFn | null = null;
+
+    const setupEvents = async () => {
+      if (!isMounted) return;
+
+      try {
+        console.log("[SettingsProvider] Setting up event listeners...");
+
+        cleanup = await listen("settings_changed", () => {
+          void (async () => {
+            console.log(
+              "[SettingsProvider] Settings changed event received, reloading",
+            );
+
+            dispatch({ type: "INVALIDATE_CACHE" });
+
+            if (isMounted) {
+              try {
+                const settings =
+                  await invoke<UserSettings>("load_user_settings");
+                dispatch({ type: "SET_SETTINGS", payload: settings });
+              } catch (error) {
+                console.error(
+                  "[SettingsProvider] Failed to reload settings:",
+                  error,
+                );
+              }
+            }
+          })();
+        });
+
+        console.log("[SettingsProvider] Event listeners initialized");
+      } catch (error) {
+        console.error("[SettingsProvider] Failed to setup events:", error);
+      }
+    };
+
+    void setupEvents();
+
+    return () => {
+      isMounted = false;
+      if (cleanup) {
+        cleanup();
+      }
+      console.log("[SettingsProvider] Event listeners cleaned up");
+    };
+  }, []);
 
   return (
     <SettingsContext.Provider value={{ state, dispatch }}>

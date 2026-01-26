@@ -1,46 +1,25 @@
 import { ConversationList } from "@/components/hud/conversation-list";
 import { MessageList } from "@/components/hud/message-list";
-import type { ChatMessage } from "@/lib/conversations/types";
+import { useConversation } from "@/lib/conversations";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
-import type { Conversation } from "@/types/conversations";
 import type { HudDimensions } from "@/types/settings";
 import type React from "react";
 import { useMemo } from "react";
 
 interface DynamicChatContentProps {
   hudDimensions: HudDimensions | null;
-  conversationName: string;
-  messages: ChatMessage[];
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
-  conversations: Conversation[];
-  hasMoreConversations: boolean;
-  loadConversation: (id: string) => Promise<void>;
-  deleteConversation: (id: string) => Promise<void>;
-  loadMoreConversations: () => Promise<void>;
-  refreshConversations: () => Promise<void>;
-  renameConversation: (
-    conversationId: string,
-    newName: string,
-  ) => Promise<void>;
   handleNewChat: () => void;
 }
 
 export function DynamicChatContent({
   hudDimensions,
-  conversationName,
-  messages,
   messagesEndRef,
-  conversations,
-  hasMoreConversations,
-  loadConversation,
-  deleteConversation,
-  loadMoreConversations,
-  refreshConversations,
-  renameConversation,
   handleNewChat,
 }: DynamicChatContentProps) {
   const { isChatExpanded, isChatHistoryExpanded } = useWindows();
+  const { conversationName, messages } = useConversation();
 
   const isVisible = isChatExpanded || isChatHistoryExpanded;
   const showBothPanels = isChatExpanded && isChatHistoryExpanded;
@@ -87,15 +66,7 @@ export function DynamicChatContent({
             conversationsClass,
           )}
         >
-          <ConversationList
-            conversations={conversations}
-            hasMoreConversations={hasMoreConversations}
-            loadConversation={loadConversation}
-            deleteConversation={deleteConversation}
-            loadMoreConversations={loadMoreConversations}
-            refreshConversations={refreshConversations}
-            renameConversation={renameConversation}
-          />
+          <ConversationList />
         </div>
 
         {/* Message list */}

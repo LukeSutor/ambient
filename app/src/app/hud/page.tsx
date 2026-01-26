@@ -25,30 +25,14 @@ export default function HudPage() {
   // Conversation Manager
   const {
     messages,
-    conversationName,
-    conversations,
-    conversationType,
-    hasMoreConversations,
     conversationId,
-    attachmentData,
-    ocrLoading,
     isLoading,
-    isStreaming,
     sendMessage,
     resetConversation,
-    loadConversation,
-    deleteConversation,
-    loadMoreConversations,
-    refreshConversations,
-    renameConversation,
-    dispatchOCRCapture,
-    toggleComputerUse,
-    addAttachmentData,
-    removeAttachmentData,
   } = useConversation(messagesEndRef);
 
   // Settings Manager
-  const { getHudDimensions } = useSettings(true);
+  const { getHudDimensions } = useSettings();
 
   // Window Manager
   const { setChatMinimized, setChatExpanded } = useWindows();
@@ -131,10 +115,6 @@ export default function HudPage() {
     setIsDraggingWindow(true);
   }, []);
 
-  const handleDispatchOCRCapture = useCallback(() => {
-    void dispatchOCRCapture();
-  }, [dispatchOCRCapture]);
-
   return (
     <AutoResizeContainer widthType="chat">
       <Toaster richColors position="top-center" />
@@ -143,16 +123,7 @@ export default function HudPage() {
         {/* Dynamic Chat Content Area */}
         <DynamicChatContent
           hudDimensions={hudDimensions}
-          conversationName={conversationName}
-          messages={messages}
           messagesEndRef={messagesEndRef}
-          conversations={conversations}
-          hasMoreConversations={hasMoreConversations}
-          loadConversation={loadConversation}
-          deleteConversation={deleteConversation}
-          loadMoreConversations={loadMoreConversations}
-          refreshConversations={refreshConversations}
-          renameConversation={renameConversation}
           handleNewChat={() => {
             void handleNewChat();
           }}
@@ -165,19 +136,11 @@ export default function HudPage() {
           setInputValue={setInput}
           handleSubmit={handleSubmit}
           onKeyDown={handleKeyDown}
-          dispatchOCRCapture={handleDispatchOCRCapture}
           onDragStart={handleDragStart}
           onMouseLeave={handleMouseLeave}
           isDraggingWindow={isDraggingWindow}
           isHoveringGroup={isHoveringGroup}
           setIsHoveringGroup={setIsHoveringGroup}
-          toggleComputerUse={toggleComputerUse}
-          ocrLoading={ocrLoading}
-          isStreaming={isStreaming}
-          conversationType={conversationType}
-          attachmentData={attachmentData}
-          addAttachmentData={addAttachmentData}
-          removeAttachmentData={removeAttachmentData}
         />
       </div>
     </AutoResizeContainer>

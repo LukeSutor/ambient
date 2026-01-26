@@ -8,28 +8,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
+import { useConversation } from "@/lib/conversations";
 import {
   MousePointerClick,
   SquareDashedMousePointer,
   Wrench,
 } from "lucide-react";
+import { useCallback } from "react";
 
 interface ToolMenuProps {
   onOpenChange: (open: boolean) => void;
   disabled?: boolean;
-  conversationType: string;
-  dispatchOCRCapture: () => void;
-  toggleComputerUse: () => void;
 }
 
-export function ToolMenu({
-  onOpenChange,
-  disabled,
-  conversationType,
-  dispatchOCRCapture,
-  toggleComputerUse,
-}: ToolMenuProps) {
+export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
+  const { conversationType, dispatchOCRCapture, toggleComputerUse } =
+    useConversation();
   const showToolsLabel = conversationType === "chat";
+
+  const handleDispatchOCRCapture = useCallback(() => {
+    void dispatchOCRCapture();
+  }, [dispatchOCRCapture]);
 
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
@@ -50,7 +49,7 @@ export function ToolMenu({
         <DropdownMenuGroup>
           <DropdownMenuItem
             className="hover:bg-white/60"
-            onClick={dispatchOCRCapture}
+            onClick={handleDispatchOCRCapture}
           >
             <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
             <span className="text-black text-sm whitespace-nowrap">

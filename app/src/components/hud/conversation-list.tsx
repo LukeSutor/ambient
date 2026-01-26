@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useConversation } from "@/lib/conversations";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { Conversation } from "@/types/conversations";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -42,34 +43,22 @@ const conversationNameSchema = z.object({
 
 type ConversationNameFormValues = z.infer<typeof conversationNameSchema>;
 
-interface ConversationListProps {
-  conversations: Conversation[];
-  hasMoreConversations: boolean;
-  loadConversation: (id: string) => Promise<void>;
-  deleteConversation: (id: string) => Promise<void>;
-  loadMoreConversations: () => Promise<void>;
-  refreshConversations: () => Promise<void>;
-  renameConversation: (
-    conversationId: string,
-    newName: string,
-  ) => Promise<void>;
-}
-
-export function ConversationList({
-  conversations,
-  hasMoreConversations,
-  loadConversation,
-  deleteConversation,
-  loadMoreConversations,
-  refreshConversations,
-  renameConversation,
-}: ConversationListProps) {
+export function ConversationList() {
   const [editingConversationId, setEditingConversationId] = useState<
     string | null
   >(null);
   const observerTarget = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false);
 
+  const {
+    conversations,
+    hasMoreConversations,
+    loadConversation,
+    deleteConversation,
+    loadMoreConversations,
+    refreshConversations,
+    renameConversation,
+  } = useConversation();
   const { setChatExpanded, toggleChatHistory } = useWindows();
 
   const form = useForm<ConversationNameFormValues>({
@@ -114,7 +103,7 @@ export function ConversationList({
     return () => {
       if (target) observer.unobserve(target);
     };
-  }, [hasMoreConversations, loadMoreConversations, observerTarget.current]);
+  }, [hasMoreConversations, loadMoreConversations]);
 
   const handleLoadConversation = useCallback(
     async (id: string) => {

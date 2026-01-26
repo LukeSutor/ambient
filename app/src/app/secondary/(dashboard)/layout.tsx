@@ -16,7 +16,7 @@ export default function DashboardLayout({
   // Use role access
   useRoleAccess("/secondary");
   // Use root settings
-  useSettings(true);
+  useSettings();
 
   return (
     <div className="relative h-screen w-full rounded-lg overflow-hidden border bg-white [--header-height:calc(--spacing(16))]">
