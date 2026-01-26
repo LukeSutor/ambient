@@ -18,7 +18,6 @@ export default function SetupPage() {
     formattedTotalContentLength,
     totalDownloadedBytes,
     totalContentLength,
-    setupMessage,
     startSetup,
   } = useSetup();
 
@@ -55,7 +54,6 @@ export default function SetupPage() {
         formattedTotalContentLength={formattedTotalContentLength}
         totalDownloadedBytes={totalDownloadedBytes}
         totalContentLength={totalContentLength}
-        setupMessage={setupMessage}
         onStartSetup={() => void handleStartSetup()}
         className="max-w-[450px] shadow-lg"
       />

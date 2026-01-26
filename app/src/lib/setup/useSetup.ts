@@ -65,10 +65,6 @@ export function useSetup() {
               type: "SET_DOWNLOADING_ID",
               payload: Number(event.payload.id),
             });
-            dispatch({
-              type: "SET_SETUP_MESSAGE",
-              payload: `Downloading file ${event.payload.id} of ${stateRef.current.numModels}`,
-            });
           }),
           listen<DownloadProgressEvent>("download_progress", (event) => {
             dispatch({
@@ -82,17 +78,9 @@ export function useSetup() {
           listen<DownloadFinishedEvent>("download_finished", (event) => {
             console.log({ event });
             dispatch({ type: "SET_DOWNLOADING_ID", payload: null });
-            dispatch({
-              type: "SET_SETUP_MESSAGE",
-              payload: `File ${event.payload.id} download complete.`,
-            });
             // If all downloads are complete, update state
             if (Number(event.payload.id) === stateRef.current.numModels) {
               dispatch({ type: "SET_IS_DOWNLOADING", payload: false });
-              dispatch({
-                type: "SET_SETUP_MESSAGE",
-                payload: "All downloads complete.",
-              });
             }
           }),
         ];

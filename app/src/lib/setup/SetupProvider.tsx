@@ -8,7 +8,6 @@ import { type ReactNode, createContext, useContext, useReducer } from "react";
  */
 interface SetupState {
   isDownloading: boolean;
-  setupMessage: string;
   numModels: number;
   totalContentLength: number;
   downloadedBytes: number[]; // Stores the downloaded bytes for each model
@@ -20,7 +19,6 @@ interface SetupState {
  */
 const initialState: SetupState = {
   isDownloading: false,
-  setupMessage: "",
   numModels: 0,
   totalContentLength: -1,
   downloadedBytes: [],
@@ -32,7 +30,6 @@ const initialState: SetupState = {
  */
 type SetupAction =
   | { type: "SET_IS_DOWNLOADING"; payload: boolean }
-  | { type: "SET_SETUP_MESSAGE"; payload: string }
   | { type: "SET_N_MODELS"; payload: number }
   | { type: "SET_TOTAL_CONTENT_LENGTH"; payload: number }
   | {
@@ -50,12 +47,6 @@ function setupReducer(state: SetupState, action: SetupAction): SetupState {
       return {
         ...state,
         isDownloading: action.payload,
-      };
-
-    case "SET_SETUP_MESSAGE":
-      return {
-        ...state,
-        setupMessage: action.payload,
       };
 
     case "SET_N_MODELS":
