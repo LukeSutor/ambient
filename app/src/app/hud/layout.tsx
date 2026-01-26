@@ -10,6 +10,6 @@ export default function HudLayout({
   // Use role access
   useRoleAccess("/hud");
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black">{children}</div>
+    <div className="w-screen h-screen overflow-hidden">{children}</div>
   );
 }

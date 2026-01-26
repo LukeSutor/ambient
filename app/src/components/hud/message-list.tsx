@@ -27,8 +27,8 @@ interface MessageListProps {
 }
 
 const SCROLL_MASK_STYLE = {
-  maskImage: "linear-gradient(to bottom, transparent 40px, black 40px)",
-  WebkitMaskImage: "linear-gradient(to bottom, transparent 40px, black 40px)",
+  maskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
+  WebkitMaskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
 } as const;
 
 export function MessageList({
