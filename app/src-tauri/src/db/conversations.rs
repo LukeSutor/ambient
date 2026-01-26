@@ -402,6 +402,11 @@ pub async fn list_conversations(
   limit: usize,
   offset: usize,
 ) -> Result<Vec<Conversation>, String> {
+  log::info!(
+    "[conversations] Listing conversations with limit {} and offset {}",
+    limit,
+    offset
+  );
   let state = app_handle.state::<DbState>();
   let conn_guard = state
     .0

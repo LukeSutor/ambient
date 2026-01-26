@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
@@ -47,6 +48,7 @@ interface ConversationListProps {
   loadConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
+  refreshConversations: () => Promise<void>;
   renameConversation: (
     conversationId: string,
     newName: string,
@@ -59,6 +61,7 @@ export function ConversationList({
   loadConversation,
   deleteConversation,
   loadMoreConversations,
+  refreshConversations,
   renameConversation,
 }: ConversationListProps) {
   const [editingConversationId, setEditingConversationId] = useState<
@@ -111,7 +114,7 @@ export function ConversationList({
     return () => {
       if (target) observer.unobserve(target);
     };
-  }, [hasMoreConversations, loadMoreConversations]);
+  }, [hasMoreConversations, loadMoreConversations, observerTarget.current]);
 
   const handleLoadConversation = useCallback(
     async (id: string) => {
@@ -173,6 +176,14 @@ export function ConversationList({
                   conversation history here.
                 </EmptyDescription>
               </EmptyHeader>
+              <EmptyContent>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    void refreshConversations();
+                  }}
+                >Refresh Conversations</Button>
+              </EmptyContent>
             </Empty>
           )
         ) : (

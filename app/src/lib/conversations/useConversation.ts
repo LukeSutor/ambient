@@ -290,10 +290,7 @@ export function useConversation(
     const initialize = async () => {
       console.log("[useConversation] Initializing...");
 
-      // Ensure llama server is running
-      await ensureLlamaServerRunning();
-
-      // Load the conversations list
+      // Load the conversations list immediately
       try {
         const conversations = await invoke<Conversation[]>(
           "list_conversations",
@@ -309,6 +306,9 @@ export function useConversation(
       } catch (error) {
         console.error("[useConversation] Failed to load conversations:", error);
       }
+
+      // Ensure llama server is running in the background - don't block the UI
+      void ensureLlamaServerRunning();
     };
 
     void initialize();
@@ -676,6 +676,7 @@ export function useConversation(
     loadMessages,
     sendMessage,
     loadMoreConversations,
+    refreshConversations,
     renameConversation,
     dispatchOCRCapture,
     toggleComputerUse,

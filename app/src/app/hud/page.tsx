@@ -39,6 +39,7 @@ export default function HudPage() {
     loadConversation,
     deleteConversation,
     loadMoreConversations,
+    refreshConversations,
     renameConversation,
     dispatchOCRCapture,
     toggleComputerUse,
@@ -150,6 +151,7 @@ export default function HudPage() {
           loadConversation={loadConversation}
           deleteConversation={deleteConversation}
           loadMoreConversations={loadMoreConversations}
+          refreshConversations={refreshConversations}
           renameConversation={renameConversation}
           handleNewChat={() => {
             void handleNewChat();
