@@ -20,9 +20,11 @@ import {
 import { Toggle } from "@/components/ui/toggle";
 import type { TimeFilter, TokenUsageQueryResult } from "@/types/token_usage";
 import { ChartColumn } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { TimeFilterButtons } from "./time-filter-buttons";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 const chartConfig = {
   local: {
@@ -43,18 +45,40 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-interface TokenUsageChartProps {
-  chartData: TokenUsageQueryResult | null;
-  timeFilter: TimeFilter;
-  onTimeFilterChange: (filter: TimeFilter) => void;
-}
-
-export function TokenUsageChart({
-  chartData,
-  timeFilter,
-  onTimeFilterChange,
-}: TokenUsageChartProps) {
+export function TokenUsageChart() {
+  const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(
+    null,
+  );
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
   const [logScale, setLogScale] = useState(false);
+
+  // Set up token usage changed listener
+  useEffect(() => {
+    const unlisten = listen("token_usage_changed", () => {
+      const fetchChartData = async () => {
+        const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
+          timeFilter,
+        });
+        setChartData(data);
+      };
+      void fetchChartData();
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [timeFilter]);
+
+  // Fetch chart data when time filter changes
+  useEffect(() => {
+    const fetchChartData = async () => {
+      const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
+        timeFilter,
+      });
+      setChartData(data);
+    };
+    void fetchChartData();
+  }, [timeFilter]);
 
   return (
     <Card className="w-full">
@@ -65,7 +89,7 @@ export function TokenUsageChart({
           <ButtonGroup>
             <TimeFilterButtons
               currentFilter={timeFilter}
-              onFilterChange={onTimeFilterChange}
+              onFilterChange={setTimeFilter}
             />
             <ButtonGroup>
               <Toggle

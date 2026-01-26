@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use super::computer_use::ComputerUseEngine;

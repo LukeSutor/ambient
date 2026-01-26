@@ -40,10 +40,6 @@ export default function Home() {
   const [greeting, setGreeting] = useState<string>("");
   const [consumptionData, setConsumptionData] =
     useState<TokenUsageConsumptionResult | null>(null);
-  const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(
-    null,
-  );
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
 
   const { userInfo, getFirstName } = useRoleAccess();
 
@@ -64,17 +60,6 @@ export default function Home() {
     };
     void fetchConsumptionData();
   }, []);
-
-  // Fetch chart data when time filter changes
-  useEffect(() => {
-    const fetchChartData = async () => {
-      const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
-        timeFilter,
-      });
-      setChartData(data);
-    };
-    void fetchChartData();
-  }, [timeFilter]);
 
   return (
     <div className="relative flex flex-col items-center justify-start p-4 w-full max-w-6xl mx-auto">
@@ -113,11 +98,7 @@ export default function Home() {
       </div>
 
       {/* Token usage graph */}
-      <TokenUsageChart
-        chartData={chartData}
-        timeFilter={timeFilter}
-        onTimeFilterChange={setTimeFilter}
-      />
+      <TokenUsageChart />
     </div>
   );
 }

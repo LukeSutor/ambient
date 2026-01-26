@@ -145,3 +145,10 @@ pub struct SafetyConfirmationResponseEvent {
   pub user_confirmed: bool,
   pub timestamp: String,
 }
+
+pub const TOKEN_USAGE_CHANGED: &str = "token_usage_changed";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct TokenUsageChangedEvent {
+  pub timestamp: String,
+}

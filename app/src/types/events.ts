@@ -35,3 +35,5 @@ export type RenameConversationEvent = { conv_id: string, new_name: string, times
 export type SafetyConfirmationEvent = { reason: string, timestamp: string, };
 
 export type SafetyConfirmationResponseEvent = { user_confirmed: boolean, timestamp: string, };
+
+export type TokenUsageChangedEvent = { timestamp: string, };
