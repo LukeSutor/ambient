@@ -8,7 +8,7 @@ import {
   SuccessCard,
   VerificationForm,
 } from "@/components/auth";
-import { GoogleLoginButton } from "@/components/google-login-button";
+import { GoogleLoginButton } from "@/components/auth/google-login-button";
 import { Button } from "@/components/ui/button";
 import { CardFooter } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";

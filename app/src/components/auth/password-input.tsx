@@ -26,7 +26,10 @@ interface PasswordInputProps<
   helpText?: React.ReactNode;
 }
 
-export function PasswordInput({
+export function PasswordInput<
+  TFieldValues extends FieldValues = FieldValues,
+  TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
+>({
   id,
   label,
   field,
@@ -36,7 +39,7 @@ export function PasswordInput({
   autoComplete = "current-password",
   showIcon = true,
   helpText,
-}: PasswordInputProps) {
+}: PasswordInputProps<TFieldValues, TName>) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
