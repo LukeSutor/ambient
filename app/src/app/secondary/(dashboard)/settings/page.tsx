@@ -46,7 +46,7 @@ export default function Settings() {
   const handleHudSizeChange = async (value: string) => {
     const newSize = value as HudSizeOption;
     try {
-      await setHudSize(newSize, true);
+      await setHudSize(newSize);
       const displayName = newSize.charAt(0).toUpperCase() + newSize.slice(1);
       toast.success(`HUD size changed to ${displayName}`);
     } catch (error) {

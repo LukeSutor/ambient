@@ -12,5 +12,5 @@ export default function HudLayout({
   useRoleAccess("/hud");
   // Use root settings
   useSettings(true);
-  return <div className="w-screen h-screen overflow-hidden">{children}</div>;
+  return <div className="w-screen h-screen overflow-hidden bg-black">{children}</div>;
 }

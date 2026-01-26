@@ -204,7 +204,7 @@ export function useSettings(isRoot = false) {
    * Sets HUD size setting
    */
   const setHudSize = useCallback(
-    async (size: HudSizeOption, isExpanded?: boolean): Promise<void> => {
+    async (size: HudSizeOption): Promise<void> => {
       try {
         if (!state.settings) {
           throw new Error("Settings not loaded");
@@ -220,15 +220,12 @@ export function useSettings(isRoot = false) {
         };
         await invoke("save_user_settings", { settings: updatedSettings });
 
-        // Refresh HUD window size
+        // Refresh main window size
         try {
-          await invoke("refresh_hud_window_size", {
-            label: "main",
-            isExpanded,
-          });
+          await invoke("refresh_main_window_size");
         } catch (refreshError) {
           console.warn(
-            "[useSettings] Failed to refresh HUD window:",
+            "[useSettings] Failed to refresh main window:",
             refreshError,
           );
         }

@@ -61,7 +61,7 @@ export function AutoResizeContainer({
 
       try {
         // Call backend to resize the window
-        await invoke("resize_hud", {
+        await invoke("resize_main_window", {
           width: width,
           height: contentHeight,
         });
