@@ -41,13 +41,11 @@ export function SetupCard({
   return (
     <Card className={cn("relative w-full pt-12", className)}>
       <CardHeader className="text-center pt-2">
-        <CardTitle className="text-2xl font-bold">
-          Setup Required
-        </CardTitle>
+        <CardTitle className="text-2xl font-bold">Setup Required</CardTitle>
         <CardDescription>
-          Essential files need to be downloaded before using ambient.
-          This might take some time depending on your internet connection. The
-          total download size is
+          Essential files need to be downloaded before using ambient. This might
+          take some time depending on your internet connection. The total
+          download size is
           {totalContentLength > 0 ? (
             ` ${formattedTotalContentLength}.`
           ) : (
@@ -62,13 +60,9 @@ export function SetupCard({
           <div className="space-y-2 pt-2">
             <div className="flex justify-between text-xs font-medium text-foreground tabular-nums font-mono">
               <div className="flex items-center justify-between w-[18ch]">
-                <span>
-                  {formattedDownloadedBytes}
-                </span>
+                <span>{formattedDownloadedBytes}</span>
                 <span className="text-muted-foreground">/</span>
-                <span>
-                  {formattedTotalContentLength}
-                </span>
+                <span>{formattedTotalContentLength}</span>
               </div>
               <span className="w-[8ch] text-right">
                 {progressPercent.toFixed(0)}%

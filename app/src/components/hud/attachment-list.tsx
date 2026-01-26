@@ -5,7 +5,8 @@ import { useConversation } from "@/lib/conversations";
 import { AttachmentPreview } from "./attachment-preview";
 
 export function AttachmentList() {
-  const { attachmentData, removeAttachmentData, ocrLoading } = useConversation();
+  const { attachmentData, removeAttachmentData, ocrLoading } =
+    useConversation();
 
   if (attachmentData.length === 0 && !ocrLoading) return null;
 

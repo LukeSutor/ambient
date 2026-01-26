@@ -69,11 +69,11 @@ export function useConversation(
   const { state, dispatch } = useConversationContext();
   const isLoadingMoreRef = useRef(false);
 
-  // ============================================================
   // Auto-scroll effect for streaming messages
-  // ============================================================
   useEffect(() => {
     if (state.isStreaming && messagesEndRef?.current) {
+      // Accessing streamingContent ensures this effect re-runs on every update
+      void state.streamingContent;
       queueMicrotask(() => {
         messagesEndRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -83,9 +83,7 @@ export function useConversation(
     }
   }, [state.streamingContent, state.isStreaming, messagesEndRef]);
 
-  // ============================================================
-  // Initialization Effect
-  // ============================================================
+  // Initialization effect
 
   useEffect(() => {
     // Check shared initialization ref to prevent multiple initializations
