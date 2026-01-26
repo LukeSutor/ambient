@@ -45,6 +45,7 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
+    .manage(crate::models::computer_use::ComputerUseState::default())
     .setup(|app| {
       // Register deep link scheme for development/testing
       #[cfg(any(windows, target_os = "linux"))]
@@ -170,6 +171,7 @@ pub fn run() {
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,
       models::computer_use::commands::start_computer_use,
+      models::computer_use::commands::stop_computer_use,
       models::computer_use::commands::execute_computer_action,
       auth::auth_flow::sign_up,
       auth::auth_flow::sign_in_with_password,

@@ -14,6 +14,7 @@ import {
   ensureLlamaServerRunning,
   sendMessage as sendChatApiMessage,
   startComputerUseSession,
+  stopComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
 
@@ -439,6 +440,17 @@ export function useConversation(
   }, [dispatch, state.conversationType]);
 
   /**
+   * Stops the current computer use session
+   */
+  const stopComputerUse = useCallback(async (): Promise<void> => {
+    try {
+      await stopComputerUseSession();
+    } catch (error) {
+      console.error("[useConversation] Failed to stop computer use:", error);
+    }
+  }, []);
+
+  /**
    * Add attachment data
    */
   const addAttachmentData = useCallback(
@@ -485,6 +497,7 @@ export function useConversation(
     renameConversation,
     dispatchOCRCapture,
     toggleComputerUse,
+    stopComputerUse,
     addAttachmentData,
     removeAttachmentData,
   };

@@ -17,9 +17,10 @@ import type {
 } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { type UnlistenFn, emit, listen } from "@tauri-apps/api/event";
-import { ArrowUpRight, X } from "lucide-react";
+import { ArrowUpRight, X, Square } from "lucide-react";
 import Image from "next/image";
 import React, { useEffect, useState, useRef } from "react";
+import { useConversation } from "@/lib/conversations";
 
 const startupToasts = [
   "Dusting off the keyboard",
@@ -48,6 +49,7 @@ const getRandomToast = () =>
   startupToasts[Math.floor(Math.random() * startupToasts.length)];
 
 function ComputerUsePage() {
+  const { stopComputerUse } = useConversation();
   const [toastMessage, setToastMessage] = useState<string>();
   const [confirmationRequired, setConfirmationRequired] =
     useState<boolean>(false);
@@ -212,8 +214,18 @@ function ComputerUsePage() {
             <Button
               size="icon"
               variant="ghost"
-              className="ml-2 rounded-full w-7 h-7 shrink-0"
+              className="ml-2 rounded-full w-7 h-7 shrink-0 hover:bg-red-50 hover:text-red-600 transition-colors"
+              onClick={() => void stopComputerUse()}
+              title="Stop session"
+            >
+              <Square className="w-3 h-3 fill-current" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="rounded-full w-7 h-7 shrink-0"
               onClick={() => void closeToast()}
+              title="close window"
             >
               <X className="w-4 h-4" />
             </Button>

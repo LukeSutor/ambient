@@ -1,5 +1,7 @@
 use tauri::{AppHandle, Manager, Listener};
 use tokio::sync::oneshot;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use base64::{Engine as _, engine::general_purpose};
 use super::actions::*;
@@ -80,10 +82,16 @@ pub struct ComputerUseEngine {
     height: i32,
     final_response: String,
     contents: Vec<serde_json::Value>,
+    should_stop: Arc<AtomicBool>,
 }
 
 impl ComputerUseEngine {
-    pub async fn new(app_handle: AppHandle, conversation_id: String, prompt: String) -> Self {
+    pub async fn new(
+        app_handle: AppHandle,
+        conversation_id: String,
+        prompt: String,
+        should_stop: Arc<AtomicBool>,
+    ) -> Self {
         // Get the screen's physical size to store it
         let mut width: i32 = 0;
         let mut height: i32 = 0;
@@ -134,6 +142,7 @@ impl ComputerUseEngine {
             final_response: String::new(),
             contents,
             conversation_id,
+            should_stop,
         }
     }
 
@@ -636,6 +645,13 @@ impl ComputerUseEngine {
         let _ = close_main_window(self.app_handle.clone()).await;
 
         loop {
+            // Check for stop signal
+            if self.should_stop.load(Ordering::SeqCst) {
+                log::info!("[computer_use] Stop signal received, exiting loop");
+                self.final_response = "Computer use was stopped by the user.".to_string();
+                break;
+            }
+
             let done = self.run_one_iteration().await?;
             if done {
                 break;

@@ -84,6 +84,21 @@ export async function startComputerUseSession(
 }
 
 /**
+ * Stops the current computer use session
+ */
+export async function stopComputerUseSession(): Promise<void> {
+  try {
+    await invoke("stop_computer_use");
+  } catch (error) {
+    console.error(
+      "[ConversationAPI] Failed to stop computer use session:",
+      error,
+    );
+    throw new Error("Failed to stop computer use session");
+  }
+}
+
+/**
  * Emits an event to generate a conversation name
  * @param conversationId - ID of the conversation
  * @param message - The message content to base the name on

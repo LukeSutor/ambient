@@ -1,21 +1,72 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use super::computer_use::ComputerUseEngine;
 use super::actions;
 use super::types::{ActionResponse, ComputerAction};
+
+pub struct ComputerUseState {
+    pub is_running: Mutex<bool>,
+    pub should_stop: Arc<AtomicBool>,
+}
+
+impl Default for ComputerUseState {
+    fn default() -> Self {
+        Self {
+            is_running: Mutex::new(false),
+            should_stop: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 /// Test the computer use engine with a sample prompt
 #[tauri::command]
 pub async fn start_computer_use(
     app_handle: AppHandle,
+    state: tauri::State<'_, ComputerUseState>,
     conversation_id: String,
     prompt: String,
 ) -> Result<String, String> {
-    let mut engine = ComputerUseEngine::new(app_handle, conversation_id, prompt.clone()).await;
+    // Check if a session is already running
+    {
+        let mut is_running = state.is_running.lock().unwrap();
+        if *is_running {
+            return Err("A computer use session is already running.".to_string());
+        }
+        *is_running = true;
+    }
 
-    match engine.run().await {
+    // Reset stop signal
+    state.should_stop.store(false, Ordering::SeqCst);
+
+    let mut engine = ComputerUseEngine::new(
+        app_handle.clone(),
+        conversation_id,
+        prompt.clone(),
+        state.should_stop.clone(),
+    ).await;
+
+    let result = engine.run().await;
+
+    // Reset running state
+    {
+        let mut is_running = state.is_running.lock().unwrap();
+        *is_running = false;
+    }
+
+    match result {
         Ok(_) => Ok("Computer use engine ran successfully.".to_string()),
         Err(e) => Err(format!("Error running computer use engine: {}", e)),
     }
+}
+
+/// Stop the current computer use session
+#[tauri::command]
+pub async fn stop_computer_use(
+    state: tauri::State<'_, ComputerUseState>,
+) -> Result<String, String> {
+    state.should_stop.store(true, Ordering::SeqCst);
+    Ok("Stop signal sent.".to_string())
 }
 
 /// Directly execute a computer action for testing
