@@ -20,7 +20,7 @@ import {
 import { Toggle } from "@/components/ui/toggle";
 import type { TimeFilter, TokenUsageQueryResult } from "@/types/token_usage";
 import { ChartColumn } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { TimeFilterButtons } from "./time-filter-buttons";
 import { invoke } from "@tauri-apps/api/core";
@@ -52,33 +52,32 @@ export function TokenUsageChart() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
   const [logScale, setLogScale] = useState(false);
 
-  // Set up token usage changed listener
+  const fetchChartData = useCallback(async () => {
+    try {
+      const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
+        timeFilter, // React will handle the closure here if we include it in dependencies
+      });
+      setChartData(data);
+    } catch (error) {
+      console.error("Failed to fetch token usage:", error);
+    }
+  }, [timeFilter]);
+
+  // 2. Fetch data whenever timeFilter changes
   useEffect(() => {
+    void fetchChartData();
+  }, [fetchChartData]);
+
+  useEffect(() => {
+    // Listen for changes
     const unlisten = listen("token_usage_changed", () => {
-      const fetchChartData = async () => {
-        const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
-          timeFilter,
-        });
-        setChartData(data);
-      };
       void fetchChartData();
     });
 
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [timeFilter]);
-
-  // Fetch chart data when time filter changes
-  useEffect(() => {
-    const fetchChartData = async () => {
-      const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
-        timeFilter,
-      });
-      setChartData(data);
-    };
-    void fetchChartData();
-  }, [timeFilter]);
+  }, [fetchChartData]);
 
   return (
     <Card className="w-full">
