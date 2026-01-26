@@ -27,32 +27,6 @@
       "identifier": "shell:allow-execute",
       "allow": [
         {
-          "args": true,
-          "name": "binaries/embedding",
-          "sidecar": true
-        },
-        {
-          "args": [
-            "-m",
-            {
-              "validator": ".*"
-            },
-            "-p",
-            {
-              "validator": ".*"
-            },
-            "--ctx-size",
-            "2048"
-          ],
-          "name": "binaries/server",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/server",
-          "sidecar": true
-        },
-        {
           "args": [
             "-m",
             {
@@ -75,7 +49,21 @@
             "-np",
             "3",
             "--ctx-size",
-            "4096",
+            "32768",
+            "--n-predict",
+            "32768",
+            "--temp",
+            "0.7",
+            "--top-p",
+            "0.8",
+            "--top-k",
+            "20",
+            "--repeat-penalty",
+            "1.0",
+            "--presence-penalty",
+            "1.5",
+            "--seed",
+            "3407",
             "-ctk",
             "q8_0",
             "-ctv",
@@ -89,111 +77,6 @@
             "--jinja"
           ],
           "name": "binaries/server",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-base.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-alderlake.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-haswell.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-icelake.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-sandybridge.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-sapphirerapids.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-skylakex.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-sse42.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-x64.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-zen4.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-piledriver.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-ivybridge.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-cooperlake.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-cascadelake.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-cpu-cannonlake.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml-rpc.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/ggml.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/libcurl-x64.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/llama.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/libomp140.x86_64.dll",
-          "sidecar": true
-        },
-        {
-          "args": true,
-          "name": "binaries/mtmd.dll",
           "sidecar": true
         }
       ]
