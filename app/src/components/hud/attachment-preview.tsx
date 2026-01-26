@@ -19,18 +19,37 @@ import {
 } from "../ui/dialog";
 
 type AttachmentPreviewProps = {
-  attachment: AttachmentData;
+  attachment?: AttachmentData;
   index: number;
   removeAttachmentData: (index: number) => void;
+  isLoading?: boolean;
 };
 
 export function AttachmentPreview({
   attachment,
   index,
   removeAttachmentData,
+  isLoading = false,
 }: AttachmentPreviewProps) {
   const [preview, setPreview] = useState(false);
   const { isChatExpanded, isChatHistoryExpanded } = useWindows();
+
+  if (isLoading) {
+    return (
+      <div className="relative h-20 w-56 px-3 bg-white/40 border border-black/10 rounded-lg animate-pulse flex items-center gap-3 shrink-0">
+        <div className="h-12 w-12 bg-blue-500/10 rounded-lg flex items-center justify-center flex-shrink-0">
+          <SquareDashed className="h-6 w-6 text-blue-400" />
+        </div>
+        <div className="flex-1 space-y-2">
+          <div className="h-2.5 bg-black/10 rounded-full w-24" />
+          <div className="h-2 bg-blue-500/10 rounded-full w-12" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!attachment) return null;
+
   return (
     <div
       key={index}

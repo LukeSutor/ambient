@@ -5,9 +5,9 @@ import { useConversation } from "@/lib/conversations";
 import { AttachmentPreview } from "./attachment-preview";
 
 export function AttachmentList() {
-  const { attachmentData, removeAttachmentData } = useConversation();
+  const { attachmentData, removeAttachmentData, ocrLoading } = useConversation();
 
-  if (attachmentData.length === 0) return null;
+  if (attachmentData.length === 0 && !ocrLoading) return null;
 
   return (
     <ScrollArea className="flex justify-start items-center w-full space-x-2 py-1 px-3">
@@ -20,6 +20,14 @@ export function AttachmentList() {
             key={`${attachment.name}-${index}`}
           />
         ))}
+        {ocrLoading && (
+          <AttachmentPreview
+            key="ocr-loading"
+            isLoading={true}
+            index={-1}
+            removeAttachmentData={() => {}}
+          />
+        )}
       </div>
       <ScrollBar
         orientation="horizontal"
