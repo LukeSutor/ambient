@@ -31,7 +31,6 @@ function transformBackendMessage(backendMessage: Message): ChatMessage {
       role: backendMessage.role.toLowerCase() as Role,
     },
     reasoningMessages: [],
-    memory: null,
   };
 }
 
@@ -41,7 +40,6 @@ function transformBackendMessage(backendMessage: Message): ChatMessage {
 function createUserMessage(
   content: string,
   conversationId: string,
-  memory: MemoryEntry | null = null,
 ): ChatMessage {
   const message: Message = {
     id: crypto.randomUUID(),
@@ -50,11 +48,11 @@ function createUserMessage(
     content,
     timestamp: new Date().toISOString(),
     attachments: [],
+    memory: null,
   };
   return {
     message,
     reasoningMessages: [],
-    memory,
   };
 }
 

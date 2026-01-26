@@ -34,15 +34,6 @@ import {
   HoverCardTrigger,
 } from "../ui/hover-card";
 
-// Helper function to check if previous message has memory
-const hasPreviousMemory = (messages: ChatMessage[], index: number) => {
-  return (
-    index > 0 &&
-    messages[index - 1]?.message.role === "user" &&
-    messages[index - 1]?.memory !== null
-  );
-};
-
 function PreviewAttachment({ a }: { a: Attachment }) {
   const [fileSrc, setFileSrc] = useState<string | null>(null);
 
@@ -215,14 +206,56 @@ function PreviewAttachment({ a }: { a: Attachment }) {
   return null;
 }
 
-export function UserMessage({ m }: { m: ChatMessage }) {
+export function UserMessage({
+  m,
+  openSecondary,
+}: {
+  m: ChatMessage;
+  openSecondary: (dest: string) => void;
+}) {
   return (
     <>
       {m.message.attachments.map((a) => (
         <PreviewAttachment key={a.id} a={a} />
       ))}
-      <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto w-fit max-w-full">
+      <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto w-fit max-w-[85%]">
         <div className="whitespace-pre-wrap break-all">{m.message.content}</div>
+      </div>
+
+      {/* Persistent memory area to avoid layout shifts and provide spacing */}
+      <div className="h-10 flex items-end justify-start">
+        {m.message.memory && (
+          <div className="mb-1 ml-1">
+            <HoverCard>
+              <HoverCardTrigger asChild>
+                <div className="flex items-center gap-1 text-xs text-black/50 cursor-pointer hover:text-black/70 transition-colors">
+                  <NotebookPen className="h-4 w-4" />
+                  <span className="font-bold">Captured memory</span>
+                </div>
+              </HoverCardTrigger>
+              <HoverCardContent side="top" className="w-min max-w-80 bg-white/70">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm text-black">
+                      {m.message.memory.text || "No memory text available"}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full bg-white/50"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openSecondary("memories");
+                    }}
+                  >
+                    Manage Memories
+                  </Button>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
+          </div>
+        )}
       </div>
     </>
   );
@@ -240,7 +273,7 @@ export function ReasoningAssistantMessage({ m }: { m: ChatMessage }) {
 
 export function ReasoningFunctionMessage({ m }: { m: ChatMessage }) {
   return (
-    <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left">
+    <div className="overflow-hidden bg-white/20 border border-black/20 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left">
       <Markdown {...llmMarkdownConfig}>
         {preprocessMarkdownCurrency(m.message.content)}
       </Markdown>
@@ -262,7 +295,7 @@ export function ReasoningMessages({
   if (reasoningMessages.length === 0) return null;
 
   return (
-    <div className="mt-4 -mb-4">
+    <div className="-mb-2">
       <Button
         variant="ghost"
         onClick={() => {
@@ -299,17 +332,13 @@ export function ReasoningMessages({
 }
 
 export function AssistantMessage({
-  messages,
   m,
   i,
-  openSecondary,
   toggleReasoning,
   showReasoning,
 }: {
-  messages: ChatMessage[];
   m: ChatMessage;
   i: number;
-  openSecondary: (dest: string) => void;
   toggleReasoning: (index: number) => void;
   showReasoning: boolean;
 }) {
@@ -322,41 +351,6 @@ export function AssistantMessage({
         toggleReasoning={toggleReasoning}
         showReasoning={showReasoning}
       />
-      <div className="h-4 flex items-center justify-start -mb-2">
-        {hasPreviousMemory(messages, i) ? (
-          <HoverCard>
-            <HoverCardTrigger asChild>
-              <div className="flex items-center gap-1 text-xs text-black/50">
-                <NotebookPen className="h-4 w-4" />
-                <span className="font-bold">Updated saved memory</span>
-              </div>
-            </HoverCardTrigger>
-            <HoverCardContent side="top" className="w-min max-w-80 bg-white/70">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-black">
-                    {messages[i - 1]?.memory?.text ||
-                      "No memory text available"}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full bg-white/50"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    openSecondary("memories");
-                  }}
-                >
-                  Manage Memories
-                </Button>
-              </div>
-            </HoverCardContent>
-          </HoverCard>
-        ) : (
-          <div className="h-4 w-4" />
-        )}
-      </div>
       <Markdown {...llmMarkdownConfig}>
         {preprocessMarkdownCurrency(m.message.content)}
       </Markdown>

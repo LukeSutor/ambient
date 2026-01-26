@@ -209,9 +209,9 @@ function conversationReducer(
           content: "",
           timestamp: action.payload.timestamp,
           attachments: [],
+          memory: null,
         },
         reasoningMessages: [],
-        memory: null,
       };
       return {
         ...state,
@@ -252,9 +252,9 @@ function conversationReducer(
           content: "",
           timestamp: new Date().toISOString(),
           attachments: [],
+          memory: null,
         },
         reasoningMessages: [],
-        memory: null,
       };
       return {
         ...state,
@@ -393,15 +393,15 @@ function conversationReducer(
     }
 
     case "ATTACH_MEMORY": {
-      // Find user message by ID and attach memory
+      // Find message by ID and attach memory to its message property
       const messagesWithMemory = state.messages.map((msg) => {
-        if (
-          msg.message.id === action.payload.messageId &&
-          msg.message.role === "user"
-        ) {
+        if (msg.message.id === action.payload.messageId) {
           return {
             ...msg,
-            memory: action.payload.memory,
+            message: {
+              ...msg.message,
+              memory: action.payload.memory,
+            },
           };
         }
         return msg;
@@ -540,7 +540,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             const chatMessage: ChatMessage = {
               message: event.payload.message,
               reasoningMessages: [],
-              memory: null,
             };
 
             if (event.payload.status === "completed") {

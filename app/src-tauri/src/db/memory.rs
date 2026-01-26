@@ -1,4 +1,4 @@
-use crate::db::core::DbState;
+use crate::db::core::{DbState, bytes_to_f32_vec};
 use crate::memory::types::MemoryEntry;
 use crate::models::embedding::embedding::generate_embedding;
 use rusqlite::params;
@@ -387,28 +387,4 @@ pub async fn find_similar_memories(
   }
 
   Ok(results)
-}
-
-/// Convert a BLOB of little-endian f32 bytes into Vec<f32>.
-fn bytes_to_f32_vec(blob: &[u8]) -> Result<Vec<f32>, String> {
-  if blob.len() % 4 != 0 {
-    return Err(format!(
-      "Invalid embedding BLOB length: {} (not divisible by 4)",
-      blob.len()
-    ));
-  }
-  // Ensure correct dimension of 768
-  if blob.len() / 4 != 768 {
-    return Err(format!(
-      "Invalid embedding dimension: {} (expected 768)",
-      blob.len() / 4
-    ));
-  }
-  let mut out = Vec::with_capacity(blob.len() / 4);
-  for chunk in blob.chunks_exact(4) {
-    let arr = <[u8; 4]>::try_from(chunk)
-      .map_err(|_| "Failed to convert bytes to f32 (chunk size)".to_string())?;
-    out.push(f32::from_le_bytes(arr));
-  }
-  Ok(out)
 }

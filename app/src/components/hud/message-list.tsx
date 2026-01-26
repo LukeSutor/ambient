@@ -118,7 +118,7 @@ export function MessageList({
           className="w-full h-full flex flex-col hud-scroll overflow-y-auto p-4 pt-12"
           style={SCROLL_MASK_STYLE}
         >
-          <div className="flex flex-col space-y-2">
+          <div className="flex flex-col">
             {messages.map((m, i) => {
               const role = m.message.role.toLowerCase();
               const isUser = role === "user";
@@ -130,7 +130,7 @@ export function MessageList({
                   className={cn(
                     "grid transition-[grid-template-rows] duration-300 ease-out",
                     isUser
-                      ? "max-w-[85%] w-full ml-auto"
+                      ? "max-w-full w-full"
                       : "max-w-[95%] w-full text-left ml-2 mb-0",
                   )}
                   style={{
@@ -138,13 +138,11 @@ export function MessageList({
                   }}
                 >
                   {isUser ? (
-                    <UserMessage m={m} />
+                    <UserMessage m={m} openSecondary={handleOpenSecondary} />
                   ) : isAssistant ? (
                     <AssistantMessage
-                      messages={messages}
                       m={m}
                       i={i}
-                      openSecondary={handleOpenSecondary}
                       toggleReasoning={toggleReasoning}
                       showReasoning={showReasoning.has(i)}
                     />
