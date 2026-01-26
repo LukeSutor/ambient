@@ -8,7 +8,7 @@ use tauri::AppHandle;
 #[tauri::command]
 pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<Vec<f32>, String> {
   log::info!("[Embedding] Generating embedding from ONNX model");
-  let input = input.trim();
+  let input = input.trim().to_string();
 
   let model_path = get_embedding_model_path(&app_handle)
     .map_err(|e| format!("Failed to get embedding model path: {}", e))?;
@@ -25,7 +25,7 @@ pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<
 
   // Tokenize input
   let encoded = tokenizer
-    .encode(input, Some(EncodeOptions::default()))
+    .encode(&input, Some(EncodeOptions::default()))
     .map_err(|e| format!("Tokenization failed: {}", e))?;
 
   let token_ids: Vec<i32> = encoded.token_ids().iter().map(|&id| id as i32).collect();

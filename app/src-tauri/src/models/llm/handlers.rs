@@ -85,7 +85,7 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
 
   // Get 3 most relevant memories
   let relevant_memories =
-    match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.5).await {
+    match find_similar_memories(&app_handle.clone(), &event.text, 3, 0.8).await {
       Ok(memories) => memories,
       Err(e) => {
         log::warn!("[hud_chat] Failed to find similar memories: {}", e);

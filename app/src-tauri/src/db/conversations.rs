@@ -1,4 +1,4 @@
-use crate::db::core::{DbState, bytes_to_f32_vec};
+use crate::db::core::DbState;
 use crate::events::types::AttachmentData;
 use crate::memory::types::MemoryEntry;
 use chrono::Utc;
