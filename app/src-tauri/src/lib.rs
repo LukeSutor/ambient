@@ -26,6 +26,10 @@ pub fn run() {
       tauri_plugin_log::Builder::new()
         .clear_targets()
         .target(Target::new(TargetKind::Stdout))
+        .target(Target::new(TargetKind::LogDir {
+          file_name: Some("logs".to_string()),
+        }))
+        .max_file_size(50_000)
         .filter(|metadata| {
           let t = metadata.target();
           !(t.starts_with("hyper")
