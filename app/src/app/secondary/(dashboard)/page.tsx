@@ -77,7 +77,7 @@ export default function Home() {
   }, [timeFilter]);
 
   return (
-    <div className="relative flex flex-col items-center justify-start p-4 w-full">
+    <div className="relative flex flex-col items-center justify-start p-4 w-full max-w-6xl mx-auto">
       {/* Greeting */}
       {userInfo ? (
         <p className="text-4xl font-bold w-full h-20 font-sora">

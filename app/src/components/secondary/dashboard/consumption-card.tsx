@@ -13,10 +13,10 @@ export function ConsumptionCard({ label, value, unit }: ConsumptionCardProps) {
     <Card>
       <CardHeader className="text-sm">{label}</CardHeader>
       <CardContent className="flex flex-row items-baseline justify-center mt-auto">
-        <p className="text-4xl text-black font-bold mr-1">
+        <p className="text-2xl lg:text-4xl text-black font-bold mr-1">
           {value?.toFixed(2)}
         </p>
-        <p className="text-xl">{unit}</p>
+        <p className="text-base lg:text-xl">{unit}</p>
       </CardContent>
     </Card>
   );

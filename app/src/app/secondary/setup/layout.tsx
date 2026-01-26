@@ -11,7 +11,7 @@ export default function SetupLayout({
 }>) {
   return (
     <div className="relative bg-background h-screen w-full rounded-lg overflow-hidden border flex flex-col pt-16">
-      <SiteHeader includeMinimize />
+      <SiteHeader includeCollapse includeMaximize />
       <div className="flex-1 overflow-auto">{children}</div>
       <Toaster richColors position="top-center" />
     </div>

@@ -21,7 +21,7 @@ export default function DashboardLayout({
   return (
     <div className="relative h-screen w-full rounded-lg overflow-hidden border bg-white [--header-height:calc(--spacing(16))]">
       <SidebarProvider className="h-full">
-        <SiteHeader includeMinimize />
+        <SiteHeader includeCollapse includeMaximize />
         <div className="flex flex-1 h-full overflow-hidden">
           <AppSidebar />
           <SidebarInset className="flex flex-1 flex-col min-h-0 overflow-hidden">
