@@ -72,7 +72,7 @@ pub async fn open_screen_selector(
   .skip_taskbar(true)
   .focused(true)
   .build()
-  .map_err(|e| e.to_string())?;
+  .map_err(|e: tauri::Error| e.to_string())?;
 
   log::info!("Screen selector overlay window created");
   Ok(())

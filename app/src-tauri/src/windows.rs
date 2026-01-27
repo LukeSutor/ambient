@@ -187,7 +187,7 @@ pub async fn open_secondary_window(
   .decorations(false)
   .shadow(false)
   .build()
-  .map_err(|e| e.to_string())?;
+  .map_err(|e: tauri::Error| e.to_string())?;
 
   Ok(())
 }
@@ -263,7 +263,7 @@ pub async fn open_computer_use_window(app_handle: AppHandle) -> Result<(), Strin
   .always_on_top(true)
   .skip_taskbar(true)
   .build()
-  .map_err(|e| e.to_string())?;
+  .map_err(|e: tauri::Error| e.to_string())?;
   Ok(())
 }
 

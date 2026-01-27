@@ -26,6 +26,7 @@
         "skipTaskbar": true
       }
     ],
+    "macOSPrivateApi": true,
     "security": {
       "csp": "default-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co http://ipc.localhost; img-src 'self' asset: http://asset.localhost https://*.googleusercontent.com data: blob:; frame-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'",
       "dangerousDisableAssetCspModification": ["style-src"],
@@ -42,6 +43,7 @@
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
+      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "resources": ["../public/favicon.ico"],
