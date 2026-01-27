@@ -1,4 +1,3 @@
-*.exe
 .env
 app/src-tauri/.env
 backlog.txt
