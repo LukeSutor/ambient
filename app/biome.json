@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": []
+    "ignore": ["src/types/**"]
   },
   "formatter": {
     "enabled": true,
@@ -33,7 +33,19 @@
         "useComponentExportOnlyModules": {
           "level": "error",
           "options": {
-            "allowExportNames": ["metadata"]
+            "allowExportNames": [
+              "metadata",
+              "badgeVariants",
+              "buttonVariants",
+              "buttonGroupVariants",
+              "toggleVariants",
+              "useFormField",
+              "useSettingsContext",
+              "useSetupContext",
+              "useRoleAccessContext",
+              "useSidebar",
+              "useConversationContext"
+            ]
           }
         }
       }

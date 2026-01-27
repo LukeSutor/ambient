@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use std::collections::{HashSet, BTreeMap};
 use crate::constants::{COST_PER_TOKEN, WATER_PER_TOKEN, ENERGY_PER_TOKEN};
+use crate::events::{emitter::emit, types::{TOKEN_USAGE_CHANGED, TokenUsageChangedEvent}};
 
 /// Time filters for querying token usage
 #[derive(Debug, Serialize, Deserialize, TS, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +96,11 @@ pub async fn add_token_usage(
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
   
+  let event = TokenUsageChangedEvent {
+    timestamp: now.to_rfc3339(),
+  };
+  let _ = emit(TOKEN_USAGE_CHANGED, event);
+
   Ok(())
 }
 

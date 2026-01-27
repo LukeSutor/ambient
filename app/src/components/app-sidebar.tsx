@@ -1,58 +1,43 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { cn } from "@/lib/utils"
+import { useSidebar } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import {
+  Code,
+  House,
   LifeBuoy,
+  NotebookPen,
   Settings2,
   SquareTerminal,
-  House,
-  Code,
-  NotebookPen,
-} from "lucide-react"
-import { useSidebar } from "@/components/ui/sidebar"
+} from "lucide-react";
+import type * as React from "react";
 
-import { Separator } from "@/components/ui/separator"
-import { NavMain } from "@/components/nav-main"
-import { NavSecondary } from "@/components/nav-secondary"
-import { NavUser } from "@/components/nav-user"
+import { NavMain } from "@/components/nav-main";
+import { NavSecondary } from "@/components/nav-secondary";
+import { NavUser } from "@/components/nav-user";
+import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
-  SidebarFooter
-} from "@/components/ui/sidebar"
-import { useRoleAccess } from "@/lib/role-access"
-import { NavHeader } from "./nav-header"
+} from "@/components/ui/sidebar";
+import { useRoleAccess } from "@/lib/role-access";
+import { NavHeader } from "./nav-header";
 
 const data = {
   navMain: [
     {
       title: "Dashboard",
       url: "/secondary",
-      icon: House
+      icon: House,
     },
     {
-      title: "Activity",
-      url: "/secondary/activity",
-      icon: SquareTerminal,
-      items: [
-        {
-          title: "Recent",
-          url: "/secondary/activity/recent",
-    },
-    {
-          title: "Recurring",
-          url: "/secondary/activity/recurring",
-        }
-      ]
-        },
-        {
       title: "Memories",
       url: "/secondary/memories",
-      icon: NotebookPen
-    }
-      ],
+      icon: NotebookPen,
+    },
+  ],
   navSecondary: [
     {
       title: "Settings",
@@ -63,47 +48,55 @@ const data = {
       title: "Support",
       url: "/secondary/support",
       icon: LifeBuoy,
-    }
-  ]
-}
+    },
+  ],
+};
 
-export function AppSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({
+  className,
+  ...props
+}: React.ComponentProps<typeof Sidebar>) {
   const { userInfo } = useRoleAccess();
 
   // Create a mutable copy of the nav items for this render
   const navItems = [...data.navMain];
 
   // Conditionally add the Debug item in development mode to the copy
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === "development") {
     // Optional: Check if it already exists (though copying usually prevents duplicates)
-    const hasDebug = navItems.some(item => item.title === "Dev");
+    const hasDebug = navItems.some((item) => item.title === "Dev");
     if (!hasDebug) {
-       navItems.push({
+      navItems.push({
         title: "Dev",
         url: "/secondary/dev", // Point to your debug page route
-        icon: Code,   // Use the Code icon
+        icon: Code, // Use the Code icon
       });
     }
   }
 
-  const { state } = useSidebar()
+  const { state } = useSidebar();
 
   // Create user object for NavUser component
-  const user = userInfo ? {
-    name: userInfo.full_name || userInfo.email?.split('@')[0] || 'User',
-    email: userInfo.email || '',
-    avatar: userInfo.avatar_url || '/',
-  } : {
-    name: 'User',
-    email: '',
-    avatar: '/',
-  };
+  const user = userInfo
+    ? {
+        name: userInfo.full_name ?? userInfo.email?.split("@")[0] ?? "User",
+        email: userInfo.email ?? "",
+        avatar: userInfo.avatar_url ?? "/",
+      }
+    : {
+        name: "User",
+        email: "",
+        avatar: "/",
+      };
 
   return (
     <Sidebar
       variant="floating"
       collapsible="icon"
-      className={cn("top-(--header-height) h-[calc(100svh-var(--header-height))]!", className)}
+      className={cn(
+        "top-(--header-height) h-[calc(100svh-var(--header-height))]!",
+        className,
+      )}
       {...props}
     >
       <SidebarHeader>
@@ -118,5 +111,5 @@ export function AppSidebar({ className, ...props }: React.ComponentProps<typeof 
         <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }

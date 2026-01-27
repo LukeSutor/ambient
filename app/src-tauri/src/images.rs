@@ -3,10 +3,9 @@ use image::imageops::{crop, FilterType};
 use screenshots::Screen;
 use std::fs;
 use std::path::PathBuf;
-use tauri::Manager;
+use tauri::{AppHandle, Manager};
 
-#[tauri::command]
-pub fn save_screenshot(app_handle: tauri::AppHandle, filename: String) -> String {
+pub fn save_screenshot(app_handle: &AppHandle, filename: String) -> String {
   let screens = Screen::all().unwrap();
   let screen = &screens[0]; // Assuming single screen for simplicity
   let image = screen.capture().unwrap();

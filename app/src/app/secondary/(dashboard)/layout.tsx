@@ -1,19 +1,12 @@
 "use client";
 
-import * as React from "react";
-import { useRoleAccess } from "@/lib/role-access";
-import { invoke } from "@tauri-apps/api/core";
-import { Minus, X } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import { SiteHeader } from "@/components/site-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
+import { useRoleAccess } from "@/lib/role-access";
 import { useSettings } from "@/lib/settings";
+import type * as React from "react";
 
 export default function DashboardLayout({
   children,
@@ -21,43 +14,25 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }>) {
   // Use role access
-  useRoleAccess('/secondary');
+  useRoleAccess("/secondary");
   // Use root settings
-  useSettings(true);
-
-  const handleClose = async () => {
-    await invoke("close_secondary_window");
-  }
-
-  const handleMinimize = async () => {
-    await invoke("minimize_secondary_window");
-  }
+  useSettings();
 
   return (
-    <div className="relative h-full max-h-[800px] w-full rounded-lg overflow-hidden border bg-white [--header-height:calc(--spacing(16))]">
-      {/* Force transparent background for this window on first paint */}
-      <style
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{
-          __html:
-            "html,body{background:transparent!important;background-color:transparent!important;}",
-        }}
-      />
-      <SidebarProvider>
-        <SiteHeader handleClose={handleClose} handleMinimize={handleMinimize} />
-        <div className="flex flex-1">
+    <div className="relative h-screen w-full rounded-lg overflow-hidden border bg-white [--header-height:calc(--spacing(16))]">
+      <SidebarProvider className="h-full">
+        <SiteHeader includeCollapse includeMaximize />
+        <div className="flex flex-1 h-full overflow-hidden">
           <AppSidebar />
-          <SidebarInset>
-            <main className="flex flex-1 flex-col overflow-y-auto min-h-0 max-h-[800px]">
+          <SidebarInset className="flex flex-1 flex-col min-h-0 overflow-hidden">
+            <main className="flex-1 overflow-y-auto">
               <div className="h-(--header-height) shrink-0" />
-              <div className="p-4">
-                {children}
-              </div>
+              <div className="p-4">{children}</div>
             </main>
             <Toaster richColors />
           </SidebarInset>
         </div>
       </SidebarProvider>
-  </div>
+    </div>
   );
 }

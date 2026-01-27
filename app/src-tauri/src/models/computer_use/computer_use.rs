@@ -1,5 +1,7 @@
 use tauri::{AppHandle, Manager, Listener};
 use tokio::sync::oneshot;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use base64::{Engine as _, engine::general_purpose};
 use super::actions::*;
@@ -12,6 +14,7 @@ use crate::windows::{open_main_window, close_main_window, open_computer_use_wind
 use crate::db::computer_use::{get_computer_use_session, save_computer_use_session};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
+use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use chrono;
 
 fn transform_function_call(function_name: String, args: Vec<String>) -> (String, String) {
@@ -79,10 +82,16 @@ pub struct ComputerUseEngine {
     height: i32,
     final_response: String,
     contents: Vec<serde_json::Value>,
+    should_stop: Arc<AtomicBool>,
 }
 
 impl ComputerUseEngine {
-    pub async fn new(app_handle: AppHandle, conversation_id: String, prompt: String) -> Self {
+    pub async fn new(
+        app_handle: AppHandle,
+        conversation_id: String,
+        prompt: String,
+        should_stop: Arc<AtomicBool>,
+    ) -> Self {
         // Get the screen's physical size to store it
         let mut width: i32 = 0;
         let mut height: i32 = 0;
@@ -133,6 +142,7 @@ impl ComputerUseEngine {
             final_response: String::new(),
             contents,
             conversation_id,
+            should_stop,
         }
     }
 
@@ -158,11 +168,8 @@ impl ComputerUseEngine {
         let mut prompt_tokens = 0u64;
         let mut completion_tokens = 0u64;
 
-        let url = std::env::var("CLOUDFLARE_COMPLETIONS_WORKER_URL")
-            .map_err(|_| "Missing CLOUDFLARE_COMPLETIONS_WORKER_URL environment variable".to_string())?;
-
         let resp = client
-            .post(&url)
+            .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
             .headers(headers)
             .json(&body)
             .send()
@@ -382,7 +389,7 @@ impl ComputerUseEngine {
 
     async fn save_user_message(&self, content: String) -> Result<(), String> {
         let user_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "user".to_string(),
             content,
@@ -400,7 +407,7 @@ impl ComputerUseEngine {
         }
 
         let reasoning_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "assistant".to_string(),
             reasoning.clone(),
@@ -432,7 +439,7 @@ impl ComputerUseEngine {
         let _ = emit(COMPUTER_USE_TOAST, toast_event);
 
         let func_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "functioncall".to_string(),
             function_call_message.clone(),
@@ -638,6 +645,13 @@ impl ComputerUseEngine {
         let _ = close_main_window(self.app_handle.clone()).await;
 
         loop {
+            // Check for stop signal
+            if self.should_stop.load(Ordering::SeqCst) {
+                log::info!("[computer_use] Stop signal received, exiting loop");
+                self.final_response = "Computer use was stopped by the user.".to_string();
+                break;
+            }
+
             let done = self.run_one_iteration().await?;
             if done {
                 break;
@@ -650,7 +664,7 @@ impl ComputerUseEngine {
 
         // Emit final update event
         let final_message = add_message(
-            self.app_handle.clone(),
+            &self.app_handle,
             self.conversation_id.clone(),
             "assistant".to_string(),
             self.final_response.clone(),

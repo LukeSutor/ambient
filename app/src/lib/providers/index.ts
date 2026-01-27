@@ -3,4 +3,4 @@
  * Composes all context providers for the application
  */
 
-export { AppProvider } from './AppProvider';
+export { AppProvider } from "./AppProvider";

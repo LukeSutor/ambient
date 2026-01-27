@@ -1,7 +1,7 @@
-import { MemoryEntry } from '@/types/memory';
-import { AttachmentData, OcrResponseEvent } from '@/types/events';
-import { RefObject } from 'react';
-import { Conversation, Message, Role } from '@/types/conversations';
+import { type Conversation, type Message, Role } from "@/types/conversations";
+import { type AttachmentData, OcrResponseEvent } from "@/types/events";
+import type { MemoryEntry } from "@/types/memory";
+import type { RefObject } from "react";
 
 /**
  * Chat message structure with optional memory attachment
@@ -9,7 +9,6 @@ import { Conversation, Message, Role } from '@/types/conversations';
 export interface ChatMessage {
   message: Message;
   reasoningMessages: ChatMessage[];
-  memory: MemoryEntry | null;
 }
 
 /**

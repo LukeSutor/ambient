@@ -1,5 +1,6 @@
 use crate::db::core::DbState;
 use crate::events::types::AttachmentData;
+use crate::memory::types::MemoryEntry;
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -63,6 +64,7 @@ pub struct Message {
   pub content: String,
   pub timestamp: String,
   pub attachments: Vec<Attachment>,
+  pub memory: Option<MemoryEntry>,
 }
 
 /// Conversation structure
@@ -148,9 +150,8 @@ pub async fn create_conversation(
 }
 
 /// Add a message to a conversation
-#[tauri::command]
 pub async fn add_message(
-  app_handle: AppHandle,
+  app_handle: &AppHandle,
   conversation_id: String,
   role: String,
   content: String,
@@ -159,7 +160,7 @@ pub async fn add_message(
 }
 
 pub async fn add_message_with_id(
-  app_handle: AppHandle,
+  app_handle: &AppHandle,
   conversation_id: String,
   role: String,
   content: String,
@@ -184,6 +185,7 @@ pub async fn add_message_with_id(
     content: content.clone(),
     timestamp: now.to_rfc3339(),
     attachments: vec![],
+    memory: None,
   };
 
   // Insert the message
@@ -249,9 +251,11 @@ pub async fn get_messages(
   let mut stmt = conn
     .prepare(
       "SELECT m.id, m.conversation_id, m.role, m.content, m.timestamp, 
-        a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at,
+        me.id, me.memory_type, me.text, me.timestamp
         FROM conversation_messages m 
         LEFT JOIN attachments a ON m.id = a.message_id
+        LEFT JOIN memory_entries me ON m.id = me.message_id
         WHERE conversation_id = ?1 
         ORDER BY m.timestamp ASC",
     )
@@ -268,6 +272,21 @@ pub async fn get_messages(
 
       if messages.is_empty() || messages.last().unwrap().id != msg_id {
         let role_str: String = row.get(2).map_err(|e| e.to_string())?;
+
+        let memory = if let Some(mem_id) = row.get::<_, Option<String>>(12).map_err(|e| e.to_string())? {
+          Some(MemoryEntry {
+            id: mem_id,
+            message_id: msg_id.clone(),
+            memory_type: row.get(13).map_err(|e| e.to_string())?,
+            text: row.get(14).map_err(|e| e.to_string())?,
+            embedding: vec![],
+            timestamp: row.get(15).map_err(|e| e.to_string())?,
+            similarity: None,
+          })
+        } else {
+          None
+        };
+
         messages.push(Message {
           id: msg_id,
           conversation_id: row.get(1).map_err(|e| e.to_string())?,
@@ -275,6 +294,7 @@ pub async fn get_messages(
           content: row.get(3).map_err(|e| e.to_string())?,
           timestamp: row.get(4).map_err(|e| e.to_string())?,
           attachments: Vec::new(),
+          memory,
         });
       }
 
@@ -312,9 +332,11 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
     .prepare(
       "SELECT 
         m.id, m.conversation_id, m.role, m.content, m.timestamp,
-        a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at,
+        me.id, me.memory_type, me.text, me.timestamp
         FROM conversation_messages m 
         LEFT JOIN attachments a ON m.id = a.message_id 
+        LEFT JOIN memory_entries me ON m.id = me.message_id
         WHERE m.id = ?1",
     )
     .map_err(|e| format!("Failed to prepare statement: {}", e))?;
@@ -328,13 +350,30 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
   while let Some(row) = rows.next().map_err(|e| e.to_string())? {
     if message_acc.is_none() {
       let role_str: String = row.get(2).map_err(|e| e.to_string())?;
+      let msg_id: String = row.get(0).map_err(|e| e.to_string())?;
+
+      let memory = if let Some(mem_id) = row.get::<_, Option<String>>(12).map_err(|e| e.to_string())? {
+        Some(MemoryEntry {
+          id: mem_id,
+          message_id: msg_id.clone(),
+          memory_type: row.get(13).map_err(|e| e.to_string())?,
+          text: row.get(14).map_err(|e| e.to_string())?,
+          embedding: vec![],
+          timestamp: row.get(15).map_err(|e| e.to_string())?,
+          similarity: None,
+        })
+      } else {
+        None
+      };
+
       message_acc = Some(Message {
-        id: row.get(0).map_err(|e| e.to_string())?,
+        id: msg_id,
         conversation_id: row.get(1).map_err(|e| e.to_string())?,
         role: Role::from_str(&role_str),
         content: row.get(3).map_err(|e| e.to_string())?,
         timestamp: row.get(4).map_err(|e| e.to_string())?,
         attachments: Vec::new(),
+        memory,
       });
     }
 
@@ -403,6 +442,11 @@ pub async fn list_conversations(
   limit: usize,
   offset: usize,
 ) -> Result<Vec<Conversation>, String> {
+  log::info!(
+    "[conversations] Listing conversations with limit {} and offset {}",
+    limit,
+    offset
+  );
   let state = app_handle.state::<DbState>();
   let conn_guard = state
     .0
@@ -440,42 +484,6 @@ pub async fn list_conversations(
     .map_err(|e| format!("Failed to collect conversations: {}", e))?;
 
   Ok(conversations)
-}
-
-/// Reset a conversation (delete all messages)
-#[tauri::command]
-pub async fn reset_conversation(
-  app_handle: AppHandle,
-  conversation_id: String,
-) -> Result<(), String> {
-  let state = app_handle.state::<DbState>();
-  let conn_guard = state
-    .0
-    .lock()
-    .map_err(|_| "Failed to acquire DB lock".to_string())?;
-  let conn = conn_guard
-    .as_ref()
-    .ok_or("Database connection not available.".to_string())?;
-
-  // Delete all messages
-  conn
-    .execute(
-      "DELETE FROM conversation_messages WHERE conversation_id = ?1",
-      params![conversation_id],
-    )
-    .map_err(|e| format!("Failed to delete messages: {}", e))?;
-
-  // Reset message count
-  let now = Utc::now();
-  conn
-    .execute(
-      "UPDATE conversations SET message_count = 0, updated_at = ?1 WHERE id = ?2",
-      params![now.to_rfc3339(), conversation_id],
-    )
-    .map_err(|e| format!("Failed to reset conversation: {}", e))?;
-
-  log::info!("[conversations] Reset conversation: {}", conversation_id);
-  Ok(())
 }
 
 /// Delete a conversation completely

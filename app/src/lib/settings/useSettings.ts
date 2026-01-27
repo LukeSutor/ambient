@@ -1,10 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { useSettingsContext } from './SettingsProvider';
-import { UserSettings, HudSizeOption, ModelSelection, HudDimensions } from '@/types/settings';
+import type {
+  HudDimensions,
+  HudSizeOption,
+  ModelSelection,
+  UserSettings,
+} from "@/types/settings";
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback } from "react";
+import { useSettingsContext } from "./SettingsProvider";
 
 /**
  * Convert HUD size option to dimensions
@@ -40,96 +44,10 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
 
 /**
  * Main settings hook - provides all settings functionality
- * @param isRoot Whether this hook is used in the root context and should setup event listeners
  * @returns Settings state and operations
  */
-export function useSettings(isRoot: boolean = false) {
+export function useSettings() {
   const { state, dispatch } = useSettingsContext();
-
-  // ============================================================
-  // Event Listener Setup
-  // ============================================================
-  useEffect(() => {
-    if (!isRoot) return;
-    let isMounted = true;
-
-    const setupEvents = async () => {
-      try {
-        // Listen for settings changes from other windows/sources
-        const unlisten = await listen('settings_changed', async () => {
-          console.log('[useSettings] Settings changed event received, invalidating cache');
-          
-          // Invalidate cache and reload
-          dispatch({ type: 'INVALIDATE_CACHE' });
-          
-          if (isMounted) {
-            try {
-              const settings = await invoke<UserSettings>('load_user_settings');
-              dispatch({ type: 'SET_SETTINGS', payload: settings });
-            } catch (error) {
-              console.error('[useSettings] Failed to reload settings:', error);
-            }
-          }
-        });
-
-        return unlisten;
-      } catch (error) {
-        console.error('[useSettings] Failed to setup event listener:', error);
-        return null;
-      }
-    };
-
-    let cleanup: UnlistenFn | null = null;
-    setupEvents().then((fn) => {
-      if (isMounted) {
-        cleanup = fn;
-      } else if (fn) {
-        fn();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      if (cleanup) {
-        cleanup();
-      }
-    };
-  }, [dispatch]);
-
-  // ============================================================
-  // Initialization Effect
-  // ============================================================
-
-  useEffect(() => {
-    if (!isRoot) return;
-    // Check shared initialization ref to prevent multiple initializations
-    if (state.initializationRef.current || state.settings) {
-      return;
-    }
-    
-    state.initializationRef.current = true;
-
-    const initialize = async () => {
-      console.log('[useSettings] Initializing settings...');
-      
-      try {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        const settings = await invoke<UserSettings>('load_user_settings');
-        dispatch({ type: 'SET_SETTINGS', payload: settings });
-      } catch (error) {
-        console.error('[useSettings] Failed to load settings:', error);
-        
-        // Set defaults on error
-        const defaults: UserSettings = {
-          hud_size: 'Normal',
-          model_selection: 'Local',
-        };
-        dispatch({ type: 'SET_SETTINGS', payload: defaults });
-      }
-    };
-
-    initialize();
-  }, [state.initializationRef, state.settings, dispatch]);
 
   // ============================================================
   // Operations
@@ -140,12 +58,12 @@ export function useSettings(isRoot: boolean = false) {
    */
   const loadSettings = useCallback(async (): Promise<UserSettings> => {
     try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const settings = await invoke<UserSettings>('load_user_settings');
-      dispatch({ type: 'SET_SETTINGS', payload: settings });
+      dispatch({ type: "SET_LOADING", payload: true });
+      const settings = await invoke<UserSettings>("load_user_settings");
+      dispatch({ type: "SET_SETTINGS", payload: settings });
       return settings;
     } catch (error) {
-      console.error('[useSettings] Failed to load settings:', error);
+      console.error("[useSettings] Failed to load settings:", error);
       throw error;
     }
   }, [dispatch]);
@@ -153,24 +71,27 @@ export function useSettings(isRoot: boolean = false) {
   /**
    * Saves settings to backend and updates cache
    */
-  const saveSettings = useCallback(async (settings: UserSettings): Promise<void> => {
-    try {
-      // Optimistically update cache
-      dispatch({ type: 'SET_SETTINGS', payload: settings });
-      
-      // Save to backend
-      await invoke('save_user_settings', { settings });
-      
-      // Emit settings changed event for other windows
-      await invoke('emit_settings_changed');
-    } catch (error) {
-      console.error('[useSettings] Failed to save settings:', error);
-      
-      // Reload from backend on error to ensure consistency
-      await loadSettings();
-      throw error;
-    }
-  }, [dispatch, loadSettings]);
+  const saveSettings = useCallback(
+    async (settings: UserSettings): Promise<void> => {
+      try {
+        // Optimistically update cache
+        dispatch({ type: "SET_SETTINGS", payload: settings });
+
+        // Save to backend
+        await invoke("save_user_settings", { settings });
+
+        // Emit settings changed event for other windows
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error("[useSettings] Failed to save settings:", error);
+
+        // Reload from backend on error to ensure consistency
+        await loadSettings();
+        throw error;
+      }
+    },
+    [dispatch, loadSettings],
+  );
 
   /**
    * Gets current HUD size setting
@@ -187,42 +108,45 @@ export function useSettings(isRoot: boolean = false) {
   /**
    * Sets HUD size setting
    */
-  const setHudSize = useCallback(async (size: HudSizeOption, isExpanded?: boolean): Promise<void> => {
-    try {
-      if (!state.settings) {
-        throw new Error('Settings not loaded');
-      }
-
-      // Optimistically update
-      dispatch({ type: 'UPDATE_HUD_SIZE', payload: size });
-
-      // Save to backend
-      const updatedSettings = {
-        ...state.settings,
-        hud_size: size,
-      };
-      await invoke('save_user_settings', { settings: updatedSettings });
-
-      // Refresh HUD window size
-        try {
-            await invoke('refresh_hud_window_size', { 
-            label: 'main', 
-            isExpanded 
-            });
-        } catch (refreshError) {
-            console.warn('[useSettings] Failed to refresh HUD window:', refreshError);
+  const setHudSize = useCallback(
+    async (size: HudSizeOption): Promise<void> => {
+      try {
+        if (!state.settings) {
+          throw new Error("Settings not loaded");
         }
 
-      // Emit settings changed event
-      await invoke('emit_settings_changed');
-    } catch (error) {
-      console.error('[useSettings] Failed to set HUD size:', error);
-      
-      // Reload settings on error
-      await loadSettings();
-      throw error;
-    }
-  }, [state.settings, dispatch, loadSettings]);
+        // Optimistically update
+        dispatch({ type: "UPDATE_HUD_SIZE", payload: size });
+
+        // Save to backend
+        const updatedSettings = {
+          ...state.settings,
+          hud_size: size,
+        };
+        await invoke("save_user_settings", { settings: updatedSettings });
+
+        // Refresh main window size
+        try {
+          await invoke("refresh_main_window_size");
+        } catch (refreshError) {
+          console.warn(
+            "[useSettings] Failed to refresh main window:",
+            refreshError,
+          );
+        }
+
+        // Emit settings changed event
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error("[useSettings] Failed to set HUD size:", error);
+
+        // Reload settings on error
+        await loadSettings();
+        throw error;
+      }
+    },
+    [state.settings, dispatch, loadSettings],
+  );
 
   /**
    * Gets HUD dimensions based on current size setting
@@ -247,38 +171,41 @@ export function useSettings(isRoot: boolean = false) {
   /**
    * Sets model selection setting
    */
-  const setModelSelection = useCallback(async (selection: ModelSelection): Promise<void> => {
-    try {
-      if (!state.settings) {
-        throw new Error('Settings not loaded');
+  const setModelSelection = useCallback(
+    async (selection: ModelSelection): Promise<void> => {
+      try {
+        if (!state.settings) {
+          throw new Error("Settings not loaded");
+        }
+
+        // Optimistically update
+        dispatch({ type: "UPDATE_MODEL_SELECTION", payload: selection });
+
+        // Save to backend
+        const updatedSettings = {
+          ...state.settings,
+          model_selection: selection,
+        };
+        await invoke("save_user_settings", { settings: updatedSettings });
+
+        // Emit settings changed event
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error("[useSettings] Failed to set model selection:", error);
+
+        // Reload settings on error
+        await loadSettings();
+        throw error;
       }
-
-      // Optimistically update
-      dispatch({ type: 'UPDATE_MODEL_SELECTION', payload: selection });
-
-      // Save to backend
-      const updatedSettings = {
-        ...state.settings,
-        model_selection: selection,
-      };
-      await invoke('save_user_settings', { settings: updatedSettings });
-
-      // Emit settings changed event
-      await invoke('emit_settings_changed');
-    } catch (error) {
-      console.error('[useSettings] Failed to set model selection:', error);
-      
-      // Reload settings on error
-      await loadSettings();
-      throw error;
-    }
-  }, [state.settings, dispatch, loadSettings]);
+    },
+    [state.settings, dispatch, loadSettings],
+  );
 
   /**
    * Invalidates the cache and reloads from backend
    */
   const refreshCache = useCallback(async (): Promise<void> => {
-    dispatch({ type: 'INVALIDATE_CACHE' });
+    dispatch({ type: "INVALIDATE_CACHE" });
     await loadSettings();
   }, [dispatch, loadSettings]);
 
@@ -290,7 +217,7 @@ export function useSettings(isRoot: boolean = false) {
     // State
     settings: state.settings,
     isLoading: state.isLoading,
-    
+
     // Operations
     loadSettings,
     saveSettings,

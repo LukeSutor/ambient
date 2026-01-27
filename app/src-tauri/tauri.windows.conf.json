@@ -1,22 +1,27 @@
 {
-    "bundle": {
-      "resources": {
-        "binaries/ggml-base.dll": "ggml-base.dll",
-        "binaries/ggml-cpu-alderlake.dll": "ggml-cpu-alderlake.dll",
-        "binaries/ggml-cpu-haswell.dll": "ggml-cpu-haswell.dll",
-        "binaries/ggml-cpu-icelake.dll": "ggml-cpu-icelake.dll",
-        "binaries/ggml-cpu-sandybridge.dll": "ggml-cpu-sandybridge.dll",
-        "binaries/ggml-cpu-sapphirerapids.dll": "ggml-cpu-sapphirerapids.dll",
-        "binaries/ggml-cpu-skylakex.dll": "ggml-cpu-skylakex.dll",
-        "binaries/ggml-cpu-sse42.dll": "ggml-cpu-sse42.dll",
-        "binaries/ggml-cpu-x64.dll": "ggml-cpu-x64.dll",
-        "binaries/ggml-rpc.dll": "ggml-rpc.dll",
-        "binaries/ggml.dll": "ggml.dll",
-        "binaries/libcurl-x64.dll": "libcurl-x64.dll",
-        "binaries/llama.dll": "llama.dll",
-        "binaries/libomp140.x86_64.dll": "libomp140.x86_64.dll",
-        "binaries/mtmd.dll": "mtmd.dll"
-      }
+  "bundle": {
+    "resources": {
+      "binaries/windows/ggml-base.dll": "ggml-base.dll",
+      "binaries/windows/ggml-cpu-alderlake.dll": "ggml-cpu-alderlake.dll",
+      "binaries/windows/ggml-cpu-cannonlake.dll": "ggml-cpu-cannonlake.dll",
+      "binaries/windows/ggml-cpu-cascadelake.dll": "ggml-cpu-cascadelake.dll",
+      "binaries/windows/ggml-cpu-cooperlake.dll": "ggml-cpu-cooperlake.dll",
+      "binaries/windows/ggml-cpu-haswell.dll": "ggml-cpu-haswell.dll",
+      "binaries/windows/ggml-cpu-icelake.dll": "ggml-cpu-icelake.dll",
+      "binaries/windows/ggml-cpu-ivybridge.dll": "ggml-cpu-ivybridge.dll",
+      "binaries/windows/ggml-cpu-piledriver.dll": "ggml-cpu-piledriver.dll",
+      "binaries/windows/ggml-cpu-sandybridge.dll": "ggml-cpu-sandybridge.dll",
+      "binaries/windows/ggml-cpu-sapphirerapids.dll": "ggml-cpu-sapphirerapids.dll",
+      "binaries/windows/ggml-cpu-skylakex.dll": "ggml-cpu-skylakex.dll",
+      "binaries/windows/ggml-cpu-sse42.dll": "ggml-cpu-sse42.dll",
+      "binaries/windows/ggml-cpu-x64.dll": "ggml-cpu-x64.dll",
+      "binaries/windows/ggml-cpu-zen4.dll": "ggml-cpu-zen4.dll",
+      "binaries/windows/ggml-rpc.dll": "ggml-rpc.dll",
+      "binaries/windows/ggml.dll": "ggml.dll",
+      "binaries/windows/libcurl-x64.dll": "libcurl-x64.dll",
+      "binaries/windows/llama.dll": "llama.dll",
+      "binaries/windows/libomp140.x86_64.dll": "libomp140.x86_64.dll",
+      "binaries/windows/mtmd.dll": "mtmd.dll"
     }
+  }
 }
-  

@@ -4,7 +4,7 @@ use image::GenericImageView;
 use tauri::{
   image::Image,
   menu::{Menu, MenuItem},
-  tray::{TrayIconBuilder, TrayIconEvent},
+  tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
   AppHandle,
 };
 
@@ -40,6 +40,7 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
   let _tray = TrayIconBuilder::new()
     .icon(icon)
     .menu(&menu)
+    .show_menu_on_left_click(false)
     .tooltip("Ambient Assistant")
     .on_menu_event({
       let app_handle = app.clone();
@@ -87,8 +88,17 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
       let app_handle = app.clone();
       move |_tray, event| {
         match event {
-          TrayIconEvent::Click { .. } => {
-            // Do nothing for now...
+          TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+          } => {
+            log::info!("[tray] Tray left-clicked, opening HUD");
+            if let Err(e) =
+              tauri::async_runtime::block_on(windows::open_main_window(app_handle.clone()))
+            {
+              log::error!("[tray] Failed to open HUD window on click: {}", e);
+            }
           }
           TrayIconEvent::DoubleClick { .. } => {
             log::info!("[tray] Tray double-clicked");

@@ -16,8 +16,22 @@ server:
             "none",
             "-np",                      // Decode up to 3 sequences in parallel
             "3",
-            "--ctx-size",               // Use smaller context size for faster responses
-            "4096",
+            "--ctx-size",
+            "32768",
+            "--n-predict",
+            "32768",
+            "--temp",
+            "0.7",
+            "--top-p",
+            "0.8",
+            "--top-k",
+            "20",
+            "--repeat-penalty",
+            "1.0",
+            "--presence-penalty",
+            "1.5",
+            "--seed",
+            "3407",
             "-ctk",                     // Use q8 quant for kv cache
             "q8_0",
             "-ctv",
@@ -33,8 +47,15 @@ server:
     host: "localhost"
     port: 8080
     reasoning-format: "none"
-    np: 4
-    ctx-size: 4096
+    np: 3
+    ctx-size: 32768
+    n-predict: 32768
+    temp: 0.7
+    top-p: 0.8
+    top-k: 20
+    repeat-penalty: 1.0
+    presence-penalty: 1.5
+    seed: 3407
     ctk: "q8_0"
     ctv: "q8_0"
     mlock: true

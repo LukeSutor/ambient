@@ -2,8 +2,8 @@ use crate::constants::{COMPUTER_USE_WINDOW_LABEL, COMPUTER_USE_PATH, DASHBOARD_W
 use crate::settings::{load_user_settings, HudDimensions};
 use tauri::{AppHandle, LogicalSize, Manager};
 
-/// Get current HUD dimensions from user settings
-async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
+/// Get current main window dimensions from user settings
+async fn get_current_main_window_dimensions(app_handle: &AppHandle) -> HudDimensions {
   match load_user_settings(app_handle.clone()).await {
     Ok(settings) => settings.hud_size.to_dimensions(),
     Err(_) => {
@@ -21,20 +21,28 @@ async fn get_current_hud_dimensions(app_handle: &AppHandle) -> HudDimensions {
 
 // Resize the HUD to the input size, keeping top aligned and ensuring the window doesn't overflow the bottom of the screen
 #[tauri::command]
-pub async fn resize_hud(app_handle: AppHandle, width: f64, height: f64) -> Result<(), String> {
+pub async fn resize_main_window(app_handle: AppHandle, width: f64, height: f64) -> Result<(), String> {
   let window_label = HUD_WINDOW_LABEL.to_string();
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    // Get position before resizing to calculate bottom overflow
+    // Get position before resizing to calculate overflow
     let position = window.outer_position().map_err(|e| e.to_string())?;
+    let mut new_x = position.x;
     let mut new_y = position.y;
 
-    // Ensure resizing doesn't push the window off the bottom of the screen
-    // We do this by calculating the physical height and checking against the monitor's work area
+    // Ensure resizing doesn't push the window off the bottom or right of the screen
     if let (Ok(Some(monitor)), Ok(scale_factor)) = (window.current_monitor(), window.scale_factor()) {
       let work_area = monitor.work_area();
+      
+      let physical_width = (width * scale_factor) as i32;
       let physical_height = (height * scale_factor) as i32;
+      
+      let monitor_right = work_area.position.x + work_area.size.width as i32;
       let monitor_bottom = work_area.position.y + work_area.size.height as i32;
+
+      if new_x + physical_width > monitor_right {
+        new_x = (monitor_right - physical_width).max(work_area.position.x);
+      }
 
       if new_y + physical_height > monitor_bottom {
         new_y = (monitor_bottom - physical_height).max(work_area.position.y);
@@ -46,7 +54,7 @@ pub async fn resize_hud(app_handle: AppHandle, width: f64, height: f64) -> Resul
       .map_err(|e| e.to_string())?;
 
     window
-      .set_position(tauri::PhysicalPosition::new(position.x, new_y))
+      .set_position(tauri::PhysicalPosition::new(new_x, new_y))
       .map_err(|e| e.to_string())?;
 
     Ok(())
@@ -57,29 +65,52 @@ pub async fn resize_hud(app_handle: AppHandle, width: f64, height: f64) -> Resul
 
 /// Refresh the HUD window size based on current settings and expanded state
 #[tauri::command]
-pub async fn refresh_hud_window_size(
-  app_handle: AppHandle,
-  label: Option<String>,
-  is_expanded: bool,
-) -> Result<(), String> {
-  let window_label = label.unwrap_or_else(|| HUD_WINDOW_LABEL.to_string());
-  let dimensions = get_current_hud_dimensions(&app_handle).await;
+pub async fn refresh_main_window_size(app_handle: AppHandle) -> Result<(), String> {
+  let window_label = HUD_WINDOW_LABEL.to_string();
+  let dimensions = get_current_main_window_dimensions(&app_handle).await;
 
   if let Some(window) = app_handle.get_webview_window(&window_label) {
-    let height = if is_expanded {
-      dimensions.chat_max_height
-    } else {
-      dimensions.input_bar_height
-    };
+    let width = dimensions.chat_width;
+    let height = dimensions.input_bar_height;
 
-    let size = LogicalSize::new(dimensions.chat_width, height);
-    window.set_size(size).map_err(|e| e.to_string())?;
+    // Get position before resizing to calculate overflow
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    let mut new_x = position.x;
+    let mut new_y = position.y;
+
+    // Ensure resizing doesn't push the window off the bottom or right of the screen
+    if let (Ok(Some(monitor)), Ok(scale_factor)) = (window.current_monitor(), window.scale_factor()) {
+      let work_area = monitor.work_area();
+      
+      let physical_width = (width * scale_factor) as i32;
+      let physical_height = (height * scale_factor) as i32;
+      
+      let monitor_right = work_area.position.x + work_area.size.width as i32;
+      let monitor_bottom = work_area.position.y + work_area.size.height as i32;
+
+      if new_x + physical_width > monitor_right {
+        new_x = (monitor_right - physical_width).max(work_area.position.x);
+      }
+
+      if new_y + physical_height > monitor_bottom {
+        new_y = (monitor_bottom - physical_height).max(work_area.position.y);
+      }
+    }
+
     log::info!(
-      "HUD window size refreshed: {}x{} (expanded: {})",
-      dimensions.chat_width,
+      "HUD window size refreshed: {}x{}",
+      width,
       height,
-      is_expanded
     );
+
+    window
+      .set_size(LogicalSize::new(width, height))
+      .map_err(|e| e.to_string())?;
+
+    window
+      .set_position(tauri::PhysicalPosition::new(new_x, new_y))
+      .map_err(|e| e.to_string())?;
+
     Ok(())
   } else {
     Err("Window not found".to_string())
@@ -101,7 +132,7 @@ pub async fn open_main_window(app_handle: AppHandle) -> Result<(), String> {
   Err("Main window not found".to_string())
 }
 
-/// Close the floating HUD window by label (defaults to 'main').
+/// Close the floating HUD window.
 #[tauri::command]
 pub async fn close_main_window(app_handle: AppHandle) -> Result<(), String> {
   let window_label = HUD_WINDOW_LABEL.to_string();
@@ -150,7 +181,8 @@ pub async fn open_secondary_window(
   )
   .title("Dashboard")
   .inner_size(1200 as f64, 800 as f64)
-  .resizable(false)
+  .min_inner_size(800.0 as f64, 500.0 as f64)
+  .resizable(true)
   .transparent(true)
   .decorations(false)
   .shadow(false)

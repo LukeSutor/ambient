@@ -1,32 +1,32 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { useRoleAccessContext } from './RoleAccessProvider';
-import type { 
-  ConfirmSignUpRequest, 
-  SignUpRequest, 
-  AuthResponse, 
-  SignUpResponse,
-  ResendConfirmationResponse,
-} from './types';
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect } from "react";
+import { useRoleAccessContext } from "./RoleAccessProvider";
 import {
-  invokeVerifyOtp,
+  invokeEmitAuthChanged,
+  invokeIsSetupComplete,
+  invokeLogout,
   invokeResendConfirmation,
   invokeSignIn,
   invokeSignInWithGoogle,
   invokeSignUp,
-  invokeEmitAuthChanged,
-  invokeIsSetupComplete,
-  invokeLogout,
-} from './commands';
+  invokeVerifyOtp,
+} from "./commands";
+import type {
+  AuthResponse,
+  ConfirmSignUpRequest,
+  ResendConfirmationResponse,
+  SignUpRequest,
+  SignUpResponse,
+} from "./types";
 
 function normalizeBasePath(base?: string): string | null {
   if (!base) {
     return null;
   }
 
-  return base.endsWith('/') ? base.slice(0, -1) : base;
+  return base.endsWith("/") ? base.slice(0, -1) : base;
 }
 
 export function useRoleAccess(location?: string) {
@@ -43,14 +43,16 @@ export function useRoleAccess(location?: string) {
     const signInPath = `${normalizedLocation}/signin`;
     const signUpPath = `${normalizedLocation}/signup`;
     const isAuthRoute =
-    pathname === signInPath ||
-    pathname === signUpPath ||
-    pathname.startsWith(`${signInPath}/`) ||
-    pathname.startsWith(`${signUpPath}/`);
+      pathname === signInPath ||
+      pathname === signUpPath ||
+      pathname.startsWith(`${signInPath}/`) ||
+      pathname.startsWith(`${signUpPath}/`);
     const setupPath = `${normalizedLocation}/setup`;
-    const isSetupRoute = pathname === setupPath || pathname.startsWith(`${setupPath}/`);
+    const isSetupRoute =
+      pathname === setupPath || pathname.startsWith(`${setupPath}/`);
     const isWithinBase =
-      pathname === normalizedLocation || pathname.startsWith(`${normalizedLocation}/`);
+      pathname === normalizedLocation ||
+      pathname.startsWith(`${normalizedLocation}/`);
 
     // Go to sign in if online and not logged in
     if (state.isOnline && !state.isLoggedIn && isWithinBase && !isAuthRoute) {
@@ -59,7 +61,12 @@ export function useRoleAccess(location?: string) {
     }
 
     // Go to setup if logged in but setup not complete
-    if (!state.isSetupComplete && isWithinBase && !isAuthRoute && !isSetupRoute) {
+    if (
+      !state.isSetupComplete &&
+      isWithinBase &&
+      !isAuthRoute &&
+      !isSetupRoute
+    ) {
       router.replace(setupPath);
       return;
     }
@@ -73,41 +80,54 @@ export function useRoleAccess(location?: string) {
     if (state.isSetupComplete && isSetupRoute) {
       router.replace(normalizedLocation);
     }
-  }, [normalizedLocation, pathname, router, state.isHydrated, state.isOnline, state.isLoggedIn, state.isSetupComplete]);
+  }, [
+    normalizedLocation,
+    pathname,
+    router,
+    state.isHydrated,
+    state.isOnline,
+    state.isLoggedIn,
+    state.isSetupComplete,
+  ]);
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<AuthResponse> => {
       try {
         const result = await invokeSignIn(email, password);
-        
+
         if (result.session) {
-          dispatch({ type: 'SET_LOGGED_IN', payload: true });
+          dispatch({ type: "SET_LOGGED_IN", payload: true });
         }
-        
+
         // Extract user info from response
         if (result.user) {
-          dispatch({ type: 'SET_USER_INFO', payload: {
-            id: result.user.id,
-            email: result.user.email,
-            full_name: result.user.user_metadata?.full_name ?? null,
-            avatar_url: result.user.user_metadata?.avatar_url ?? null,
-            email_verified: result.user.user_metadata?.email_verified ?? null,
-            provider: result.user.app_metadata?.provider ?? null,
-            created_at: result.user.created_at ?? null,
-            providers: result.user.identities?.map((identity) => identity.provider) ?? [],
-          }});
+          dispatch({
+            type: "SET_USER_INFO",
+            payload: {
+              id: result.user.id,
+              email: result.user.email,
+              full_name: result.user.user_metadata?.full_name ?? null,
+              avatar_url: result.user.user_metadata?.avatar_url ?? null,
+              email_verified: result.user.user_metadata?.email_verified ?? null,
+              provider: result.user.app_metadata?.provider ?? null,
+              created_at: result.user.created_at ?? null,
+              providers:
+                result.user.identities?.map((identity) => identity.provider) ??
+                [],
+            },
+          });
         }
-        
+
         const setupComplete = await invokeIsSetupComplete();
-        dispatch({ type: 'SET_SETUP_COMPLETE', payload: setupComplete });
+        dispatch({ type: "SET_SETUP_COMPLETE", payload: setupComplete });
         await invokeEmitAuthChanged();
         return result;
       } catch (error) {
-        console.error('Error during signIn:', error);
+        console.error("Error during signIn:", error);
         throw error;
       }
     },
-  [dispatch],
+    [dispatch],
   );
 
   /**
@@ -118,62 +138,71 @@ export function useRoleAccess(location?: string) {
   const signInWithGoogle = useCallback(async (): Promise<void> => {
     try {
       const { url } = await invokeSignInWithGoogle();
-      
+
       // Open the OAuth URL in the system browser
-      const { open } = await import('@tauri-apps/plugin-shell');
+      const { open } = await import("@tauri-apps/plugin-shell");
       await open(url);
-      
+
       // Note: The actual session creation happens when the deep link callback
       // is received in deep_link.rs, which emits 'oauth2-success' or 'oauth2-error'
     } catch (error) {
-      console.error('Error during signInWithGoogle:', error);
+      console.error("Error during signInWithGoogle:", error);
       throw error;
     }
   }, []);
 
-  const signUp = useCallback(async (request: SignUpRequest): Promise<SignUpResponse> => {
-    try {
-      return await invokeSignUp(request);
-    } catch (error) {
-      console.error('Error during signUp:', error);
-      throw error;
-    }
-  }, []);
+  const signUp = useCallback(
+    async (request: SignUpRequest): Promise<SignUpResponse> => {
+      try {
+        return await invokeSignUp(request);
+      } catch (error) {
+        console.error("Error during signUp:", error);
+        throw error;
+      }
+    },
+    [],
+  );
 
-  const confirmSignUp = useCallback(async (request: ConfirmSignUpRequest): Promise<void> => {
-    try {
-      await invokeVerifyOtp(request.email, request.confirmation_code);
-    } catch (error) {
-      console.error('Error during confirmSignUp:', error);
-      throw error;
-    }
-  }, []);
+  const confirmSignUp = useCallback(
+    async (request: ConfirmSignUpRequest): Promise<void> => {
+      try {
+        await invokeVerifyOtp(request.email, request.confirmation_code);
+      } catch (error) {
+        console.error("Error during confirmSignUp:", error);
+        throw error;
+      }
+    },
+    [],
+  );
 
-  const resendConfirmationCode = useCallback(async (email: string): Promise<ResendConfirmationResponse> => {
-    try {
-      return await invokeResendConfirmation(email);
-    } catch (error) {
-      console.error('Error during resendConfirmationCode:', error);
-      throw error;
-    }
-  }, []);
+  const resendConfirmationCode = useCallback(
+    async (email: string): Promise<ResendConfirmationResponse> => {
+      try {
+        return await invokeResendConfirmation(email);
+      } catch (error) {
+        console.error("Error during resendConfirmationCode:", error);
+        throw error;
+      }
+    },
+    [],
+  );
 
   const signOut = useCallback(async (): Promise<void> => {
     try {
       await invokeLogout();
-      dispatch({ type: 'SET_LOGGED_IN', payload: false });
-      dispatch({ type: 'SET_USER_INFO', payload: null });
-      dispatch({ type: 'SET_SETUP_COMPLETE', payload: false });
+      dispatch({ type: "SET_LOGGED_IN", payload: false });
+      dispatch({ type: "SET_USER_INFO", payload: null });
+      dispatch({ type: "SET_SETUP_COMPLETE", payload: false });
       await invokeEmitAuthChanged();
     } catch (error) {
-      console.error('Error during signOut:', error);
+      console.error("Error during signOut:", error);
       throw error;
     }
   }, [dispatch]);
 
   const getFirstName = useCallback((): string | null => {
     if (state.userInfo?.full_name) {
-      const parts = state.userInfo.full_name.trim().split(' ');
+      const parts = state.userInfo.full_name.trim().split(" ");
       return parts.length > 0 ? parts[0] : null;
     }
     return null;

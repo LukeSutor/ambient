@@ -1,7 +1,5 @@
 // Re-export types from generated auth types
-import type {
-  UserInfo,
-} from '@/types/auth';
+import type { UserInfo } from "@/types/auth";
 
 // Re-export all auth types
 export type {
@@ -17,7 +15,7 @@ export type {
   AuthState,
   AuthErrorResponse,
   AuthErrorCode,
-} from '@/types/auth';
+} from "@/types/auth";
 
 /**
  * Role access state

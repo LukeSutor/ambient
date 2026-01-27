@@ -1,43 +1,36 @@
 use crate::memory::types::MemoryEntry;
-use crate::os_utils::windows::window::ApplicationTextData;
-use crate::db::conversations::Attachment;
-use crate::db::conversations::Message;
+use crate::db::conversations::{Attachment, Message};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-pub const CAPTURE_SCREEN: &str = "capture_screen";
+pub const DOWNLOAD_INFORMATION: &str = "download_information";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
-pub struct CaptureScreenEvent {
-  pub timestamp: String,
+pub struct DownloadInformationEvent {
+  pub n_items: u64,
+  pub content_length: u64,
 }
 
-pub const GET_SCREEN_DIFF: &str = "get_screen_diff";
+pub const DOWNLOAD_STARTED: &str = "download_started";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
-pub struct GetScreenDiffEvent {
-  pub data: Vec<ApplicationTextData>,
-  pub active_url: Option<String>,
-  pub timestamp: String,
+pub struct DownloadStartedEvent {
+  pub id: u64,
 }
 
-pub const DETECT_TASKS: &str = "detect_tasks";
+pub const DOWNLOAD_PROGRESS: &str = "download_progress";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
-pub struct DetectTasksEvent {
-  pub text: String,
-  pub active_url: Option<String>,
-  pub timestamp: String,
+pub struct DownloadProgressEvent {
+  pub id: u64,
+  pub total_progress: u64,
 }
 
-pub const SUMMARIZE_SCREEN: &str = "summarize_screen";
+pub const DOWNLOAD_FINISHED: &str = "download_finished";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
-pub struct SummarizeScreenEvent {
-  pub text: String,
-  pub data: Vec<ApplicationTextData>,
-  pub active_url: Option<String>,
-  pub timestamp: String,
+pub struct DownloadFinishedEvent {
+  pub id: u64,
 }
 
 pub const CHAT_STREAM: &str = "chat_stream";
@@ -83,13 +76,6 @@ pub const OCR_RESPONSE: &str = "ocr_response";
 pub struct OcrResponseEvent {
   pub text: String,
   pub success: bool,
-  pub timestamp: String,
-}
-
-pub const UPDATE_TASKS: &str = "update_tasks";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct UpdateTasksEvent {
   pub timestamp: String,
 }
 
@@ -157,5 +143,12 @@ pub const SAFETY_CONFIRMATION_RESPONSE: &str = "safety_confirmation_response";
 #[ts(export, export_to = "events.ts")]
 pub struct SafetyConfirmationResponseEvent {
   pub user_confirmed: bool,
+  pub timestamp: String,
+}
+
+pub const TOKEN_USAGE_CHANGED: &str = "token_usage_changed";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct TokenUsageChangedEvent {
   pub timestamp: String,
 }

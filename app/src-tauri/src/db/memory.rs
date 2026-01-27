@@ -287,12 +287,11 @@ pub async fn find_similar_memories(
   k: u32,
   p: f32,
 ) -> Result<Vec<MemoryEntry>, String> {
-  // 1) Generate query embedding for the prompt
+  // Generate query embedding for the prompt
   let query_embedding: Vec<f32> = generate_embedding(app_handle.clone(), prompt.to_string())
     .await
     .map_err(|e| format!("Failed to generate embedding: {}", e))?;
 
-  // 2) Get DB connection
   let db_state = app_handle.state::<DbState>();
   let conn_guard = db_state
     .0
@@ -302,29 +301,14 @@ pub async fn find_similar_memories(
     .as_ref()
     .ok_or_else(|| "Database connection not available".to_string())?;
 
-  // Optional safety check to ensure vector table exists
-  let vec_table_exists: Option<String> = conn
-    .query_row(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='memory_entries_vec'",
-      [],
-      |row| row.get(0),
-    )
-    .optional()
-    .map_err(|e| format!("Failed to check for memory_entries_vec: {}", e))?;
-  if vec_table_exists.is_none() {
-    // No vector index, return empty (graceful degradation)
-    return Ok(Vec::new());
-  }
-
-  // 3) Query using cosine distance function directly
-  //    Join through the mapping table to fetch full memory entries (including embedding BLOB).
+  // Query using cosine distance function directly
+  // Join through the mapping table to fetch full memory entries (including embedding BLOB).
   let sql = r#"
 		SELECT
 		  me.id,
 		  me.message_id,
 		  me.memory_type,
 		  me.text,
-		  me.embedding,
 		  me.timestamp,
 		  vec_distance_cosine(v.embedding, ?1) AS cosine_distance
 		FROM memory_entries_vec AS v
@@ -361,25 +345,23 @@ pub async fn find_similar_memories(
     let message_id: String = row.get(1).map_err(|e| e.to_string())?;
     let memory_type: String = row.get(2).map_err(|e| e.to_string())?;
     let text: String = row.get(3).map_err(|e| e.to_string())?;
-    let embedding_blob: Vec<u8> = row.get(4).map_err(|e| e.to_string())?;
-    let timestamp: String = row.get(5).map_err(|e| e.to_string())?;
-    let cosine_distance: f64 = row.get(6).map_err(|e| e.to_string())?;
+    let timestamp: String = row.get(4).map_err(|e| e.to_string())?;
+    let cosine_distance: f64 = row.get(5).map_err(|e| e.to_string())?;
 
     // Convert cosine distance to cosine similarity
     // Cosine distance is typically 1 - cosine_similarity, so similarity = 1 - distance
     let similarity = 1.0 - cosine_distance as f32;
 
+    log::info!("[memory] found memory {} with similarity {}", text, similarity);
+
     // Only include memories that meet the similarity threshold
     if similarity >= p {
-      // Convert BLOB back into Vec<f32> (little-endian)
-      let embedding = bytes_to_f32_vec(&embedding_blob)?;
-
       results.push(MemoryEntry {
         id,
         message_id,
         memory_type,
         text,
-        embedding,
+        embedding: Vec::new(), // Do not return embedding for efficiency
         timestamp,
         similarity: Some(similarity as f64),
       });
@@ -387,28 +369,4 @@ pub async fn find_similar_memories(
   }
 
   Ok(results)
-}
-
-/// Convert a BLOB of little-endian f32 bytes into Vec<f32>.
-fn bytes_to_f32_vec(blob: &[u8]) -> Result<Vec<f32>, String> {
-  if blob.len() % 4 != 0 {
-    return Err(format!(
-      "Invalid embedding BLOB length: {} (not divisible by 4)",
-      blob.len()
-    ));
-  }
-  // Ensure correct dimension of 768
-  if blob.len() / 4 != 768 {
-    return Err(format!(
-      "Invalid embedding dimension: {} (expected 768)",
-      blob.len() / 4
-    ));
-  }
-  let mut out = Vec::with_capacity(blob.len() / 4);
-  for chunk in blob.chunks_exact(4) {
-    let arr = <[u8; 4]>::try_from(chunk)
-      .map_err(|_| "Failed to convert bytes to f32 (chunk size)".to_string())?;
-    out.push(f32::from_le_bytes(arr));
-  }
-  Ok(out)
 }

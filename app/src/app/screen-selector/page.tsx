@@ -1,7 +1,11 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
 
 interface SelectionBounds {
   x: number;
@@ -13,71 +17,93 @@ interface SelectionBounds {
 interface ScreenSelectionResult {
   bounds: SelectionBounds;
   text_content: string;
-  raw_data: any[];
+  raw_data: unknown[];
 }
 
 export default function ScreenSelectorPage() {
   const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
-  const [selectionEnd, setSelectionEnd] = useState<{ x: number; y: number } | null>(null);
-  const [screenDimensions, setScreenDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [selectionStart, setSelectionStart] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [selectionEnd, setSelectionEnd] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [screenDimensions, setScreenDimensions] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Initialize screen dimensions and add transparent background class
   useEffect(() => {
     // Add transparent background class
-    document.documentElement.classList.add('screen-selector-transparent');
-    document.body.classList.add('screen-selector-transparent');
+    document.documentElement.classList.add("screen-selector-transparent");
+    document.body.classList.add("screen-selector-transparent");
 
     // Get screen dimensions
     const loadScreenDimensions = async () => {
       try {
-        const [width, height] = await invoke<[number, number]>('get_screen_dimensions');
+        const [width, height] = await invoke<[number, number]>(
+          "get_screen_dimensions",
+        );
         setScreenDimensions({ width, height });
       } catch (error) {
-        console.error('Failed to get screen dimensions:', error);
+        console.error("Failed to get screen dimensions:", error);
       }
     };
 
-    loadScreenDimensions();
+    void loadScreenDimensions();
 
     // Cleanup function
     return () => {
-      if (typeof document !== 'undefined') {
-        document.documentElement.classList.remove('screen-selector-transparent');
-        document.body.classList.remove('screen-selector-transparent');
+      if (typeof document !== "undefined") {
+        document.documentElement.classList.remove(
+          "screen-selector-transparent",
+        );
+        document.body.classList.remove("screen-selector-transparent");
       }
     };
-  }, []);
-
-  // Handle escape key to cancel selection
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        cancelSelector();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const cancelSelector = useCallback(async () => {
     try {
-      await invoke('cancel_screen_selection');
-      await invoke('close_screen_selector');
+      await invoke("cancel_screen_selection");
+      await invoke("close_screen_selector");
     } catch (error) {
-      console.error('Failed to cancel screen selector:', error);
+      console.error("Failed to cancel screen selector:", error);
+
+      // If all else fails, just close the window
+      try {
+        await getCurrentWindow().close();
+      } catch (windowError) {
+        console.error("Failed to close window via JS fallback:", windowError);
+      }
     }
   }, []);
 
   const closeSelector = useCallback(async () => {
     try {
-      await invoke('close_screen_selector');
+      await invoke("close_screen_selector");
     } catch (error) {
-      console.error('Failed to close screen selector:', error);
+      console.error("Failed to close screen selector:", error);
     }
   }, []);
+
+  // Handle escape key to cancel selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        void cancelSelector();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [cancelSelector]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const rect = overlayRef.current?.getBoundingClientRect();
@@ -91,17 +117,20 @@ export default function ScreenSelectorPage() {
     setSelectionEnd({ x, y });
   }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isSelecting || !selectionStart) return;
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isSelecting || !selectionStart) return;
 
-    const rect = overlayRef.current?.getBoundingClientRect();
-    if (!rect) return;
+      const rect = overlayRef.current?.getBoundingClientRect();
+      if (!rect) return;
 
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-    setSelectionEnd({ x, y });
-  }, [isSelecting, selectionStart]);
+      setSelectionEnd({ x, y });
+    },
+    [isSelecting, selectionStart],
+  );
 
   const handleMouseUp = useCallback(async () => {
     if (!isSelecting || !selectionStart || !selectionEnd) return;
@@ -119,11 +148,19 @@ export default function ScreenSelectorPage() {
     // Only process if selection has meaningful size
     if (bounds.width > 10 && bounds.height > 10) {
       try {
-        invoke<ScreenSelectionResult>('process_screen_selection', { bounds });
+        // Fire and forget: don't wait for background processing before closing the UI
+        void invoke<ScreenSelectionResult>("process_screen_selection", {
+          bounds,
+        }).catch((error: unknown) => {
+          console.error(
+            "Failed to process screen selection background task:",
+            error,
+          );
+        });
 
         await closeSelector();
       } catch (error) {
-        console.error('Failed to process screen selection:', error);
+        console.error("Failed to process screen selection:", error);
       } finally {
         // Reset selection
         setSelectionStart(null);
@@ -137,37 +174,59 @@ export default function ScreenSelectorPage() {
   }, [isSelecting, selectionStart, selectionEnd, closeSelector]);
 
   // Calculate selection rectangle for display
-  const selectionRect = selectionStart && selectionEnd ? {
-    left: Math.min(selectionStart.x, selectionEnd.x),
-    top: Math.min(selectionStart.y, selectionEnd.y),
-    width: Math.abs(selectionEnd.x - selectionStart.x),
-    height: Math.abs(selectionEnd.y - selectionStart.y),
-  } : null;
+  const selectionRect =
+    selectionStart && selectionEnd
+      ? {
+          left: Math.min(selectionStart.x, selectionEnd.x),
+          top: Math.min(selectionStart.y, selectionEnd.y),
+          width: Math.abs(selectionEnd.x - selectionStart.x),
+          height: Math.abs(selectionEnd.y - selectionStart.y),
+        }
+      : null;
 
   return (
-    <div 
+    <div
       ref={overlayRef}
       className="w-full h-full bg-black/10 cursor-crosshair select-none overflow-hidden"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      style={{ 
-        width: screenDimensions?.width || '100vw',
-        height: screenDimensions?.height || '100vh',
+      onMouseUp={() => {
+        void handleMouseUp();
+      }}
+      style={{
+        width: screenDimensions?.width ?? "100vw",
+        height: screenDimensions?.height ?? "100vh",
       }}
     >
       {/* Semi-transparent overlay */}
       <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-      
+
+      {/* Close button */}
+      <div className="absolute top-4 right-4 z-50">
+        <Button
+          variant="secondary"
+          size="icon"
+          className="rounded-full shadow-md cursor-default"
+          onMouseDown={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            void cancelSelector();
+          }}
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </Button>
+      </div>
+
       {/* Instructions */}
       <div className="absolute top-8 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
         <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg">
           <p className="text-sm font-medium text-gray-800">
             Click and drag to select an area of the screen
           </p>
-          <p className="text-xs text-gray-600 mt-1">
-            Press ESC to cancel
-          </p>
+          <p className="text-xs text-gray-600 mt-1">Press ESC to cancel</p>
         </div>
       </div>
 
@@ -184,16 +243,17 @@ export default function ScreenSelectorPage() {
               height: selectionRect.height,
             }}
           />
-          
+
           {/* Selection info */}
-          <div 
+          <div
             className="absolute bg-blue-500 text-white text-xs px-2 py-1 rounded pointer-events-none z-30"
             style={{
               left: selectionRect.left,
               top: Math.max(0, selectionRect.top - 24),
             }}
           >
-            {Math.round(selectionRect.width)} x {Math.round(selectionRect.height)}
+            {Math.round(selectionRect.width)} x{" "}
+            {Math.round(selectionRect.height)}
           </div>
         </>
       )}

@@ -1,75 +1,89 @@
-use crate::setup::get_embedding_model_path;
+use crate::setup::{get_embedding_model_path, get_embedding_tokenizer_path};
+use rten::Model;
+use rten_tensor::prelude::*;
+use rten_tensor::{NdTensorView, Tensor};
+use rten_text::tokenizer::{EncodeOptions, Tokenizer};
 use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 pub async fn generate_embedding(app_handle: AppHandle, input: String) -> Result<Vec<f32>, String> {
-  log::info!("[Embedding] Generating embedding");
+  log::info!("[Embedding] Generating embedding from ONNX model");
+  let input = input.trim().to_string();
 
-  // Apply EmbeddingGemma document-style prompt with a 'none' title.
-  // Format: "title: none | text: {content}" as recommended for document embeddings
-  let memory_text = input.trim();
-  let prompt = format!("title: none | text: {}", memory_text);
-
-  let model_path = get_embedding_model_path(app_handle.clone())
+  let model_path = get_embedding_model_path(&app_handle)
     .map_err(|e| format!("Failed to get embedding model path: {}", e))?;
+  
+  let tokenizer_path = get_embedding_tokenizer_path(&app_handle)
+    .map_err(|e| format!("Failed to get tokenizer path: {}", e))?;
 
-  // Prepare sidecar command
-  let shell = app_handle.shell();
-  let sidecar_command = shell
-    .sidecar("embedding")
-    .map_err(|e| format!("Failed to get sidecar command: {}", e))?
-    .args([
-      "-m",
-      model_path.to_str().ok_or("Invalid model path")?,
-      "-p",
-      prompt.as_str(),
-      "--ctx-size",
-      "2048",
-    ]);
+  // Load model and tokenizer
+  let model = Model::load_file(&model_path)
+    .map_err(|e| format!("Failed to load embedding model: {}", e))?;
+  
+  let tokenizer = Tokenizer::from_file(&tokenizer_path)
+    .map_err(|e| format!("Failed to load tokenizer: {}", e))?;
 
-  // Run sidecar and capture output directly
-  let output = sidecar_command
-    .output()
-    .await
-    .map_err(|e| format!("Failed to execute embedding sidecar: {}", e))?;
+  // Tokenize input
+  let encoded = tokenizer
+    .encode(&input, Some(EncodeOptions::default()))
+    .map_err(|e| format!("Tokenization failed: {}", e))?;
 
-  if !output.status.success() {
-    return Err(format!(
-      "Embedding process failed with status: {:?}",
-      output.status
-    ));
+  let token_ids: Vec<i32> = encoded.token_ids().iter().map(|&id| id as i32).collect();
+  let n_tokens = token_ids.len();
+
+  // Create input tensors
+  let input_ids = Tensor::from_vec(token_ids).into_shape([1, n_tokens]);
+  let attention_mask = Tensor::full(&[1, n_tokens], 1i32);
+  let token_type_ids = Tensor::full(&[1, n_tokens], 0i32);
+
+  // Get input node IDs
+  let input_ids_id = model
+    .node_id("input_ids")
+    .map_err(|_| "Model missing 'input_ids' input")?;
+  let attention_mask_id = model
+    .node_id("attention_mask")
+    .map_err(|_| "Model missing 'attention_mask' input")?;
+  
+  // Some models (like BERT/BGE) require token_type_ids, others (like Gemma) don't
+  let token_type_ids_id = model.node_id("token_type_ids");
+
+  let mut inputs = vec![
+    (input_ids_id, input_ids.view().into()),
+    (attention_mask_id, attention_mask.view().into()),
+  ];
+
+  if let Ok(id) = token_type_ids_id {
+    inputs.push((id, token_type_ids.view().into()));
   }
 
-  let stdout = String::from_utf8(output.stdout)
-    .map_err(|e| format!("Failed to parse process output: {}", e))?;
+  // Run model
+  let output_id = model
+    .find_node("sentence_embedding")
+    .ok_or("Could not find output node in model")?;
 
-  let embedding = parse_embedding_output(&stdout)?;
+  let outputs = model
+    .run_n(inputs, [output_id], None)
+    .map_err(|e| format!("Model execution failed: {}", e))?;
 
-  Ok(embedding)
-}
+  // Convert output (batch, embed_dim) to vector.
+  let output_2d: NdTensorView<f32, 2> = outputs[0]
+    .as_view()
+    .try_into()
+    .map_err(|_| format!("Expected rank 2 output [batch, dim], got {:?}", outputs[0].shape().to_vec()))?;
 
-fn parse_embedding_output(output: &str) -> Result<Vec<f32>, String> {
-  // Find the line that starts with "embedding 0:"
-  let embedding_line = output
-    .lines()
-    .find(|line| line.contains("embedding 0:"))
-    .ok_or("Could not find embedding output line")?;
+  let mut mean_embedding: Vec<f32> = output_2d
+    .to_tensor()
+    .data()
+    .ok_or("Failed to get tensor data")?
+    .to_vec();
 
-  // Extract everything after "embedding 0:"
-  let numbers_part = embedding_line
-    .split("embedding 0:")
-    .nth(1)
-    .ok_or("Could not extract numbers from embedding line")?;
+  // L2 Normalize the embedding
+  let norm = mean_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+  if norm > 0.0 {
+    for val in mean_embedding.iter_mut() {
+      *val /= norm;
+    }
+  }
 
-  // Parse the space-separated numbers
-  let embedding: Vec<f32> = numbers_part
-    .split_whitespace()
-    .map(|s| {
-      s.parse::<f32>()
-        .map_err(|e| format!("Failed to parse float '{}': {}", s, e))
-    })
-    .collect::<Result<Vec<f32>, _>>()?;
-
-  Ok(embedding)
+  Ok(mean_embedding)
 }

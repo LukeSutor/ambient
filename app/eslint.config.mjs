@@ -73,6 +73,7 @@ const eslintConfig = tseslint.config(
       "@typescript-eslint/ban-types": "off",
       "@typescript-eslint/consistent-type-exports": "off",
       "@typescript-eslint/consistent-type-imports": "off",
+      "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/default-param-last": "off",
       "@typescript-eslint/dot-notation": "off",
       "@typescript-eslint/explicit-function-return-type": "off",
@@ -120,6 +121,9 @@ const eslintConfig = tseslint.config(
           allowNever: true,
         },
       ],
+      // My added rules
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@next/next/no-img-element": "off",
     },
     languageOptions: {
       parserOptions: {

@@ -1,0 +1,31 @@
+{
+  "bundle": {
+    "resources": {
+      "binaries/macos/libggml-base.0.9.5.dylib": "libggml-base.0.9.5.dylib",
+      "binaries/macos/libggml-base.0.dylib": "libggml-base.0.dylib",
+      "binaries/macos/libggml-base.dylib": "libggml-base.dylib",
+      "binaries/macos/libggml-blas.0.9.5.dylib": "libggml-blas.0.9.5.dylib",
+      "binaries/macos/libggml-blas.0.dylib": "libggml-blas.0.dylib",
+      "binaries/macos/libggml-blas.dylib": "libggml-blas.dylib",
+      "binaries/macos/libggml-cpu.0.9.5.dylib": "libggml-cpu.0.9.5.dylib",
+      "binaries/macos/libggml-cpu.0.dylib": "libggml-cpu.0.dylib",
+      "binaries/macos/libggml-cpu.dylib": "libggml-cpu.dylib",
+      "binaries/macos/libggml-metal.0.9.5.dylib": "libggml-metal.0.9.5.dylib",
+      "binaries/macos/libggml-metal.0.dylib": "libggml-metal.0.dylib",
+      "binaries/macos/libggml-metal.dylib": "libggml-metal.dylib",
+      "binaries/macos/libggml-rpc.0.9.5.dylib": "libggml-rpc.0.9.5.dylib",
+      "binaries/macos/libggml-rpc.0.dylib": "libggml-rpc.0.dylib",
+      "binaries/macos/libggml-rpc.dylib": "libggml-rpc.dylib",
+      "binaries/macos/libggml.0.9.5.dylib": "libggml.0.9.5.dylib",
+      "binaries/macos/libggml.0.dylib": "libggml.0.dylib",
+      "binaries/macos/libggml.dylib": "libggml.dylib",
+      "binaries/macos/libllama.0.0.7710.dylib": "libllama.0.0.7710.dylib",
+      "binaries/macos/libllama.0.dylib": "libllama.0.dylib",
+      "binaries/macos/libllama.dylib": "libllama.dylib",
+      "binaries/macos/libmtmd.0.0.7710.dylib": "libmtmd.0.0.7710.dylib",
+      "binaries/macos/libmtmd.0.dylib": "libmtmd.0.dylib",
+      "binaries/macos/libmtmd.dylib": "libmtmd.dylib",
+      "binaries/macos/ggml-metal.metal": "ggml-metal.metal"
+    }
+  }
+}

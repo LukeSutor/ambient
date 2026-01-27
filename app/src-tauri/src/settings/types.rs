@@ -27,14 +27,14 @@ impl HudSizeOption {
         login_height: 600.0,
       },
       Self::Normal => HudDimensions {
-        chat_width: 700.0,
+        chat_width: 600.0,
         input_bar_height: 130.0,
         chat_max_height: 350.0,
         login_width: 450.0,
         login_height: 600.0,
       },
       Self::Large => HudDimensions {
-        chat_width: 600.0,
+        chat_width: 700.0,
         input_bar_height: 130.0,
         chat_max_height: 450.0,
         login_width: 450.0,

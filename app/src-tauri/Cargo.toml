@@ -24,7 +24,6 @@ tauri = { version = "2", features = [ "protocol-asset", "devtools", "tray-icon"]
 tauri-plugin-opener = "2"
 tauri-plugin-shell = "2"
 tokio = { version = "1.45.1", features = ["macros"] }
-tokio-util = "0.7"
 rand = "0.8"
 screenshots = "0.8.10"
 image = "0.25.5"
@@ -43,25 +42,8 @@ tauri-plugin-log = "2"
 log = "0.4"
 async-trait = "0.1"
 
-# Windows crates
-windows = { version = "0.60.0", features = [
-    "Win32_UI_Accessibility", 
-    "Win32_System_Com",
-    "Win32_Foundation",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Variant",
-    "Win32_System_Ole",
-    "Win32_System_Com",
-    "Win32_System_ProcessStatus",
-    "Win32_System_Diagnostics",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_Threading",
-    "Win32_System_Diagnostics_ToolHelp"
-] }
-
 # Auth crates
 keyring = { version = "3.6.3", features = ["windows-native", "apple-native"] }
-dotenv = "0.15"
 base64 = "0.22"
 tauri-plugin-deep-link = "2"
 urlencoding = "2.1"
@@ -69,8 +51,10 @@ url = "2.4"
 tauri-plugin-store = "2"
 
 # OCR crates
-ocrs = "0.10.4"
-rten = "0.21.0"
+ocrs = "0.12.0"
+rten = "0.24.0"
+rten-text = "0.24.0"
+rten-tensor = "0.24.0"
 pdf-extract = "0.10.0"
 
 # Crypto

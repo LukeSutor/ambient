@@ -156,16 +156,18 @@ impl LlmProvider for LocalProvider {
       }));
     }
 
-    log::debug!(
-      "[llama_server] Building messages for conv_id: {:?}",
-      messages
-    );
-
     // Build request body
     let mut request_body = json!({
-        "model": "gemini-7",
+        "model": "local",
         "messages": messages,
-        "stream": should_stream
+        "stream": should_stream,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "seed": 3407,
+        "repeat_penalty": 1.0,
+        "presence_penalty": 1.5,
+        "max_tokens": 32768
     });
 
     // Add JSON schema if provided

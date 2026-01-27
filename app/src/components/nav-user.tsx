@@ -1,21 +1,6 @@
-"use client"
+"use client";
 
-import {
-  BadgeCheck,
-  Bell,
-  ChevronsUpDown,
-  CreditCard,
-  LogOut,
-  Sparkles,
-  User
-} from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useRoleAccess } from "@/lib/role-access"
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,40 +9,51 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar"
+} from "@/components/ui/sidebar";
+import { useRoleAccess } from "@/lib/role-access";
+import {
+  BadgeCheck,
+  Bell,
+  ChevronsUpDown,
+  CreditCard,
+  LogOut,
+  Sparkles,
+  User,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export function NavUser({
   user,
 }: {
   user: {
-    name: string
-    email: string
-    avatar: string
-  }
+    name: string;
+    email: string;
+    avatar: string;
+  };
 }) {
-  const { isMobile } = useSidebar()
-  const router = useRouter()
+  const { isMobile } = useSidebar();
+  const router = useRouter();
 
   // Auth state
-  const { signOut } = useRoleAccess()
+  const { signOut } = useRoleAccess();
 
   const handleLogout = async () => {
     try {
-      await signOut()
+      await signOut();
       // Redirect to signin page
-      router.push('/secondary/signin')
+      router.push("/secondary/signin");
     } catch (error) {
-      console.error('Logout failed:', error)
+      console.error("Logout failed:", error);
       // Still redirect to signin page even if logout fails
-      router.push('/secondary/signin')
+      router.push("/secondary/signin");
     }
-  }
+  };
 
   return (
     <SidebarMenu>
@@ -70,7 +66,9 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg"><User /></AvatarFallback>
+                <AvatarFallback className="rounded-lg">
+                  <User />
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -89,7 +87,9 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg"><User width={20} /></AvatarFallback>
+                  <AvatarFallback className="rounded-lg">
+                    <User width={20} />
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -106,7 +106,11 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => router.push('/secondary/account')}>
+              <DropdownMenuItem
+                onClick={() => {
+                  router.push("/secondary/account");
+                }}
+              >
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>
@@ -120,7 +124,11 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
+            <DropdownMenuItem
+              onClick={() => {
+                void handleLogout();
+              }}
+            >
               <LogOut />
               Log out
             </DropdownMenuItem>
@@ -128,5 +136,5 @@ export function NavUser({
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
-  )
+  );
 }

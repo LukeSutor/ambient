@@ -1,19 +1,18 @@
 "use client";
 
-import React, {
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
+import type React from "react";
+import {
+  type ReactNode,
   createContext,
   useCallback,
   useContext,
   useEffect,
   useReducer,
   useRef,
-  type ReactNode,
 } from "react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import {
-  invokeGetAuthState,
-} from "./commands";
-import type { UserInfo, RoleAccessState } from "./types";
+import { invokeGetAuthState } from "./commands";
+import type { RoleAccessState, UserInfo } from "./types";
 
 const initialState: RoleAccessState = {
   isHydrated: false,
@@ -31,10 +30,20 @@ type RoleAccessAction =
   | { type: "SET_PREMIUM_USER"; payload: boolean }
   | { type: "SET_USER_INFO"; payload: UserInfo | null }
   | { type: "SET_IS_HYDRATED"; payload: boolean }
-  | { type: "SET_FULL_STATE"; payload: { isOnline: boolean; isLoggedIn: boolean; isSetupComplete: boolean; userInfo: UserInfo | null } };
+  | {
+      type: "SET_FULL_STATE";
+      payload: {
+        isOnline: boolean;
+        isLoggedIn: boolean;
+        isSetupComplete: boolean;
+        userInfo: UserInfo | null;
+      };
+    };
 
-
-function roleAccessReducer(state: RoleAccessState, action: RoleAccessAction): RoleAccessState {
+function roleAccessReducer(
+  state: RoleAccessState,
+  action: RoleAccessAction,
+): RoleAccessState {
   switch (action.type) {
     case "SET_IS_ONLINE":
       return {
@@ -85,7 +94,9 @@ interface RoleAccessContextType {
   refresh: () => Promise<void>;
 }
 
-const RoleAccessContext = createContext<RoleAccessContextType | undefined>(undefined);
+const RoleAccessContext = createContext<RoleAccessContextType | undefined>(
+  undefined,
+);
 
 interface RoleAccessProviderProps {
   children: ReactNode;
@@ -98,19 +109,19 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
   const refresh = useCallback(async () => {
     if (isRefreshing.current) return;
     console.log("Refreshing role access state...");
-    
+
     isRefreshing.current = true;
     try {
       const fullState = await invokeGetAuthState();
-      
-      dispatch({ 
-        type: "SET_FULL_STATE", 
+
+      dispatch({
+        type: "SET_FULL_STATE",
         payload: {
           isOnline: fullState.is_online,
           isLoggedIn: fullState.is_authenticated,
           isSetupComplete: fullState.is_setup_complete,
           userInfo: fullState.user,
-        }
+        },
       });
     } catch (error) {
       console.error("Error fetching role access state:", error);
@@ -118,7 +129,7 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
       isRefreshing.current = false;
       dispatch({ type: "SET_IS_HYDRATED", payload: true });
     }
-  }, [dispatch]);
+  }, []);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -155,7 +166,9 @@ export function useRoleAccessContext(): RoleAccessContextType {
   const context = useContext(RoleAccessContext);
 
   if (!context) {
-    throw new Error("useRoleAccessContext must be used within a RoleAccessProvider");
+    throw new Error(
+      "useRoleAccessContext must be used within a RoleAccessProvider",
+    );
   }
 
   return context;
