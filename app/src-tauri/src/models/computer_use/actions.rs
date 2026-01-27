@@ -52,7 +52,6 @@ fn map_key(key_str: &str) -> Option<Key> {
         "end" => Some(Key::End),
         "pageup" | "pgup" => Some(Key::PageUp),
         "pagedown" | "pgdn" => Some(Key::PageDown),
-        "insert" => Some(Key::Insert),
         "capslock" => Some(Key::CapsLock),
         
         // Single character keys
