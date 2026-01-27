@@ -19,12 +19,12 @@ import {
 } from "@/components/ui/chart";
 import { Toggle } from "@/components/ui/toggle";
 import type { TimeFilter, TokenUsageQueryResult } from "@/types/token_usage";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ChartColumn } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { TimeFilterButtons } from "./time-filter-buttons";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 
 const chartConfig = {
   local: {
@@ -75,7 +75,9 @@ export function TokenUsageChart() {
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      void unlisten.then((fn) => {
+        fn();
+      });
     };
   }, [fetchChartData]);
 

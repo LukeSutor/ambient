@@ -10,6 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { useConversation } from "@/lib/conversations";
 import type {
   ComputerUseToastEvent,
   SafetyConfirmationEvent,
@@ -17,10 +18,9 @@ import type {
 } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { type UnlistenFn, emit, listen } from "@tauri-apps/api/event";
-import { ArrowUpRight, X, Square } from "lucide-react";
+import { ArrowUpRight, Square, X } from "lucide-react";
 import Image from "next/image";
 import React, { useEffect, useState, useRef } from "react";
-import { useConversation } from "@/lib/conversations";
 
 const startupToasts = [
   "Dusting off the keyboard",

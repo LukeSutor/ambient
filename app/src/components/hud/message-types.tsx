@@ -230,10 +230,13 @@ export function UserMessage({
               <HoverCardTrigger asChild>
                 <div className="flex items-center gap-1 text-xs text-black/50 cursor-pointer hover:text-black/70 transition-colors">
                   <NotebookPen className="h-4 w-4" />
-                  <span className="font-bold">Captured memory</span>
+                  <span className="font-bold">Saved memory</span>
                 </div>
               </HoverCardTrigger>
-              <HoverCardContent side="top" className="w-min max-w-80 bg-white/70">
+              <HoverCardContent
+                side="top"
+                className="w-min max-w-80 bg-white/70"
+              >
                 <div className="space-y-3">
                   <div>
                     <p className="text-sm text-black">
