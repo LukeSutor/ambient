@@ -81,7 +81,6 @@ export function MessageList({
       mType === "toolcall" ||
       mType === "tool_result" ||
       mType === "toolresult" ||
-      (m.message.role.toLowerCase() === "assistant" && !m.message.content) ||
       m.message.role.toLowerCase() === "tool";
 
     if (isThinking) {

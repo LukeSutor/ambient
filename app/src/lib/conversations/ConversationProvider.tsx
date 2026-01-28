@@ -86,6 +86,7 @@ type ConversationAction =
   | { type: "LOAD_CONVERSATION"; payload: Conversation }
   | { type: "LOAD_MESSAGES"; payload: ChatMessage[] }
   | { type: "ADD_CHAT_MESSAGE"; payload: ChatMessage }
+  | { type: "ADD_AGENTIC_MESSAGE"; payload: ChatMessage }
   | {
       type: "START_USER_MESSAGE";
       payload: { id: string; conversationId: string; timestamp: string };
@@ -201,6 +202,29 @@ function conversationReducer(
         ...state,
         messages: [...state.messages, action.payload],
       };
+
+    case "ADD_AGENTIC_MESSAGE": {
+      const messages = [...state.messages];
+      const lastIdx = messages.length - 1;
+
+      // If the last message is an assistant text message, insert BEFORE it
+      // this ensures thinking/tools appear above the final response
+      if (lastIdx >= 0) {
+        const lastMsg = messages[lastIdx];
+        const role = lastMsg.message.role.toLowerCase();
+        const mType = (lastMsg.message.message_type || "").toLowerCase();
+
+        if (role === "assistant" && mType === "text") {
+          messages.splice(lastIdx, 0, action.payload);
+          return { ...state, messages };
+        }
+      }
+
+      return {
+        ...state,
+        messages: [...state.messages, action.payload],
+      };
+    }
 
     case "START_USER_MESSAGE": {
       const newUserMessage: ChatMessage = {
@@ -592,7 +616,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             if (conversation_id !== convIdRef.current) return;
 
             dispatch({
-              type: "ADD_CHAT_MESSAGE",
+              type: "ADD_AGENTIC_MESSAGE",
               payload: {
                 message: {
                   id: message_id,
@@ -615,11 +639,17 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionStartedEvent>(
             "tool_execution_started",
             (event) => {
-              const { tool_call_id, message_id, skill_name, tool_name, timestamp } =
-                event.payload;
+              const {
+                tool_call_id,
+                message_id,
+                skill_name,
+                tool_name,
+                arguments: args,
+                timestamp,
+              } = event.payload;
 
               dispatch({
-                type: "ADD_CHAT_MESSAGE",
+                type: "ADD_AGENTIC_MESSAGE",
                 payload: {
                   message: {
                     id: message_id,
@@ -633,7 +663,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                       call_id: tool_call_id,
                       skill_name,
                       tool_name,
-                      arguments: {},
+                      arguments: args || {},
                     },
                     attachments: [],
                     memory: null,
@@ -658,7 +688,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
               } = event.payload;
 
               dispatch({
-                type: "ADD_CHAT_MESSAGE",
+                type: "ADD_AGENTIC_MESSAGE",
                 payload: {
                   message: {
                     id: message_id,

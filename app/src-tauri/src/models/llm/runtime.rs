@@ -72,6 +72,8 @@ pub struct ToolExecutionStartedEvent {
     pub message_id: String,
     pub skill_name: String,
     pub tool_name: String,
+    #[ts(type = "any")]
+    pub arguments: serde_json::Value,
     pub timestamp: String,
 }
 
@@ -537,6 +539,7 @@ When you need capabilities from a skill:
                 message_id: msg_id.clone(),
                 skill_name: call.skill_name.clone(),
                 tool_name: call.tool_name.clone(),
+                arguments: call.arguments.clone(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
             let _ = emit(TOOL_EXECUTION_STARTED, started_event);
