@@ -61,6 +61,9 @@ impl Skill {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "skills.ts")]
 pub struct ToolDefinition {
+    /// Optional skill name this tool belongs to.
+    /// Used for routing and name qualified names.
+    pub skill_name: Option<String>,
     /// The unique name of this tool (within its skill).
     pub name: String,
     /// A description of what this tool does, helping the LLM decide when to use it.

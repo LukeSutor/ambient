@@ -407,7 +407,11 @@ When you need capabilities from a skill:
 
         // Add tools from active skills
         for skill_name in &self.active_skills {
-            let skill_tools = get_skill_tools(skill_name);
+            let mut skill_tools = get_skill_tools(skill_name);
+            // Set skill name on each tool for mapping back from model responses
+            for tool in &mut skill_tools {
+                tool.skill_name = Some(skill_name.clone());
+            }
             tools.extend(skill_tools);
         }
 
@@ -419,6 +423,7 @@ When you need capabilities from a skill:
         use crate::skills::types::{ToolDefinition, ToolParameter, ParameterType};
 
         ToolDefinition {
+            skill_name: Some("system".to_string()),
             name: "activate_skill".to_string(),
             description: "Activate a skill to gain access to its tools. Use this when you need capabilities not currently available.".to_string(),
             parameters: vec![

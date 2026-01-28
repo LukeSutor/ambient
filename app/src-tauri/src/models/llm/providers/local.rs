@@ -1,6 +1,6 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
 use crate::db::token_usage::add_token_usage;
-use crate::models::llm::providers::translation::{tools_to_openai_format, has_tool_calls_openai, parse_openai_tool_calls};
+use crate::models::llm::providers::translation::{tools_to_openai_format, has_tool_calls_openai, parse_openai_tool_calls, resolve_tool_call};
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
 use crate::events::{emitter::emit, types::*};
 use serde_json::{json, Value};
@@ -363,14 +363,7 @@ impl LlmProvider for LocalProvider {
 
         for idx in sorted_indices {
           let (id, name, args) = &tool_calls_map[idx];
-          let (skill, tool) = if name.contains('.') {
-            let parts: Vec<&str> = name.splitn(2, '.').collect();
-            (parts[0].to_string(), parts[1].to_string())
-          } else if name == "activate_skill" {
-            ("system".to_string(), name.clone())
-          } else {
-            ("unknown".to_string(), name.clone())
-          };
+          let (skill, tool) = resolve_tool_call(name, request.internal_tools.as_deref());
 
           tool_calls.push(crate::skills::types::ToolCall {
             id: if id.is_empty() { uuid::Uuid::new_v4().to_string() } else { id.clone() },
@@ -449,29 +442,8 @@ impl LlmProvider for LocalProvider {
       let _ = emit(CHAT_STREAM, final_stream_data);
 
       // Extract tool calls if present
-      if let Some(tool_calls_json) = result["choices"][0]["message"].get("tool_calls").and_then(|t| t.as_array()) {
-        let mut tool_calls = Vec::new();
-        for tc in tool_calls_json {
-          let id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-          let name = tc.get("function").and_then(|v| v.get("name")).and_then(|v| v.as_str()).unwrap_or("").to_string();
-          let args = tc.get("function").and_then(|v| v.get("arguments")).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
-
-          let (skill, tool) = if name.contains('.') {
-            let parts: Vec<&str> = name.splitn(2, '.').collect();
-            (parts[0].to_string(), parts[1].to_string())
-          } else if name == "activate_skill" {
-            ("system".to_string(), name.clone())
-          } else {
-            ("unknown".to_string(), name.clone())
-          };
-
-          tool_calls.push(crate::skills::types::ToolCall {
-            id: if id.is_empty() { uuid::Uuid::new_v4().to_string() } else { id.clone() },
-            skill_name: skill,
-            tool_name: tool,
-            arguments: serde_json::from_str(&args).unwrap_or(json!({})),
-          });
-        }
+      if has_tool_calls_openai(&result) {
+        let tool_calls = parse_openai_tool_calls(&result, request.internal_tools.as_deref());
         Ok(LlmResponse::ToolCalls(tool_calls))
       } else {
         Ok(LlmResponse::Text(generated_text))

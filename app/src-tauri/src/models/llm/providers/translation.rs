@@ -33,10 +33,16 @@ pub fn tools_to_openai_format(tools: &[ToolDefinition]) -> Vec<Value> {
                 }
             }
 
+            let name = if let Some(skill) = &tool.skill_name {
+                format!("{}.{}", skill, tool.name)
+            } else {
+                tool.name.clone()
+            };
+
             json!({
                 "type": "function",
                 "function": {
-                    "name": tool.name,
+                    "name": name,
                     "description": tool.description,
                     "parameters": {
                         "type": "object",
@@ -72,8 +78,14 @@ pub fn tools_to_gemini_format(tools: &[ToolDefinition]) -> Value {
                 }
             }
 
+            let name = if let Some(skill) = &tool.skill_name {
+                format!("{}.{}", skill, tool.name)
+            } else {
+                tool.name.clone()
+            };
+
             json!({
-                "name": tool.name,
+                "name": name,
                 "description": tool.description,
                 "parameters": {
                     "type": "OBJECT",
@@ -89,11 +101,40 @@ pub fn tools_to_gemini_format(tools: &[ToolDefinition]) -> Value {
     })
 }
 
+/// Resolves a tool name to its skill and tool name components.
+///
+/// Handles names with dots (e.g., "web-search.search_web"),
+/// system tools, and performs lookups in available tools if needed.
+pub fn resolve_tool_call(name: &str, available_tools: Option<&[ToolDefinition]>) -> (String, String) {
+    if name.contains('.') {
+        let parts: Vec<&str> = name.splitn(2, '.').collect();
+        (parts[0].to_string(), parts[1].to_string())
+    } else if name == "activate_skill" {
+        ("system".to_string(), name.to_string())
+    } else {
+        // Try to find which skill owns this tool by looking at available tools
+        let mut found_skill = "unknown".to_string();
+        
+        if let Some(tools) = available_tools {
+            for tool in tools {
+                if tool.name == name {
+                    if let Some(s) = &tool.skill_name {
+                        found_skill = s.clone();
+                        break;
+                    }
+                }
+            }
+        }
+        
+        (found_skill, name.to_string())
+    }
+}
+
 /// Parses tool calls from OpenAI format response.
 ///
 /// Extracts tool calls from OpenAI's response structure,
 /// which uses `tool_calls` array with `function` objects.
-pub fn parse_openai_tool_calls(response: &Value) -> Vec<ToolCall> {
+pub fn parse_openai_tool_calls(response: &Value, available_tools: Option<&[ToolDefinition]>) -> Vec<ToolCall> {
     let mut calls = Vec::new();
 
     if let Some(choices) = response.get("choices").and_then(|c| c.as_array()) {
@@ -120,16 +161,7 @@ pub fn parse_openai_tool_calls(response: &Value) -> Vec<ToolCall> {
                                 .and_then(|s| serde_json::from_str(s).ok())
                                 .unwrap_or(json!({}));
 
-                            // Determine skill from tool name (format: skill_name.tool_name or just tool_name)
-                            let (skill_name, tool_name) = if name.contains('.') {
-                                let parts: Vec<&str> = name.splitn(2, '.').collect();
-                                (parts[0].to_string(), parts[1].to_string())
-                            } else if name == "activate_skill" {
-                                ("system".to_string(), name)
-                            } else {
-                                // Try to find which skill owns this tool
-                                ("unknown".to_string(), name)
-                            };
+                            let (skill_name, tool_name) = resolve_tool_call(&name, available_tools);
 
                             calls.push(ToolCall {
                                 id,
@@ -151,7 +183,7 @@ pub fn parse_openai_tool_calls(response: &Value) -> Vec<ToolCall> {
 ///
 /// Extracts tool calls from Gemini's response structure,
 /// which uses `functionCall` in the `parts` array.
-pub fn parse_gemini_tool_calls(response: &Value) -> Vec<ToolCall> {
+pub fn parse_gemini_tool_calls(response: &Value, available_tools: Option<&[ToolDefinition]>) -> Vec<ToolCall> {
     let mut calls = Vec::new();
 
     if let Some(candidates) = response.get("candidates").and_then(|c| c.as_array()) {
@@ -174,14 +206,7 @@ pub fn parse_gemini_tool_calls(response: &Value) -> Vec<ToolCall> {
                             // Generate unique ID for this call (Gemini doesn't provide one)
                             let id = uuid::Uuid::new_v4().to_string();
 
-                            let (skill_name, tool_name) = if name.contains('.') {
-                                let parts: Vec<&str> = name.splitn(2, '.').collect();
-                                (parts[0].to_string(), parts[1].to_string())
-                            } else if name == "activate_skill" {
-                                ("system".to_string(), name)
-                            } else {
-                                ("unknown".to_string(), name)
-                            };
+                            let (skill_name, tool_name) = resolve_tool_call(&name, available_tools);
 
                             calls.push(ToolCall {
                                 id,

@@ -170,6 +170,7 @@ impl SkillRegistry {
                 };
 
                 tools.push(ToolDefinition {
+                    skill_name: None, // Will be populated by the caller if needed
                     name,
                     description,
                     parameters,

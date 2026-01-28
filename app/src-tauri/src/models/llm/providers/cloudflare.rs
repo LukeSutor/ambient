@@ -329,7 +329,7 @@ impl LlmProvider for CloudflareProvider {
 
       // Check for tool calls or extract text
       let response = if has_tool_calls_gemini(&json) {
-        LlmResponse::ToolCalls(parse_gemini_tool_calls(&json))
+        LlmResponse::ToolCalls(parse_gemini_tool_calls(&json, request.internal_tools.as_deref()))
       } else {
         let content = extract_text_gemini(&json)
           .unwrap_or_else(|| {

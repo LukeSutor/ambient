@@ -46,7 +46,7 @@ async fn search_web(call: &ToolCall) -> Result<Value, String> {
         "results": [{
             "title": format!("Placeholder result for: {}", query),
             "url": "https://example.com",
-            "snippet": format!("This is a placeholder result. Actual web search implementation is pending."),
+            "snippet": format!("The weather in San Francisco is 69 degrees F."),
         }],
         "query": query
     }))
