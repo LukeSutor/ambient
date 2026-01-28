@@ -64,6 +64,35 @@ export async function sendMessage(
 }
 
 /**
+ * Sends a message using the agentic runtime
+ * @param conversationId - ID of the conversation
+ * @param content - Message content
+ * @param attachmentData - Attachments to include
+ * @param messageId - The message ID to use
+ * @returns Promise resolving to final response text
+ */
+export async function sendAgentMessage(
+  conversationId: string,
+  content: string,
+  attachmentData: AttachmentData[],
+  messageId: string,
+): Promise<string> {
+  try {
+    const finalText = await invoke<string>("handle_agent_chat", {
+      convId: conversationId,
+      messageId: messageId,
+      userMessage: content,
+      attachments: attachmentData,
+    });
+
+    return finalText;
+  } catch (error) {
+    console.error("[ConversationAPI] Failed to send agent message:", error);
+    throw new Error("Failed to send agent message");
+  }
+}
+
+/**
  * Starts a computer use session
  * @param conversationId - ID of the conversation
  * @param prompt - The prompt to initiate computer use

@@ -13,6 +13,7 @@ import {
   emitGenerateConversationName,
   ensureLlamaServerRunning,
   sendMessage as sendChatApiMessage,
+  sendAgentMessage,
   startComputerUseSession,
   stopComputerUseSession,
 } from "./api";
@@ -49,6 +50,8 @@ function createUserMessage(
     timestamp: new Date().toISOString(),
     attachments: [],
     memory: null,
+    message_type: "text",
+    metadata: null,
   };
   return {
     message,
@@ -202,7 +205,7 @@ export function useConversation(
           // Loop reverse through the messages to group reasoning by each final assistant message
           const reversedMessages = [...messages].reverse();
           for (const msg of reversedMessages) {
-            if (msg.message.role === "functioncall") {
+            if (msg.message.role === "tool") {
               // Add function reasoning if current assistant message
               if (currentAssistantMessage) {
                 currentAssistantMessage.reasoningMessages.unshift(msg);
@@ -301,6 +304,13 @@ export function useConversation(
         // Send hud chat or computer use event
         if (state.conversationType === "computer_use") {
           void startComputerUseSession(activeConversationId, content);
+        } else if (state.conversationType === "agent") {
+          await sendAgentMessage(
+            activeConversationId,
+            content,
+            attachmentData,
+            userMessage.message.id,
+          );
         } else {
           await sendChatApiMessage(
             activeConversationId,
@@ -438,6 +448,27 @@ export function useConversation(
   }, [dispatch, state.conversationType]);
 
   /**
+   * Toggle Agentic Mode
+   */
+  const toggleAgenticMode = useCallback((): void => {
+    if (state.conversationType === "chat") {
+      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "agent" });
+    } else {
+      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "chat" });
+    }
+  }, [dispatch, state.conversationType]);
+
+  /**
+   * Sets the conversation type
+   */
+  const setConversationType = useCallback(
+    (type: string): void => {
+      dispatch({ type: "SET_CONVERSATION_TYPE", payload: type });
+    },
+    [dispatch],
+  );
+
+  /**
    * Stops the current computer use session
    */
   const stopComputerUse = useCallback(async (): Promise<void> => {
@@ -495,6 +526,8 @@ export function useConversation(
     renameConversation,
     dispatchOCRCapture,
     toggleComputerUse,
+    toggleAgenticMode,
+    setConversationType,
     stopComputerUse,
     addAttachmentData,
     removeAttachmentData,

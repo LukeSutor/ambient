@@ -9,6 +9,9 @@ import type {
   MemoryExtractedEvent,
   OcrResponseEvent,
   RenameConversationEvent,
+  SkillActivatedEvent,
+  ToolExecutionStartedEvent,
+  ToolExecutionCompletedEvent,
 } from "@/types/events";
 import type { MemoryEntry } from "@/types/memory";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
@@ -210,6 +213,8 @@ function conversationReducer(
           timestamp: action.payload.timestamp,
           attachments: [],
           memory: null,
+          message_type: "text",
+          metadata: null,
         },
         reasoningMessages: [],
       };
@@ -253,6 +258,8 @@ function conversationReducer(
           timestamp: new Date().toISOString(),
           attachments: [],
           memory: null,
+          message_type: "text",
+          metadata: null,
         },
         reasoningMessages: [],
       };
@@ -596,6 +603,25 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
               payload: { id: conv_id, newName: new_name },
             });
           }),
+
+          // Agentic Runtime Listeners
+          listen<SkillActivatedEvent>("skill_activated", (event) => {
+            console.log("[AgentRuntime] Skill Activated:", event.payload);
+          }),
+
+          listen<ToolExecutionStartedEvent>("tool_execution_started", (event) => {
+            console.log("[AgentRuntime] Tool Execution Started:", event.payload);
+          }),
+
+          listen<ToolExecutionCompletedEvent>(
+            "tool_execution_completed",
+            (event) => {
+              console.log(
+                "[AgentRuntime] Tool Execution Completed:",
+                event.payload,
+              );
+            },
+          ),
         ];
 
         const results = await Promise.all(listenerPromises);

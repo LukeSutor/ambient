@@ -58,6 +58,7 @@ use chrono::Local;
 use serde_json::json;
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
+use ts_rs::TS;
 
 // ============================================================================
 // Event Types for Agentic Runtime
@@ -66,7 +67,8 @@ use uuid::Uuid;
 /// Event emitted when a skill is activated.
 pub const SKILL_ACTIVATED: &str = "skill_activated";
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, TS)]
+#[ts(export, export_to = "events.ts")]
 pub struct SkillActivatedEvent {
     pub skill_name: String,
     pub conversation_id: String,
@@ -76,7 +78,8 @@ pub struct SkillActivatedEvent {
 /// Event emitted when a tool execution starts.
 pub const TOOL_EXECUTION_STARTED: &str = "tool_execution_started";
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, TS)]
+#[ts(export, export_to = "events.ts")]
 pub struct ToolExecutionStartedEvent {
     pub tool_call_id: String,
     pub skill_name: String,
@@ -87,7 +90,8 @@ pub struct ToolExecutionStartedEvent {
 /// Event emitted when a tool execution completes.
 pub const TOOL_EXECUTION_COMPLETED: &str = "tool_execution_completed";
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, TS)]
+#[ts(export, export_to = "events.ts")]
 pub struct ToolExecutionCompletedEvent {
     pub tool_call_id: String,
     pub skill_name: String,
@@ -271,6 +275,8 @@ impl AgentRuntime {
             )
             .await?;
 
+            log::info!("[agent] Received response from model: {:?}", response);
+
             // Handle response
             match response {
                 AgentResponse::Text(text) => {
@@ -282,6 +288,7 @@ impl AgentRuntime {
 
                 AgentResponse::SkillActivation(activation) => {
                     // Model wants to activate a skill
+                    log::info!("[agent] Skill activation requested: {:?}", activation);
                     self.handle_skill_activation(activation).await?;
 
                     // Continue loop with skill now active
@@ -298,6 +305,7 @@ impl AgentRuntime {
 
                 AgentResponse::ToolCalls(tool_calls) => {
                     // Model wants to execute tools
+                    log::info!("[agent] Tool calls requested: {:?}", tool_calls);
                     // Check if we have too many tool calls
                     if tool_calls.len() > self.config.max_tool_calls_per_turn {
                         return Err(AgentError::TooManyToolCalls(

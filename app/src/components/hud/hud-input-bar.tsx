@@ -12,7 +12,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUpIcon, MousePointerClick, Move, X } from "lucide-react";
+import { ArrowUpIcon, Bot, MousePointerClick, Move, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -62,6 +62,7 @@ export function HUDInputBar({
     conversationType,
     addAttachmentData,
     toggleComputerUse,
+    toggleAgenticMode,
   } = useConversation();
   const { closeHUD } = useWindows();
 
@@ -69,6 +70,7 @@ export function HUDInputBar({
   const isLoading = ocrLoading || isStreaming;
   const showWindowControls = isDraggingWindow || isHoveringGroup;
   const isComputerUseActive = conversationType === "computer_use";
+  const isAgentActive = conversationType === "agent";
 
   // Memoized styles
   const containerStyle = useMemo(
@@ -200,6 +202,23 @@ export function HUDInputBar({
             disabled={isLoading}
           />
 
+          {isAgentActive && (
+            <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
+              <Bot className="!h-4 !w-4 text-black" />
+              <p className="mx-1 text-black text-xs font-medium">
+                Agentic Chat
+              </p>
+              <Button
+                variant="ghost"
+                className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
+                size="icon"
+                onClick={toggleAgenticMode}
+              >
+                <X className="!h-3 !w-3 text-black shrink-0" />
+              </Button>
+            </div>
+          )}
+
           {isComputerUseActive && (
             <div className="flex items-center justify-center bg-yellow-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
               <MousePointerClick className="!h-4 !w-4 text-black" />
@@ -268,7 +287,7 @@ export function HUDInputBar({
         className={cn(
           "pointer-events-none overflow-hidden transition-all duration-0",
           isPlusDropdownOpen && "h-[112px]",
-          isToolsDropdownOpen && "h-[70px]",
+          isToolsDropdownOpen && "h-[102px]",
           isModelDropdownOpen && "h-[155px]",
           !isPlusDropdownOpen &&
             !isToolsDropdownOpen &&

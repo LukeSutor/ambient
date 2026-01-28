@@ -10,6 +10,7 @@ import {
 import { InputGroupButton } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
 import {
+  Bot,
   MousePointerClick,
   SquareDashedMousePointer,
   Wrench,
@@ -22,8 +23,12 @@ interface ToolMenuProps {
 }
 
 export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
-  const { conversationType, dispatchOCRCapture, toggleComputerUse } =
-    useConversation();
+  const {
+    conversationType,
+    dispatchOCRCapture,
+    toggleComputerUse,
+    toggleAgenticMode,
+  } = useConversation();
   const showToolsLabel = conversationType === "chat";
 
   const handleDispatchOCRCapture = useCallback(() => {
@@ -54,6 +59,15 @@ export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
             <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
             <span className="text-black text-sm whitespace-nowrap">
               Capture Area
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="hover:bg-white/60"
+            onClick={toggleAgenticMode}
+          >
+            <Bot className="!w-4 !h-4 text-black shrink-0 mr-2" />
+            <span className="text-black text-sm whitespace-nowrap">
+              Agentic Chat
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem
