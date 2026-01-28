@@ -1,5 +1,5 @@
 use crate::db::conversations::{
-  create_attachments, add_attachments, add_message, add_message_with_id, update_conversation_name,
+  create_attachments, add_attachments, add_message, update_conversation_name, Role,
 };
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
@@ -9,11 +9,13 @@ use tauri::AppHandle;
 #[tauri::command]
 pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Result<String, String> {
   // Save the user message to the database
-  let _user_message = match add_message_with_id(
+  let _user_message = match add_message(
     &app_handle,
     event.conv_id.clone(),
-    "user".to_string(),
+    Role::User,
     event.text.clone(),
+    None,
+    None,
     Some(event.message_id.clone()),
   )
   .await
@@ -142,8 +144,11 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
   if let Err(e) = add_message(
     &app_handle,
     event.conv_id.clone(),
-    "assistant".to_string(),
+    Role::Assistant,
     response.clone(),
+    None,
+    None,
+    None,
   )
   .await
   {

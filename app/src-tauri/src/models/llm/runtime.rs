@@ -29,7 +29,7 @@
 //! - Error occurs
 
 use crate::db::conversations::{
-    add_message_extended, get_conversation_history, load_conversation_skills,
+    add_message, get_conversation_history, load_conversation_skills,
     save_conversation_skill, MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::AttachmentData};
@@ -566,12 +566,12 @@ When you need capabilities from a skill:
         use crate::db::conversations::add_attachments;
 
         // Save message
-        add_message_extended(
+        add_message(
             &self.app_handle,
             self.conv_id.clone(),
             Role::User,
             content.to_string(),
-            MessageType::Text,
+            Some(MessageType::Text),
             None,
             Some(self.message_id.clone()),
         )
@@ -602,14 +602,14 @@ When you need capabilities from a skill:
         message_type: MessageType,
         metadata: Option<MessageMetadata>,
     ) -> Result<(), AgentError> {
-        let _ = add_message_extended(
+        let _ = add_message(
             &self.app_handle,
             self.conv_id.clone(),
             Role::Assistant,
             content.to_string(),
-            message_type,
+            Some(message_type),
             metadata,
-            None, // Let DB generate new ID
+            None,
         )
         .await?;
 
@@ -622,14 +622,14 @@ When you need capabilities from a skill:
         content: &str,
         metadata: MessageMetadata,
     ) -> Result<(), AgentError> {
-        let _ = add_message_extended(
+        let _ = add_message(
             &self.app_handle,
             self.conv_id.clone(),
             Role::Tool,
             content.to_string(),
-            MessageType::ToolResult,
+            Some(MessageType::ToolResult),
             Some(metadata),
-            None, // Let DB generate new ID
+            None,
         )
         .await?;
 

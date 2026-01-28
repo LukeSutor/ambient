@@ -244,21 +244,18 @@ pub async fn create_conversation(
   Ok(conversation)
 }
 
-/// Add a message to a conversation
+/// Add a message to a conversation.
+///
+/// This handles regular text messages, tool calls, and results.
+/// If it's the first user message, it also generates and updates the conversation name.
+#[tauri::command]
 pub async fn add_message(
   app_handle: &AppHandle,
   conversation_id: String,
-  role: String,
+  role: Role,
   content: String,
-) -> Result<Message, String> {
-  add_message_with_id(app_handle, conversation_id, role, content, None).await
-}
-
-pub async fn add_message_with_id(
-  app_handle: &AppHandle,
-  conversation_id: String,
-  role: String,
-  content: String,
+  message_type: Option<MessageType>,
+  metadata: Option<MessageMetadata>,
   message_id: Option<String>,
 ) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
@@ -270,17 +267,22 @@ pub async fn add_message_with_id(
     .as_ref()
     .ok_or("Database connection not available.".to_string())?;
 
-  let message_id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+  let id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
   let now = Utc::now();
+  let m_type = message_type.unwrap_or(MessageType::Text);
+  let metadata_json = metadata
+    .as_ref()
+    .map(|m| serde_json::to_string(m).ok())
+    .flatten();
 
   let message = Message {
-    id: message_id.clone(),
+    id: id.clone(),
     conversation_id: conversation_id.clone(),
-    role: Role::from_str(&role),
+    role: role.clone(),
     content: content.clone(),
     timestamp: now.to_rfc3339(),
-    message_type: MessageType::Text,
-    metadata: None,
+    message_type: m_type.clone(),
+    metadata: metadata.clone(),
     attachments: vec![],
     memory: None,
   };
@@ -291,13 +293,13 @@ pub async fn add_message_with_id(
       "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp, message_type, metadata)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
       params![
-        message_id,
-        conversation_id,
-        Role::from_str(&role).as_str(),
-        content,
+        &id,
+        &conversation_id,
+        role.as_str(),
+        &content,
         now.to_rfc3339(),
-        MessageType::Text.as_str(),
-        None::<String>
+        m_type.as_str(),
+        &metadata_json,
       ],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
@@ -306,12 +308,12 @@ pub async fn add_message_with_id(
   conn
     .execute(
       "UPDATE conversations SET message_count = message_count + 1, updated_at = ?1 WHERE id = ?2",
-      params![now.to_rfc3339(), conversation_id],
+      params![now.to_rfc3339(), &conversation_id],
     )
     .map_err(|e| format!("Failed to update conversation: {}", e))?;
 
   // Auto-update conversation name if it's the first user message
-  if Role::from_str(&role) == Role::User {
+  if role == Role::User {
     let message_count: i32 = conn
       .query_row(
         "SELECT message_count FROM conversations WHERE id = ?1",
@@ -835,75 +837,6 @@ pub async fn add_attachments(
   Ok(created_attachments)
 }
 
-/// Extended message insertion with message_type and metadata fields.
-///
-/// This is used by the agentic runtime to create messages
-/// with specific types (tool_call, tool_result, etc.) and metadata.
-#[tauri::command]
-pub async fn add_message_extended(
-  app_handle: &AppHandle,
-  conversation_id: String,
-  role: Role,
-  content: String,
-  message_type: MessageType,
-  metadata: Option<MessageMetadata>,
-  message_id: Option<String>,
-) -> Result<Message, String> {
-  let state = app_handle.state::<DbState>();
-  let conn_guard = state
-    .0
-    .lock()
-    .map_err(|_| "Failed to acquire DB lock".to_string())?;
-  let conn = conn_guard
-    .as_ref()
-    .ok_or("Database connection not available.".to_string())?;
-
-  let id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
-  let now = Utc::now();
-  let metadata_json = metadata
-    .as_ref()
-    .map(|m| serde_json::to_string(m).ok())
-    .flatten();
-
-  let message = Message {
-    id: id.clone(),
-    conversation_id: conversation_id.clone(),
-    role: role.clone(),
-    content: content.clone(),
-    timestamp: now.to_rfc3339(),
-    message_type: message_type.clone(),
-    metadata: metadata.clone(),
-    attachments: vec![],
-    memory: None,
-  };
-
-  conn
-    .execute(
-      "INSERT INTO conversation_messages
-         (id, conversation_id, role, content, timestamp, message_type, metadata)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-      params![
-        &id,
-        &conversation_id,
-        role.as_str(),
-        &content,
-        now.to_rfc3339(),
-        message_type.as_str(),
-        &metadata_json,
-      ],
-    )
-    .map_err(|e| format!("Insert failed: {}", e))?;
-
-  // Update conversation
-  conn
-    .execute(
-      "UPDATE conversations SET message_count = message_count + 1, updated_at = ?1 WHERE id = ?2",
-      params![now.to_rfc3339(), &conversation_id],
-    )
-    .map_err(|e| format!("Update failed: {}", e))?;
-
-  Ok(message)
-}
 
 /// Load activated skills for a conversation.
 ///

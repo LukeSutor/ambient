@@ -9,7 +9,7 @@ use super::types::ActionResponse;
 use serde_json::json;
 use crate::images::take_screenshot;
 use crate::events::{emitter::emit, types::*};
-use crate::db::conversations::add_message;
+use crate::db::conversations::{add_message, Role, MessageType};
 use crate::windows::{open_main_window, close_main_window, open_computer_use_window, close_computer_use_window};
 use crate::db::computer_use::{get_computer_use_session, save_computer_use_session};
 use crate::auth::commands::get_access_token_command;
@@ -391,8 +391,11 @@ impl ComputerUseEngine {
         let user_message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
-            "user".to_string(),
+            Role::User,
             content,
+            None,
+            None,
+            None,
         ).await;
 
         match user_message {
@@ -409,8 +412,11 @@ impl ComputerUseEngine {
         let reasoning_message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
-            "assistant".to_string(),
+            Role::Assistant,
             reasoning.clone(),
+            Some(MessageType::Thinking),
+            None,
+            None,
         ).await;
 
         match reasoning_message {
@@ -441,8 +447,11 @@ impl ComputerUseEngine {
         let func_message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
-            "functioncall".to_string(),
+            Role::Assistant,
             function_call_message.clone(),
+            Some(MessageType::ToolCall),
+            None,
+            None,
         ).await;
 
         match func_message {
@@ -666,8 +675,11 @@ impl ComputerUseEngine {
         let final_message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
-            "assistant".to_string(),
+            Role::Assistant,
             self.final_response.clone(),
+            None,
+            None,
+            None,
         ).await;
 
         match final_message {
