@@ -418,6 +418,8 @@ impl ToolEnabledProvider for LocalProvider {
       return Err(format!("Server returned error {}: {}", status, error_text));
     }
 
+    log::debug!("[llama_server] Tool-enabled response received: {:?}", response);
+
     response
         .json()
         .await

@@ -372,14 +372,14 @@ pub async fn get_messages(
       if messages.is_empty() || messages.last().unwrap().id != msg_id {
         let role_str: String = row.get(2).map_err(|e| e.to_string())?;
 
-        let memory = if let Some(mem_id) = row.get::<_, Option<String>>(12).map_err(|e| e.to_string())? {
+        let memory = if let Some(mem_id) = row.get::<_, Option<String>>(14).map_err(|e| e.to_string())? {
           Some(MemoryEntry {
             id: mem_id,
             message_id: msg_id.clone(),
-            memory_type: row.get(13).map_err(|e| e.to_string())?,
-            text: row.get(14).map_err(|e| e.to_string())?,
+            memory_type: row.get(15).map_err(|e| e.to_string())?,
+            text: row.get(16).map_err(|e| e.to_string())?,
             embedding: vec![],
-            timestamp: row.get(15).map_err(|e| e.to_string())?,
+            timestamp: row.get(17).map_err(|e| e.to_string())?,
             similarity: None,
           })
         } else {
@@ -405,16 +405,16 @@ pub async fn get_messages(
         });
       }
 
-      if let Some(attachment_id) = row.get::<_, Option<String>>(5).map_err(|e| e.to_string())? {
+      if let Some(attachment_id) = row.get::<_, Option<String>>(7).map_err(|e| e.to_string())? {
         if let Some(msg) = messages.last_mut() {
           msg.attachments.push(Attachment {
             id: attachment_id,
-            message_id: row.get(6).map_err(|e| e.to_string())?,
-            file_type: row.get(7).map_err(|e| e.to_string())?,
-            file_name: row.get(8).map_err(|e| e.to_string())?,
-            file_path: row.get(9).map_err(|e| e.to_string())?,
-            extracted_text: row.get(10).map_err(|e| e.to_string())?,
-            created_at: row.get(11).map_err(|e| e.to_string())?,
+            message_id: row.get(8).map_err(|e| e.to_string())?,
+            file_type: row.get(9).map_err(|e| e.to_string())?,
+            file_name: row.get(10).map_err(|e| e.to_string())?,
+            file_path: row.get(11).map_err(|e| e.to_string())?,
+            extracted_text: row.get(12).map_err(|e| e.to_string())?,
+            created_at: row.get(13).map_err(|e| e.to_string())?,
           });
         }
       }
@@ -459,14 +459,14 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
       let role_str: String = row.get(2).map_err(|e| e.to_string())?;
       let msg_id: String = row.get(0).map_err(|e| e.to_string())?;
 
-      let memory = if let Some(mem_id) = row.get::<_, Option<String>>(12).map_err(|e| e.to_string())? {
+      let memory = if let Some(mem_id) = row.get::<_, Option<String>>(14).map_err(|e| e.to_string())? {
         Some(MemoryEntry {
           id: mem_id,
           message_id: msg_id.clone(),
-          memory_type: row.get(13).map_err(|e| e.to_string())?,
-          text: row.get(14).map_err(|e| e.to_string())?,
+          memory_type: row.get(15).map_err(|e| e.to_string())?,
+          text: row.get(16).map_err(|e| e.to_string())?,
           embedding: vec![],
-          timestamp: row.get(15).map_err(|e| e.to_string())?,
+          timestamp: row.get(17).map_err(|e| e.to_string())?,
           similarity: None,
         })
       } else {
@@ -493,15 +493,15 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
     }
 
     if let Some(ref mut msg) = message_acc {
-      if let Some(attachment_id) = row.get::<_, Option<String>>(5).map_err(|e| e.to_string())? {
+      if let Some(attachment_id) = row.get::<_, Option<String>>(7).map_err(|e| e.to_string())? {
         msg.attachments.push(Attachment {
           id: attachment_id,
-          message_id: row.get(6).map_err(|e| e.to_string())?,
-          file_type: row.get(7).map_err(|e| e.to_string())?,
-          file_name: row.get(8).map_err(|e| e.to_string())?,
-          file_path: row.get(9).map_err(|e| e.to_string())?,
-          extracted_text: row.get(10).map_err(|e| e.to_string())?,
-          created_at: row.get(11).map_err(|e| e.to_string())?,
+          message_id: row.get(8).map_err(|e| e.to_string())?,
+          file_type: row.get(9).map_err(|e| e.to_string())?,
+          file_name: row.get(10).map_err(|e| e.to_string())?,
+          file_path: row.get(11).map_err(|e| e.to_string())?,
+          extracted_text: row.get(12).map_err(|e| e.to_string())?,
+          created_at: row.get(13).map_err(|e| e.to_string())?,
         });
       }
     }
