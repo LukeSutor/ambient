@@ -363,9 +363,13 @@ impl LlmProvider for LocalProvider {
 
         for idx in sorted_indices {
           let (id, name, args) = &tool_calls_map[idx];
-          let (skill, tool) = match name.split_once('.') {
-            Some((s, t)) => (s.to_string(), t.to_string()),
-            None => ("".to_string(), name.to_string()),
+          let (skill, tool) = if name.contains('.') {
+            let parts: Vec<&str> = name.splitn(2, '.').collect();
+            (parts[0].to_string(), parts[1].to_string())
+          } else if name == "activate_skill" {
+            ("system".to_string(), name.clone())
+          } else {
+            ("unknown".to_string(), name.clone())
           };
 
           tool_calls.push(crate::skills::types::ToolCall {
@@ -418,16 +422,58 @@ impl LlmProvider for LocalProvider {
           completion_tokens,
       ).await?;
 
-      // Extract generated content and check for tool calls
-      if has_tool_calls_openai(&result) {
-        let tool_calls = parse_openai_tool_calls(&result);
+      // Extract generated content
+      let generated_text = result["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+      // Emit stream event to frontend even for non-streaming for consistency
+      if !generated_text.is_empty() {
+        let stream_data = ChatStreamEvent {
+          delta: generated_text.clone(),
+          is_finished: false,
+          full_response: generated_text.clone(),
+          conv_id: request.conv_id.clone(),
+        };
+        let _ = emit(CHAT_STREAM, stream_data);
+      }
+
+      // Final stream completion event
+      let final_stream_data = ChatStreamEvent {
+        delta: "".to_string(),
+        is_finished: true,
+        full_response: generated_text.clone(),
+        conv_id: request.conv_id.clone(),
+      };
+      let _ = emit(CHAT_STREAM, final_stream_data);
+
+      // Extract tool calls if present
+      if let Some(tool_calls_json) = result["choices"][0]["message"].get("tool_calls").and_then(|t| t.as_array()) {
+        let mut tool_calls = Vec::new();
+        for tc in tool_calls_json {
+          let id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+          let name = tc.get("function").and_then(|v| v.get("name")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+          let args = tc.get("function").and_then(|v| v.get("arguments")).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
+
+          let (skill, tool) = if name.contains('.') {
+            let parts: Vec<&str> = name.splitn(2, '.').collect();
+            (parts[0].to_string(), parts[1].to_string())
+          } else if name == "activate_skill" {
+            ("system".to_string(), name.clone())
+          } else {
+            ("unknown".to_string(), name.clone())
+          };
+
+          tool_calls.push(crate::skills::types::ToolCall {
+            id: if id.is_empty() { uuid::Uuid::new_v4().to_string() } else { id.clone() },
+            skill_name: skill,
+            tool_name: tool,
+            arguments: serde_json::from_str(&args).unwrap_or(json!({})),
+          });
+        }
         Ok(LlmResponse::ToolCalls(tool_calls))
       } else {
-        let generated_text = result["choices"][0]["message"]["content"]
-          .as_str()
-          .ok_or("No content in response")?
-          .to_string();
-
         Ok(LlmResponse::Text(generated_text))
       }
     }

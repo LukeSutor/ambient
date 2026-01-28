@@ -44,7 +44,6 @@ use crate::skills::types::{
 };
 use chrono::Local;
 use tauri::AppHandle;
-use uuid::Uuid;
 use ts_rs::TS;
 
 // ============================================================================
@@ -275,6 +274,7 @@ impl AgentRuntime {
                     }
 
                     // Save tool calls as messages
+                    let mut call_message_ids = Vec::with_capacity(tool_calls.len());
                     for call in &tool_calls {
                         let metadata = MessageMetadata::ToolCall {
                             call_id: call.id.clone(),
@@ -290,12 +290,13 @@ impl AgentRuntime {
                             serde_json::to_string_pretty(&call.arguments).unwrap_or_default()
                         );
 
-                        self.save_assistant_message(&content, MessageType::ToolCall, Some(metadata))
+                        let msg_id = self.save_assistant_message(&content, MessageType::ToolCall, Some(metadata))
                             .await?;
+                        call_message_ids.push(msg_id);
                     }
 
                     // Execute tools in parallel
-                    let results = self.execute_tool_calls(tool_calls).await?;
+                    let results = self.execute_tool_calls(tool_calls, call_message_ids).await?;
 
                     // Add results to context and continue
                     for result in &results {
@@ -482,13 +483,13 @@ When you need capabilities from a skill:
     async fn execute_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
+        message_ids: Vec<String>,
     ) -> Result<Vec<ToolResult>, AgentError> {
         log::info!("[agent] Executing {} tool calls", tool_calls.len());
 
         // Save tool call records
-        let message_id = Uuid::new_v4().to_string();
-        for call in &tool_calls {
-            save_tool_call_record(&self.app_handle, &message_id, &self.conv_id, call).await?;
+        for (call, msg_id) in tool_calls.iter().zip(message_ids.iter()) {
+            save_tool_call_record(&self.app_handle, msg_id, &self.conv_id, call).await?;
 
             // Emit tool execution started event
             let started_event = ToolExecutionStartedEvent {
@@ -582,8 +583,8 @@ When you need capabilities from a skill:
         content: &str,
         message_type: MessageType,
         metadata: Option<MessageMetadata>,
-    ) -> Result<(), AgentError> {
-        let _ = add_message(
+    ) -> Result<String, AgentError> {
+        let message = add_message(
             &self.app_handle,
             self.conv_id.clone(),
             Role::Assistant,
@@ -594,7 +595,7 @@ When you need capabilities from a skill:
         )
         .await?;
 
-        Ok(())
+        Ok(message.id)
     }
 
     /// Saves a tool result message to the database.
@@ -602,8 +603,8 @@ When you need capabilities from a skill:
         &self,
         content: &str,
         metadata: MessageMetadata,
-    ) -> Result<(), AgentError> {
-        let _ = add_message(
+    ) -> Result<String, AgentError> {
+        let message = add_message(
             &self.app_handle,
             self.conv_id.clone(),
             Role::Tool,
@@ -614,6 +615,6 @@ When you need capabilities from a skill:
         )
         .await?;
 
-        Ok(())
+        Ok(message.id)
     }
 }
