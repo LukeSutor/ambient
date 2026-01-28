@@ -350,6 +350,7 @@ mod tests {
     fn test_openai_format() {
         let tool = ToolDefinition {
             name: "test_tool".to_string(),
+            skill_name: Some("test".to_string()),
             description: "A test tool".to_string(),
             parameters: vec![],
             returns: None,
@@ -358,7 +359,7 @@ mod tests {
         let result = tools_to_openai_format(&[tool]);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0]["type"], "function");
-        assert_eq!(result[0]["function"]["name"], "test_tool");
+        assert_eq!(result[0]["function"]["name"], "test.test_tool");
     }
 
     #[test]
@@ -377,7 +378,13 @@ mod tests {
             }]
         });
 
-        let calls = parse_openai_tool_calls(&response);
+        let calls = parse_openai_tool_calls(&response, Some(&[ToolDefinition {
+            name: "test.skill.search".to_string(),
+            skill_name: Some("test".to_string()),
+            description: "A test tool".to_string(),
+            parameters: vec![],
+            returns: None,
+        }]));
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].skill_name, "test");
         assert_eq!(calls[0].tool_name, "skill.search");
@@ -387,6 +394,7 @@ mod tests {
     fn test_gemini_format() {
         let tool = ToolDefinition {
             name: "test_tool".to_string(),
+            skill_name: Some("test".to_string()),
             description: "A test tool".to_string(),
             parameters: vec![],
             returns: None,
@@ -394,7 +402,7 @@ mod tests {
 
         let result = tools_to_gemini_format(&[tool]);
         assert!(result["functionDeclarations"].is_array());
-        assert_eq!(result["functionDeclarations"][0]["name"], "test_tool");
+        assert_eq!(result["functionDeclarations"][0]["name"], "test.test_tool");
     }
 
     #[test]

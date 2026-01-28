@@ -3,7 +3,7 @@
 //! This module implements the main agentic loop that:
 //! 1. Loads conversation history with context limiting
 //! 2. Builds system prompts with skill summaries
-//! 3. Executes agentic loop: model request → response → tool execution
+//! 3. Executes agentic loop: model request > response > tool execution
 //! 4. Handles skill activation and tool calling
 //! 5. Persists all messages to database
 //!
@@ -11,15 +11,15 @@
 //!
 //! ```
 //! User Message
-//!     ↓
-//! [Check context limit] → [Build system prompt with skill summaries]
-//!     ↓
+//!     v
+//! [Check context limit] > [Build system prompt with skill summaries]
+//!     v
 //! Model Generation (Phase 1 - summaries only)
-//!     ↓
+//!     v
 //! Response: Text | Tool Calls
-//!     ↓
-//! Tool Calls? → [Execute tools] → [Check for skill activation] → [Add results] → Continue
-//! Text? → [Save and return]
+//!     v
+//! Tool Calls? > [Execute tools] > [Check for skill activation] > [Add results] > Continue
+//! Text? > [Save and return]
 //! ```
 //!
 //! The loop continues until:
@@ -57,6 +57,7 @@ pub const SKILL_ACTIVATED: &str = "skill_activated";
 #[ts(export, export_to = "events.ts")]
 pub struct SkillActivatedEvent {
     pub skill_name: String,
+    pub message_id: String,
     pub conversation_id: String,
     pub timestamp: String,
 }
@@ -68,6 +69,7 @@ pub const TOOL_EXECUTION_STARTED: &str = "tool_execution_started";
 #[ts(export, export_to = "events.ts")]
 pub struct ToolExecutionStartedEvent {
     pub tool_call_id: String,
+    pub message_id: String,
     pub skill_name: String,
     pub tool_name: String,
     pub timestamp: String,
@@ -80,9 +82,13 @@ pub const TOOL_EXECUTION_COMPLETED: &str = "tool_execution_completed";
 #[ts(export, export_to = "events.ts")]
 pub struct ToolExecutionCompletedEvent {
     pub tool_call_id: String,
+    pub message_id: String,
     pub skill_name: String,
     pub tool_name: String,
     pub success: bool,
+    #[ts(type = "any")]
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
     pub timestamp: String,
 }
 
@@ -296,7 +302,7 @@ impl AgentRuntime {
                     }
 
                     // Execute tools in parallel
-                    let results = self.execute_tool_calls(tool_calls, call_message_ids).await?;
+                    let results = self.execute_tool_calls(tool_calls.clone(), call_message_ids).await?;
 
                     // Add results to context and continue
                     for result in &results {
@@ -322,7 +328,28 @@ impl AgentRuntime {
                             )
                         };
 
-                        self.save_tool_result_message(&content, metadata).await?;
+                        let msg_id = self.save_tool_result_message(&content, metadata).await?;
+
+                        // Emit completion event with message id and result
+                        let completed_event = ToolExecutionCompletedEvent {
+                            tool_call_id: result.call_id.clone(),
+                            message_id: msg_id,
+                            skill_name: tool_calls
+                                .iter()
+                                .find(|c| c.id == result.call_id)
+                                .map(|c| c.skill_name.clone())
+                                .unwrap_or_default(),
+                            tool_name: tool_calls
+                                .iter()
+                                .find(|c| c.id == result.call_id)
+                                .map(|c| c.tool_name.clone())
+                                .unwrap_or_default(),
+                            success: result.success,
+                            result: result.result.clone(),
+                            error: result.error.clone(),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                        };
+                        let _ = emit(TOOL_EXECUTION_COMPLETED, completed_event);
                     }
 
                     continue;
@@ -469,9 +496,17 @@ When you need capabilities from a skill:
             save_conversation_skill(&self.app_handle, &self.conv_id, skill_name)
                 .await?;
 
+            // Save a thinking message for skill activation
+            let content = format!("Activated skill: {}", skill_name);
+            let metadata = MessageMetadata::Thinking {
+                stage: format!("Skill Activated: {}", skill_name),
+            };
+            let message_id = self.save_assistant_message(&content, MessageType::Thinking, Some(metadata)).await?;
+
             // Emit skill activated event
             let event = SkillActivatedEvent {
                 skill_name: skill_name.to_string(),
+                message_id,
                 conversation_id: self.conv_id.clone(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
@@ -499,6 +534,7 @@ When you need capabilities from a skill:
             // Emit tool execution started event
             let started_event = ToolExecutionStartedEvent {
                 tool_call_id: call.id.clone(),
+                message_id: msg_id.clone(),
                 skill_name: call.skill_name.clone(),
                 tool_name: call.tool_name.clone(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
@@ -518,26 +554,9 @@ When you need capabilities from a skill:
             }
         }
 
-        // Update records with results and emit completion events
+        // Update records with results
         for result in &results {
             update_tool_call_result(&self.app_handle, &result.call_id, result).await?;
-
-            let completed_event = ToolExecutionCompletedEvent {
-                tool_call_id: result.call_id.clone(),
-                skill_name: tool_calls
-                    .iter()
-                    .find(|c| c.id == result.call_id)
-                    .map(|c| c.skill_name.clone())
-                    .unwrap_or_default(),
-                tool_name: tool_calls
-                    .iter()
-                    .find(|c| c.id == result.call_id)
-                    .map(|c| c.tool_name.clone())
-                    .unwrap_or_default(),
-                success: result.success,
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = emit(TOOL_EXECUTION_COMPLETED, completed_event);
         }
 
         Ok(results)

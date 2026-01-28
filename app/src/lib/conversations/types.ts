@@ -8,7 +8,6 @@ import type { RefObject } from "react";
  */
 export interface ChatMessage {
   message: Message;
-  reasoningMessages: ChatMessage[];
 }
 
 /**

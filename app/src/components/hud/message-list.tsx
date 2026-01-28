@@ -15,7 +15,7 @@ import type React from "react";
 import { useCallback, useState } from "react";
 import {
   AssistantMessage,
-  FunctionMessage,
+  ThinkingBlock,
   UserMessage,
 } from "./message-types";
 
@@ -37,17 +37,17 @@ export function MessageList({
   messagesEndRef,
   handleNewChat,
 }: MessageListProps) {
-  const [showReasoning, setShowReasoning] = useState(new Set<number>());
+  const [showReasoning, setShowReasoning] = useState(new Set<string>());
   const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =
     useWindows();
 
-  const toggleReasoning = useCallback((index: number) => {
+  const toggleReasoning = useCallback((id: string) => {
     setShowReasoning((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(index);
+        next.add(id);
       }
       return next;
     });
@@ -65,6 +65,45 @@ export function MessageList({
   );
 
   const isLoading = conversationName === "";
+
+  // Grouping logic for thinking messages
+  const groupedMessages: Array<
+    | { type: "message"; message: ChatMessage }
+    | { type: "thinking"; messages: ChatMessage[] }
+  > = [];
+  let currentThinkingGroup: ChatMessage[] = [];
+
+  for (const m of messages) {
+    const mType = (m.message.message_type || "").toLowerCase();
+    const isThinking =
+      mType === "thinking" ||
+      mType === "tool_call" ||
+      mType === "toolcall" ||
+      mType === "tool_result" ||
+      mType === "toolresult" ||
+      (m.message.role.toLowerCase() === "assistant" && !m.message.content) ||
+      m.message.role.toLowerCase() === "tool";
+
+    if (isThinking) {
+      currentThinkingGroup.push(m);
+    } else {
+      if (currentThinkingGroup.length > 0) {
+        groupedMessages.push({
+          type: "thinking",
+          messages: [...currentThinkingGroup],
+        });
+        currentThinkingGroup = [];
+      }
+      groupedMessages.push({ type: "message", message: m });
+    }
+  }
+
+  if (currentThinkingGroup.length > 0) {
+    groupedMessages.push({
+      type: "thinking",
+      messages: currentThinkingGroup,
+    });
+  }
 
   return (
     <ContentContainer>
@@ -119,10 +158,26 @@ export function MessageList({
           style={SCROLL_MASK_STYLE}
         >
           <div className="flex flex-col">
-            {messages.map((m, i) => {
+            {groupedMessages.map((group, groupIdx) => {
+              if (group.type === "thinking") {
+                const firstId = group.messages[0].message.id;
+                return (
+                  <div
+                    key={`thinking-${firstId}`}
+                    className="max-w-[95%] w-full text-left ml-2"
+                  >
+                    <ThinkingBlock
+                      messages={group.messages}
+                      isExpanded={showReasoning.has(firstId)}
+                      onToggle={() => toggleReasoning(firstId)}
+                    />
+                  </div>
+                );
+              }
+
+              const m = group.message;
               const role = m.message.role.toLowerCase();
               const isUser = role === "user";
-              const isAssistant = role === "assistant";
 
               return (
                 <div
@@ -139,15 +194,8 @@ export function MessageList({
                 >
                   {isUser ? (
                     <UserMessage m={m} openSecondary={handleOpenSecondary} />
-                  ) : isAssistant ? (
-                    <AssistantMessage
-                      m={m}
-                      i={i}
-                      toggleReasoning={toggleReasoning}
-                      showReasoning={showReasoning.has(i)}
-                    />
                   ) : (
-                    <FunctionMessage m={m} />
+                    <AssistantMessage m={m} />
                   )}
                 </div>
               );

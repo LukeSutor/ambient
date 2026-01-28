@@ -22,7 +22,7 @@ export type Message = { id: string, conversation_id: string, role: Role, content
  * Different message types carry different metadata
  * that helps with displaying and tracking.
  */
-export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name: string, tool_name: string, arguments: any, } | { "type": "ToolResult", call_id: string, success: boolean, error: string | null, result: any, } | { "type": "SkillActivation", skill_name: string, reason: string, } | { "type": "Thinking", stage: string, };
+export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name: string, tool_name: string, arguments: any, } | { "type": "ToolResult", call_id: string, success: boolean, error: string | null, result: any, } | { "type": "Thinking", stage: string, };
 
 /**
  * The type of a message in the conversation.
@@ -30,6 +30,6 @@ export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name:
  * Different message types represent different stages of agentic
  * processing and are displayed differently in the UI.
  */
-export type MessageType = "text" | "tool_call" | "tool_result" | "thinking" | "skill_activation";
+export type MessageType = "text" | "tool_call" | "tool_result" | "thinking";
 
 export type Role = "system" | "user" | "assistant" | "tool";

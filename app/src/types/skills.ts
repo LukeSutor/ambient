@@ -55,6 +55,11 @@ arguments: any, };
  */
 export type ToolDefinition = { 
 /**
+ * Optional skill name this tool belongs to.
+ * Used for routing and name qualified names.
+ */
+skill_name: string | null, 
+/**
  * The unique name of this tool (within its skill).
  */
 name: string, 

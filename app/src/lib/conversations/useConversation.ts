@@ -31,7 +31,6 @@ function transformBackendMessage(backendMessage: Message): ChatMessage {
       ...backendMessage,
       role: backendMessage.role.toLowerCase() as Role,
     },
-    reasoningMessages: [],
   };
 }
 
@@ -55,7 +54,6 @@ function createUserMessage(
   };
   return {
     message,
-    reasoningMessages: [],
   };
 }
 
@@ -196,42 +194,8 @@ export function useConversation(
         const backendMessages = await invoke<Message[]>("get_messages", {
           conversationId: conversation.id,
         });
-        let messages = backendMessages.map(transformBackendMessage);
-        // Load messages depending on conversation type
-        if (conversation.conv_type === "computer_use") {
-          // Collect all assistant/function messages into the last assistant message's reasoningMessages
-          const finalizedMessages: ChatMessage[] = [];
-          let currentAssistantMessage: ChatMessage | null = null;
-          // Loop reverse through the messages to group reasoning by each final assistant message
-          const reversedMessages = [...messages].reverse();
-          for (const msg of reversedMessages) {
-            if (msg.message.role === "tool") {
-              // Add function reasoning if current assistant message
-              if (currentAssistantMessage) {
-                currentAssistantMessage.reasoningMessages.unshift(msg);
-              }
-            } else if (msg.message.role === "user") {
-              // Add current assistant message to finalized and reset
-              if (currentAssistantMessage) {
-                finalizedMessages.unshift(currentAssistantMessage);
-                finalizedMessages.unshift(msg);
-                currentAssistantMessage = null;
-              }
-            } else if (msg.message.role === "assistant") {
-              // If there is a current assistant message, add this as reasoning
-              if (currentAssistantMessage) {
-                currentAssistantMessage.reasoningMessages.unshift(msg);
-              } else {
-                currentAssistantMessage = msg;
-              }
-            }
-          }
-          // If there is a remaining assistant message, add it
-          if (currentAssistantMessage) {
-            finalizedMessages.unshift(currentAssistantMessage);
-          }
-          messages = finalizedMessages;
-        }
+        const messages = backendMessages.map(transformBackendMessage);
+        console.log({messages})
         dispatch({ type: "LOAD_MESSAGES", payload: messages });
       } catch (error) {
         console.error("[useConversation] Failed to load messages:", error);

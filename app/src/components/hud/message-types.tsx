@@ -12,14 +12,19 @@ import {
   Camera,
   ChevronDown,
   FileText,
+  Hammer,
   NotebookPen,
   Search,
+  Sparkles,
   SquareDashed,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -264,69 +269,150 @@ export function UserMessage({
   );
 }
 
-export function ReasoningAssistantMessage({ m }: { m: ChatMessage }) {
-  return (
-    <div className="overflow-hidden">
-      <Markdown {...llmMarkdownConfig}>
-        {preprocessMarkdownCurrency(m.message.content)}
-      </Markdown>
-    </div>
-  );
-}
-
-export function ReasoningFunctionMessage({ m }: { m: ChatMessage }) {
-  return (
-    <div className="overflow-hidden bg-white/20 border border-black/20 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left">
-      <Markdown {...llmMarkdownConfig}>
-        {preprocessMarkdownCurrency(m.message.content)}
-      </Markdown>
-    </div>
-  );
-}
-
-export function ReasoningMessages({
-  reasoningMessages,
-  i,
-  toggleReasoning,
-  showReasoning,
+export function ToolStep({
+  call,
+  result,
 }: {
-  reasoningMessages: ChatMessage[];
-  i: number;
-  toggleReasoning: (index: number) => void;
-  showReasoning: boolean;
+  call: ChatMessage;
+  result?: ChatMessage;
 }) {
-  if (reasoningMessages.length === 0) return null;
+  const metadata = call.message.metadata;
+  if (metadata?.type !== "ToolCall") return null;
+
+  const resultMetadata = result?.message.metadata;
+  const isSuccess =
+    resultMetadata?.type === "ToolResult" ? resultMetadata.success : null;
 
   return (
-    <div className="-mb-2">
+    <div className="flex flex-col gap-1.5 py-1">
+      <div className="flex items-center gap-2 text-zinc-600">
+        <div className="p-1 rounded bg-zinc-100">
+          <Hammer className="w-3.5 h-3.5" />
+        </div>
+        <span className="text-sm font-medium">
+          {metadata.skill_name}.{metadata.tool_name}
+        </span>
+        {isSuccess === true && (
+          <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+        )}
+        {isSuccess === false && <XCircle className="w-3.5 h-3.5 text-red-500" />}
+      </div>
+
+      <div className="ml-7 text-xs text-zinc-500 font-mono bg-zinc-50/50 p-2 rounded border border-zinc-100 overflow-x-auto">
+        {JSON.stringify(metadata.arguments, null, 2)}
+      </div>
+
+      {result && resultMetadata?.type === "ToolResult" && resultMetadata.result && (
+        <div className="ml-7 mt-1 text-xs text-zinc-600 bg-white p-2 rounded border border-zinc-100 shadow-sm">
+          <div className="font-semibold mb-1 uppercase text-[10px] text-zinc-400 tracking-wider">
+            Result
+          </div>
+          <pre className="whitespace-pre-wrap break-all">
+            {typeof resultMetadata.result === "string"
+              ? resultMetadata.result
+              : JSON.stringify(resultMetadata.result, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {result &&
+        resultMetadata?.type === "ToolResult" &&
+        resultMetadata.error && (
+          <div className="ml-7 mt-1 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100 font-mono">
+            {resultMetadata.error}
+          </div>
+        )}
+    </div>
+  );
+}
+
+export function GenericThinkingStep({ m }: { m: ChatMessage }) {
+  return (
+    <div className="flex items-center gap-2 text-zinc-500 py-1">
+      <div className="p-1 rounded bg-zinc-100">
+        <Sparkles className="w-3.5 h-3.5" />
+      </div>
+      <span className="text-sm">{m.message.content}</span>
+    </div>
+  );
+}
+
+export function ThinkingBlock({
+  messages,
+  isExpanded,
+  onToggle,
+}: {
+  messages: ChatMessage[];
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  if (messages.length === 0) return null;
+
+  const resultsMap = new Map();
+  for (const m of messages) {
+    const mType = (m.message.message_type || "").toLowerCase();
+    if (
+      (mType === "tool_result" || mType === "toolresult") &&
+      m.message.metadata?.type === "ToolResult"
+    ) {
+      resultsMap.set(m.message.metadata.call_id, m);
+    }
+  }
+
+  return (
+    <div className="flex flex-col mb-4">
       <Button
         variant="ghost"
-        onClick={() => {
-          toggleReasoning(i);
-        }}
+        size="sm"
+        onClick={onToggle}
+        className="w-fit text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 h-8 px-2 -ml-2 transition-colors flex items-center gap-1.5"
       >
-        {showReasoning ? "Hide" : "Show"} Thinking
+        <span className="text-xs font-semibold uppercase tracking-wider">
+          {isExpanded ? "Hide" : "Show"} Thinking
+        </span>
         <ChevronDown
-          className={`${showReasoning ? "rotate-180" : ""} transition-transform`}
+          className={cn(
+            "w-3.5 h-3.5 transition-transform duration-200",
+            isExpanded && "rotate-180",
+          )}
         />
       </Button>
+
       <div
-        className={`grid transition-[grid-template-rows] duration-500 ${showReasoning ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        className={cn(
+          "grid transition-all duration-300 ease-in-out overflow-hidden",
+          isExpanded
+            ? "grid-rows-[1fr] opacity-100 mt-2"
+            : "grid-rows-[0fr] opacity-0",
+        )}
       >
-        <div className="overflow-hidden">
-          <div className="flex flex-row mt-2">
-            <div className="w-[1px] bg-black/40 rounded-full ml-6 mr-4 flex-shrink-0" />
-            <div className="flex-1 space-y-4">
-              {reasoningMessages.map((rm) => (
-                <div key={rm.message.id}>
-                  {rm.message.role.toLowerCase() === "assistant" ? (
-                    <ReasoningAssistantMessage m={rm} />
-                  ) : (
-                    <ReasoningFunctionMessage m={rm} />
-                  )}
-                </div>
-              ))}
-            </div>
+        <div className="min-h-0">
+          <div className="ml-2 border-l-2 border-zinc-100 pl-4 space-y-1">
+            {messages.map((m) => {
+              const mType = (m.message.message_type || "").toLowerCase();
+              const role = m.message.role.toLowerCase();
+
+              if (mType === "tool_call" || mType === "toolcall") {
+                const result = resultsMap.get(
+                  m.message.metadata?.type === "ToolCall"
+                    ? m.message.metadata.call_id
+                    : "",
+                );
+                return <ToolStep key={m.message.id} call={m} result={result} />;
+              }
+
+              // Only render individual steps for non-result messages
+              // (Results are rendered inside ToolStep)
+              if (
+                mType !== "tool_result" &&
+                mType !== "toolresult" &&
+                role !== "tool"
+              ) {
+                return <GenericThinkingStep key={m.message.id} m={m} />;
+              }
+
+              return null;
+            })}
           </div>
         </div>
       </div>
@@ -334,26 +420,11 @@ export function ReasoningMessages({
   );
 }
 
-export function AssistantMessage({
-  m,
-  i,
-  toggleReasoning,
-  showReasoning,
-}: {
-  m: ChatMessage;
-  i: number;
-  toggleReasoning: (index: number) => void;
-  showReasoning: boolean;
-}) {
+export function AssistantMessage({ m }: { m: ChatMessage }) {
+  if (!m.message.content) return null;
+
   return (
     <div className="overflow-hidden">
-      {/* Reasoning Messages */}
-      <ReasoningMessages
-        reasoningMessages={m.reasoningMessages}
-        i={i}
-        toggleReasoning={toggleReasoning}
-        showReasoning={showReasoning}
-      />
       <Markdown {...llmMarkdownConfig}>
         {preprocessMarkdownCurrency(m.message.content)}
       </Markdown>
@@ -362,6 +433,7 @@ export function AssistantMessage({
 }
 
 export function FunctionMessage({ m }: { m: ChatMessage }) {
+  // If this is rendered outside a thinking block (fallback)
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
       <Markdown {...llmMarkdownConfig}>

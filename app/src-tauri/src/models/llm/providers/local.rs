@@ -140,7 +140,6 @@ impl LlmProvider for LocalProvider {
 
     // Handle internal tools translation
     if let Some(internal_tools) = &request.internal_tools {
-      log::debug!("[llama_server] Translating internal tools to OpenAI format: {:?}", json!(tools_to_openai_format(internal_tools)));
       request.tools = Some(json!(tools_to_openai_format(internal_tools)));
     }
 

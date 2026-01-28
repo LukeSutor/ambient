@@ -86,7 +86,6 @@ type ConversationAction =
   | { type: "LOAD_CONVERSATION"; payload: Conversation }
   | { type: "LOAD_MESSAGES"; payload: ChatMessage[] }
   | { type: "ADD_CHAT_MESSAGE"; payload: ChatMessage }
-  | { type: "ADD_REASONING_MESSAGE"; payload: ChatMessage }
   | {
       type: "START_USER_MESSAGE";
       payload: { id: string; conversationId: string; timestamp: string };
@@ -216,7 +215,6 @@ function conversationReducer(
           message_type: "text",
           metadata: null,
         },
-        reasoningMessages: [],
       };
       return {
         ...state,
@@ -261,7 +259,6 @@ function conversationReducer(
           message_type: "text",
           metadata: null,
         },
-        reasoningMessages: [],
       };
       return {
         ...state,
@@ -272,11 +269,15 @@ function conversationReducer(
     }
 
     case "UPDATE_STREAMING_CONTENT": {
-      // Find the last assistant message and update its content
+      // Find the last assistant text message and update its content
       const updatedMessages = [...state.messages];
       const lastAssistantIndex = [...updatedMessages]
         .reverse()
-        .findIndex((m) => m.message.role === "assistant");
+        .findIndex((m) => {
+          const role = m.message.role.toLowerCase();
+          const mType = (m.message.message_type || "").toLowerCase();
+          return role === "assistant" && mType === "text";
+        });
 
       if (lastAssistantIndex !== -1) {
         const actualIndex = updatedMessages.length - 1 - lastAssistantIndex;
@@ -296,36 +297,16 @@ function conversationReducer(
       };
     }
 
-    case "ADD_REASONING_MESSAGE": {
-      // Find the last assistant message and add reasoning message to it
-      const updatedMessages = [...state.messages];
-      const lastAssistantIdx = [...updatedMessages]
-        .reverse()
-        .findIndex((m) => m.message.role === "assistant");
-
-      if (lastAssistantIdx !== -1) {
-        const actualIdx = updatedMessages.length - 1 - lastAssistantIdx;
-        const updatedReasoning = [
-          ...updatedMessages[actualIdx].reasoningMessages,
-          action.payload,
-        ];
-        updatedMessages[actualIdx] = {
-          ...updatedMessages[actualIdx],
-          reasoningMessages: updatedReasoning,
-        };
-      }
-      return {
-        ...state,
-        messages: updatedMessages,
-      };
-    }
-
     case "FINALIZE_STREAM": {
-      // Update the last assistant message with final content
+      // Update the last assistant text message with final content
       const finalizedMessages = [...state.messages];
       const lastAssistIdx = [...finalizedMessages]
         .reverse()
-        .findIndex((m) => m.message.role === "assistant");
+        .findIndex((m) => {
+          const role = m.message.role.toLowerCase();
+          const mType = (m.message.message_type || "").toLowerCase();
+          return role === "assistant" && mType === "text";
+        });
 
       if (lastAssistIdx !== -1) {
         const actualIdx = finalizedMessages.length - 1 - lastAssistIdx;
@@ -546,7 +527,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ComputerUseUpdateEvent>("computer_use_update", (event) => {
             const chatMessage: ChatMessage = {
               message: event.payload.message,
-              reasoningMessages: [],
             };
 
             if (event.payload.status === "completed") {
@@ -555,7 +535,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                 payload: event.payload.message.content,
               });
             } else {
-              dispatch({ type: "ADD_REASONING_MESSAGE", payload: chatMessage });
+              dispatch({ type: "ADD_CHAT_MESSAGE", payload: chatMessage });
             }
           }),
 
@@ -606,20 +586,101 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
           // Agentic Runtime Listeners
           listen<SkillActivatedEvent>("skill_activated", (event) => {
-            console.log("[AgentRuntime] Skill Activated:", event.payload);
+            const { skill_name, message_id, conversation_id, timestamp } =
+              event.payload;
+
+            if (conversation_id !== convIdRef.current) return;
+
+            dispatch({
+              type: "ADD_CHAT_MESSAGE",
+              payload: {
+                message: {
+                  id: message_id,
+                  conversation_id,
+                  role: "assistant",
+                  content: `Activated skill: ${skill_name}`,
+                  timestamp,
+                  message_type: "thinking",
+                  metadata: {
+                    type: "Thinking",
+                    stage: `Skill Activated: ${skill_name}`,
+                  },
+                  attachments: [],
+                  memory: null,
+                },
+              },
+            });
           }),
 
-          listen<ToolExecutionStartedEvent>("tool_execution_started", (event) => {
-            console.log("[AgentRuntime] Tool Execution Started:", event.payload);
-          }),
+          listen<ToolExecutionStartedEvent>(
+            "tool_execution_started",
+            (event) => {
+              const { tool_call_id, message_id, skill_name, tool_name, timestamp } =
+                event.payload;
+
+              dispatch({
+                type: "ADD_CHAT_MESSAGE",
+                payload: {
+                  message: {
+                    id: message_id,
+                    conversation_id: convIdRef.current || "",
+                    role: "assistant",
+                    content: `Calling ${skill_name}.${tool_name}...`,
+                    timestamp,
+                    message_type: "tool_call",
+                    metadata: {
+                      type: "ToolCall",
+                      call_id: tool_call_id,
+                      skill_name,
+                      tool_name,
+                      arguments: {},
+                    },
+                    attachments: [],
+                    memory: null,
+                  },
+                },
+              });
+            },
+          ),
 
           listen<ToolExecutionCompletedEvent>(
             "tool_execution_completed",
             (event) => {
-              console.log(
-                "[AgentRuntime] Tool Execution Completed:",
-                event.payload,
-              );
+              const {
+                tool_call_id,
+                message_id,
+                skill_name,
+                tool_name,
+                success,
+                result,
+                error,
+                timestamp,
+              } = event.payload;
+
+              dispatch({
+                type: "ADD_CHAT_MESSAGE",
+                payload: {
+                  message: {
+                    id: message_id,
+                    conversation_id: convIdRef.current || "",
+                    role: "tool",
+                    content: success
+                      ? "Tool execution successful"
+                      : `Tool error: ${error}`,
+                    timestamp,
+                    message_type: "tool_result",
+                    metadata: {
+                      type: "ToolResult",
+                      call_id: tool_call_id,
+                      success,
+                      error: error || null,
+                      result: result || null,
+                    },
+                    attachments: [],
+                    memory: null,
+                  },
+                },
+              });
             },
           ),
         ];
