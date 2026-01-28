@@ -41,7 +41,6 @@ pub use types::{
     ParameterType,
     ToolCall,
     ToolResult,
-    SkillActivationRequest,
     AgentRuntimeConfig,
     ProviderType,
     AgentError,

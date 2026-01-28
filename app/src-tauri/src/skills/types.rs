@@ -223,19 +223,6 @@ impl ToolResult {
     }
 }
 
-/// A skill activation request from the model.
-///
-/// This represents the model's request to activate a skill before
-/// using its tools. Activation loads the skill's full tool definitions.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "skills.ts")]
-pub struct SkillActivationRequest {
-    /// The name of the skill to activate.
-    pub skill_name: String,
-    /// The model's explanation for why this skill is needed.
-    pub reason: String,
-}
-
 /// Configuration for the agentic runtime.
 ///
 /// These settings control the behavior of the agent loop,

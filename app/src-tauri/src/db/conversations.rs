@@ -36,8 +36,6 @@ pub enum MessageType {
   ToolResult,
   /// Internal reasoning/thinking step (optional).
   Thinking,
-  /// Request to activate a new skill.
-  SkillActivation,
 }
 
 impl MessageType {
@@ -48,7 +46,6 @@ impl MessageType {
             MessageType::ToolCall => "tool_call",
             MessageType::ToolResult => "tool_result",
             MessageType::Thinking => "thinking",
-            MessageType::SkillActivation => "skill_activation",
         }
     }
 
@@ -59,7 +56,6 @@ impl MessageType {
             "tool_call" => MessageType::ToolCall,
             "tool_result" => MessageType::ToolResult,
             "thinking" => MessageType::Thinking,
-            "skill_activation" => MessageType::SkillActivation,
             _ => MessageType::Text,
         }
     }
@@ -135,10 +131,6 @@ pub enum MessageMetadata {
     error: Option<String>,
     #[ts(type = "any")]
     result: Option<serde_json::Value>,
-  },
-  SkillActivation {
-    skill_name: String,
-    reason: String,
   },
   Thinking {
     stage: String,

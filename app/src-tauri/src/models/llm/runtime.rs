@@ -16,10 +16,9 @@
 //!     ↓
 //! Model Generation (Phase 1 - summaries only)
 //!     ↓
-//! Response: Text | Skill Activation | Tool Calls
+//! Response: Text | Tool Calls
 //!     ↓
-//! Skill Activation? → [Load skill tools] → Continue
-//! Tool Calls? → [Execute tools] → [Add results] → Continue
+//! Tool Calls? → [Execute tools] → [Check for skill activation] → [Add results] → Continue
 //! Text? → [Save and return]
 //! ```
 //!
@@ -41,7 +40,7 @@ use crate::skills::executor::{execute_tools, save_tool_call_record, update_tool_
 use crate::skills::registry::{get_all_summaries, get_skill, get_skill_tools, skill_exists};
 use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
-    SkillActivationRequest, SkillSummary, ToolCall, ToolDefinition, ToolResult,
+    SkillSummary, ToolCall, ToolDefinition, ToolResult,
 };
 use chrono::Local;
 use tauri::AppHandle;
@@ -264,15 +263,6 @@ impl AgentRuntime {
                     return Ok(text);
                 }
 
-                LlmResponse::SkillActivation(activation) => {
-                    // Model wants to activate a skill
-                    log::info!("[agent] Skill activation requested: {:?}", activation);
-                    self.handle_skill_activation(activation).await?;
-
-                    // Continue loop with skill now active
-                    continue;
-                }
-
                 LlmResponse::ToolCalls(tool_calls) => {
                     // Model wants to execute tools
                     log::info!("[agent] Tool calls requested: {:?}", tool_calls);
@@ -453,52 +443,34 @@ When you need capabilities from a skill:
     /// Handles a skill activation request.
     ///
     /// Verifies skill exists, adds to active skills list, persists
-    /// to database, and saves an activation message.
-    async fn handle_skill_activation(
+    /// to database, and emits activation event.
+    async fn activate_skill_internal(
         &mut self,
-        activation: SkillActivationRequest,
+        skill_name: &str,
     ) -> Result<(), AgentError> {
-        log::info!(
-            "[agent] Activating skill '{}': {}",
-            activation.skill_name,
-            activation.reason
-        );
+        log::info!("[agent] Activating skill '{}'", skill_name);
 
         // Verify skill exists
-        if !skill_exists(&activation.skill_name) {
-            return Err(AgentError::SkillNotFound(activation.skill_name.clone()));
+        if !skill_exists(skill_name) {
+            return Err(AgentError::SkillNotFound(skill_name.to_string()));
         }
 
         // Add to active skills if not already active
-        if !self.active_skills.contains(&activation.skill_name) {
-            self.active_skills.push(activation.skill_name.clone());
+        if !self.active_skills.contains(&skill_name.to_string()) {
+            self.active_skills.push(skill_name.to_string());
 
             // Persist to database
-            save_conversation_skill(&self.app_handle, &self.conv_id, &activation.skill_name)
+            save_conversation_skill(&self.app_handle, &self.conv_id, skill_name)
                 .await?;
 
             // Emit skill activated event
             let event = SkillActivatedEvent {
-                skill_name: activation.skill_name.clone(),
+                skill_name: skill_name.to_string(),
                 conversation_id: self.conv_id.clone(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
             let _ = emit(SKILL_ACTIVATED, event);
         }
-
-        // Save activation as a thinking message
-        let metadata = MessageMetadata::SkillActivation {
-            skill_name: activation.skill_name.clone(),
-            reason: activation.reason.clone(),
-        };
-
-        let content = format!(
-            "Activating {} skill: {}",
-            activation.skill_name, activation.reason
-        );
-
-        self.save_assistant_message(&content, MessageType::SkillActivation, Some(metadata))
-            .await?;
 
         Ok(())
     }
@@ -508,7 +480,7 @@ When you need capabilities from a skill:
     /// Saves tool call records, executes them in parallel, and updates
     /// records with results.
     async fn execute_tool_calls(
-        &self,
+        &mut self,
         tool_calls: Vec<ToolCall>,
     ) -> Result<Vec<ToolResult>, AgentError> {
         log::info!("[agent] Executing {} tool calls", tool_calls.len());
@@ -530,6 +502,15 @@ When you need capabilities from a skill:
 
         // Execute tools in parallel
         let results = execute_tools(&self.app_handle, tool_calls.clone()).await;
+
+        // Check for skill activation calls and update state
+        for call in &tool_calls {
+            if call.skill_name == "system" && call.tool_name == "activate_skill" {
+                if let Some(skill_name) = call.arguments.get("skill_name").and_then(|v| v.as_str()) {
+                    self.activate_skill_internal(skill_name).await?;
+                }
+            }
+        }
 
         // Update records with results and emit completion events
         for result in &results {

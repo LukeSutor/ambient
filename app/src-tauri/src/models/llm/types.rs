@@ -102,8 +102,6 @@ pub trait LlmProvider: Send + Sync {
 pub enum LlmResponse {
     /// Final text response
     Text(String),
-    /// Request to activate a skill
-    SkillActivation(crate::skills::types::SkillActivationRequest),
     /// Tool calls to execute
     ToolCalls(Vec<crate::skills::types::ToolCall>),
 }
