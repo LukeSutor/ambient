@@ -38,5 +38,5 @@ Search the internet for information to answer user questions.
 ## Guidelines
 1. Use clear, specific search queries
 2. Search first, then fetch specific pages if needed
-3. Synthesize from multiple sources
+3. If the search doesn't return what you need, fetch_webpage to get more information
 4. Always cite sources

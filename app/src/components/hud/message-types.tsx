@@ -365,7 +365,7 @@ export function ThinkingBlock({
         variant="ghost"
         size="sm"
         onClick={onToggle}
-        className="w-fit text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 h-8 px-2 -ml-2 transition-colors flex items-center gap-1.5"
+        className="w-fit text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100 h-8 px-2 -ml-2 transition-colors flex items-center gap-1.5"
       >
         <span className="text-xs font-semibold uppercase tracking-wider">
           {isExpanded ? "Hide" : "Show"} Thinking

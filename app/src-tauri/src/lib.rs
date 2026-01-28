@@ -37,6 +37,8 @@ pub fn run() {
             || t.starts_with("reqwest")
             || t.starts_with("enigo")
             || t.starts_with("keyring")
+            || t.starts_with("html5ever")
+            || t.starts_with("selectors")
             || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
