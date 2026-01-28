@@ -1,8 +1,7 @@
-use crate::models::llm::types::{LlmRequest, LlmProvider};
+use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
 use crate::db::token_usage::add_token_usage;
-use crate::models::llm::providers::translation::tools_to_openai_format;
+use crate::models::llm::providers::translation::{tools_to_openai_format, has_tool_calls_openai, parse_openai_tool_calls};
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
-use crate::models::llm::client::ToolEnabledProvider;
 use crate::events::{emitter::emit, types::*};
 use serde_json::{json, Value};
 use base64::{Engine as _, engine::general_purpose};
@@ -129,8 +128,8 @@ impl LlmProvider for LocalProvider {
   async fn generate(
     &self,
     app_handle: AppHandle,
-    request: LlmRequest,
-  ) -> Result<String, String> {
+    mut request: LlmRequest,
+  ) -> Result<LlmResponse, String> {
     log::info!("[llama_server] Starting chat completion generation");
     let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
 
@@ -139,25 +138,59 @@ impl LlmProvider for LocalProvider {
       return Err(format!("Server health check failed: {}", e));
     }
 
-    let system_prompt = request.system_prompt.unwrap_or("You are a helpful assistant".to_string());
+    // Handle internal tools translation
+    if let Some(internal_tools) = &request.internal_tools {
+      request.tools = Some(json!(tools_to_openai_format(internal_tools)));
+    }
+
     let should_stream = request.stream.unwrap_or(false);
     let enable_thinking = request.use_thinking.unwrap_or(true);
 
-    let mut messages = build_messages(
-      &app_handle,
-      system_prompt,
-      request.prompt.clone(),
-      &request.conv_id,
-      &request.current_message_id
-    ).await?;
+    // Build messages
+    let messages = if let Some(msgs) = request.messages.clone() {
+      let mut formatted_msgs = Vec::new();
+      
+      // Add system prompt if provided
+      if let Some(system_prompt) = &request.system_prompt {
+        formatted_msgs.push(json!({
+          "role": "system",
+          "content": system_prompt
+        }));
+      }
 
-    // Add user prompt if no current message id is provided
-    if request.current_message_id.is_none() {
-      messages.push(json!({
-        "role": "user",
-        "content": request.prompt
-      }));
-    }
+      for msg in msgs {
+        let role = match msg.role {
+          crate::db::conversations::Role::System => "system",
+          crate::db::conversations::Role::User => "user",
+          crate::db::conversations::Role::Assistant => "assistant",
+          crate::db::conversations::Role::Tool => "tool",
+        };
+
+        formatted_msgs.push(json!({
+          "role": role,
+          "content": msg.content,
+        }));
+      }
+      formatted_msgs
+    } else {
+      let system_prompt = request.system_prompt.clone().unwrap_or("You are a helpful assistant".to_string());
+      let mut msgs = build_messages(
+        &app_handle,
+        system_prompt,
+        request.prompt.clone(),
+        &request.conv_id,
+        &request.current_message_id
+      ).await?;
+
+      // Add user prompt if no current message id is provided and no history used
+      if request.current_message_id.is_none() {
+        msgs.push(json!({
+          "role": "user",
+          "content": request.prompt
+        }));
+      }
+      msgs
+    };
 
     // Build request body
     let mut request_body = json!({
@@ -304,7 +337,7 @@ impl LlmProvider for LocalProvider {
           completion_tokens,
       ).await?;
 
-      Ok(full_response)
+      Ok(LlmResponse::Text(full_response))
     } else {
       // Handle non-streaming response
       let response = client
@@ -330,99 +363,34 @@ impl LlmProvider for LocalProvider {
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-      // Extract generated content
-      let generated_text = result["choices"][0]["message"]["content"]
-        .as_str()
-        .ok_or("No content in response")?
-        .to_string();
+      // Extract generated content and check for tool calls
+      if has_tool_calls_openai(&result) {
+        let tool_calls = parse_openai_tool_calls(&result);
+        Ok(LlmResponse::ToolCalls(tool_calls))
+      } else {
+        let generated_text = result["choices"][0]["message"]["content"]
+          .as_str()
+          .ok_or("No content in response")?
+          .to_string();
 
-      // Extract token usage
-      if let Some(timings) = result.get("timings") {
-        prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
-        completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
+        // Extract token usage
+        if let Some(timings) = result.get("timings") {
+          prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
+          completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
+        }
+
+        // Save token usage
+        add_token_usage(
+            app_handle.clone(),
+            "local",
+            prompt_tokens,
+            completion_tokens,
+        ).await?;
+
+        Ok(LlmResponse::Text(generated_text))
       }
-
-      // Save token usage
-      add_token_usage(
-          app_handle.clone(),
-          "local",
-          prompt_tokens,
-          completion_tokens,
-      ).await?;
-
-      Ok(generated_text)
     }
   }
 }
 
-#[async_trait::async_trait]
-impl ToolEnabledProvider for LocalProvider {
-  async fn generate_with_tools(
-    &self,
-    app_handle: AppHandle,
-    request: LlmRequest,
-    messages: Vec<serde_json::Value>,
-  ) -> Result<serde_json::Value, String> {
-    let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
-
-    // Check if server is healthy first
-    if let Err(e) = perform_health_check(&config).await {
-      return Err(format!("Server health check failed: {}", e));
-    }
-
-    let should_stream = request.stream.unwrap_or(false);
-    let enable_thinking = request.use_thinking.unwrap_or(true);
-
-    // Build request body
-    let mut request_body = json!({
-        "model": "local",
-        "messages": messages,
-        "stream": should_stream,
-        "temperature": 0.7,
-        "top_p": 0.8,
-        "top_k": 20,
-        "seed": 3407,
-        "repeat_penalty": 1.0,
-        "presence_penalty": 1.5,
-        "max_tokens": 32768
-    });
-
-    // Add tools if provided
-    if let Some(tools) = request.tools {
-      request_body["tools"] = tools;
-    }
-
-    // Add thinking parameter
-    request_body["chat_template_kwargs"] = json!({
-        "enable_thinking": enable_thinking
-    });
-
-    let client = reqwest::Client::new();
-    let completion_url = format!("{}/v1/chat/completions", config.base_url());
-
-    let response = client
-        .post(&completion_url)
-        .header("Content-Type", "application/json")
-        .header("Authorization", format!("Bearer {}", config.api_key))
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to send request: {}", e))?;
-
-    if !response.status().is_success() {
-      let status = response.status();
-      let error_text = response
-        .text()
-        .await
-        .unwrap_or_else(|_| "Unknown error".to_string());
-      return Err(format!("Server returned error {}: {}", status, error_text));
-    }
-
-    log::debug!("[llama_server] Tool-enabled response received: {:?}", response);
-
-    response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))
-  }
-}
+// Remove the old ToolEnabledProvider implementation

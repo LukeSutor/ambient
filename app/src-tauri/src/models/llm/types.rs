@@ -1,5 +1,5 @@
 use tauri::AppHandle;
-use crate::skills::types::{ToolDefinition, AgentRuntimeConfig, ProviderType};
+use crate::skills::types::ToolDefinition;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -22,6 +22,8 @@ pub struct LlmRequest {
     pub current_message_id: Option<String>,
     #[ts(type = "any")]
     pub tools: Option<serde_json::Value>,
+    pub internal_tools: Option<Vec<ToolDefinition>>,
+    pub messages: Option<Vec<crate::db::conversations::Message>>,
     pub context_limit: Option<usize>,
 }
 
@@ -68,6 +70,16 @@ impl LlmRequest {
         self
     }
 
+    pub fn with_internal_tools(mut self, tools: Option<Vec<ToolDefinition>>) -> Self {
+        self.internal_tools = tools;
+        self
+    }
+
+    pub fn with_messages(mut self, messages: Option<Vec<crate::db::conversations::Message>>) -> Self {
+        self.messages = messages;
+        self
+    }
+
     pub fn with_context_limit(mut self, context_limit: Option<usize>) -> Self {
         self.context_limit = context_limit;
         self
@@ -81,34 +93,17 @@ pub trait LlmProvider: Send + Sync {
         &self,
         app_handle: AppHandle,
         request: LlmRequest,
-    ) -> Result<String, String>;
+    ) -> Result<LlmResponse, String>;
 }
 
-/// Request type specifically for agentic flow
-#[derive(Debug, Clone)]
-pub struct AgentRequest {
-    pub system_prompt: String,
-    pub messages: Vec<crate::db::conversations::Message>,
-    pub tools: Vec<ToolDefinition>,
-    pub current_message_id: Option<String>,
-    pub conv_id: Option<String>,
-    pub stream: bool,
-}
-
-/// Response variants from agentic generation
-#[derive(Debug, Clone)]
-pub enum AgentResponse {
+/// Response variants from generation
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "llm.ts")]
+pub enum LlmResponse {
     /// Final text response
     Text(String),
     /// Request to activate a skill
     SkillActivation(crate::skills::types::SkillActivationRequest),
     /// Tool calls to execute
     ToolCalls(Vec<crate::skills::types::ToolCall>),
-}
-
-/// LLM provider response with tool information
-#[derive(Debug, Clone)]
-pub struct ToolLlmResponse {
-    pub content: String,
-    pub tool_calls: Vec<crate::skills::types::ToolCall>,
 }

@@ -12,7 +12,7 @@
 //! **TODO**: This is a stub implementation. Actual calendar API
 //! integration needs to be implemented.
 
-use super::{ToolCall, AgentResult};
+use super::ToolCall;
 use serde_json::Value;
 
 /// Execute a calendar tool.

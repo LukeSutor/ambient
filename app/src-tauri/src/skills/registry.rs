@@ -6,7 +6,6 @@
 
 use super::types::{Skill, SkillSummary, ToolDefinition, ToolParameter, ToolReturnType, ParameterType, AgentError};
 use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
 use serde_yaml::Value as YamlValue;
 use std::collections::HashMap;
 use std::path::Path;

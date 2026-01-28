@@ -1,8 +1,9 @@
-use crate::models::llm::types::{LlmRequest, LlmProvider};
+use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
+use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use base64::{Engine as _, engine::general_purpose};
 use serde_json::{json, Value};
@@ -112,29 +113,48 @@ impl LlmProvider for CloudflareProvider {
   async fn generate(
     &self,
     app_handle: AppHandle,
-    request: LlmRequest,
-  ) -> Result<String, String> {
+    mut request: LlmRequest,
+  ) -> Result<LlmResponse, String> {
     // Load user settings to get model selection
     let settings = crate::settings::service::load_user_settings(app_handle.clone())
       .await
       .map_err(|e| format!("Failed to load user settings: {}", e))?;
     let model = &settings.model_selection.as_str();
 
-    let should_stream = request.stream.unwrap_or(false);
-    let mut content = build_content(
-      &app_handle,
-      request.prompt.clone(),
-      &request.conv_id,
-      &request.current_message_id
-    ).await?;
-
-    // Add user prompt if no current message id is provided
-    if request.current_message_id.is_none() {
-      content.push(json!({
-        "role": "user",
-        "parts": [{"text": request.prompt.clone()}]
-      }));
+    // Handle internal tools translation
+    if let Some(internal_tools) = &request.internal_tools {
+      request.tools = Some(tools_to_gemini_format(internal_tools));
     }
+
+    let should_stream = request.stream.unwrap_or(false);
+    
+    // Build content
+    let content = if let Some(msgs) = request.messages.clone() {
+      let mut formatted_content = Vec::new();
+      for msg in msgs {
+        formatted_content.push(json!({
+          "role": role_to_gemini(msg.role.as_str()),
+          "parts": [{"text": msg.content}]
+        }));
+      }
+      formatted_content
+    } else {
+      let mut content = build_content(
+        &app_handle,
+        request.prompt.clone(),
+        &request.conv_id,
+        &request.current_message_id
+      ).await?;
+
+      // Add user prompt if no current message id is provided
+      if request.current_message_id.is_none() {
+        content.push(json!({
+          "role": "user",
+          "parts": [{"text": request.prompt.clone()}]
+        }));
+      }
+      content
+    };
 
     // Get user access token
     let access_token = get_access_token_command()
@@ -157,6 +177,11 @@ impl LlmProvider for CloudflareProvider {
         // Fallback to json_object
         body["jsonSchema"] = json!({ "type": "json_object" });
       }
+    }
+
+    // Add tools if provided
+    if let Some(tools) = request.tools {
+      body["tools"] = tools;
     }
 
     let client = reqwest::Client::new();
@@ -268,7 +293,7 @@ impl LlmProvider for CloudflareProvider {
           completion_tokens,
       ).await?;
 
-      Ok(full)
+      Ok(LlmResponse::Text(full))
     } else {
       let resp = client
         .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
@@ -302,22 +327,17 @@ impl LlmProvider for CloudflareProvider {
           .unwrap_or(0);
       }
 
-      // Try extraction from full Gemini structure, or fallback to direct string if worker returned response.text
-      let content = json
-        .get("candidates")
-        .and_then(|c| c.as_array())
-        .and_then(|a| a.get(0))
-        .and_then(|c| c.get("content"))
-        .and_then(|c| c.get("parts"))
-        .and_then(|p| p.as_array())
-        .and_then(|a| a.get(0))
-        .and_then(|p| p.get("text"))
-        .and_then(|t| t.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-          log::warn!("Failed to extract content from Gemini structure, falling back to as_str()");
-          json.as_str().unwrap_or("").to_string()
-        });
+      // Check for tool calls or extract text
+      let response = if has_tool_calls_gemini(&json) {
+        LlmResponse::ToolCalls(parse_gemini_tool_calls(&json))
+      } else {
+        let content = extract_text_gemini(&json)
+          .unwrap_or_else(|| {
+            log::warn!("Failed to extract content from Gemini structure, falling back to as_str()");
+            json.as_str().unwrap_or("").to_string()
+          });
+        LlmResponse::Text(content)
+      };
 
       // Save token usage
       add_token_usage(
@@ -327,7 +347,7 @@ impl LlmProvider for CloudflareProvider {
           completion_tokens,
       ).await?;
 
-      Ok(content)
+      Ok(response)
     }
   }
 }

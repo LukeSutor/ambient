@@ -11,7 +11,7 @@
 //! **TODO**: This is a stub implementation. Actual sandboxed code
 //! execution needs to be implemented securely.
 
-use super::{ToolCall, AgentResult};
+use super::ToolCall;
 use serde_json::Value;
 
 /// Execute a code execution tool.

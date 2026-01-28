@@ -12,7 +12,7 @@
 //! **TODO**: This is a stub implementation. Should delegate to
 //! the existing ComputerUseEngine in the future.
 
-use super::{ToolCall, AgentResult};
+use super::ToolCall;
 use serde_json::Value;
 use tauri::AppHandle;
 

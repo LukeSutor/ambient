@@ -12,7 +12,7 @@
 //! **TODO**: This is a stub implementation. Actual web search
 //! and webpage fetching logic needs to be implemented.
 
-use super::{ToolCall, AgentResult};
+use super::ToolCall;
 use serde_json::Value;
 use tauri::AppHandle;
 

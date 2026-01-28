@@ -3,7 +3,7 @@ use crate::db::conversations::{
 };
 use crate::db::memory::find_similar_memories;
 use crate::events::{emitter::emit, types::*};
-use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema, types::LlmRequest};
+use crate::models::llm::{client::generate, prompts::get_prompt, schemas::get_schema, types::{LlmRequest, LlmResponse}};
 use tauri::AppHandle;
 
 #[tauri::command]
@@ -125,8 +125,12 @@ pub async fn handle_hud_chat(app_handle: AppHandle, event: HudChatEvent) -> Resu
     .with_current_message_id(Some(event.message_id.clone()));
 
   let response = match generate(app_handle.clone(), request, None).await {
-    Ok(response) => {
+    Ok(LlmResponse::Text(response)) => {
       response
+    }
+    Ok(_) => {
+      log::error!("[hud_chat] Received tool calls in HUD chat, which is not supported");
+      return Err("Tool calls not supported in HUD chat".into());
     }
     Err(e) => {
       log::error!("[hud_chat] Failed to generate response: {}", e);
@@ -185,9 +189,13 @@ pub async fn handle_generate_conversation_name(
     .with_stream(Some(false));
 
   let generated_name = match generate(app_handle.clone(), request, Some(true)).await {
-    Ok(generated) => {
+    Ok(LlmResponse::Text(generated)) => {
       log::info!("[generate_conversation_name] Generated conversation name");
       generated
+    }
+    Ok(_) => {
+      log::error!("[generate_conversation_name] Received tool calls instead of text name");
+      return Err("Received tool calls instead of text name".into());
     }
     Err(e) => {
       log::error!("[generate_conversation_name] Failed to generate conversation name: {}", e);

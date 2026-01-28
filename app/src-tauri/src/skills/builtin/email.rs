@@ -12,7 +12,7 @@
 //! **TODO**: This is a stub implementation. Actual email API
 //! integration needs to be implemented.
 
-use super::{ToolCall, AgentResult};
+use super::ToolCall;
 use serde_json::Value;
 
 /// Execute an email tool.

@@ -227,7 +227,8 @@ impl ToolResult {
 ///
 /// This represents the model's request to activate a skill before
 /// using its tools. Activation loads the skill's full tool definitions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "skills.ts")]
 pub struct SkillActivationRequest {
     /// The name of the skill to activate.
     pub skill_name: String,
@@ -348,6 +349,11 @@ pub enum AgentError {
     #[serde(rename = "SkillParseError")]
     #[error("Failed to parse skill file: {0}")]
     SkillParseError(String),
+
+    /// LLM generation failed.
+    #[serde(rename = "LlmError")]
+    #[error("LLM error: {0}")]
+    LlmError(String),
 
     /// Database operation failed.
     #[serde(rename = "DatabaseError")]

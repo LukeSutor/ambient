@@ -30,33 +30,21 @@
 
 use crate::db::conversations::{
     add_message_extended, get_conversation_history, load_conversation_skills,
-    save_conversation_skill, Message, MessageMetadata, MessageType, Role,
+    save_conversation_skill, MessageMetadata, MessageType, Role,
 };
-use crate::db::core::DbState;
 use crate::events::{emitter::emit, types::AttachmentData};
-use crate::events::types::CHAT_STREAM;
-use crate::events::types::ChatStreamEvent;
-use crate::models::llm::handlers::handle_generate_conversation_name;
-use crate::models::llm::client::generate_with_tools;
-use crate::models::llm::types::{AgentRequest, AgentResponse};
-use crate::models::llm::types::LlmRequest;
-use crate::models::llm::providers::translation::{
-    has_tool_calls_openai, has_tool_calls_gemini,
-    parse_openai_tool_calls, parse_gemini_tool_calls,
-    tools_to_openai_format, tools_to_gemini_format,
-    format_openai_tool_results, format_gemini_tool_results,
-};
+use crate::models::llm::client::generate;
+use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools, save_tool_call_record, update_tool_call_result};
 use crate::skills::registry::{get_all_summaries, get_skill, get_skill_tools, skill_exists};
 use crate::skills::types::{
-    AgentError, AgentResult, AgentRuntimeConfig, ProviderType,
+    AgentError, AgentRuntimeConfig, ProviderType,
     SkillActivationRequest, SkillSummary, ToolCall, ToolDefinition, ToolResult,
 };
 use chrono::Local;
-use serde_json::json;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use uuid::Uuid;
 use ts_rs::TS;
 
@@ -160,9 +148,6 @@ pub struct AgentRuntime {
 
     /// Current iteration count (for safety).
     iteration: usize,
-
-    /// The provider type being used.
-    provider_type: ProviderType,
 }
 
 impl AgentRuntime {
@@ -184,11 +169,6 @@ impl AgentRuntime {
             settings.model_selection,
             ModelSelection::Local
         );
-        let provider_type = if is_local {
-            ProviderType::Local
-        } else {
-            ProviderType::Cloudflare
-        };
 
         // Load runtime config (use defaults for now, could be from settings in future)
         let config = AgentRuntimeConfig::default();
@@ -199,8 +179,7 @@ impl AgentRuntime {
             .unwrap_or_default();
 
         log::info!(
-            "[agent] Runtime created: provider={:?}, active_skills={:?}",
-            provider_type,
+            "[agent] Runtime created: active_skills={:?}",
             active_skills
         );
 
@@ -212,7 +191,6 @@ impl AgentRuntime {
             is_local,
             active_skills,
             iteration: 0,
-            provider_type,
         })
     }
 
@@ -237,14 +215,6 @@ impl AgentRuntime {
         // Build system prompt
         let system_prompt = self.build_system_prompt(&skill_summaries);
 
-        // Get context-limited conversation history
-        let messages = get_conversation_history(
-            &self.app_handle,
-            &self.conv_id,
-            self.config.context_limit_for(self.is_local),
-        )
-        .await?;
-
         // Main agentic loop
         loop {
             self.iteration += 1;
@@ -254,56 +224,56 @@ impl AgentRuntime {
 
             log::info!("[agent] Iteration {}/{}", self.iteration, self.config.max_iterations);
 
+            // Get context-limited conversation history
+            let messages = get_conversation_history(
+                &self.app_handle,
+                &self.conv_id,
+                self.config.context_limit_for(self.is_local),
+            )
+            .await?;
+
             // Determine what tools to include in request
             let available_tools = self.get_available_tools();
 
-            // Build agent request
-            let request = AgentRequest {
-                system_prompt: system_prompt.clone(),
-                messages: messages.clone(),
-                tools: available_tools,
-                current_message_id: Some(self.message_id.clone()),
-                conv_id: Some(self.conv_id.clone()),
-                stream: true,
-            };
+            // Build LLM request
+            let request = LlmRequest::new(String::new())
+                .with_system_prompt(Some(system_prompt.clone()))
+                .with_messages(Some(messages.clone()))
+                .with_internal_tools(Some(available_tools))
+                .with_current_message_id(Some(self.message_id.clone()))
+                .with_conv_id(Some(self.conv_id.clone()))
+                .with_stream(Some(true));
 
             // Generate response from LLM
-            let response = generate_with_tools(
+            let response = generate(
                 self.app_handle.clone(),
                 request,
-                self.provider_type,
+                Some(self.is_local),
             )
-            .await?;
+            .await
+            .map_err(|e| AgentError::LlmError(e))?;
 
             log::info!("[agent] Received response from model: {:?}", response);
 
             // Handle response
             match response {
-                AgentResponse::Text(text) => {
+                LlmResponse::Text(text) => {
                     // Final response - save and return
                     log::info!("[agent] Final response received, saving and returning");
                     self.save_assistant_message(&text, MessageType::Text, None).await?;
                     return Ok(text);
                 }
 
-                AgentResponse::SkillActivation(activation) => {
+                LlmResponse::SkillActivation(activation) => {
                     // Model wants to activate a skill
                     log::info!("[agent] Skill activation requested: {:?}", activation);
                     self.handle_skill_activation(activation).await?;
 
                     // Continue loop with skill now active
-                    // Refresh messages to include the activation message
-                    let messages = get_conversation_history(
-                        &self.app_handle,
-                        &self.conv_id,
-                        self.config.context_limit_for(self.is_local),
-                    )
-                    .await?;
-
                     continue;
                 }
 
-                AgentResponse::ToolCalls(tool_calls) => {
+                LlmResponse::ToolCalls(tool_calls) => {
                     // Model wants to execute tools
                     log::info!("[agent] Tool calls requested: {:?}", tool_calls);
                     // Check if we have too many tool calls
@@ -363,14 +333,6 @@ impl AgentRuntime {
 
                         self.save_tool_result_message(&content, metadata).await?;
                     }
-
-                    // Refresh messages for next iteration
-                    let messages = get_conversation_history(
-                        &self.app_handle,
-                        &self.conv_id,
-                        self.config.context_limit_for(self.is_local),
-                    )
-                    .await?;
 
                     continue;
                 }

@@ -7,7 +7,7 @@
 //! - **Internal → Provider**: Converts tool definitions to provider format
 //! - **Provider → Internal**: Parses tool calls from provider responses
 
-use crate::skills::types::{ToolDefinition, ToolParameter, ToolCall, ToolResult, ParameterType};
+use crate::skills::types::{ToolDefinition, ToolCall, ToolResult};
 use serde_json::{json, Value};
 
 /// Translates tool definitions to OpenAI function calling format.
