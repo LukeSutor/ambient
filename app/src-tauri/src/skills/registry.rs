@@ -40,7 +40,7 @@ impl SkillRegistry {
 
     /// Loads all bundled skills from the resources directory.
     ///
-    /// Scans the resources/skills directory for subdirectories
+    /// Scans the resources/.skills directory for subdirectories
     /// containing SKILL.md files and loads them into the registry.
     pub fn load_bundled_skills(&mut self, app_handle: &AppHandle) -> Result<(), AgentError> {
         // Get the resource directory path
@@ -48,7 +48,7 @@ impl SkillRegistry {
             .path()
             .resource_dir()
             .map_err(|e| AgentError::SkillParseError(format!("Failed to get resource dir: {}", e)))?
-            .join("skills");
+            .join(".skills");
 
         if !resource_path.exists() {
             log::warn!("[skills] No bundled skills directory found at {:?}", resource_path);

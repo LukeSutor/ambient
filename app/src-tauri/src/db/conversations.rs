@@ -122,7 +122,6 @@ pub struct Message {
 #[ts(export, export_to = "conversations.ts")]
 #[serde(tag = "type")]
 pub enum MessageMetadata {
-  /// Metadata for tool_call messages.
   ToolCall {
     call_id: String,
     skill_name: String,
@@ -130,7 +129,6 @@ pub enum MessageMetadata {
     #[ts(type = "any")]
     arguments: serde_json::Value,
   },
-  /// Metadata for tool_result messages.
   ToolResult {
     call_id: String,
     success: bool,
@@ -138,12 +136,10 @@ pub enum MessageMetadata {
     #[ts(type = "any")]
     result: Option<serde_json::Value>,
   },
-  /// Metadata for skill_activation messages.
   SkillActivation {
     skill_name: String,
     reason: String,
   },
-  /// Metadata for thinking messages.
   Thinking {
     stage: String,
   },
