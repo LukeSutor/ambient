@@ -140,6 +140,7 @@ impl LlmProvider for LocalProvider {
 
     // Handle internal tools translation
     if let Some(internal_tools) = &request.internal_tools {
+      log::debug!("[llama_server] Translating internal tools to OpenAI format: {:?}", json!(tools_to_openai_format(internal_tools)));
       request.tools = Some(json!(tools_to_openai_format(internal_tools)));
     }
 
@@ -256,6 +257,7 @@ impl LlmProvider for LocalProvider {
 
       // Process streaming response
       let mut full_response = String::new();
+      let mut tool_calls_map: std::collections::HashMap<usize, (String, String, String)> = std::collections::HashMap::new();
       let mut stream = response.bytes_stream();
 
       use tokio_stream::StreamExt;
@@ -275,22 +277,17 @@ impl LlmProvider for LocalProvider {
                 }
 
                 if let Ok(json_data) = serde_json::from_str::<Value>(data) {
+                  // Capture timings if present
+                  if let Some(timings) = json_data.get("timings") {
+                    prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(prompt_tokens);
+                    completion_tokens = timings["predicted_n"].as_u64().unwrap_or(completion_tokens);
+                  }
+
                   if let Some(choices) = json_data["choices"].as_array() {
                     if let Some(choice) = choices.get(0) {
-                      // Check if stream is finished
-                      if let Some(finish_reason) = choice["finish_reason"].as_str() {
-                        if finish_reason == "stop" {
-                          // Save token usage
-                          if let Some(timings) = json_data.get("timings") {
-                            prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
-                            completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
-                          }
-                          break;
-                        }
-                      }
-
-                      // Process delta content if available
-                      if let Some(delta) = choice["delta"].as_object() {
+                      // Process delta
+                      if let Some(delta) = choice.get("delta") {
+                        // Text content
                         if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
                           full_response.push_str(content);
 
@@ -306,6 +303,27 @@ impl LlmProvider for LocalProvider {
                             log::error!("[llama_server] Failed to emit stream event: {}", e);
                           }
                         }
+
+                        // Tool calls
+                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|t| t.as_array()) {
+                          for tc in tool_calls {
+                            let index = tc["index"].as_u64().unwrap_or(0) as usize;
+                            let entry = tool_calls_map.entry(index).or_insert_with(|| (String::new(), String::new(), String::new()));
+                            
+                            if let Some(id) = tc.get("id").and_then(|v| v.as_str()) {
+                              entry.0 = id.to_string();
+                            }
+                            
+                            if let Some(func) = tc.get("function") {
+                              if let Some(name) = func.get("name").and_then(|v| v.as_str()) {
+                                entry.1.push_str(name);
+                              }
+                              if let Some(args) = func.get("arguments").and_then(|v| v.as_str()) {
+                                entry.2.push_str(args);
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -319,7 +337,7 @@ impl LlmProvider for LocalProvider {
         }
       }
 
-      // Emit final stream completion event
+      // Final stream completion event
       let final_stream_data = ChatStreamEvent {
         delta: "".to_string(),
         is_finished: true,
@@ -337,7 +355,30 @@ impl LlmProvider for LocalProvider {
           completion_tokens,
       ).await?;
 
-      Ok(LlmResponse::Text(full_response))
+      // Decide whether to return text or tool calls
+      if !tool_calls_map.is_empty() {
+        let mut tool_calls = Vec::new();
+        let mut sorted_indices: Vec<_> = tool_calls_map.keys().collect();
+        sorted_indices.sort();
+
+        for idx in sorted_indices {
+          let (id, name, args) = &tool_calls_map[idx];
+          let (skill, tool) = match name.split_once('.') {
+            Some((s, t)) => (s.to_string(), t.to_string()),
+            None => ("".to_string(), name.to_string()),
+          };
+
+          tool_calls.push(crate::skills::types::ToolCall {
+            id: if id.is_empty() { uuid::Uuid::new_v4().to_string() } else { id.clone() },
+            skill_name: skill,
+            tool_name: tool,
+            arguments: serde_json::from_str(args).unwrap_or(json!({})),
+          });
+        }
+        Ok(LlmResponse::ToolCalls(tool_calls))
+      } else {
+        Ok(LlmResponse::Text(full_response))
+      }
     } else {
       // Handle non-streaming response
       let response = client
@@ -363,6 +404,20 @@ impl LlmProvider for LocalProvider {
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
+      // Extract token usage
+      if let Some(timings) = result.get("timings") {
+        prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
+        completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
+      }
+
+      // Save token usage
+      add_token_usage(
+          app_handle.clone(),
+          "local",
+          prompt_tokens,
+          completion_tokens,
+      ).await?;
+
       // Extract generated content and check for tool calls
       if has_tool_calls_openai(&result) {
         let tool_calls = parse_openai_tool_calls(&result);
@@ -372,20 +427,6 @@ impl LlmProvider for LocalProvider {
           .as_str()
           .ok_or("No content in response")?
           .to_string();
-
-        // Extract token usage
-        if let Some(timings) = result.get("timings") {
-          prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
-          completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);
-        }
-
-        // Save token usage
-        add_token_usage(
-            app_handle.clone(),
-            "local",
-            prompt_tokens,
-            completion_tokens,
-        ).await?;
 
         Ok(LlmResponse::Text(generated_text))
       }

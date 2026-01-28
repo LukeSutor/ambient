@@ -40,7 +40,7 @@ use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools, save_tool_call_record, update_tool_call_result};
 use crate::skills::registry::{get_all_summaries, get_skill, get_skill_tools, skill_exists};
 use crate::skills::types::{
-    AgentError, AgentRuntimeConfig, ProviderType,
+    AgentError, AgentRuntimeConfig,
     SkillActivationRequest, SkillSummary, ToolCall, ToolDefinition, ToolResult,
 };
 use chrono::Local;
