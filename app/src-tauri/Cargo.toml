@@ -37,7 +37,7 @@ reqwest = { version = "0.12.15", default-features = false, features = ["rustls-t
 tokio-stream = { version = "0.1.17", features = ["net"] }
 chrono = { version = "0.4.41", features = ["serde"] }
 uuid = { version = "1.17.0", features = ["v4"] }
-ts-rs = "11.0.1"
+ts-rs = { version = "11.0.1", features = ["serde_json"] }
 tauri-plugin-log = "2"
 log = "0.4"
 async-trait = "0.1"
@@ -64,6 +64,10 @@ sha2 = "0.10"
 # Computer use crates
 enigo = "0.6.1"
 tauri-plugin-os = "2"
+
+futures = "0.3"
+serde_yaml = "0.9"
+thiserror = "1"
 
 [profile.dev]
 debug = true

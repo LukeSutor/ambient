@@ -17,7 +17,52 @@ pub enum Role {
   System,
   User,
   Assistant,
-  FunctionCall,
+  Tool,
+}
+
+/// The type of a message in the conversation.
+///
+/// Different message types represent different stages of agentic
+/// processing and are displayed differently in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(rename_all = "snake_case")]
+#[ts(export, export_to = "conversations.ts")]
+pub enum MessageType {
+  /// Regular text message from user or assistant.
+  Text,
+  /// Assistant requesting tool execution.
+  ToolCall,
+  /// Result returned from tool execution.
+  ToolResult,
+  /// Internal reasoning/thinking step (optional).
+  Thinking,
+  /// Request to activate a new skill.
+  SkillActivation,
+}
+
+impl MessageType {
+  /// Returns the string representation for database storage.
+  pub fn as_str(&self) -> &'static str {
+        match self {
+            MessageType::Text => "text",
+            MessageType::ToolCall => "tool_call",
+            MessageType::ToolResult => "tool_result",
+            MessageType::Thinking => "thinking",
+            MessageType::SkillActivation => "skill_activation",
+        }
+    }
+
+  /// Parses a string from database into MessageType.
+  pub fn from_str(s: &str) -> Self {
+        match s {
+            "text" => MessageType::Text,
+            "tool_call" => MessageType::ToolCall,
+            "tool_result" => MessageType::ToolResult,
+            "thinking" => MessageType::Thinking,
+            "skill_activation" => MessageType::SkillActivation,
+            _ => MessageType::Text,
+        }
+    }
 }
 
 impl Role {
@@ -26,7 +71,7 @@ impl Role {
       Role::System => "system",
       Role::User => "user",
       Role::Assistant => "assistant",
-      Role::FunctionCall => "functioncall",
+      Role::Tool => "tool",
     }
   }
 
@@ -35,7 +80,7 @@ impl Role {
       "system" => Role::System,
       "user" => Role::User,
       "assistant" => Role::Assistant,
-      "functioncall" => Role::FunctionCall,
+      "tool" => Role::Tool,
       _ => Role::User,
     }
   }
@@ -63,8 +108,62 @@ pub struct Message {
   pub role: Role,
   pub content: String,
   pub timestamp: String,
+  pub message_type: MessageType,
+  pub metadata: Option<MessageMetadata>,
   pub attachments: Vec<Attachment>,
   pub memory: Option<MemoryEntry>,
+}
+
+/// Structured metadata for messages.
+///
+/// Different message types carry different metadata
+/// that helps with displaying and tracking.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
+#[serde(tag = "type")]
+pub enum MessageMetadata {
+  /// Metadata for tool_call messages.
+  ToolCall {
+    call_id: String,
+    skill_name: String,
+    tool_name: String,
+    #[ts(type = "any")]
+    arguments: serde_json::Value,
+  },
+  /// Metadata for tool_result messages.
+  ToolResult {
+    call_id: String,
+    success: bool,
+    error: Option<String>,
+    #[ts(type = "any")]
+    result: Option<serde_json::Value>,
+  },
+  /// Metadata for skill_activation messages.
+  SkillActivation {
+    skill_name: String,
+    reason: String,
+  },
+  /// Metadata for thinking messages.
+  Thinking {
+    stage: String,
+  },
+}
+
+impl Message {
+  /// Creates a default text message with minimal fields.
+  pub fn text(id: String, conversation_id: String, role: Role, content: String, timestamp: String) -> Self {
+        Self {
+            id,
+            conversation_id,
+            role,
+            content,
+            timestamp,
+            message_type: MessageType::Text,
+            metadata: None,
+            attachments: Vec::new(),
+            memory: None,
+        }
+    }
 }
 
 /// Conversation structure
@@ -184,6 +283,8 @@ pub async fn add_message_with_id(
     role: Role::from_str(&role),
     content: content.clone(),
     timestamp: now.to_rfc3339(),
+    message_type: MessageType::Text,
+    metadata: None,
     attachments: vec![],
     memory: None,
   };
@@ -191,14 +292,16 @@ pub async fn add_message_with_id(
   // Insert the message
   conn
     .execute(
-      "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+      "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp, message_type, metadata)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
       params![
         message_id,
         conversation_id,
         Role::from_str(&role).as_str(),
         content,
-        now.to_rfc3339()
+        now.to_rfc3339(),
+        MessageType::Text.as_str(),
+        None::<String>
       ],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
@@ -250,7 +353,7 @@ pub async fn get_messages(
 
   let mut stmt = conn
     .prepare(
-      "SELECT m.id, m.conversation_id, m.role, m.content, m.timestamp, 
+      "SELECT m.id, m.conversation_id, m.role, m.content, m.timestamp, m.message_type, m.metadata,
         a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at,
         me.id, me.memory_type, me.text, me.timestamp
         FROM conversation_messages m 
@@ -293,6 +396,14 @@ pub async fn get_messages(
           role: Role::from_str(&role_str),
           content: row.get(3).map_err(|e| e.to_string())?,
           timestamp: row.get(4).map_err(|e| e.to_string())?,
+          message_type: row.get::<_, String>(5)
+            .map(|s| MessageType::from_str(&s))
+            .unwrap_or(MessageType::Text),
+          metadata: row.get::<_, Option<String>>(6)
+            .map_err(|e| e.to_string())?
+            .and_then(|m| serde_json::from_str::<MessageMetadata>(&m)
+              .map_err(|e| format!("Failed to parse metadata: {}", e))
+              .ok()),
           attachments: Vec::new(),
           memory,
         });
@@ -330,8 +441,8 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
 
   let mut stmt = conn
     .prepare(
-      "SELECT 
-        m.id, m.conversation_id, m.role, m.content, m.timestamp,
+      "SELECT
+        m.id, m.conversation_id, m.role, m.content, m.timestamp, m.message_type, m.metadata,
         a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at,
         me.id, me.memory_type, me.text, me.timestamp
         FROM conversation_messages m 
@@ -372,6 +483,14 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
         role: Role::from_str(&role_str),
         content: row.get(3).map_err(|e| e.to_string())?,
         timestamp: row.get(4).map_err(|e| e.to_string())?,
+        message_type: row.get::<_, String>(5)
+          .map(|s| MessageType::from_str(&s))
+          .unwrap_or(MessageType::Text),
+        metadata: row.get::<_, Option<String>>(6)
+          .map_err(|e| e.to_string())?
+          .and_then(|m| serde_json::from_str::<MessageMetadata>(&m)
+            .map_err(|e| format!("Failed to parse metadata: {}", e))
+            .ok()),
         attachments: Vec::new(),
         memory,
       });
@@ -718,4 +837,227 @@ pub async fn add_attachments(
     message_id
   );
   Ok(created_attachments)
+}
+
+/// Extended message insertion with message_type and metadata fields.
+///
+/// This is used by the agentic runtime to create messages
+/// with specific types (tool_call, tool_result, etc.) and metadata.
+#[tauri::command]
+pub async fn add_message_extended(
+  app_handle: &AppHandle,
+  conversation_id: String,
+  role: Role,
+  content: String,
+  message_type: MessageType,
+  metadata: Option<MessageMetadata>,
+  message_id: Option<String>,
+) -> Result<Message, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+  let now = Utc::now();
+  let metadata_json = metadata
+    .as_ref()
+    .map(|m| serde_json::to_string(m).ok())
+    .flatten();
+
+  let message = Message {
+    id: id.clone(),
+    conversation_id: conversation_id.clone(),
+    role: role.clone(),
+    content: content.clone(),
+    timestamp: now.to_rfc3339(),
+    message_type: message_type.clone(),
+    metadata: metadata.clone(),
+    attachments: vec![],
+    memory: None,
+  };
+
+  conn
+    .execute(
+      "INSERT INTO conversation_messages
+         (id, conversation_id, role, content, timestamp, message_type, metadata)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      params![
+        &id,
+        &conversation_id,
+        role.as_str(),
+        &content,
+        now.to_rfc3339(),
+        message_type.as_str(),
+        &metadata_json,
+      ],
+    )
+    .map_err(|e| format!("Insert failed: {}", e))?;
+
+  // Update conversation
+  conn
+    .execute(
+      "UPDATE conversations SET message_count = message_count + 1, updated_at = ?1 WHERE id = ?2",
+      params![now.to_rfc3339(), &conversation_id],
+    )
+    .map_err(|e| format!("Update failed: {}", e))?;
+
+  Ok(message)
+}
+
+/// Load activated skills for a conversation.
+///
+/// Returns the list of skill names that have been activated
+/// for the given conversation.
+pub async fn load_conversation_skills(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+) -> Result<Vec<String>, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let mut stmt = conn
+    .prepare(
+      "SELECT skill_name FROM conversation_skills WHERE conversation_id = ?1"
+    )
+    .map_err(|e| format!("Prepare failed: {}", e))?;
+
+  let skills: Vec<String> = stmt
+    .query_map(params![conversation_id], |row| row.get(0))
+    .map_err(|e| format!("Query failed: {}", e))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+  Ok(skills)
+}
+
+/// Save a skill activation to the database.
+///
+/// Persists the fact that a skill was activated for a conversation.
+pub async fn save_conversation_skill(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+  skill_name: &str,
+) -> Result<(), String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  conn
+    .execute(
+      "INSERT OR IGNORE INTO conversation_skills (id, conversation_id, skill_name, activated_at)
+         VALUES (?1, ?2, ?3, ?4)",
+      params![
+        Uuid::new_v4().to_string(),
+        conversation_id,
+        skill_name,
+        Utc::now().to_rfc3339()
+      ],
+    )
+    .map_err(|e| format!("Insert failed: {}", e))?;
+
+  Ok(())
+}
+
+/// Get tool calls for a conversation.
+///
+/// Returns all tool calls associated with a given conversation,
+/// ordered by creation time.
+pub async fn get_conversation_tool_calls(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+) -> Result<Vec<crate::skills::types::ToolCall>, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let mut stmt = conn
+    .prepare(
+      "SELECT id, skill_name, tool_name, arguments FROM tool_calls
+         WHERE conversation_id = ?1 ORDER BY created_at ASC"
+    )
+    .map_err(|e| format!("Prepare failed: {}", e))?;
+
+  let tool_calls: Vec<crate::skills::types::ToolCall> = stmt
+    .query_map(params![conversation_id], |row| {
+      Ok(crate::skills::types::ToolCall {
+        id: row.get(0)?,
+        skill_name: row.get(1)?,
+        tool_name: row.get(2)?,
+        arguments: row
+          .get::<_, String>(3)
+          .ok()
+          .and_then(|s| serde_json::from_str(&s).ok())
+          .unwrap_or_else(|| serde_json::json!({})),
+      })
+    })
+    .map_err(|e| format!("Query failed: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("Collect failed: {}", e))?;
+
+  Ok(tool_calls)
+}
+
+/// Get conversation history with context limiting.
+///
+/// Returns messages respecting tool call/result pairing and
+/// limiting based on the provided limit.
+pub async fn get_conversation_history(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+  limit: usize,
+) -> Result<Vec<Message>, String> {
+  let all_messages = get_messages(app_handle.clone(), conversation_id.to_string()).await?;
+
+  // Take the most recent N messages, ensuring we don't break tool call/result pairs
+  let mut messages: Vec<Message> = Vec::new();
+  let mut count = 0;
+
+  for msg in all_messages.into_iter().rev() {
+    // Always include tool results with their calls
+    if msg.message_type == MessageType::ToolResult {
+      messages.push(msg);
+      continue;
+    }
+
+    if count >= limit {
+      // Check if next message is a tool call that has results we included
+      if msg.message_type == MessageType::ToolCall {
+        messages.push(msg);
+      }
+      break;
+    }
+
+    // Only count user/assistant text messages toward limit
+    if matches!(msg.message_type, MessageType::Text)
+      && matches!(msg.role, Role::User | Role::Assistant)
+    {
+      count += 1;
+    }
+
+    messages.push(msg);
+  }
+
+  messages.reverse();
+  Ok(messages)
 }

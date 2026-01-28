@@ -1,7 +1,9 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider};
 use crate::db::token_usage::add_token_usage;
+use crate::models::llm::providers::translation::tools_to_openai_format;
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
-use crate::events::{emitter::emit, types::{CHAT_STREAM, ChatStreamEvent}};
+use crate::models::llm::client::ToolEnabledProvider;
+use crate::events::{emitter::emit, types::*};
 use serde_json::{json, Value};
 use base64::{Engine as _, engine::general_purpose};
 use tauri::{AppHandle, Manager};
@@ -11,7 +13,7 @@ pub struct LocalProvider;
 
 const MAX_RECENT_ATTACHMENTS: usize = 3;
 
-/// Build messages according to the OpenAI conversations format
+/// Build messages according to OpenAI conversations format
 async fn build_messages(
   app_handle: &AppHandle,
   system_prompt: String,
@@ -30,7 +32,7 @@ async fn build_messages(
     if let Ok(conv_messages) =
       crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
     {
-      // Collect IDs of the most recent images/pdfs across all messages
+      // Collect IDs of most recent images/pdfs across all messages
       let mut valid_attachments = Vec::new();
       for msg in conv_messages.iter().rev() {
         for attachment in msg.attachments.iter().rev() {
@@ -88,7 +90,7 @@ async fn build_messages(
               if full_path.exists() {
                 if let Ok(bytes) = fs::read(&full_path) {
                   let Ok(pdf_text) = pdf_extract::extract_text_from_mem(&bytes) else {
-                  continue;
+                    continue;
                   };
                   content_blocks.push(json!({
                     "type": "text",
@@ -106,8 +108,8 @@ async fn build_messages(
               }));
             }
           }
-
         }
+
         // Add text content last
         content_blocks.push(json!({"type": "text", "text": content}));
 
@@ -118,6 +120,7 @@ async fn build_messages(
       }
     }
   }
+
   Ok(messages)
 }
 
@@ -139,12 +142,12 @@ impl LlmProvider for LocalProvider {
     let system_prompt = request.system_prompt.unwrap_or("You are a helpful assistant".to_string());
     let should_stream = request.stream.unwrap_or(false);
     let enable_thinking = request.use_thinking.unwrap_or(true);
-    
+
     let mut messages = build_messages(
-      &app_handle, 
+      &app_handle,
       system_prompt,
       request.prompt.clone(),
-      &request.conv_id, 
+      &request.conv_id,
       &request.current_message_id
     ).await?;
 
@@ -187,6 +190,11 @@ impl LlmProvider for LocalProvider {
         "enable_thinking": enable_thinking
     });
 
+    // Add tools if provided
+    if let Some(tools) = request.tools {
+      request_body["tools"] = tools;
+    }
+
     let client = reqwest::Client::new();
     let completion_url = format!("{}/v1/chat/completions", config.base_url());
 
@@ -203,7 +211,7 @@ impl LlmProvider for LocalProvider {
         .send()
         .await
         .map_err(|e| format!("Failed to send streaming request: {}", e))?;
-      
+
       if !response.status().is_success() {
         let status = response.status();
         let error_text = response
@@ -265,7 +273,6 @@ impl LlmProvider for LocalProvider {
                             log::error!("[llama_server] Failed to emit stream event: {}", e);
                           }
                         }
-                        // If no content in delta, just continue (this is normal for some chunks)
                       }
                     }
                   }
@@ -287,9 +294,7 @@ impl LlmProvider for LocalProvider {
         conv_id: request.conv_id.clone(),
       };
 
-      if let Err(e) = emit(CHAT_STREAM, final_stream_data) {
-        log::error!("[llama_server] Failed to emit final stream event: {}", e);
-      }
+      let _ = emit(CHAT_STREAM, final_stream_data);
 
       // Save token usage
       add_token_usage(
@@ -325,7 +330,7 @@ impl LlmProvider for LocalProvider {
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-      // Extract the generated content
+      // Extract generated content
       let generated_text = result["choices"][0]["message"]["content"]
         .as_str()
         .ok_or("No content in response")?
@@ -347,5 +352,75 @@ impl LlmProvider for LocalProvider {
 
       Ok(generated_text)
     }
+  }
+}
+
+#[async_trait::async_trait]
+impl ToolEnabledProvider for LocalProvider {
+  async fn generate_with_tools(
+    &self,
+    app_handle: AppHandle,
+    request: LlmRequest,
+    messages: Vec<serde_json::Value>,
+  ) -> Result<serde_json::Value, String> {
+    let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
+
+    // Check if server is healthy first
+    if let Err(e) = perform_health_check(&config).await {
+      return Err(format!("Server health check failed: {}", e));
+    }
+
+    let should_stream = request.stream.unwrap_or(false);
+    let enable_thinking = request.use_thinking.unwrap_or(true);
+
+    // Build request body
+    let mut request_body = json!({
+        "model": "local",
+        "messages": messages,
+        "stream": should_stream,
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "seed": 3407,
+        "repeat_penalty": 1.0,
+        "presence_penalty": 1.5,
+        "max_tokens": 32768
+    });
+
+    // Add tools if provided
+    if let Some(tools) = request.tools {
+      request_body["tools"] = tools;
+    }
+
+    // Add thinking parameter
+    request_body["chat_template_kwargs"] = json!({
+        "enable_thinking": enable_thinking
+    });
+
+    let client = reqwest::Client::new();
+    let completion_url = format!("{}/v1/chat/completions", config.base_url());
+
+    let response = client
+        .post(&completion_url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", config.api_key))
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    if !response.status().is_success() {
+      let status = response.status();
+      let error_text = response
+        .text()
+        .await
+        .unwrap_or_else(|_| "Unknown error".to_string());
+      return Err(format!("Server returned error {}: {}", status, error_text));
+    }
+
+    response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
   }
 }

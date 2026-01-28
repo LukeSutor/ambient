@@ -15,8 +15,9 @@ pub struct DbState(pub Mutex<Option<Connection>>);
 
 // Database schema migrations
 static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
-  Migrations::new(vec![M::up(
-    r#"
+  Migrations::new(vec![
+    M::up(
+      r#"
         -- Conversation tables
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY,
@@ -109,7 +110,59 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
 
         CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
       "#,
-  )])
+    ),
+    M::up(
+      r#"
+        -- Agentic runtime migration: Enhanced message storage
+        -- Add new columns to conversation_messages
+        ALTER TABLE conversation_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'text';
+        ALTER TABLE conversation_messages ADD COLUMN metadata TEXT;
+
+        -- message_type values:
+        -- 'text'           - Regular text message (user or assistant)
+        -- 'tool_call'      - Assistant requesting tool execution
+        -- 'tool_result'    - Result from tool execution
+        -- 'thinking'       - Internal reasoning/planning step
+        -- 'skill_activation' - Skill activation request
+
+        -- Create index for efficient filtering by message type
+        CREATE INDEX IF NOT EXISTS idx_messages_type ON conversation_messages(message_type);
+
+        -- Tool calls table for structured storage
+        CREATE TABLE IF NOT EXISTS tool_calls (
+            id TEXT PRIMARY KEY,
+            message_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            skill_name TEXT NOT NULL,
+            tool_name TEXT NOT NULL,
+            arguments TEXT NOT NULL,
+            result TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            started_at TEXT,
+            completed_at TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (message_id) REFERENCES conversation_messages(id) ON DELETE CASCADE,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_conversation ON tool_calls(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_tool_calls_status ON tool_calls(status);
+
+        -- Active skills per conversation
+        CREATE TABLE IF NOT EXISTS conversation_skills (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL,
+            skill_name TEXT NOT NULL,
+            activated_at TEXT NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+            UNIQUE(conversation_id, skill_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conv_skills ON conversation_skills(conversation_id);
+      "#,
+    ),
+  ])
 });
 
 fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {

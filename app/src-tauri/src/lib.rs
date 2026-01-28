@@ -8,9 +8,11 @@ pub mod memory;
 pub mod models;
 pub mod settings;
 pub mod screen_selection;
+pub mod skills;
 pub mod setup;
 pub mod tray;
 pub mod windows;
+
 use db::core::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -22,8 +24,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_store::Builder::new().build())
-    .plugin(
-      tauri_plugin_log::Builder::new()
+    .plugin(tauri_plugin_log::Builder::new()
         .clear_targets()
         .target(Target::new(TargetKind::Stdout))
         .target(Target::new(TargetKind::LogDir {
@@ -47,6 +48,13 @@ pub fn run() {
     .manage(DbState(Mutex::new(None)))
     .manage(crate::models::computer_use::ComputerUseState::default())
     .setup(|app| {
+      // Initialize the skill registry
+      if let Err(e) = crate::skills::registry::initialize_registry(&app.handle()) {
+        log::error!("[skills] Failed to initialize skill registry: {}", e);
+      } else {
+        log::info!("[skills] Skill registry initialized successfully");
+      }
+
       // Register deep link scheme for development/testing
       #[cfg(any(windows, target_os = "linux"))]
       {
@@ -62,7 +70,7 @@ pub fn run() {
       events::get_emitter().set_app_handle(app.handle().clone());
       events::initialize_event_listeners(app.handle().clone());
 
-      // Handle deep link events for OAuth2 callbacks
+      // Handle deep link events for OAuth callbacks
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
@@ -72,7 +80,7 @@ pub fn run() {
       });
 
       // Initialize the database connection during setup
-      let app_handle = app.handle().clone();
+      let app_handle = app.handle();
       match db::core::initialize_database(&app_handle) {
         Ok(conn) => {
           log::info!("[setup] Database initialized successfully.");
@@ -87,9 +95,9 @@ pub fn run() {
       }
 
       // Start llama.cpp server on startup
-      let app_handle_for_llama = app.handle().clone();
+      let app_handle_for_llama = app_handle.clone();
       tauri::async_runtime::spawn(async move {
-        // Wait to ensure the app is fully initialized
+        // Wait to ensure app is fully initialized
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         match models::llm::server::spawn_llama_server(app_handle_for_llama).await {
@@ -98,7 +106,7 @@ pub fn run() {
         }
       });
 
-      // Create the system tray
+      // Create system tray
       if let Err(e) = tray::create_tray(&app.handle()) {
         log::error!("[setup] Failed to create system tray: {}", e);
       } else {
@@ -110,18 +118,16 @@ pub fn run() {
     .on_window_event(|window, event| {
       match event {
         tauri::WindowEvent::CloseRequested { api, .. } => {
-          // Prevent the window from closing and hide it instead
+          // Prevent window from closing and hide it instead
           // Only the tray quit option should actually exit the app
           log::info!(
             "[window] Window '{}' close requested - hiding instead of closing",
             window.label()
           );
-
           if let Err(e) = window.hide() {
             log::error!("[window] Failed to hide window '{}': {}", window.label(), e);
           }
-
-          // Prevent the default close behavior
+          // Prevent default close behavior
           api.prevent_close();
         }
         _ => {}
@@ -183,6 +189,9 @@ pub fn run() {
       auth::commands::get_user,
       auth::commands::get_access_token_command,
       auth::commands::emit_auth_changed,
+      // New skills commands
+      crate::skills::registry::get_available_skills,
+      crate::models::llm::runtime::handle_agent_chat,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
