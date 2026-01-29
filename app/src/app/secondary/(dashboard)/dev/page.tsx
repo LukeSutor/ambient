@@ -65,6 +65,31 @@ export default function Dev() {
     }
   };
 
+  // --- Python Code Execution Test ---
+  const [pythonCode, setPythonCode] = useState<string>(
+    "print('Hello from Embedded Python!')\n\ndef fib(n):\n    if n <= 1: return n\n    return fib(n-1) + fib(n-2)\n\nprint(f'Fib(10) = {fib(10)}')",
+  );
+  const [pythonResult, setPythonResult] = useState<string | null>(null);
+  const [pythonLoading, setPythonLoading] = useState<boolean>(false);
+  const [pythonError, setPythonError] = useState<string | null>(null);
+
+  const handleTestPython = async () => {
+    if (!pythonCode.trim()) return;
+    setPythonLoading(true);
+    setPythonError(null);
+    setPythonResult(null);
+    try {
+      const result = await invoke("test_python_execution", {
+        code: pythonCode,
+      });
+      setPythonResult(JSON.stringify(result, null, 2));
+    } catch (err) {
+      setPythonError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setPythonLoading(false);
+    }
+  };
+
   // --- OCR Processing ---
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrLoading, setOcrLoading] = useState<boolean>(false);
@@ -539,6 +564,45 @@ export default function Dev() {
             <Label>API Response:</Label>
             <pre className="p-3 bg-white border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
               {computerUseResult}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Python Execution Test Section */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-orange-50">
+        <h2 className="text-lg font-semibold">Python Execution Test</h2>
+        <p className="text-sm text-gray-600">
+          Run Python code in the embedded sandboxed interpreter.
+        </p>
+        <Textarea
+          value={pythonCode}
+          onChange={(e) => {
+            setPythonCode(e.target.value);
+          }}
+          rows={6}
+          placeholder="Enter Python code..."
+          className="font-mono text-xs"
+        />
+        <Button
+          onClick={() => {
+            void handleTestPython();
+          }}
+          disabled={pythonLoading || !pythonCode.trim()}
+          variant="default"
+        >
+          {pythonLoading ? "Executing..." : "Run Python Code"}
+        </Button>
+        {pythonError && (
+          <div className="p-2 bg-red-100 border border-red-300 rounded text-xs font-mono overflow-x-auto">
+            Error: {pythonError}
+          </div>
+        )}
+        {pythonResult && !pythonError && (
+          <div className="space-y-2">
+            <Label>Result:</Label>
+            <pre className="p-3 bg-white border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-mono">
+              {pythonResult}
             </pre>
           </div>
         )}

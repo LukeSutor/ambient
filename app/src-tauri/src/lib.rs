@@ -191,8 +191,8 @@ pub fn run() {
       auth::commands::get_user,
       auth::commands::get_access_token_command,
       auth::commands::emit_auth_changed,
-      // New skills commands
       crate::skills::registry::get_available_skills,
+      crate::skills::builtin::code_execution::test_python_execution,
       crate::models::llm::runtime::handle_agent_chat,
     ])
     .run(tauri::generate_context!())

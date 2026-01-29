@@ -39,4 +39,4 @@ Search the internet for information to answer user questions.
 1. Use clear, specific search queries
 2. Search first, then fetch specific pages if needed
 3. If the search doesn't return what you need, fetch_webpage to get more information
-4. Always cite sources
+4. Always cite sources with markdown-formatted links

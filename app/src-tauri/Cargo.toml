@@ -71,6 +71,7 @@ dom-content-extraction = { version = "0.3.15", features = ["markdown"] }
 futures = "0.3"
 serde_yaml = "0.9"
 thiserror = "1"
+rustpython-vm = { version = "0.4.0", default-features = false, features = ["compiler", "parser", "codegen"] }
 
 [profile.dev]
 debug = true

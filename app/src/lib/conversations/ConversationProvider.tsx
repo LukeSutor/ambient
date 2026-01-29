@@ -525,10 +525,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           // Stream Listener
           listen<ChatStreamEvent>("chat_stream", (event) => {
             const { delta, full_response, is_finished, conv_id } =
-              event.payload;
-
+            event.payload;
+            
             // Filter by conversation ID using ref
-            if (conv_id && conv_id !== convIdRef.current) {
+            if (!conv_id || (conv_id && conv_id !== convIdRef.current)) {
               return;
             }
 
