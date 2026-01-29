@@ -19,12 +19,8 @@ pub struct LlmRequest {
     pub conv_id: Option<String>,
     pub use_thinking: Option<bool>,
     pub stream: Option<bool>,
-    pub current_message_id: Option<String>,
-    #[ts(type = "any")]
-    pub tools: Option<serde_json::Value>,
     pub internal_tools: Option<Vec<ToolDefinition>>,
     pub messages: Option<Vec<crate::db::conversations::Message>>,
-    pub context_limit: Option<usize>,
 }
 
 impl LlmRequest {
@@ -60,16 +56,6 @@ impl LlmRequest {
         self
     }
 
-    pub fn with_current_message_id(mut self, current_message_id: Option<String>) -> Self {
-        self.current_message_id = current_message_id;
-        self
-    }
-
-    pub fn with_tools(mut self, tools: Option<serde_json::Value>) -> Self {
-        self.tools = tools;
-        self
-    }
-
     pub fn with_internal_tools(mut self, tools: Option<Vec<ToolDefinition>>) -> Self {
         self.internal_tools = tools;
         self
@@ -77,11 +63,6 @@ impl LlmRequest {
 
     pub fn with_messages(mut self, messages: Option<Vec<crate::db::conversations::Message>>) -> Self {
         self.messages = messages;
-        self
-    }
-
-    pub fn with_context_limit(mut self, context_limit: Option<usize>) -> Self {
-        self.context_limit = context_limit;
         self
     }
 }

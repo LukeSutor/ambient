@@ -5,106 +5,10 @@ use crate::db::token_usage::add_token_usage;
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini, format_messages_for_gemini};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use base64::{Engine as _, engine::general_purpose};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokio_stream::StreamExt;
-use std::fs;
 
-
-const MAX_RECENT_ATTACHMENTS: usize = 3;
-
-/// Map roles to Gemini format
-fn role_to_gemini(role: &str) -> &str {
-  match role {
-    "system" => "model",
-    "assistant" => "model",
-    "user" => "user",
-    _ => "user",
-  }
-}
-
-/// Builds messages in the Gemini API format
-async fn build_content(
-  app_handle: &AppHandle,
-  user_prompt: String,
-  conv_id: &Option<String>,
-  current_message_id: &Option<String>,
-) -> Result<Vec<Value>, String> {
-  let mut content = Vec::new();
-
-  if let Some(conversation_id) = conv_id {
-    if let Ok(conv_messages) =
-      crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
-    {
-      // Collect IDs of the most recent images/pdfs across all messages
-      let mut valid_attachments = Vec::new();
-      for msg in conv_messages.iter().rev() {
-        for attachment in msg.attachments.iter().rev() {
-          if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
-            valid_attachments.push(attachment.id.clone());
-          }
-        }
-      }
-
-      for msg in conv_messages {
-        let is_current = current_message_id.as_ref().map_or(false, |id| id == &msg.id);
-        let msg_content = if is_current {
-          &user_prompt
-        } else {
-          &msg.content
-        };
-
-        let mut content_parts = Vec::new();
-
-        for attachment in msg.attachments {
-          if !valid_attachments.contains(&attachment.id) {
-            continue;
-          }
-
-          if attachment.file_type.starts_with("image/") || attachment.file_type == "application/pdf" {
-            // Attach image as base64 data URL
-            if let Some(rel_path) = attachment.file_path {
-              let full_path = app_handle
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("Could not resolve app data directory: {}", e))?
-                .join(rel_path);
-
-              if full_path.exists() {
-                if let Ok(bytes) = fs::read(&full_path) {
-                  let base64_data = general_purpose::STANDARD.encode(bytes);
-                  content_parts.push(json!({
-                    "inlineData": {
-                      "mimeType": attachment.file_type,
-                      "data": base64_data,
-                    },
-                  }));
-                }
-              }
-            }
-          } else if attachment.file_type == "ambient/ocr" {
-            // Attach OCR text
-            if let Some(extracted_text) = attachment.extracted_text {
-              content_parts.push(json!({
-                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
-              }));
-            }
-          }
-        }
-
-        // Add text content last
-        content_parts.push(json!({"text": msg_content}));
-
-        content.push(json!({
-          "role": role_to_gemini(msg.role.as_str()),
-          "parts": content_parts
-        }));
-      }
-    }
-  }
-  Ok(content)
-}
 
 pub struct CloudflareProvider;
 
@@ -113,7 +17,7 @@ impl LlmProvider for CloudflareProvider {
   async fn generate(
     &self,
     app_handle: AppHandle,
-    mut request: LlmRequest,
+    request: LlmRequest,
   ) -> Result<LlmResponse, String> {
     // Load user settings to get model selection
     let settings = crate::settings::service::load_user_settings(app_handle.clone())
@@ -121,32 +25,17 @@ impl LlmProvider for CloudflareProvider {
       .map_err(|e| format!("Failed to load user settings: {}", e))?;
     let model = &settings.model_selection.as_str();
 
-    // Handle internal tools translation
-    if let Some(internal_tools) = &request.internal_tools {
-      request.tools = Some(tools_to_gemini_format(internal_tools));
-    }
-
     let should_stream = request.stream.unwrap_or(false);
-    
-    // Build content
-    let content = if let Some(msgs) = request.messages.clone() {
-      format_messages_for_gemini(&app_handle, &msgs)
-    } else {
-      let mut content = build_content(
-        &app_handle,
-        request.prompt.clone(),
-        &request.conv_id,
-        &request.current_message_id
-      ).await?;
+    let mut content = Vec::new();
 
-      // Add user prompt if no current message id is provided
-      if request.current_message_id.is_none() {
-        content.push(json!({
-          "role": "user",
-          "parts": [{"text": request.prompt.clone()}]
-        }));
-      }
-      content
+    // Build content
+    if let Some(msgs) = request.messages.clone() {
+      content.extend(format_messages_for_gemini(&app_handle, &msgs));
+    } else {
+      content.push(json!({
+        "role": "user",
+        "parts": [{"text": request.prompt.clone()}]
+      }));
     };
 
     // Get user access token
@@ -171,9 +60,9 @@ impl LlmProvider for CloudflareProvider {
       }
     }
 
-    // Add tools if provided
-    if let Some(tools) = request.tools {
-      body["tools"] = tools;
+    // Handle internal tools translation
+    if let Some(internal_tools) = &request.internal_tools {
+      body["tools"] = tools_to_gemini_format(internal_tools);
     }
 
     // Pretty print the request body for debugging

@@ -251,7 +251,6 @@ impl AgentRuntime {
                 .with_system_prompt(Some(system_prompt.clone()))
                 .with_messages(Some(messages.clone()))
                 .with_internal_tools(Some(available_tools))
-                .with_current_message_id(Some(self.message_id.clone()))
                 .with_conv_id(Some(self.conv_id.clone()))
                 .with_stream(Some(true));
 

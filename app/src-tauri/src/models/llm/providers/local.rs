@@ -4,131 +4,16 @@ use crate::models::llm::providers::translation::{tools_to_openai_format, has_too
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
 use crate::events::{emitter::emit, types::*};
 use serde_json::{json, Value};
-use base64::{Engine as _, engine::general_purpose};
-use tauri::{AppHandle, Manager};
-use std::fs;
+use tauri::AppHandle;
 
 pub struct LocalProvider;
-
-const MAX_RECENT_ATTACHMENTS: usize = 3;
-
-/// Build messages according to OpenAI conversations format
-async fn build_messages(
-  app_handle: &AppHandle,
-  system_prompt: String,
-  user_prompt: String,
-  conv_id: &Option<String>,
-  current_message_id: &Option<String>,
-) -> Result<Vec<Value>, String> {
-  let mut messages = Vec::new();
-
-  messages.push(json!({
-    "role": "system",
-    "content": system_prompt
-  }));
-
-  if let Some(conversation_id) = conv_id {
-    if let Ok(conv_messages) =
-      crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
-    {
-      // Collect IDs of most recent images/pdfs across all messages
-      let mut valid_attachments = Vec::new();
-      for msg in conv_messages.iter().rev() {
-        for attachment in msg.attachments.iter().rev() {
-          if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
-            valid_attachments.push(attachment.id.clone());
-          }
-        }
-      }
-
-      for msg in conv_messages {
-        let is_current = current_message_id.as_ref().map_or(false, |id| id == &msg.id);
-        let content = if is_current {
-          &user_prompt
-        } else {
-          &msg.content
-        };
-
-        let mut content_blocks = Vec::new();
-
-        for attachment in msg.attachments {
-          if !valid_attachments.contains(&attachment.id) {
-            continue;
-          }
-
-          if attachment.file_type.starts_with("image/") {
-            // Attach image as base64 data URL
-            if let Some(rel_path) = attachment.file_path {
-              let full_path = app_handle
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("Could not resolve app data directory: {}", e))?
-                .join(rel_path);
-
-              if full_path.exists() {
-                if let Ok(bytes) = fs::read(&full_path) {
-                  let base64_image = general_purpose::STANDARD.encode(bytes);
-                  content_blocks.push(json!({
-                    "type": "image_url",
-                    "image_url": {
-                      "url": format!("data:{};base64,{}", attachment.file_type, base64_image)
-                    }
-                  }));
-                }
-              }
-            }
-          } else if attachment.file_type == "application/pdf" {
-            // Extract text from PDF and attach to prompt
-            if let Some(rel_path) = attachment.file_path {
-              let full_path = app_handle
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("Could not resolve app data directory: {}", e))?
-                .join(rel_path);
-
-              if full_path.exists() {
-                if let Ok(bytes) = fs::read(&full_path) {
-                  let Ok(pdf_text) = pdf_extract::extract_text_from_mem(&bytes) else {
-                    continue;
-                  };
-                  content_blocks.push(json!({
-                    "type": "text",
-                    "text": format!("Extracted text from {}:\n{}", attachment.file_name, pdf_text)
-                  }));
-                }
-              }
-            }
-          } else if attachment.file_type == "ambient/ocr" {
-            // Attach OCR text
-            if let Some(extracted_text) = attachment.extracted_text {
-              content_blocks.push(json!({
-                "type": "text",
-                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
-              }));
-            }
-          }
-        }
-
-        // Add text content last
-        content_blocks.push(json!({"type": "text", "text": content}));
-
-        messages.push(json!({
-          "role": msg.role.as_str(),
-          "content": content_blocks
-        }));
-      }
-    }
-  }
-
-  Ok(messages)
-}
 
 #[async_trait::async_trait]
 impl LlmProvider for LocalProvider {
   async fn generate(
     &self,
     app_handle: AppHandle,
-    mut request: LlmRequest,
+    request: LlmRequest,
   ) -> Result<LlmResponse, String> {
     log::info!("[llama_server] Starting chat completion generation");
     let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
@@ -138,47 +23,23 @@ impl LlmProvider for LocalProvider {
       return Err(format!("Server health check failed: {}", e));
     }
 
-    // Handle internal tools translation
-    if let Some(internal_tools) = &request.internal_tools {
-      request.tools = Some(json!(tools_to_openai_format(internal_tools)));
-    }
-
     let should_stream = request.stream.unwrap_or(false);
     let enable_thinking = request.use_thinking.unwrap_or(false);
+    let system_prompt = request.system_prompt.clone().unwrap_or("You are a helpful assistant".to_string());
+    let mut messages = vec![json!({
+      "role": "system",
+      "content": system_prompt
+    })];
 
     // Build messages
-    let messages = if let Some(msgs) = request.messages.clone() {
-      let mut formatted_msgs = Vec::new();
-      
-      // Add system prompt if provided
-      if let Some(system_prompt) = &request.system_prompt {
-        formatted_msgs.push(json!({
-          "role": "system",
-          "content": system_prompt
-        }));
-      }
-
+    if let Some(msgs) = request.messages.clone() {
       // Format messages according to OpenAI spec
-      formatted_msgs.extend(format_messages_for_openai(&app_handle, &msgs));
-      formatted_msgs
+      messages.extend(format_messages_for_openai(&app_handle, &msgs));
     } else {
-      let system_prompt = request.system_prompt.clone().unwrap_or("You are a helpful assistant".to_string());
-      let mut msgs = build_messages(
-        &app_handle,
-        system_prompt,
-        request.prompt.clone(),
-        &request.conv_id,
-        &request.current_message_id
-      ).await?;
-
-      // Add user prompt if no current message id is provided and no history used
-      if request.current_message_id.is_none() {
-        msgs.push(json!({
-          "role": "user",
-          "content": request.prompt
-        }));
-      }
-      msgs
+      messages.push(json!({
+        "role": "user",
+        "content": request.prompt
+      }));
     };
 
     // Build request body
@@ -212,9 +73,9 @@ impl LlmProvider for LocalProvider {
         "enable_thinking": enable_thinking
     });
 
-    // Add tools if provided
-    if let Some(tools) = request.tools {
-      request_body["tools"] = tools;
+    // Handle internal tools translation
+    if let Some(internal_tools) = &request.internal_tools {
+      request_body["tools"] = json!(tools_to_openai_format(internal_tools));
     }
 
     let client = reqwest::Client::new();
@@ -412,26 +273,6 @@ impl LlmProvider for LocalProvider {
         .as_str()
         .unwrap_or("")
         .to_string();
-
-      // Emit stream event to frontend even for non-streaming for consistency
-      if !generated_text.is_empty() {
-        let stream_data = ChatStreamEvent {
-          delta: generated_text.clone(),
-          is_finished: false,
-          full_response: generated_text.clone(),
-          conv_id: request.conv_id.clone(),
-        };
-        let _ = emit(CHAT_STREAM, stream_data);
-      }
-
-      // Final stream completion event
-      let final_stream_data = ChatStreamEvent {
-        delta: "".to_string(),
-        is_finished: true,
-        full_response: generated_text.clone(),
-        conv_id: request.conv_id.clone(),
-      };
-      let _ = emit(CHAT_STREAM, final_stream_data);
 
       // Extract tool calls if present
       if has_tool_calls_openai(&result) {

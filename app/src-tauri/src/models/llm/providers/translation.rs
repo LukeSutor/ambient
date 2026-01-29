@@ -247,19 +247,31 @@ pub fn format_openai_tool_results(results: &[ToolResult]) -> Vec<Value> {
     results
         .iter()
         .map(|result| {
-            let content = if result.success {
-                result.result
-                    .as_ref()
-                    .map(|r| serde_json::to_string(r).unwrap_or_default())
-                    .unwrap_or_else(|| "Success".to_string())
+            let mut response_obj = if result.success {
+                result.result.clone().unwrap_or_else(|| json!({"status": "success"}))
             } else {
-                format!("Error: {}", result.error.as_deref().unwrap_or("Unknown error"))
+                json!({ "error": result.error.as_deref().unwrap_or("Unknown error") })
             };
+
+            // Enrichment for skill activation
+            if result.success {
+                if let Some(res_val) = &result.result {
+                    if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
+                        if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
+                            if let Some(skill) = get_skill(skill_name) {
+                                if let Some(obj) = response_obj.as_object_mut() {
+                                    obj.insert("instructions".to_string(), json!(skill.instructions));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             json!({
                 "role": "tool",
                 "tool_call_id": result.call_id,
-                "content": content,
+                "content": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string()),
             })
         })
         .collect()
@@ -274,16 +286,20 @@ pub fn format_gemini_tool_results(results: &[ToolResult], tool_calls: &[ToolCall
         .iter()
         .zip(tool_calls.iter())
         .map(|(result, call)| {
-            let response_value = if result.success {
-                result.result.clone().unwrap_or(json!({"status": "success"}))
+            let response_obj = if result.success {
+                let mut res = result.result.clone().unwrap_or_else(|| json!({"status": "success"}));
+                if !res.is_object() {
+                    res = json!({ "output": res });
+                }
+                res
             } else {
-                json!({"error": result.error.as_deref().unwrap_or("Unknown error")})
+                json!({ "error": result.error.as_deref().unwrap_or("Unknown error") })
             };
 
             json!({
                 "functionResponse": {
                     "name": call.tool_name.clone(),
-                    "response": response_value
+                    "response": response_obj
                 }
             })
         })
@@ -353,13 +369,10 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
 
                 // Format tool result with tool_call_id
                 if let Some(MessageMetadata::ToolResult { call_id, result, success, error }) = &msg.metadata {
-                    let mut content = if *success {
-                        result
-                            .as_ref()
-                            .map(|r| serde_json::to_string(r).unwrap_or_else(|_| "{}".to_string()))
-                            .unwrap_or_else(|| "Success".to_string())
+                    let mut response_obj = if *success {
+                        result.clone().unwrap_or_else(|| json!({"status": "success"}))
                     } else {
-                        format!("Error: {}", error.as_deref().unwrap_or("Unknown error"))
+                        json!({"error": error.as_deref().unwrap_or("Unknown error")})
                     };
 
                     // Enrichment: If this is a skill activation, inject the skill instructions
@@ -370,11 +383,9 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                             if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
                                 if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
                                     if let Some(skill) = get_skill(skill_name) {
-                                        content = format!(
-                                            "{}\n# Instructions:\n{}",
-                                            content,
-                                            skill.instructions
-                                        );
+                                        if let Some(obj) = response_obj.as_object_mut() {
+                                            obj.insert("instructions".to_string(), json!(skill.instructions));
+                                        }
                                     }
                                 }
                             }
@@ -384,7 +395,7 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                     formatted.push(json!({
                         "role": "tool",
                         "tool_call_id": call_id,
-                        "content": content
+                        "content": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string())
                     }));
                 }
             }
@@ -514,10 +525,8 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
     for msg in msgs {
         let (role, parts) = match msg.message_type {
             MessageType::Thinking => {
-                ("model", vec![json!({
-                    "thought": true,
-                    "text": msg.content
-                })])
+                // Skip "Thinking" messages - these are internal state and confuse the model
+                continue;
             }
 
             MessageType::ToolCall => {
@@ -558,16 +567,38 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
                         }
                     }
 
-                    let content_val = if *success {
-                        result.clone().unwrap_or(json!({}))
+                    let mut response_obj = if *success {
+                        result.clone().unwrap_or_else(|| json!({"status": "success"}))
                     } else {
-                        json!({ "error": error.as_deref().unwrap_or("Unknown error") })
+                        json!({"error": error.as_deref().unwrap_or("Unknown error")})
                     };
 
-                    ("user", vec![json!({
+                    // Ensure response is an object as Gemini expects a Struct
+                    if !response_obj.is_object() {
+                        response_obj = json!({ "output": response_obj });
+                    }
+
+                    // Enrichment: If this is a skill activation, inject the skill instructions
+                    // but don't save them to the database. This allows the LLM to get the
+                    // instructions immediately without bloating the database records.
+                    if *success {
+                        if let Some(res_val) = result {
+                            if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
+                                if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
+                                    if let Some(skill) = get_skill(skill_name) {
+                                        if let Some(obj) = response_obj.as_object_mut() {
+                                            obj.insert("instructions".to_string(), json!(skill.instructions));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ("function", vec![json!({
                         "functionResponse": {
                             "name": tool_name,
-                            "response": content_val
+                            "response": response_obj
                         }
                     })])
                 } else {
