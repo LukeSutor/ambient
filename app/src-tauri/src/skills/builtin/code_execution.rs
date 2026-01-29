@@ -14,7 +14,7 @@
 
 use super::ToolCall;
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 

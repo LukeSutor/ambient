@@ -33,14 +33,21 @@ async fn execute_single_tool(
         call.arguments
     );
 
-    // Handle system tools (like activate_skill) - these are handled by runtime, not here
+    // Handle system tools
     if call.skill_name == "system" && call.tool_name == "activate_skill" {
-        // This is handled by the runtime, not here
+        // This is handled by the runtime, we just return the status and skill name
+        let skill_name = call.arguments.get("skill_name").and_then(|v| v.as_str()).unwrap_or("<unknown>");
         log::info!(
             "[executor] Skill activation request for skill: {}",
-            call.arguments.get("skill_name").and_then(|v| v.as_str()).unwrap_or("<unknown>")
+            skill_name
         );
-        return ToolResult::success(call.id, serde_json::json!({"status": "skill_activated"}));
+        return ToolResult::success(
+            call.id,
+            serde_json::json!({
+                "status": "skill_activated",
+                "skill_name": skill_name
+            })
+        );
     }
 
     // Route to appropriate skill executor

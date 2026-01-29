@@ -9,6 +9,7 @@
 
 use crate::db::conversations::{Message, MessageType, MessageMetadata, Role};
 use crate::skills::types::{ToolDefinition, ToolCall, ToolResult};
+use crate::skills::registry::get_skill;
 use serde_json::{json, Value};
 
 /// Translates tool definitions to OpenAI function calling format.
@@ -329,7 +330,7 @@ pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
 
                 // Format tool result with tool_call_id
                 if let Some(MessageMetadata::ToolResult { call_id, result, success, error }) = &msg.metadata {
-                    let content = if *success {
+                    let mut content = if *success {
                         result
                             .as_ref()
                             .map(|r| serde_json::to_string(r).unwrap_or_else(|_| "{}".to_string()))
@@ -337,6 +338,25 @@ pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
                     } else {
                         format!("Error: {}", error.as_deref().unwrap_or("Unknown error"))
                     };
+
+                    // Enrichment: If this is a skill activation, inject the skill instructions
+                    // but don't save them to the database. This allows the LLM to get the
+                    // instructions immediately without bloating the database records.
+                    if *success {
+                        if let Some(res_val) = result {
+                            if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
+                                if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
+                                    if let Some(skill) = get_skill(skill_name) {
+                                        content = format!(
+                                            "{}\n# Instructions:\n{}",
+                                            content,
+                                            skill.instructions
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     formatted.push(json!({
                         "role": "tool",

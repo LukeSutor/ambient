@@ -45,6 +45,7 @@ use crate::skills::types::{
 use chrono::Local;
 use tauri::AppHandle;
 use ts_rs::TS;
+use super::prompts::get_prompt;
 
 // ============================================================================
 // Event Types for Agentic Runtime
@@ -359,43 +360,15 @@ impl AgentRuntime {
 
     /// Builds the system prompt with skill information.
     ///
-    /// Includes skill summaries and active skill instructions.
+    /// Includes skill summaries. Active skill instructions are injected 
+    /// dynamically in the conversation history during tool result translation.
     fn build_system_prompt(&self, skill_summaries: &[SkillSummary]) -> String {
         let skills_section = self.format_skill_summaries(skill_summaries);
-
-        let base_prompt = format!(
-            r#"You are Ambient, a helpful AI assistant. Today is {date}.
-
-{skills_section}
-
-## Skill Activation
-When you need capabilities from a skill:
-1. Call the `activate_skill` function with the skill name
-2. After activation, the skill's tools will become available
-3. Use the tools to complete the user's request
-
-## Guidelines
-- Only activate skills when necessary for the task
-- Use available tools efficiently
-- Provide clear, helpful responses
-- Cite sources when using web search"#,
-            date = Local::now().format("%Y-%m-%d %H:%M:%S"),
-            skills_section = skills_section,
-        );
-
-        // Add active skill instructions
-        let mut prompt = base_prompt;
-        for skill_name in &self.active_skills {
-            if let Some(skill) = get_skill(skill_name) {
-                prompt.push_str(&format!(
-                    "\n\n## Active Skill: {}\n{}",
-                    skill.name,
-                    skill.instructions
-                ));
-            }
-        }
-
-        prompt
+        let agentic_prompt = get_prompt("agentic_chat").unwrap_or_default();
+        
+        agentic_prompt
+            .replace("{date}", &Local::now().format("%Y-%m-%d %H:%M:%S").to_string())
+            .replace("{skills_section}", &skills_section)
     }
 
     /// Formats skill summaries for the system prompt.

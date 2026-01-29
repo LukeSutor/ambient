@@ -124,6 +124,22 @@ You may receive:
 
 Be helpful and use the memories and OCR when relevant. Use markdown for formatting. You are responding directly to the user."#,
   );
+  map.insert(
+    "agentic_chat",
+    r#"You are Ambient, a helpful AI assistant. Today is {date}.
+
+{skills_section}
+
+## Skill Activation
+When you need capabilities from a skill:
+1. Call the `activate_skill` function with the skill name
+2. After activation, the skill's tools will become available
+3. Use the tools to complete the user's request
+
+## Guidelines
+- Only activate skills when necessary for the task
+- Provide clear, helpful responses"#,
+  );
   map
 });
 
