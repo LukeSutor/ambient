@@ -15,7 +15,7 @@ tools:
 
 # Code Execution Skill
 
-This skill allows running Python code in a sandboxed embedded environment.
+This skill allows running Python code in a sandboxed embedded environment. 
 
 ## Capabilities
 - **Pure Python Logic**: Run algorithms, mathematical calculations, and string processing.
@@ -25,15 +25,21 @@ This skill allows running Python code in a sandboxed embedded environment.
 ## Limitations
 - No standard library I/O (`os`, `sys`, `io`, `socket` are not available).
 - No external packages (`numpy`, `pandas`, `requests` are not available).
-- Only `print()` and return values are captured.
+- Only `print()` values are captured. Print any values you want to view.
+
+## Guidelines
+- Prefer iteration over recursion
+- Prefer efficiency over readability
 
 ## Examples
 
 ### Calculate Fibonacci
 ```python
 def fib(n):
-    if n <= 1: return n
-    return fib(n-1) + fib(n-2)
+    a, b = 0, 1
+    for i in range(0, n):
+        a, b = b, a + b
+    return a
 print(fib(10))
 ```
 
