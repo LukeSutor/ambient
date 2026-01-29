@@ -65,7 +65,14 @@ async fn search_web(call: &ToolCall) -> Result<Value, String> {
 
     let mut results = Vec::new();
 
-    for element in document.select(&result_selector).take(3) {
+    for element in document.select(&result_selector) {
+        // Skip ads: check if the element's class contains "result--ad"
+        if let Some(class) = element.value().attr("class") {
+            if class.contains("result--ad") {
+                continue;
+            }
+        }
+
         let title_elem = element.select(&title_selector).next();
         let snippet_elem = element.select(&snippet_selector).next();
 
@@ -78,6 +85,11 @@ async fn search_web(call: &ToolCall) -> Result<Value, String> {
                 url: clean_url,
                 snippet: snippet_node.text().collect::<String>().trim().to_string(),
             });
+        }
+
+        // Stop once we have 3 results
+        if results.len() >= 3 {
+            break;
         }
     }
 

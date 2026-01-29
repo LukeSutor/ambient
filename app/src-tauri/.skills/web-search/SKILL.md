@@ -11,11 +11,6 @@ tools:
         type: string
         description: The search query
         required: true
-      num_results:
-        type: integer
-        description: Number of results to return (1-10)
-        required: false
-        default: 5
   - name: fetch_webpage
     description: Fetch and extract main content from a specific URL
     parameters:
