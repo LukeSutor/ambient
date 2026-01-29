@@ -1,6 +1,7 @@
 use crate::db::core::DbState;
 use crate::events::types::AttachmentData;
 use crate::memory::types::MemoryEntry;
+use crate::events::{emitter::emit, types::{ATTACHMENTS_CREATED, AttachmentsCreatedEvent}};
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -762,6 +763,14 @@ pub async fn create_attachments(
     };
     attachments.push(attachment);
   }
+
+  // Emit attachments created event
+  let attachments_event = AttachmentsCreatedEvent {
+    message_id: message_id.clone(),
+    attachments: attachments.clone(),
+    timestamp: now.to_rfc3339(),
+  };
+  let _ = emit(ATTACHMENTS_CREATED, attachments_event);
 
   log::info!(
     "[conversations] Created {} attachments for message: {}",

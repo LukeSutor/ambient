@@ -27,7 +27,6 @@ export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
     conversationType,
     dispatchOCRCapture,
     toggleComputerUse,
-    toggleAgenticMode,
   } = useConversation();
   const showToolsLabel = conversationType === "chat";
 
@@ -59,15 +58,6 @@ export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
             <SquareDashedMousePointer className="!w-4 !h-4 text-black shrink-0 mr-2" />
             <span className="text-black text-sm whitespace-nowrap">
               Capture Area
-            </span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="hover:bg-white/60"
-            onClick={toggleAgenticMode}
-          >
-            <Bot className="!w-4 !h-4 text-black shrink-0 mr-2" />
-            <span className="text-black text-sm whitespace-nowrap">
-              Agentic Chat
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem

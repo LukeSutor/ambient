@@ -30,40 +30,6 @@ export async function createConversation(
 }
 
 /**
- * Sends a message and triggers LLM generation with streaming
- * @param conversationId - ID of the conversation
- * @param content - Message content
- * @param ocrResults - OCR context to include with the message
- * @param messageId - The message ID to use for the user message
- * @returns Promise resolving to final response text (may not be needed if streaming)
- */
-export async function sendMessage(
-  conversationId: string,
-  content: string,
-  attachmentData: AttachmentData[],
-  messageId: string,
-): Promise<string> {
-  try {
-    const hudChatEvent: HudChatEvent = {
-      text: content,
-      conv_id: conversationId,
-      timestamp: Date.now().toString(),
-      message_id: messageId,
-      attachments: attachmentData,
-    };
-
-    const finalText = await invoke<string>("handle_hud_chat", {
-      event: hudChatEvent,
-    });
-
-    return finalText;
-  } catch (error) {
-    console.error("[ConversationAPI] Failed to send message:", error);
-    throw new Error("Failed to send message");
-  }
-}
-
-/**
  * Sends a message using the agentic runtime
  * @param conversationId - ID of the conversation
  * @param content - Message content

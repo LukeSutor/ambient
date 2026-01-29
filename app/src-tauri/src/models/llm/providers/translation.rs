@@ -7,7 +7,7 @@
 //! - **Internal → Provider**: Converts tool definitions to provider format
 //! - **Provider → Internal**: Parses tool calls from provider responses
 
-use crate::db::conversations::{Message, MessageType, MessageMetadata, Role, Attachment};
+use crate::db::conversations::{Message, MessageType, MessageMetadata, Role};
 use crate::skills::types::{ToolDefinition, ToolCall, ToolResult};
 use crate::skills::registry::get_skill;
 use serde_json::{json, Value};
@@ -512,7 +512,7 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
     }
 
     for msg in msgs {
-        let (role, mut parts) = match msg.message_type {
+        let (role, parts) = match msg.message_type {
             MessageType::Thinking => {
                 ("model", vec![json!({
                     "thought": true,

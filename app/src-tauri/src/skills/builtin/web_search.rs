@@ -63,6 +63,9 @@ async fn search_web(call: &ToolCall) -> Result<Value, String> {
     let title_selector = Selector::parse(".result__a").unwrap();
     let snippet_selector = Selector::parse(".result__snippet").unwrap();
 
+    // Log the raw HTML for debugging
+    log::debug!("[web_search] Search results HTML: {}", html);
+
     let mut results = Vec::new();
 
     for element in document.select(&result_selector) {

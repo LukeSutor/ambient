@@ -31,13 +31,13 @@ use crate::db::conversations::{
     add_message, get_conversation_history, load_conversation_skills,
     save_conversation_skill, MessageMetadata, MessageType, Role,
 };
-use crate::events::{emitter::emit, types::AttachmentData};
+use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY}};
 use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools, save_tool_call_record, update_tool_call_result};
-use crate::skills::registry::{get_all_summaries, get_skill, get_skill_tools, skill_exists};
+use crate::skills::registry::{get_all_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
     SkillSummary, ToolCall, ToolDefinition, ToolResult,
@@ -205,9 +205,10 @@ impl AgentRuntime {
     ///
     /// This is the main execution method that:
     /// 1. Saves the user message
-    /// 2. Builds the system prompt with skill summaries
-    /// 3. Gets conversation history (context-limited)
-    /// 4. Enters the agentic loop
+    /// 2. Emits memory save event
+    /// 3. Builds the system prompt with skill summaries
+    /// 4. Gets conversation history (context-limited)
+    /// 5. Enters the agentic loop
     async fn run(
         mut self,
         user_message: String,
@@ -215,6 +216,9 @@ impl AgentRuntime {
     ) -> Result<String, AgentError> {
         // Save user message to database
         self.save_user_message(&user_message, &attachments).await?;
+
+        // Emit memory save event
+        self.emit_memory_save_event(&user_message).await?;
 
         // Get skill summaries for system prompt
         let skill_summaries = get_all_summaries();
@@ -534,6 +538,21 @@ impl AgentRuntime {
         }
 
         Ok(results)
+    }
+
+    /// Emits an event to save the user message to interactive memory.
+    async fn emit_memory_save_event(&self, user_message: &str) -> Result<(), AgentError> {
+        use crate::events::types::ExtractInteractiveMemoryEvent;
+
+        // Emit extract memory event
+        let extract_event = ExtractInteractiveMemoryEvent {
+            message: user_message.to_string(),
+            message_id: self.message_id.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        };
+        let _ = emit(EXTRACT_INTERACTIVE_MEMORY, extract_event);
+
+        Ok(())
     }
 
     /// Saves a user message to the database.

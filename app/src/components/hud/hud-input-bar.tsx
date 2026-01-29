@@ -62,7 +62,6 @@ export function HUDInputBar({
     conversationType,
     addAttachmentData,
     toggleComputerUse,
-    toggleAgenticMode,
   } = useConversation();
   const { closeHUD } = useWindows();
 
@@ -70,7 +69,6 @@ export function HUDInputBar({
   const isLoading = ocrLoading || isStreaming;
   const showWindowControls = isDraggingWindow || isHoveringGroup;
   const isComputerUseActive = conversationType === "computer_use";
-  const isAgentActive = conversationType === "agent";
 
   // Memoized styles
   const containerStyle = useMemo(
@@ -201,23 +199,6 @@ export function HUDInputBar({
             onOpenChange={setIsToolsDropdownOpen}
             disabled={isLoading}
           />
-
-          {isAgentActive && (
-            <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
-              <Bot className="!h-4 !w-4 text-black" />
-              <p className="mx-1 text-black text-xs font-medium">
-                Agentic Chat
-              </p>
-              <Button
-                variant="ghost"
-                className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
-                size="icon"
-                onClick={toggleAgenticMode}
-              >
-                <X className="!h-3 !w-3 text-black shrink-0" />
-              </Button>
-            </div>
-          )}
 
           {isComputerUseActive && (
             <div className="flex items-center justify-center bg-yellow-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">

@@ -2,7 +2,6 @@
 
 import type { Conversation, Message, Role } from "@/types/conversations";
 import type { AttachmentData } from "@/types/events";
-import type { MemoryEntry } from "@/types/memory";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
@@ -12,7 +11,6 @@ import {
   deleteConversation as deleteApiConversation,
   emitGenerateConversationName,
   ensureLlamaServerRunning,
-  sendMessage as sendChatApiMessage,
   sendAgentMessage,
   startComputerUseSession,
   stopComputerUseSession,
@@ -95,7 +93,6 @@ export function useConversation(
     const initialize = async () => {
       console.log("[useConversation] Initializing...");
 
-      // Load the conversations list immediately
       try {
         const conversations = await invoke<Conversation[]>(
           "list_conversations",
@@ -217,6 +214,7 @@ export function useConversation(
         }
 
         // Create conversation and generate name if first message
+        //TODO: look into moving name generation to backend
         let activeConversationId = conversationId;
         if (!activeConversationId) {
           const conversation = await createConversation(
@@ -265,18 +263,11 @@ export function useConversation(
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
 
-        // Send hud chat or computer use event
+        // Send agentic chat or computer use event
         if (state.conversationType === "computer_use") {
           void startComputerUseSession(activeConversationId, content);
-        } else if (state.conversationType === "agent") {
-          await sendAgentMessage(
-            activeConversationId,
-            content,
-            attachmentData,
-            userMessage.message.id,
-          );
         } else {
-          await sendChatApiMessage(
+          await sendAgentMessage(
             activeConversationId,
             content,
             attachmentData,
@@ -412,27 +403,6 @@ export function useConversation(
   }, [dispatch, state.conversationType]);
 
   /**
-   * Toggle Agentic Mode
-   */
-  const toggleAgenticMode = useCallback((): void => {
-    if (state.conversationType === "chat") {
-      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "agent" });
-    } else {
-      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "chat" });
-    }
-  }, [dispatch, state.conversationType]);
-
-  /**
-   * Sets the conversation type
-   */
-  const setConversationType = useCallback(
-    (type: string): void => {
-      dispatch({ type: "SET_CONVERSATION_TYPE", payload: type });
-    },
-    [dispatch],
-  );
-
-  /**
    * Stops the current computer use session
    */
   const stopComputerUse = useCallback(async (): Promise<void> => {
@@ -490,8 +460,6 @@ export function useConversation(
     renameConversation,
     dispatchOCRCapture,
     toggleComputerUse,
-    toggleAgenticMode,
-    setConversationType,
     stopComputerUse,
     addAttachmentData,
     removeAttachmentData,

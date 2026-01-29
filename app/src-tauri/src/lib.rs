@@ -175,7 +175,6 @@ pub fn run() {
       setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
-      models::llm::handlers::handle_hud_chat,
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,
       models::computer_use::commands::start_computer_use,
