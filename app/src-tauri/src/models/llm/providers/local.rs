@@ -159,7 +159,7 @@ impl LlmProvider for LocalProvider {
       }
 
       // Format messages according to OpenAI spec
-      formatted_msgs.extend(format_messages_for_openai(&msgs));
+      formatted_msgs.extend(format_messages_for_openai(&app_handle, &msgs));
       formatted_msgs
     } else {
       let system_prompt = request.system_prompt.clone().unwrap_or("You are a helpful assistant".to_string());
@@ -361,6 +361,7 @@ impl LlmProvider for LocalProvider {
             skill_name: skill,
             tool_name: tool,
             arguments: serde_json::from_str(args).unwrap_or(json!({})),
+            thought_signature: None,
           });
         }
         Ok(LlmResponse::ToolCalls(tool_calls))

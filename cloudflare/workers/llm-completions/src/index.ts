@@ -5,9 +5,9 @@ type requestData = {
 	modelType: string;
 	content: Array<{ role: string; parts: object[] }>;
 	stream: boolean;
-	token: string;
 	systemPrompt?: string;
 	jsonSchema?: object;
+	tools?: any;
 }
 
 const extractModelName = (modelType: string): string | null => {
@@ -35,9 +35,17 @@ export default {
 				return new Response('Bad Request: Invalid JSON', { status: 400 });
 		}
 
+		// Get Authorization header
+		const authHeader = request.headers.get('Authorization');
+		const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+		if (!token) {
+			return new Response('Unauthorized: Missing token', { status: 401 });
+		}
+
 		// Ensure use is authenticated
 		const supabase = createClient(env["SUPABASE_URL"], env["SUPABASE_ANON_KEY"]);
-		const { data: { user } } = await supabase.auth.getUser(body.token);
+		const { data: { user } } = await supabase.auth.getUser(token);
 
 		if (!user) {
 			return new Response('Unauthorized: Invalid token', { status: 401 });
@@ -75,6 +83,11 @@ export default {
 			chatConfig.maxOutputTokens = 8192;
 		} else {
 			chatConfig.systemInstruction = body.systemPrompt || "You are a helpful assistant.";
+			
+			if (body.tools) {
+				chatConfig.tools = [body.tools];
+			}
+
 			// Thinking level minimal is not supported on pro, only on fast
 			chatConfig.thinkingConfig = {
 				thinkingLevel: body.modelType === "fast" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW

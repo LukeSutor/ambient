@@ -167,6 +167,8 @@ pub struct ToolCall {
     /// The arguments to pass to the tool, as JSON.
     #[ts(type = "any")]
     pub arguments: serde_json::Value,
+    /// Optional thought signature from the model (required for Gemini 3 function calling)
+    pub thought_signature: Option<String>,
 }
 
 impl ToolCall {
@@ -177,6 +179,7 @@ impl ToolCall {
             skill_name,
             tool_name,
             arguments,
+            thought_signature: None,
         }
     }
 

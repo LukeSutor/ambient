@@ -124,6 +124,7 @@ pub enum MessageMetadata {
     tool_name: String,
     #[ts(type = "any")]
     arguments: serde_json::Value,
+    thought_signature: Option<String>,
   },
   ToolResult {
     call_id: String,
@@ -930,6 +931,7 @@ pub async fn get_conversation_tool_calls(
           .ok()
           .and_then(|s| serde_json::from_str(&s).ok())
           .unwrap_or_else(|| serde_json::json!({})),
+        thought_signature: None,
       })
     })
     .map_err(|e| format!("Query failed: {}", e))?

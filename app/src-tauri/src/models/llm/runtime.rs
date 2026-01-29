@@ -287,6 +287,7 @@ impl AgentRuntime {
                             skill_name: call.skill_name.clone(),
                             tool_name: call.tool_name.clone(),
                             arguments: call.arguments.clone(),
+                            thought_signature: call.thought_signature.clone(),
                         };
 
                         let content = format!(

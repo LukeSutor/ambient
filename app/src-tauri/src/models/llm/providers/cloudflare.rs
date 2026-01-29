@@ -3,7 +3,7 @@ use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
-use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini};
+use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini, format_messages_for_gemini};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use base64::{Engine as _, engine::general_purpose};
 use serde_json::{json, Value};
@@ -130,14 +130,7 @@ impl LlmProvider for CloudflareProvider {
     
     // Build content
     let content = if let Some(msgs) = request.messages.clone() {
-      let mut formatted_content = Vec::new();
-      for msg in msgs {
-        formatted_content.push(json!({
-          "role": role_to_gemini(msg.role.as_str()),
-          "parts": [{"text": msg.content}]
-        }));
-      }
-      formatted_content
+      format_messages_for_gemini(&app_handle, &msgs)
     } else {
       let mut content = build_content(
         &app_handle,
@@ -166,7 +159,6 @@ impl LlmProvider for CloudflareProvider {
         "modelType": model,
         "content": content,
         "stream": should_stream,
-        "token": access_token,
         "systemPrompt": request.system_prompt.unwrap_or_else(|| "You are a helpful assistant.".to_string()),
     });
 
@@ -184,10 +176,18 @@ impl LlmProvider for CloudflareProvider {
       body["tools"] = tools;
     }
 
+    // Pretty print the request body for debugging
+    log::debug!("Cloudflare LLM Request Body: {}", serde_json::to_string_pretty(&body).unwrap());
+
     let client = reqwest::Client::new();
 
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+      reqwest::header::AUTHORIZATION,
+      HeaderValue::from_str(&format!("Bearer {}", access_token))
+        .map_err(|e| format!("Invalid access token format: {}", e))?,
+    );
 
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
@@ -209,6 +209,7 @@ impl LlmProvider for CloudflareProvider {
       }
 
       let mut full = String::new();
+      let mut tool_calls = Vec::new();
       let mut buffer = String::new();
       let mut stream = resp.bytes_stream();
       while let Some(chunk) = stream.next().await {
@@ -245,23 +246,19 @@ impl LlmProvider for CloudflareProvider {
               }
             }
 
+            // Extract tool calls from this chunk
+            if has_tool_calls_gemini(&obj) {
+              let chunk_calls = parse_gemini_tool_calls(&obj, request.internal_tools.as_deref());
+              tool_calls.extend(chunk_calls);
+            }
+
             // Extract content piece from Gemini structure
-            if let Some(piece) = obj
-              .get("candidates")
-              .and_then(|c| c.as_array())
-              .and_then(|a| a.get(0))
-              .and_then(|c| c.get("content"))
-              .and_then(|c| c.get("parts"))
-              .and_then(|p| p.as_array())
-              .and_then(|a| a.get(0))
-              .and_then(|p| p.get("text"))
-              .and_then(|t| t.as_str())
-            {
-              full.push_str(piece);
+            if let Some(piece) = extract_text_gemini(&obj) {
+              full.push_str(&piece);
               let _ = emit(
                 CHAT_STREAM,
                 ChatStreamEvent {
-                  delta: piece.to_string(),
+                  delta: piece.clone(),
                   is_finished: false,
                   full_response: full.clone(),
                   conv_id: request.conv_id.clone(),
@@ -293,7 +290,11 @@ impl LlmProvider for CloudflareProvider {
           completion_tokens,
       ).await?;
 
-      Ok(LlmResponse::Text(full))
+      if !tool_calls.is_empty() {
+        Ok(LlmResponse::ToolCalls(tool_calls))
+      } else {
+        Ok(LlmResponse::Text(full))
+      }
     } else {
       let resp = client
         .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)

@@ -7,10 +7,15 @@
 //! - **Internal → Provider**: Converts tool definitions to provider format
 //! - **Provider → Internal**: Parses tool calls from provider responses
 
-use crate::db::conversations::{Message, MessageType, MessageMetadata, Role};
+use crate::db::conversations::{Message, MessageType, MessageMetadata, Role, Attachment};
 use crate::skills::types::{ToolDefinition, ToolCall, ToolResult};
 use crate::skills::registry::get_skill;
 use serde_json::{json, Value};
+use tauri::{AppHandle, Manager};
+use base64::{Engine as _, engine::general_purpose};
+use std::fs;
+
+const MAX_RECENT_ATTACHMENTS: usize = 3;
 
 /// Translates tool definitions to OpenAI function calling format.
 ///
@@ -170,6 +175,7 @@ pub fn parse_openai_tool_calls(response: &Value, available_tools: Option<&[ToolD
                                 skill_name,
                                 tool_name,
                                 arguments,
+                                thought_signature: None,
                             });
                         }
                     }
@@ -205,6 +211,12 @@ pub fn parse_gemini_tool_calls(response: &Value, available_tools: Option<&[ToolD
                                 .cloned()
                                 .unwrap_or(json!({}));
 
+                            // Extract thought signature if present
+                            let thought_signature = part
+                                .get("thoughtSignature")
+                                .and_then(|s| s.as_str())
+                                .map(|s| s.to_string());
+
                             // Generate unique ID for this call (Gemini doesn't provide one)
                             let id = uuid::Uuid::new_v4().to_string();
 
@@ -215,6 +227,7 @@ pub fn parse_gemini_tool_calls(response: &Value, available_tools: Option<&[ToolD
                                 skill_name,
                                 tool_name,
                                 arguments,
+                                thought_signature,
                             });
                         }
                     }
@@ -289,11 +302,21 @@ pub fn format_gemini_tool_results(results: &[ToolResult], tool_calls: &[ToolCall
 /// - Tool result messages (using `tool_call_id`)
 /// - Regular text messages
 /// - Skips "Thinking" messages as they are internal state
-pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
+pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> Vec<Value> {
     let mut formatted = Vec::new();
 
     // Track pending tool calls to merge consecutive tool call messages
     let mut pending_tool_calls: Vec<Value> = Vec::new();
+
+    // Collect IDs of most recent images/pdfs across all messages
+    let mut valid_attachments = Vec::new();
+    for msg in msgs.iter().rev() {
+        for attachment in msg.attachments.iter().rev() {
+            if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
+                valid_attachments.push(attachment.id.clone());
+            }
+        }
+    }
 
     for msg in msgs {
         match msg.message_type {
@@ -304,7 +327,7 @@ pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
 
             MessageType::ToolCall => {
                 // Extract tool call from metadata and add to pending list
-                if let Some(MessageMetadata::ToolCall { call_id, skill_name, tool_name, arguments }) = &msg.metadata {
+                if let Some(MessageMetadata::ToolCall { call_id, skill_name, tool_name, arguments, thought_signature: _ }) = &msg.metadata {
                     let tool_name_full = format!("{}.{}", skill_name, tool_name);
                     pending_tool_calls.push(json!({
                         "id": call_id,
@@ -377,6 +400,66 @@ pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
                     pending_tool_calls.clear();
                 }
 
+                let mut content_blocks = Vec::new();
+
+                // Add attachments if any (multimodal support)
+                for attachment in &msg.attachments {
+                    if !valid_attachments.contains(&attachment.id) {
+                        continue;
+                    }
+
+                    if attachment.file_type.starts_with("image/") {
+                        // Attach image as base64 data URL
+                        if let Some(rel_path) = &attachment.file_path {
+                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                let full_path = app_data.join(rel_path);
+                                if full_path.exists() {
+                                    if let Ok(bytes) = fs::read(&full_path) {
+                                        let base64_image = general_purpose::STANDARD.encode(bytes);
+                                        content_blocks.push(json!({
+                                            "type": "image_url",
+                                            "image_url": {
+                                                "url": format!("data:{};base64,{}", attachment.file_type, base64_image)
+                                            }
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    } else if attachment.file_type == "application/pdf" {
+                        // Extract text from PDF and attach to prompt
+                        if let Some(rel_path) = &attachment.file_path {
+                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                let full_path = app_data.join(rel_path);
+                                if full_path.exists() {
+                                    if let Ok(bytes) = fs::read(&full_path) {
+                                        if let Ok(pdf_text) = pdf_extract::extract_text_from_mem(&bytes) {
+                                            content_blocks.push(json!({
+                                                "type": "text",
+                                                "text": format!("Extracted text from {}:\n{}", attachment.file_name, pdf_text)
+                                            }));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if attachment.file_type == "ambient/ocr" {
+                        // Attach OCR text
+                        if let Some(extracted_text) = &attachment.extracted_text {
+                            content_blocks.push(json!({
+                                "type": "text",
+                                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
+                            }));
+                        }
+                    }
+                }
+
+                // Add text content last
+                content_blocks.push(json!({
+                    "type": "text",
+                    "text": msg.content
+                }));
+
                 // Regular text message
                 let role = match msg.role {
                     Role::System => "system",
@@ -387,7 +470,7 @@ pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
 
                 formatted.push(json!({
                     "role": role,
-                    "content": msg.content
+                    "content": content_blocks
                 }));
             }
         }
@@ -399,6 +482,168 @@ pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
             "role": "assistant",
             "content": null,
             "tool_calls": pending_tool_calls
+        }));
+    }
+
+    formatted
+}
+
+/// Format conversation messages for Gemini API.
+///
+/// This properly formats:
+/// - Text messages with multimodal attachments (images, PDFs)
+/// - Tool call messages (using `functionCall` part)
+/// - Tool result messages (using `functionResponse` part)
+/// - Thinking messages (using text parts with tags)
+/// - Merges consecutive parts with the same role (required by Gemini API)
+pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> Vec<Value> {
+    let mut formatted = Vec::new();
+    let mut pending_parts = Vec::new();
+    let mut current_role: Option<&str> = None;
+
+    // Collect IDs of most recent images/pdfs across all messages
+    let mut valid_attachments = Vec::new();
+    for msg in msgs.iter().rev() {
+        for attachment in msg.attachments.iter().rev() {
+            if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
+                valid_attachments.push(attachment.id.clone());
+            }
+        }
+    }
+
+    for msg in msgs {
+        let (role, mut parts) = match msg.message_type {
+            MessageType::Thinking => {
+                ("model", vec![json!({
+                    "thought": true,
+                    "text": msg.content
+                })])
+            }
+
+            MessageType::ToolCall => {
+                if let Some(MessageMetadata::ToolCall { skill_name, tool_name, arguments, thought_signature, .. }) = &msg.metadata {
+                    let tool_name_full = format!("{}.{}", skill_name, tool_name);
+                    let mut part = json!({
+                        "functionCall": {
+                            "name": tool_name_full,
+                            "args": arguments
+                        }
+                    });
+
+                    // Re-attach thought signature if we have one
+                    if let Some(signature) = thought_signature {
+                        part["thoughtSignature"] = json!(signature);
+                    }
+
+                    ("model", vec![part])
+                } else {
+                    continue;
+                }
+            }
+
+            MessageType::ToolResult => {
+                if let Some(MessageMetadata::ToolResult { call_id, result, success, error }) = &msg.metadata {
+                    let mut tool_name = "unknown".to_string();
+                    
+                    // Try to find the matching tool call to get the name
+                    if let Some(call_msg) = msgs.iter().find(|m| {
+                        if let Some(MessageMetadata::ToolCall { call_id: cid, .. }) = &m.metadata {
+                            cid == call_id
+                        } else {
+                            false
+                        }
+                    }) {
+                        if let Some(MessageMetadata::ToolCall { skill_name, tool_name: tname, .. }) = &call_msg.metadata {
+                            tool_name = format!("{}.{}", skill_name, tname);
+                        }
+                    }
+
+                    let content_val = if *success {
+                        result.clone().unwrap_or(json!({}))
+                    } else {
+                        json!({ "error": error.as_deref().unwrap_or("Unknown error") })
+                    };
+
+                    ("user", vec![json!({
+                        "functionResponse": {
+                            "name": tool_name,
+                            "response": content_val
+                        }
+                    })])
+                } else {
+                    continue;
+                }
+            }
+
+            MessageType::Text => {
+                let role = match msg.role {
+                    Role::Assistant => "model",
+                    _ => "user",
+                };
+
+                let mut parts = Vec::new();
+                
+                // Add attachments
+                for attachment in &msg.attachments {
+                    if !valid_attachments.contains(&attachment.id) {
+                        continue;
+                    }
+
+                    if attachment.file_type.starts_with("image/") || attachment.file_type == "application/pdf" {
+                        if let Some(rel_path) = &attachment.file_path {
+                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                let full_path = app_data.join(rel_path);
+                                if full_path.exists() {
+                                    if let Ok(bytes) = fs::read(&full_path) {
+                                        let base64_data = general_purpose::STANDARD.encode(bytes);
+                                        parts.push(json!({
+                                            "inlineData": {
+                                                "mimeType": attachment.file_type,
+                                                "data": base64_data,
+                                            },
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    } else if attachment.file_type == "ambient/ocr" {
+                         if let Some(extracted_text) = &attachment.extracted_text {
+                            parts.push(json!({
+                                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
+                            }));
+                        }
+                    }
+                }
+
+                // Add text content
+                parts.push(json!({
+                    "text": msg.content
+                }));
+                
+                (role, parts)
+            }
+        };
+
+        // Merge logic for Gemini
+        if current_role == Some(role) {
+            pending_parts.extend(parts);
+        } else {
+            if let Some(prev_role) = current_role {
+                formatted.push(json!({
+                    "role": prev_role,
+                    "parts": pending_parts
+                }));
+            }
+            current_role = Some(role);
+            pending_parts = parts;
+        }
+    }
+
+    // Flush remaining
+    if let Some(role) = current_role {
+        formatted.push(json!({
+            "role": role,
+            "parts": pending_parts
         }));
     }
 
@@ -457,12 +702,17 @@ pub fn extract_text_gemini(response: &Value) -> Option<String> {
         .and_then(|c| c.get("parts"))
         .and_then(|p| p.as_array())
         .and_then(|parts| {
+            let mut full_text = String::new();
             for part in parts {
                 if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
-                    return Some(text.to_string());
+                    full_text.push_str(text);
                 }
             }
-            None
+            if full_text.is_empty() {
+                None
+            } else {
+                Some(full_text)
+            }
         })
 }
 
