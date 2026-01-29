@@ -7,6 +7,7 @@
 //! - **Internal → Provider**: Converts tool definitions to provider format
 //! - **Provider → Internal**: Parses tool calls from provider responses
 
+use crate::db::conversations::{Message, MessageType, MessageMetadata, Role};
 use crate::skills::types::{ToolDefinition, ToolCall, ToolResult};
 use serde_json::{json, Value};
 
@@ -278,6 +279,110 @@ pub fn format_gemini_tool_results(results: &[ToolResult], tool_calls: &[ToolCall
         "role": "user",
         "parts": parts
     })
+}
+
+/// Format conversation messages for OpenAI-compatible API according to the spec.
+///
+/// This properly formats:
+/// - Assistant messages with tool calls (using `tool_calls` array)
+/// - Tool result messages (using `tool_call_id`)
+/// - Regular text messages
+/// - Skips "Thinking" messages as they are internal state
+pub fn format_messages_for_openai(msgs: &[Message]) -> Vec<Value> {
+    let mut formatted = Vec::new();
+
+    // Track pending tool calls to merge consecutive tool call messages
+    let mut pending_tool_calls: Vec<Value> = Vec::new();
+
+    for msg in msgs {
+        match msg.message_type {
+            // Skip "Thinking" messages - these are internal state and confuse the model
+            MessageType::Thinking => {
+                continue;
+            }
+
+            MessageType::ToolCall => {
+                // Extract tool call from metadata and add to pending list
+                if let Some(MessageMetadata::ToolCall { call_id, skill_name, tool_name, arguments }) = &msg.metadata {
+                    let tool_name_full = format!("{}.{}", skill_name, tool_name);
+                    pending_tool_calls.push(json!({
+                        "id": call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name_full,
+                            "arguments": serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string())
+                        }
+                    }));
+                }
+            }
+
+            MessageType::ToolResult => {
+                // First, flush any pending tool calls as a single assistant message
+                if !pending_tool_calls.is_empty() {
+                    formatted.push(json!({
+                        "role": "assistant",
+                        "content": null,
+                        "tool_calls": pending_tool_calls.clone()
+                    }));
+                    pending_tool_calls.clear();
+                }
+
+                // Format tool result with tool_call_id
+                if let Some(MessageMetadata::ToolResult { call_id, result, success, error }) = &msg.metadata {
+                    let content = if *success {
+                        result
+                            .as_ref()
+                            .map(|r| serde_json::to_string(r).unwrap_or_else(|_| "{}".to_string()))
+                            .unwrap_or_else(|| "Success".to_string())
+                    } else {
+                        format!("Error: {}", error.as_deref().unwrap_or("Unknown error"))
+                    };
+
+                    formatted.push(json!({
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": content
+                    }));
+                }
+            }
+
+            MessageType::Text => {
+                // Flush any pending tool calls first
+                if !pending_tool_calls.is_empty() {
+                    formatted.push(json!({
+                        "role": "assistant",
+                        "content": null,
+                        "tool_calls": pending_tool_calls.clone()
+                    }));
+                    pending_tool_calls.clear();
+                }
+
+                // Regular text message
+                let role = match msg.role {
+                    Role::System => "system",
+                    Role::User => "user",
+                    Role::Assistant => "assistant",
+                    Role::Tool => "tool",
+                };
+
+                formatted.push(json!({
+                    "role": role,
+                    "content": msg.content
+                }));
+            }
+        }
+    }
+
+    // Flush any remaining pending tool calls
+    if !pending_tool_calls.is_empty() {
+        formatted.push(json!({
+            "role": "assistant",
+            "content": null,
+            "tool_calls": pending_tool_calls
+        }));
+    }
+
+    formatted
 }
 
 /// Checks if an OpenAI response contains tool calls.

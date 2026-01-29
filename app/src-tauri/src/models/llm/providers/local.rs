@@ -1,6 +1,6 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
 use crate::db::token_usage::add_token_usage;
-use crate::models::llm::providers::translation::{tools_to_openai_format, has_tool_calls_openai, parse_openai_tool_calls, resolve_tool_call};
+use crate::models::llm::providers::translation::{tools_to_openai_format, has_tool_calls_openai, parse_openai_tool_calls, resolve_tool_call, format_messages_for_openai};
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
 use crate::events::{emitter::emit, types::*};
 use serde_json::{json, Value};
@@ -144,7 +144,7 @@ impl LlmProvider for LocalProvider {
     }
 
     let should_stream = request.stream.unwrap_or(false);
-    let enable_thinking = request.use_thinking.unwrap_or(true);
+    let enable_thinking = request.use_thinking.unwrap_or(false);
 
     // Build messages
     let messages = if let Some(msgs) = request.messages.clone() {
@@ -158,19 +158,8 @@ impl LlmProvider for LocalProvider {
         }));
       }
 
-      for msg in msgs {
-        let role = match msg.role {
-          crate::db::conversations::Role::System => "system",
-          crate::db::conversations::Role::User => "user",
-          crate::db::conversations::Role::Assistant => "assistant",
-          crate::db::conversations::Role::Tool => "tool",
-        };
-
-        formatted_msgs.push(json!({
-          "role": role,
-          "content": msg.content,
-        }));
-      }
+      // Format messages according to OpenAI spec
+      formatted_msgs.extend(format_messages_for_openai(&msgs));
       formatted_msgs
     } else {
       let system_prompt = request.system_prompt.clone().unwrap_or("You are a helpful assistant".to_string());
@@ -233,6 +222,9 @@ impl LlmProvider for LocalProvider {
 
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
+
+    // Pretty print the raw json request body
+    log::debug!("[llama_server] Completion request body: {}", serde_json::to_string_pretty(&request_body).unwrap_or_else(|_| "Failed to pretty print".to_string()));
 
     if should_stream {
       // Handle streaming response

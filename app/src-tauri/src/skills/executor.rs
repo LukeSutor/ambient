@@ -157,8 +157,6 @@ pub async fn execute_tools(
     app_handle: &AppHandle,
     tool_calls: Vec<ToolCall>,
 ) -> Vec<ToolResult> {
-    log::info!("[executor] Executing {} tool calls in parallel", tool_calls.len());
-
     // Execute each tool call in parallel
     let futures: Vec<_> = tool_calls
         .iter()

@@ -259,8 +259,6 @@ impl AgentRuntime {
             .await
             .map_err(|e| AgentError::LlmError(e))?;
 
-            log::info!("[agent] Received response from model: {:?}", response);
-
             // Handle response
             match response {
                 LlmResponse::Text(text) => {
@@ -272,7 +270,6 @@ impl AgentRuntime {
 
                 LlmResponse::ToolCalls(tool_calls) => {
                     // Model wants to execute tools
-                    log::info!("[agent] Tool calls requested: {:?}", tool_calls);
                     // Check if we have too many tool calls
                     if tool_calls.len() > self.config.max_tool_calls_per_turn {
                         return Err(AgentError::TooManyToolCalls(
