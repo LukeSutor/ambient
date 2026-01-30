@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useConversationContext } from "./ConversationProvider";
+import { useWindows } from "../windows/useWindows";
 import {
   createConversation,
   deleteConversation as deleteApiConversation,
@@ -66,6 +67,7 @@ export function useConversation(
 ) {
   const { state, dispatch } = useConversationContext();
   const isLoadingMoreRef = useRef(false);
+  const { setChatExpanded } = useWindows();
 
   // Auto-scroll effect for streaming messages
   useEffect(() => {
@@ -83,17 +85,20 @@ export function useConversation(
 
   // Track previous conversationId to detect navigation-triggered changes
   const prevConversationIdRef = useRef<string | null>(null);
-  const isNavigatingRef = useRef(false);
 
   // Effect to load conversation when navigated to via event
   useEffect(() => {
-    // scrollToMessageId being set indicates this is a navigation request
-    if (state.scrollToMessageId !== null && state.conversationId && !isNavigatingRef.current) {
-      isNavigatingRef.current = true;
+    // Only trigger loading if conversationId changed AND we have messages to potentially scroll to
+    // This handles the case where navigation sets a new conversationId
+    if (
+      state.conversationId &&
+      state.conversationId !== prevConversationIdRef.current &&
+      state.scrollToMessageId !== null
+    ) {
+      prevConversationIdRef.current = state.conversationId;
       
       const loadNavigatedConversation = async () => {
         try {
-          console.log("[useConversation] Loading navigated conversation:", state.conversationId);
           const conversation = await invoke<Conversation>("get_conversation", {
             conversationId: state.conversationId,
           });
@@ -104,43 +109,39 @@ export function useConversation(
           });
           const messages = backendMessages.map(transformBackendMessage);
           dispatch({ type: "LOAD_MESSAGES", payload: messages });
-          console.log("[useConversation] Loaded", messages.length, "messages for navigation");
         } catch (error) {
           console.error("[useConversation] Failed to load navigated conversation:", error);
-        } finally {
-          isNavigatingRef.current = false;
         }
       };
       
       void loadNavigatedConversation();
+    } else {
+      prevConversationIdRef.current = state.conversationId;
     }
   }, [state.conversationId, state.scrollToMessageId, dispatch]);
 
   // Effect to scroll to target message after messages are loaded
   useEffect(() => {
     if (state.scrollToMessageId && state.messages.length > 0) {
-      console.log("[useConversation] Attempting to scroll to message:", state.scrollToMessageId);
+      setChatExpanded();
       // Give the DOM time to render the messages
       const timer = setTimeout(() => {
         const messageElement = document.getElementById(`message-${state.scrollToMessageId}`);
         if (messageElement) {
-          console.log("[useConversation] Found message element, scrolling...");
           messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
-          // Highlight the message temporarily
+          // Optionally highlight the message temporarily
           messageElement.classList.add("highlight-message");
           setTimeout(() => {
             messageElement.classList.remove("highlight-message");
           }, 2000);
-        } else {
-          console.warn("[useConversation] Message element not found:", `message-${state.scrollToMessageId}`);
         }
         // Clear the scroll target
         dispatch({ type: "SET_SCROLL_TO_MESSAGE", payload: null });
-      }, 300);
+      }, 100);
       
       return () => clearTimeout(timer);
     }
-  }, [state.scrollToMessageId, state.messages, dispatch]);
+  }, [state.scrollToMessageId, state.messages, dispatch, setChatExpanded]);
 
   // Initialization effect
 
