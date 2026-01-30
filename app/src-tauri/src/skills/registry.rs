@@ -322,6 +322,14 @@ pub fn get_available_skills() -> Vec<SkillSummary> {
     get_all_summaries()
 }
 
+/// Tauri command to get tools for a specific skill.
+///
+/// Returns all tools defined for the given skill.
+#[tauri::command]
+pub fn get_skill_tools_command(name: String) -> Vec<ToolDefinition> {
+    get_skill_tools(&name)
+}
+
 /// Checks if a skill exists.
 ///
 /// Returns true if the skill is registered.

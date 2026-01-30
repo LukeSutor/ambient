@@ -147,6 +147,20 @@ where
 // Public API
 // ============================================================================
 
+/// Executes a single skill tool from a Tauri command.
+///
+/// This is used for testing and direct tool execution from the frontend.
+#[tauri::command]
+pub async fn execute_skill_tool(
+    app_handle: AppHandle,
+    skill_name: String,
+    tool_name: String,
+    arguments: serde_json::Value,
+) -> Result<ToolResult, String> {
+    let call = ToolCall::new(skill_name, tool_name, arguments);
+    Ok(execute_single_tool(app_handle, call).await)
+}
+
 /// Executes multiple tool calls in parallel.
 ///
 /// Takes a vector of tool calls and executes them concurrently.

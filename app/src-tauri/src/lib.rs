@@ -198,7 +198,8 @@ pub fn run() {
       auth::commands::get_access_token_command,
       auth::commands::emit_auth_changed,
       skills::registry::get_available_skills,
-      skills::builtin::code_execution::test_python_execution,
+      skills::registry::get_skill_tools_command,
+      skills::executor::execute_skill_tool,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

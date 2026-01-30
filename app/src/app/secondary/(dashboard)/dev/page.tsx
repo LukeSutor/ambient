@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { SupabaseUser } from "@/types/auth";
 import type { OcrResponseEvent } from "@/types/events";
+import type { SkillSummary, ToolDefinition, ToolResult } from "@/types/skills";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
@@ -65,28 +66,103 @@ export default function Dev() {
     }
   };
 
-  // --- Python Code Execution Test ---
-  const [pythonCode, setPythonCode] = useState<string>(
-    "print('Hello from Embedded Python!')\n\ndef fib(n):\n    if n <= 1: return n\n    return fib(n-1) + fib(n-2)\n\nprint(f'Fib(10) = {fib(10)}')",
-  );
-  const [pythonResult, setPythonResult] = useState<string | null>(null);
-  const [pythonLoading, setPythonLoading] = useState<boolean>(false);
-  const [pythonError, setPythonError] = useState<string | null>(null);
+  // --- Skill Tool Tester ---
+  const [skills, setSkills] = useState<SkillSummary[]>([]);
+  const [selectedSkill, setSelectedSkill] = useState<string>("");
+  const [availableTools, setAvailableTools] = useState<ToolDefinition[]>([]);
+  const [selectedTool, setSelectedTool] = useState<string>("");
+  const [toolArguments, setToolArguments] = useState<string>("{}");
+  const [toolResult, setToolResult] = useState<ToolResult | null>(null);
+  const [toolLoading, setToolLoading] = useState<boolean>(false);
+  const [toolError, setToolError] = useState<string | null>(null);
 
-  const handleTestPython = async () => {
-    if (!pythonCode.trim()) return;
-    setPythonLoading(true);
-    setPythonError(null);
-    setPythonResult(null);
+  useEffect(() => {
+    const fetchSkills = async () => {
+      try {
+        const result = await invoke<SkillSummary[]>("get_available_skills");
+        setSkills(result);
+      } catch (err) {
+        console.error("Failed to fetch skills:", err);
+      }
+    };
+    fetchSkills();
+  }, []);
+
+  useEffect(() => {
+    const fetchTools = async () => {
+      if (!selectedSkill) {
+        setAvailableTools([]);
+        return;
+      }
+      try {
+        const result = await invoke<ToolDefinition[]>(
+          "get_skill_tools_command",
+          {
+            name: selectedSkill,
+          },
+        );
+        setAvailableTools(result);
+        if (result.length > 0) {
+          setSelectedTool(result[0].name);
+        } else {
+          setSelectedTool("");
+        }
+      } catch (err) {
+        console.error("Failed to fetch tools:", err);
+      }
+    };
+    fetchTools();
+  }, [selectedSkill]);
+
+  useEffect(() => {
+    if (selectedTool) {
+      const tool = availableTools.find((t) => t.name === selectedTool);
+      if (tool) {
+        const template: Record<string, unknown> = {};
+        for (const param of tool.parameters) {
+          template[param.name] =
+            param.default ??
+            (param.type === "string"
+              ? ""
+              : param.type === "number" || param.type === "integer"
+                ? 0
+                : param.type === "boolean"
+                  ? false
+                  : null);
+        }
+        setToolArguments(JSON.stringify(template, null, 2));
+      }
+    }
+  }, [selectedTool, availableTools]);
+
+  const handleExecuteTool = async () => {
+    if (!selectedSkill || !selectedTool) return;
+    setToolLoading(true);
+    setToolError(null);
+    setToolResult(null);
+
+    let parsedArgs;
     try {
-      const result = await invoke("test_python_execution", {
-        code: pythonCode,
+      parsedArgs = JSON.parse(toolArguments);
+    } catch (e) {
+      setToolError(
+        `Invalid JSON in arguments: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      setToolLoading(false);
+      return;
+    }
+
+    try {
+      const result = await invoke<ToolResult>("execute_skill_tool", {
+        skillName: selectedSkill,
+        toolName: selectedTool,
+        arguments: parsedArgs,
       });
-      setPythonResult(JSON.stringify(result, null, 2));
+      setToolResult(result);
     } catch (err) {
-      setPythonError(typeof err === "string" ? err : JSON.stringify(err));
+      setToolError(typeof err === "string" ? err : JSON.stringify(err));
     } finally {
-      setPythonLoading(false);
+      setToolLoading(false);
     }
   };
 
@@ -569,41 +645,92 @@ export default function Dev() {
         )}
       </div>
 
-      {/* Python Execution Test Section */}
+      {/* Skill Tool Tester Section */}
       <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-orange-50">
-        <h2 className="text-lg font-semibold">Python Execution Test</h2>
+        <h2 className="text-lg font-semibold">Skill Tool Tester</h2>
         <p className="text-sm text-gray-600">
-          Run Python code in the embedded sandboxed interpreter.
+          Test any tool from the skill registry with custom arguments.
         </p>
-        <Textarea
-          value={pythonCode}
-          onChange={(e) => {
-            setPythonCode(e.target.value);
-          }}
-          rows={6}
-          placeholder="Enter Python code..."
-          className="font-mono text-xs"
-        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="skill-select">Skill</Label>
+            <select
+              id="skill-select"
+              className="w-full p-2 border rounded bg-white text-sm"
+              value={selectedSkill}
+              onChange={(e) => setSelectedSkill(e.target.value)}
+            >
+              <option value="">Select a skill...</option>
+              {skills.map((skill) => (
+                <option key={skill.name} value={skill.name}>
+                  {skill.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tool-select">Tool</Label>
+            <select
+              id="tool-select"
+              className="w-full p-2 border rounded bg-white text-sm"
+              value={selectedTool}
+              disabled={!selectedSkill}
+              onChange={(e) => setSelectedTool(e.target.value)}
+            >
+              <option value="">Select a tool...</option>
+              {availableTools.map((tool) => (
+                <option key={tool.name} value={tool.name}>
+                  {tool.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="tool-args">Arguments (JSON)</Label>
+          <Textarea
+            id="tool-args"
+            value={toolArguments}
+            onChange={(e) => setToolArguments(e.target.value)}
+            rows={8}
+            placeholder="Enter tool arguments as JSON..."
+            className="font-mono text-xs"
+          />
+        </div>
+
         <Button
           onClick={() => {
-            void handleTestPython();
+            void handleExecuteTool();
           }}
-          disabled={pythonLoading || !pythonCode.trim()}
+          disabled={toolLoading || !selectedSkill || !selectedTool}
           variant="default"
         >
-          {pythonLoading ? "Executing..." : "Run Python Code"}
+          {toolLoading ? "Executing..." : "Execute Tool"}
         </Button>
-        {pythonError && (
+
+        {toolError && (
           <div className="p-2 bg-red-100 border border-red-300 rounded text-xs font-mono overflow-x-auto">
-            Error: {pythonError}
+            Error: {toolError}
           </div>
         )}
-        {pythonResult && !pythonError && (
+
+        {toolResult && (
           <div className="space-y-2">
             <Label>Result:</Label>
-            <pre className="p-3 bg-white border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-mono">
-              {pythonResult}
-            </pre>
+            <div
+              className={`p-3 border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words font-mono ${toolResult.success ? "bg-white" : "bg-red-50"}`}
+            >
+              {toolResult.success ? (
+                <pre>{JSON.stringify(toolResult.result, null, 2)}</pre>
+              ) : (
+                <p className="text-red-600">
+                  Execution Failed: {toolResult.error}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
