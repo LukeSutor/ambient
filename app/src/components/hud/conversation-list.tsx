@@ -109,11 +109,12 @@ export function ConversationList() {
 
     const target = observerTarget.current;
     if (target) observer.observe(target);
+    console.log({target, observer});
 
     return () => {
       if (target) observer.unobserve(target);
     };
-  }, [hasMoreConversations, loadMoreConversations]);
+  }, [observerTarget.current, hasMoreConversations, loadMoreConversations]);
 
   const handleLoadConversation = useCallback(
     async (id: string) => {
