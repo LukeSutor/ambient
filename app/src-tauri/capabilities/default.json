@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
-  "windows": ["main", "secondary", "screen-selector", "computer-use"],
+  "windows": ["main", "secondary", "screen-selector", "computer-use", "search-scraper", "webview-scraper"],
   "permissions": [
     "core:default",
     "core:window:allow-create",

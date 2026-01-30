@@ -25,9 +25,10 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::oneshot;
 use url::Url;
+use uuid::Uuid;
 
 /// Window label prefix for search scraper windows
 const SEARCH_WINDOW_PREFIX: &str = "search_scraper_";
@@ -38,8 +39,17 @@ const SEARCH_TIMEOUT_SECS: u64 = 600;
 /// Timeout for page fetch operations
 const FETCH_TIMEOUT_SECS: u64 = 30;
 
-/// Custom URL scheme for receiving scraped data
-const SCRAPE_RESULT_SCHEME: &str = "scraperesult";
+/// Scraper shell window label
+const SCRAPER_SHELL_WINDOW_LABEL: &str = "webview-scraper";
+
+/// Scraper shell route (app page)
+const SCRAPER_SHELL_PATH: &str = "/webview-scraper";
+
+/// Event names for scraper IPC
+const EVENT_SCRAPER_LOAD: &str = "webview_scraper_load";
+const EVENT_SCRAPER_RESULT: &str = "webview_scraper_result";
+const EVENT_SCRAPER_ERROR: &str = "webview_scraper_error";
+const EVENT_SCRAPER_SET_HTML: &str = "webview_scraper_set_html";
 
 /// Counter for unique window IDs
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -50,6 +60,34 @@ pub struct SearchResult {
     pub title: String,
     pub url: String,
     pub snippet: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrapeLoadPayload {
+    request_id: String,
+    url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrapeSetHtmlPayload {
+    request_id: String,
+    html: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrapeResultPayload {
+    request_id: String,
+    html: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ScrapeErrorPayload {
+    request_id: String,
+    error: String,
 }
 
 /// Execute a web search tool.
@@ -65,8 +103,9 @@ pub async fn execute(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, S
 
 /// Generate a unique window label for each scraper instance
 fn generate_window_label() -> String {
-    let id = WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("{}{}", SEARCH_WINDOW_PREFIX, id)
+    // let id = WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst);
+    // format!("{}{}", SEARCH_WINDOW_PREFIX, id)
+    "search-scraper".to_string()
 }
 
 /// Perform a web search using DuckDuckGo via WebView.
@@ -241,70 +280,92 @@ fn extract_content_as_markdown(document: &Html) -> Result<String, String> {
     }
 }
 
-/// JavaScript code to extract HTML and send it via navigation.
+/// JavaScript code to extract HTML and send it via Tauri IPC.
 ///
 /// This script:
 /// 1. Waits for the page to fully load
 /// 2. Extracts the full HTML content
-/// 3. Encodes it as base64
-/// 4. Navigates to a custom URL scheme that we intercept
-fn get_extraction_script() -> &'static str {
-    r#"
-    (function() {
+/// 3. Emits the payload via Tauri event IPC (no URL size limits)
+fn get_extraction_script(request_id: &str) -> String {
+    let request_id_json = serde_json::to_string(request_id).unwrap_or_else(|_| "\"\"".into());
+
+    format!(
+        r#"
+    (function() {{
         // Prevent multiple executions
         if (window.__scrapeExecuted) return;
         window.__scrapeExecuted = true;
-        console.log("[scraper] Starting HTML extraction");
-        
-        function extractAndSend() {
-            try {
-                // Get the full HTML content
+
+        const requestId = {request_id_json};
+
+        function emitResult(html) {{
+            try {{
+                const tauri = window.__TAURI__;
+                if (tauri && tauri.event && tauri.event.emit) {{
+                    tauri.event.emit("{EVENT_SCRAPER_RESULT}", {{ requestId, html }});
+                }} else {{
+                    console.error("[scraper] Tauri event emitter not available");
+                }}
+            }} catch (e) {{
+                console.error("[scraper] Failed to emit result", e);
+            }}
+        }}
+
+        function emitError(error) {{
+            try {{
+                const tauri = window.__TAURI__;
+                if (tauri && tauri.event && tauri.event.emit) {{
+                    tauri.event.emit("{EVENT_SCRAPER_ERROR}", {{ requestId, error }});
+                }} else {{
+                    console.error("[scraper] Tauri event emitter not available");
+                }}
+            }} catch (e) {{
+                console.error("[scraper] Failed to emit error", e);
+            }}
+        }}
+
+        function extractAndSend() {{
+            try {{
                 const html = document.documentElement.outerHTML;
-                console.log({html});
-                
-                // Encode as base64 to safely pass through URL
-                // Use encodeURIComponent first to handle Unicode properly
-                const encoded = btoa(unescape(encodeURIComponent(html)));
-                
-                // Navigate to our custom URL scheme
-                // The on_navigation handler will intercept this
-                window.location.href = 'scraperesult://data/' + encoded;
-                console.log("[scraper] HTML extraction sent: " + encoded.length + " bytes, navigating to scraperesult://data/");
-            } catch (e) {
-                // Send error
-                window.location.href = 'scraperesult://error/' + encodeURIComponent(e.toString());
-            }
-        }
-        
+                emitResult(html);
+            }} catch (e) {{
+                emitError(e && e.toString ? e.toString() : String(e));
+            }}
+        }}
+
         // Check document ready state
-        if (document.readyState === 'complete') {
+        if (document.readyState === 'complete') {{
             // Small delay to let any final scripts run
-            extractAndSend();
-        } else {
+            setTimeout(extractAndSend, 800);
+        }} else {{
             // Wait for full load
-            window.addEventListener('load', function() {
-                extractAndSend();
-            });
-            
+            window.addEventListener('load', function() {{
+                setTimeout(extractAndSend, 800);
+            }});
+
             // Fallback: also listen for DOMContentLoaded with longer delay
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', function() {{
                     setTimeout(extractAndSend, 1500);
-                });
-            }
-            
+                }});
+            }}
+
             // Ultimate fallback timeout
             setTimeout(extractAndSend, 4000);
-        }
-    })();
-    "#
+        }}
+    }})();
+    "#,
+    )
 }
 
 /// Scrape a URL using a hidden WebView window.
 ///
-/// This creates a temporary, invisible WebView that navigates to the target URL,
+/// This creates a temporary, hidden WebView that navigates to the target URL,
 /// waits for the page to load, extracts the HTML content via JavaScript,
 /// and returns it. The WebView provides authentic browser fingerprinting.
+///
+/// A separate visible "scraper shell" window is used to host an iframe that
+/// displays the fetched page and can be manipulated by the app UI.
 ///
 /// # Bot Detection Bypass
 ///
@@ -312,12 +373,13 @@ fn get_extraction_script() -> &'static str {
 /// - Full JavaScript execution for dynamic pages
 /// - Proper cookie and session handling
 /// - All standard browser headers sent automatically
-/// - Uses navigation interception to get data back (works on external domains)
+/// - Uses IPC for large payloads (no URL length limits)
 async fn scrape_url_with_webview(
     app_handle: &AppHandle,
     url: &str,
     timeout_secs: u64,
 ) -> Result<String, String> {
+    let request_id = Uuid::new_v4().to_string();
     let window_label = generate_window_label();
     let url_string = url.to_string();
 
@@ -327,12 +389,73 @@ async fn scrape_url_with_webview(
         url
     );
 
+    // Ensure the scraper shell window exists (app-controlled UI with iframe)
+    let shell_window = if let Some(window) = app_handle.get_webview_window(SCRAPER_SHELL_WINDOW_LABEL) {
+        window
+    } else {
+        WebviewWindowBuilder::new(
+            app_handle,
+            SCRAPER_SHELL_WINDOW_LABEL,
+            WebviewUrl::App(SCRAPER_SHELL_PATH.into()),
+        )
+        .title("Webview Scraper")
+        .inner_size(1280.0, 800.0)
+        .visible(true)
+        .focused(false)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| format!("Failed to create scraper shell window: {}", e))?
+    };
+
+    let _ = shell_window.show();
+    let _ = shell_window.emit(
+        EVENT_SCRAPER_LOAD,
+        ScrapeLoadPayload {
+            request_id: request_id.clone(),
+            url: url_string.clone(),
+        },
+    );
+
     // Channel to receive the scraped HTML
     let (tx, rx) = oneshot::channel::<Result<String, String>>();
     let tx = Arc::new(Mutex::new(Some(tx)));
-    let tx_for_nav = tx.clone();
+    let tx_for_result = tx.clone();
+    let request_id_for_result = request_id.clone();
+    let result_listener_id = app_handle.listen(EVENT_SCRAPER_RESULT, move |event| {
+        let payload = event.payload();
+        let parsed: ScrapeResultPayload = match serde_json::from_str(payload) {
+            Ok(parsed) => parsed,
+            Err(_) => return,
+        };
+        if parsed.request_id != request_id_for_result {
+            return;
+        }
+        if let Ok(mut guard) = tx_for_result.lock() {
+            if let Some(tx) = guard.take() {
+                let _ = tx.send(Ok(parsed.html));
+            }
+        }
+    });
 
-    // Create the WebView window with navigation interception
+    let tx_for_error = tx.clone();
+    let request_id_for_error = request_id.clone();
+    let error_listener_id = app_handle.listen(EVENT_SCRAPER_ERROR, move |event| {
+        let payload = event.payload();
+        let parsed: ScrapeErrorPayload = match serde_json::from_str(payload) {
+            Ok(parsed) => parsed,
+            Err(_) => return,
+        };
+        if parsed.request_id != request_id_for_error {
+            return;
+        }
+        if let Ok(mut guard) = tx_for_error.lock() {
+            if let Some(tx) = guard.take() {
+                let _ = tx.send(Err(parsed.error));
+            }
+        }
+    });
+
+    // Create the hidden WebView window for scraping
     let window = WebviewWindowBuilder::new(
         app_handle,
         &window_label,
@@ -344,71 +467,22 @@ async fn scrape_url_with_webview(
     )
     .title("Web Search")
     .inner_size(1280.0, 800.0)
-    .visible(true) // Hidden window
+    .visible(true)
     .focused(false)
     .skip_taskbar(true)
-    .on_navigation(move |nav_url| {
-        // Check if this is our custom scheme with scraped data
-        if nav_url.scheme() == SCRAPE_RESULT_SCHEME {
-            log::debug!("[web_search] Intercepted scraper result navigation");
-            let host = nav_url.host_str();
-            let path = nav_url.path();
-
-            if host == Some("data") {
-                // Extract the base64 encoded HTML
-                let encoded = &path[1..]; // Skip "/"
-
-                match base64_decode_html(encoded) {
-                    Ok(html) => {
-                        log::debug!("[web_search] Received scraped HTML ({} bytes)", html.len());
-                        if let Ok(mut guard) = tx_for_nav.lock() {
-                            if let Some(tx) = guard.take() {
-                                let _ = tx.send(Ok(html));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("[web_search] Failed to decode HTML: {}", e);
-                        if let Ok(mut guard) = tx_for_nav.lock() {
-                            if let Some(tx) = guard.take() {
-                                let _ = tx.send(Err(e));
-                            }
-                        }
-                    }
-                }
-            } else if host == Some("error") {
-                let encoded_error = &path[1..]; // Skip "/"
-                let error_msg = urlencoding::decode(encoded_error)
-                    .unwrap_or_else(|_| "Unknown error".into())
-                    .to_string();
-                log::error!("[web_search] Scraping error: {}", error_msg);
-                if let Ok(mut guard) = tx_for_nav.lock() {
-                    if let Some(tx) = guard.take() {
-                        let _ = tx.send(Err(error_msg));
-                    }
-                }
-            }
-
-            // Don't navigate to our custom scheme
-            return false;
-        }
-
-        // Allow all other navigations
-        true
-    })
     .build()
     .map_err(|e| format!("Failed to create WebView window: {}", e))?;
 
     // Wait for initial page load, then inject the extraction script
     let window_clone = window.clone();
-    let extraction_script = get_extraction_script();
+    let extraction_script = get_extraction_script(&request_id);
 
     tokio::spawn(async move {
         // Wait a moment to ensure the page is loaded
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Inject the extraction script
-        match window_clone.eval(extraction_script) {
+        match window_clone.eval(extraction_script.clone()) {
             Ok(_) => {
                 log::debug!("[web_search] Successfully injected extraction script (first attempt)");
                 return;
@@ -426,38 +500,44 @@ async fn scrape_url_with_webview(
     // Wait for result with timeout
     let result = tokio::time::timeout(Duration::from_secs(timeout_secs), rx).await;
 
-    // Clean up: close the window
-    let _ = window.destroy();
+    // Clean up event listeners and window
+    app_handle.unlisten(result_listener_id);
+    app_handle.unlisten(error_listener_id);
+    let _ = window.close();
 
     match result {
         Ok(Ok(Ok(html))) => {
             log::debug!("[web_search] Successfully scraped {} bytes", html.len());
+            let _ = shell_window.emit(
+                EVENT_SCRAPER_SET_HTML,
+                ScrapeSetHtmlPayload {
+                    request_id: request_id.clone(),
+                    html: html.clone(),
+                },
+            );
             Ok(html)
         }
-        Ok(Ok(Err(e))) => Err(e),
+        Ok(Ok(Err(e))) => {
+            let _ = shell_window.emit(
+                EVENT_SCRAPER_ERROR,
+                ScrapeErrorPayload {
+                    request_id: request_id.clone(),
+                    error: e.clone(),
+                },
+            );
+            Err(e)
+        }
         Ok(Err(_)) => Err("Channel closed unexpectedly".to_string()),
-        Err(_) => Err(format!(
-            "Scraping timed out after {} seconds",
-            timeout_secs
-        )),
+        Err(_) => {
+            let error = format!("Scraping timed out after {} seconds", timeout_secs);
+            let _ = shell_window.emit(
+                EVENT_SCRAPER_ERROR,
+                ScrapeErrorPayload {
+                    request_id: request_id.clone(),
+                    error: error.clone(),
+                },
+            );
+            Err(error)
+        }
     }
-}
-
-/// Decode base64-encoded HTML from the navigation URL.
-fn base64_decode_html(encoded: &str) -> Result<String, String> {
-    use base64::{engine::general_purpose::STANDARD, Engine as _};
-
-    let decoded_bytes = STANDARD
-        .decode(encoded)
-        .map_err(|e| format!("Base64 decode error: {}", e))?;
-
-    let decoded_str =
-        String::from_utf8(decoded_bytes).map_err(|e| format!("UTF-8 decode error: {}", e))?;
-
-    // The JS does encodeURIComponent before btoa, so we need to decode that
-    let html = urlencoding::decode(&decoded_str)
-        .map_err(|e| format!("URL decode error: {}", e))?
-        .to_string();
-
-    Ok(html)
 }
