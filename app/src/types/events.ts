@@ -28,6 +28,8 @@ export type HudChatEvent = { text: string, timestamp: string, conv_id: string, m
 
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 
+export type NavigateToConversationEvent = { conversation_id: string, message_id: string | null, timestamp: string, };
+
 export type OcrResponseEvent = { text: string, success: boolean, timestamp: string, };
 
 export type RenameConversationEvent = { conv_id: string, new_name: string, timestamp: string, };

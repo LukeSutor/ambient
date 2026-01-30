@@ -45,7 +45,11 @@ tool_name: string,
 /**
  * The arguments to pass to the tool, as JSON.
  */
-arguments: any, };
+arguments: any, 
+/**
+ * Optional thought signature from the model (required for Gemini 3 function calling)
+ */
+thought_signature: string | null, };
 
 /**
  * Tool definition in the unified internal format.
