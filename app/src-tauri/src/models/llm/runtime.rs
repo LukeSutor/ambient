@@ -26,6 +26,7 @@
 //! - Model returns plain text (final answer)
 //! - Maximum iterations exceeded
 //! - Error occurs
+//! - User cancels generation
 
 use crate::db::conversations::{
     add_message, get_conversation_history, load_conversation_skills,
@@ -33,6 +34,7 @@ use crate::db::conversations::{
 };
 use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY}};
 use crate::models::llm::client::generate;
+use crate::models::llm::state::AgentRuntimeState;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
@@ -43,6 +45,8 @@ use crate::skills::types::{
     SkillSummary, ToolCall, ToolDefinition, ToolResult,
 };
 use chrono::Local;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
 use ts_rs::TS;
 use super::prompts::get_prompt;
@@ -107,6 +111,7 @@ pub struct ToolExecutionCompletedEvent {
 /// # Arguments
 ///
 /// * `app_handle` - Tauri app handle
+/// * `state` - Agent runtime state for cancellation support
 /// * `conv_id` - Conversation ID
 /// * `message_id` - Unique message ID for this user message
 /// * `user_message` - The user's message text
@@ -118,6 +123,7 @@ pub struct ToolExecutionCompletedEvent {
 #[tauri::command]
 pub async fn handle_agent_chat(
     app_handle: AppHandle,
+    state: tauri::State<'_, AgentRuntimeState>,
     conv_id: String,
     message_id: String,
     user_message: String,
@@ -128,9 +134,19 @@ pub async fn handle_agent_chat(
         conv_id
     );
 
+    // Mark generation as started and get the cancellation signal
+    state.start_generation(&conv_id).await
+        .map_err(|e| AgentError::RuntimeError(e))?;
+
     // Create runtime and run
-    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, message_id).await?;
-    runtime.run(user_message, attachments).await
+    let cancel_signal = state.get_stop_signal();
+    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, message_id, cancel_signal).await?;
+    let result = runtime.run(user_message, attachments).await;
+
+    // Mark generation as finished
+    state.finish_generation().await;
+
+    result
 }
 
 /// Agentic runtime managing the tool-using conversation loop.
@@ -155,6 +171,9 @@ pub struct AgentRuntime {
 
     /// Current iteration count (for safety).
     iteration: usize,
+
+    /// Cancellation signal from the runtime state.
+    cancel_signal: Arc<AtomicBool>,
 }
 
 impl AgentRuntime {
@@ -166,6 +185,7 @@ impl AgentRuntime {
         app_handle: AppHandle,
         conv_id: String,
         message_id: String,
+        cancel_signal: Arc<AtomicBool>,
     ) -> Result<Self, AgentError> {
         // Load settings to determine model type
         let settings = load_user_settings(app_handle.clone())
@@ -198,6 +218,7 @@ impl AgentRuntime {
             is_local,
             active_skills,
             iteration: 0,
+            cancel_signal,
         })
     }
 
@@ -228,6 +249,24 @@ impl AgentRuntime {
 
         // Main agentic loop
         loop {
+            // Check for cancellation at the start of each iteration
+            if self.cancel_signal.load(Ordering::SeqCst) {
+                log::info!("[agent] Generation cancelled by user at iteration start");
+                let text = "*Request cancelled by you*".to_string();
+
+                // Emit event so UI updates immediately
+                let stream_data = crate::events::types::ChatStreamEvent {
+                    delta: "".to_string(),
+                    is_finished: true,
+                    full_response: text.clone(),
+                    conv_id: Some(self.conv_id.clone()),
+                };
+                let _ = emit(crate::events::types::CHAT_STREAM, stream_data);
+
+                self.save_assistant_message(&text, MessageType::Text, None).await?;
+                return Ok(text);
+            }
+
             self.iteration += 1;
             if self.iteration > self.config.max_iterations {
                 return Err(AgentError::MaxIterationsExceeded(self.config.max_iterations));
@@ -246,22 +285,44 @@ impl AgentRuntime {
             // Determine what tools to include in request
             let available_tools = self.get_available_tools();
 
-            // Build LLM request
+            // Build LLM request with cancel signal
             let request = LlmRequest::new(String::new())
                 .with_system_prompt(Some(system_prompt.clone()))
                 .with_messages(Some(messages.clone()))
                 .with_internal_tools(Some(available_tools))
                 .with_conv_id(Some(self.conv_id.clone()))
-                .with_stream(Some(true));
+                .with_stream(Some(true))
+                .with_cancel_signal(Some(self.cancel_signal.clone()));
 
             // Generate response from LLM
-            let response = generate(
+            let response = match generate(
                 self.app_handle.clone(),
                 request,
                 Some(self.is_local),
             )
-            .await
-            .map_err(|e| AgentError::LlmError(e))?;
+            .await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    // Check if it's a cancellation error
+                    if e.contains("cancelled"){
+                        log::info!("[agent] Generation was cancelled during LLM call");
+                        let text = "*Request cancelled by you*".to_string();
+                        
+                        // Emit event if it hasn't been emitted yet by the provider
+                        let stream_data = crate::events::types::ChatStreamEvent {
+                            delta: "".to_string(),
+                            is_finished: true,
+                            full_response: text.clone(),
+                            conv_id: Some(self.conv_id.clone()),
+                        };
+                        let _ = emit(crate::events::types::CHAT_STREAM, stream_data);
+
+                        self.save_assistant_message(&text, MessageType::Text, None).await?;
+                        return Ok(text);
+                    }
+                    return Err(AgentError::LlmError(e));
+                }
+            };
 
             // Handle response
             match response {

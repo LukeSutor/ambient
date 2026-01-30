@@ -2,8 +2,6 @@ import type { Conversation } from "@/types/conversations";
 import {
   type AttachmentData,
   type GenerateConversationNameEvent,
-  type HudChatEvent,
-  OcrResponseEvent,
 } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
@@ -90,6 +88,21 @@ export async function stopComputerUseSession(): Promise<void> {
       error,
     );
     throw new Error("Failed to stop computer use session");
+  }
+}
+
+/**
+ * Stops the current agent chat generation
+ */
+export async function stopAgentChat(): Promise<void> {
+  try {
+    await invoke("stop_agent_chat");
+  } catch (error) {
+    console.error(
+      "[ConversationAPI] Failed to stop agent chat:",
+      error,
+    );
+    throw new Error("Failed to stop agent chat");
   }
 }
 

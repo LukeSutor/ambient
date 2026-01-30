@@ -1,7 +1,8 @@
 use tauri::AppHandle;
 use crate::skills::types::ToolDefinition;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 /// Policy for choosing which provider to use
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -10,8 +11,7 @@ pub enum ProviderPolicy {
     ForceLocal,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
-#[ts(export, export_to = "llm.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LlmRequest {
     pub prompt: String,
     pub system_prompt: Option<String>,
@@ -21,6 +21,9 @@ pub struct LlmRequest {
     pub stream: Option<bool>,
     pub internal_tools: Option<Vec<ToolDefinition>>,
     pub messages: Option<Vec<crate::db::conversations::Message>>,
+    /// Cancellation signal for aborting generation (not serialized)
+    #[serde(skip)]
+    pub cancel_signal: Option<Arc<AtomicBool>>,
 }
 
 impl LlmRequest {
@@ -65,6 +68,11 @@ impl LlmRequest {
         self.messages = messages;
         self
     }
+
+    pub fn with_cancel_signal(mut self, signal: Option<Arc<AtomicBool>>) -> Self {
+        self.cancel_signal = signal;
+        self
+    }
 }
 
 /// Common interface for LLM providers
@@ -78,8 +86,7 @@ pub trait LlmProvider: Send + Sync {
 }
 
 /// Response variants from generation
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "llm.ts")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LlmResponse {
     /// Final text response
     Text(String),

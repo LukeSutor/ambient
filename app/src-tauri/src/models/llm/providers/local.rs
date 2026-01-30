@@ -4,6 +4,7 @@ use crate::models::llm::providers::translation::{tools_to_openai_format, has_too
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
 use crate::events::{emitter::emit, types::*};
 use serde_json::{json, Value};
+use std::sync::atomic::Ordering;
 use tauri::AppHandle;
 
 pub struct LocalProvider;
@@ -84,9 +85,6 @@ impl LlmProvider for LocalProvider {
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
 
-    // Pretty print the raw json request body
-    log::debug!("[llama_server] Completion request body: {}", serde_json::to_string_pretty(&request_body).unwrap_or_else(|_| "Failed to pretty print".to_string()));
-
     if should_stream {
       // Handle streaming response
       let response = client
@@ -111,10 +109,20 @@ impl LlmProvider for LocalProvider {
       let mut full_response = String::new();
       let mut tool_calls_map: std::collections::HashMap<usize, (String, String, String)> = std::collections::HashMap::new();
       let mut stream = response.bytes_stream();
+      let mut was_cancelled = false;
 
       use tokio_stream::StreamExt;
 
       while let Some(chunk_result) = stream.next().await {
+        // Check cancellation signal before processing each chunk
+        if let Some(ref cancel_signal) = request.cancel_signal {
+          if cancel_signal.load(Ordering::SeqCst) {
+            log::info!("[llama_server] Generation cancelled by user");
+            was_cancelled = true;
+            break;
+          }
+        }
+
         match chunk_result {
           Ok(chunk) => {
             let chunk_str = String::from_utf8_lossy(&chunk);
@@ -189,15 +197,25 @@ impl LlmProvider for LocalProvider {
         }
       }
 
-      // Final stream completion event
-      let final_stream_data = ChatStreamEvent {
-        delta: "".to_string(),
-        is_finished: true,
-        full_response: full_response.clone(),
-        conv_id: request.conv_id.clone(),
-      };
+      // If cancelled, return early with what we have so far
+      if was_cancelled {
+        let final_text = if full_response.is_empty() {
+          "*Request cancelled by you*".to_string()
+        } else {
+          format!("{}\n\n*Request cancelled by you*", full_response)
+        };
 
-      let _ = emit(CHAT_STREAM, final_stream_data);
+        let final_stream_data = ChatStreamEvent {
+          delta: "".to_string(),
+          is_finished: true,
+          full_response: final_text.clone(),
+          conv_id: request.conv_id.clone(),
+        };
+        let _ = emit(CHAT_STREAM, final_stream_data);
+
+        // Return Text response so the runtime loop can finalize correctly
+        return Ok(LlmResponse::Text(final_text));
+      }
 
       // Save token usage
       add_token_usage(
@@ -209,6 +227,7 @@ impl LlmProvider for LocalProvider {
 
       // Decide whether to return text or tool calls
       if !tool_calls_map.is_empty() {
+        // Tool calls detected - don't emit is finished because agentic runtime is still processing
         let mut tool_calls = Vec::new();
         let mut sorted_indices: Vec<_> = tool_calls_map.keys().collect();
         sorted_indices.sort();
@@ -227,6 +246,15 @@ impl LlmProvider for LocalProvider {
         }
         Ok(LlmResponse::ToolCalls(tool_calls))
       } else {
+        // Final text response - emit is_finished: true to signal streaming complete
+        let final_stream_data = ChatStreamEvent {
+          delta: "".to_string(),
+          is_finished: true,
+          full_response: full_response.clone(),
+          conv_id: request.conv_id.clone(),
+        };
+        let _ = emit(CHAT_STREAM, final_stream_data);
+
         Ok(LlmResponse::Text(full_response))
       }
     } else {

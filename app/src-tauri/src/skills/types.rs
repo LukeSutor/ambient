@@ -367,6 +367,16 @@ pub enum AgentError {
     #[serde(rename = "TooManyToolCalls")]
     #[error("Too many tool calls: {0} exceeds max of {1}")]
     TooManyToolCalls(usize, usize),
+
+    /// Generation was cancelled by user.
+    #[serde(rename = "Cancelled")]
+    #[error("Generation cancelled by user")]
+    Cancelled,
+
+    /// Runtime error.
+    #[serde(rename = "RuntimeError")]
+    #[error("Runtime error: {0}")]
+    RuntimeError(String),
 }
 
 /// Result type alias for agentic runtime operations.

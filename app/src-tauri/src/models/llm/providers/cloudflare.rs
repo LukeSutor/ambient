@@ -6,6 +6,7 @@ use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
 use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini, format_messages_for_gemini};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
+use std::sync::atomic::Ordering;
 use tauri::AppHandle;
 use tokio_stream::StreamExt;
 
@@ -101,7 +102,18 @@ impl LlmProvider for CloudflareProvider {
       let mut tool_calls = Vec::new();
       let mut buffer = String::new();
       let mut stream = resp.bytes_stream();
+      let mut was_cancelled = false;
+
       while let Some(chunk) = stream.next().await {
+        // Check cancellation signal
+        if let Some(ref cancel_signal) = request.cancel_signal {
+          if cancel_signal.load(Ordering::SeqCst) {
+            log::info!("[cloudflare] Generation cancelled by user");
+            was_cancelled = true;
+            break;
+          }
+        }
+
         let Ok(chunk) = chunk.map_err(|e| format!("Error reading stream: {}", e)) else {
           log::warn!("Stream chunk error encountered");
           break;
@@ -160,16 +172,25 @@ impl LlmProvider for CloudflareProvider {
         }
       }
 
-      // Final event
-      let _ = emit(
-        CHAT_STREAM,
-        ChatStreamEvent {
+      // If cancelled, return early with what we have so far
+      if was_cancelled {
+        let final_text = if full.is_empty() {
+          "*Request cancelled by you*".to_string()
+        } else {
+          format!("{}\n\n*Request cancelled by you*", full)
+        };
+
+        let final_stream_data = ChatStreamEvent {
           delta: "".to_string(),
           is_finished: true,
-          full_response: full.clone(),
+          full_response: final_text.clone(),
           conv_id: request.conv_id.clone(),
-        },
-      );
+        };
+        let _ = emit(CHAT_STREAM, final_stream_data);
+
+        // Return Text response so the runtime loop can finalize correctly
+        return Ok(LlmResponse::Text(final_text));
+      }
 
       // Save token usage
       add_token_usage(
@@ -182,6 +203,16 @@ impl LlmProvider for CloudflareProvider {
       if !tool_calls.is_empty() {
         Ok(LlmResponse::ToolCalls(tool_calls))
       } else {
+        // Final event - only emit if not tool calls so the stop button stays visible during agentic process
+        let _ = emit(
+          CHAT_STREAM,
+          ChatStreamEvent {
+            delta: "".to_string(),
+            is_finished: true,
+            full_response: full.clone(),
+            conv_id: request.conv_id.clone(),
+          },
+        );
         Ok(LlmResponse::Text(full))
       }
     } else {

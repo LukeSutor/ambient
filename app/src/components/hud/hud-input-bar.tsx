@@ -12,7 +12,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUpIcon, Bot, MousePointerClick, Move, X } from "lucide-react";
+import { ArrowUpIcon, MousePointerClick, Move, Square, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -62,6 +62,7 @@ export function HUDInputBar({
     conversationType,
     addAttachmentData,
     toggleComputerUse,
+    stopGeneration,
   } = useConversation();
   const { closeHUD } = useWindows();
 
@@ -126,6 +127,10 @@ export function HUDInputBar({
   const onSubmit = useCallback(() => {
     void handleSubmit();
   }, [handleSubmit]);
+
+  const onStopGeneration = useCallback(() => {
+    void stopGeneration();
+  }, [stopGeneration]);
 
   // Input bar enter animation
   useGSAP(() => {
@@ -222,17 +227,31 @@ export function HUDInputBar({
             disabled={isLoading}
           />
 
-          <InputGroupButton
-            variant="default"
-            className="rounded-full bg-black/80 hover:bg-black"
-            size="icon-xs"
-            type="submit"
-            onClick={onSubmit}
-            disabled={isLoading || !inputValue.trim()}
-          >
-            <ArrowUpIcon />
-            <span className="sr-only">Send</span>
-          </InputGroupButton>
+          {isStreaming ? (
+            <InputGroupButton
+              variant="ghost"
+              className="rounded-full hover:bg-red-50 text-black/80 hover:text-red-600 transition-colors"
+              size="icon-xs"
+              type="button"
+              onClick={onStopGeneration}
+              title="Stop generation"
+            >
+              <Square className="!h-3 !w-3 fill-current" />
+              <span className="sr-only">Stop</span>
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              variant="default"
+              className="rounded-full bg-black/80 hover:bg-black"
+              size="icon-xs"
+              type="submit"
+              onClick={onSubmit}
+              disabled={ocrLoading || !inputValue.trim()}
+            >
+              <ArrowUpIcon />
+              <span className="sr-only">Send</span>
+            </InputGroupButton>
+          )}
         </InputGroupAddon>
 
         {/* Window Controls */}

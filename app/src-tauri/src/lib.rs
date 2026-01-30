@@ -49,6 +49,7 @@ pub fn run() {
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
     .manage(crate::models::computer_use::ComputerUseState::default())
+    .manage(crate::models::llm::state::AgentRuntimeState::default())
     .setup(|app| {
       // Initialize the skill registry
       if let Err(e) = crate::skills::registry::initialize_registry(&app.handle()) {
@@ -179,6 +180,8 @@ pub fn run() {
       setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
+      models::llm::runtime::handle_agent_chat,
+      models::llm::state::stop_agent_chat,
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,
       models::computer_use::commands::start_computer_use,
@@ -194,9 +197,8 @@ pub fn run() {
       auth::commands::get_user,
       auth::commands::get_access_token_command,
       auth::commands::emit_auth_changed,
-      crate::skills::registry::get_available_skills,
-      crate::skills::builtin::code_execution::test_python_execution,
-      crate::models::llm::runtime::handle_agent_chat,
+      skills::registry::get_available_skills,
+      skills::builtin::code_execution::test_python_execution,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

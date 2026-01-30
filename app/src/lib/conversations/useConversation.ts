@@ -14,6 +14,7 @@ import {
   ensureLlamaServerRunning,
   sendAgentMessage,
   startComputerUseSession,
+  stopAgentChat,
   stopComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
@@ -476,6 +477,24 @@ export function useConversation(
   }, []);
 
   /**
+   * Stops the current agent generation
+   */
+  const stopGeneration = useCallback(async (): Promise<void> => {
+    try {
+      // Stop the agent chat if it's a regular chat, or computer use if it's that mode
+      if (state.conversationType === "computer_use") {
+        await stopComputerUseSession();
+      } else {
+        await stopAgentChat();
+      }
+      // Note: We don't manually set isStreaming to false here anymore
+      // The backend will emit a final stream event that settles the state
+    } catch (error) {
+      console.error("[useConversation] Failed to stop generation:", error);
+    }
+  }, [state.conversationType]);
+
+  /**
    * Add attachment data
    */
   const addAttachmentData = useCallback(
@@ -523,6 +542,7 @@ export function useConversation(
     dispatchOCRCapture,
     toggleComputerUse,
     stopComputerUse,
+    stopGeneration,
     addAttachmentData,
     removeAttachmentData,
   };
