@@ -4,6 +4,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
   Code,
+  FolderOpen,
   House,
   LifeBuoy,
   NotebookPen,
@@ -36,6 +37,11 @@ const data = {
       title: "Memories",
       url: "/secondary/memories",
       icon: NotebookPen,
+    },
+    {
+      title: "Your Uploads",
+      url: "/secondary/uploads",
+      icon: FolderOpen,
     },
   ],
   navSecondary: [

@@ -1,5 +1,7 @@
 use crate::constants::{COMPUTER_USE_WINDOW_LABEL, COMPUTER_USE_PATH, DASHBOARD_WINDOW_LABEL, DASHBOARD_PATH, HUD_WINDOW_LABEL, MARGIN_BOTTOM, MARGIN_LEFT};
 use crate::settings::{load_user_settings, HudDimensions};
+use crate::events::{emitter::emit, types::{NAVIGATE_TO_CONVERSATION, NavigateToConversationEvent}};
+use chrono::Utc;
 use tauri::{AppHandle, LogicalSize, Manager};
 
 /// Get current main window dimensions from user settings
@@ -126,6 +128,36 @@ pub async fn open_main_window(app_handle: AppHandle) -> Result<(), String> {
     // Focus and show existing window
     win.show().map_err(|e| e.to_string())?;
     win.set_focus().map_err(|e| e.to_string())?;
+    return Ok(());
+  }
+
+  Err("Main window not found".to_string())
+}
+
+/// Open the main window and navigate to a specific conversation.
+///
+/// Emits a navigation event that the frontend listens to.
+#[tauri::command]
+pub async fn open_main_window_at_conversation(
+  app_handle: AppHandle,
+  conversation_id: String,
+  message_id: Option<String>,
+) -> Result<(), String> {
+  let window_label = HUD_WINDOW_LABEL.to_string();
+
+  if let Some(win) = app_handle.get_webview_window(&window_label) {
+    // Focus and show existing window
+    win.show().map_err(|e| e.to_string())?;
+    win.set_focus().map_err(|e| e.to_string())?;
+
+    // Emit navigation event for the frontend to handle
+    let event = NavigateToConversationEvent {
+      conversation_id,
+      message_id,
+      timestamp: Utc::now().to_rfc3339(),
+    };
+    emit(NAVIGATE_TO_CONVERSATION, event)?;
+
     return Ok(());
   }
 

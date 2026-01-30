@@ -81,6 +81,67 @@ export function useConversation(
     }
   }, [state.streamingContent, state.isStreaming, messagesEndRef]);
 
+  // Track previous conversationId to detect navigation-triggered changes
+  const prevConversationIdRef = useRef<string | null>(null);
+  const isNavigatingRef = useRef(false);
+
+  // Effect to load conversation when navigated to via event
+  useEffect(() => {
+    // scrollToMessageId being set indicates this is a navigation request
+    if (state.scrollToMessageId !== null && state.conversationId && !isNavigatingRef.current) {
+      isNavigatingRef.current = true;
+      
+      const loadNavigatedConversation = async () => {
+        try {
+          console.log("[useConversation] Loading navigated conversation:", state.conversationId);
+          const conversation = await invoke<Conversation>("get_conversation", {
+            conversationId: state.conversationId,
+          });
+          dispatch({ type: "LOAD_CONVERSATION", payload: conversation });
+          
+          const backendMessages = await invoke<Message[]>("get_messages", {
+            conversationId: state.conversationId,
+          });
+          const messages = backendMessages.map(transformBackendMessage);
+          dispatch({ type: "LOAD_MESSAGES", payload: messages });
+          console.log("[useConversation] Loaded", messages.length, "messages for navigation");
+        } catch (error) {
+          console.error("[useConversation] Failed to load navigated conversation:", error);
+        } finally {
+          isNavigatingRef.current = false;
+        }
+      };
+      
+      void loadNavigatedConversation();
+    }
+  }, [state.conversationId, state.scrollToMessageId, dispatch]);
+
+  // Effect to scroll to target message after messages are loaded
+  useEffect(() => {
+    if (state.scrollToMessageId && state.messages.length > 0) {
+      console.log("[useConversation] Attempting to scroll to message:", state.scrollToMessageId);
+      // Give the DOM time to render the messages
+      const timer = setTimeout(() => {
+        const messageElement = document.getElementById(`message-${state.scrollToMessageId}`);
+        if (messageElement) {
+          console.log("[useConversation] Found message element, scrolling...");
+          messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Highlight the message temporarily
+          messageElement.classList.add("highlight-message");
+          setTimeout(() => {
+            messageElement.classList.remove("highlight-message");
+          }, 2000);
+        } else {
+          console.warn("[useConversation] Message element not found:", `message-${state.scrollToMessageId}`);
+        }
+        // Clear the scroll target
+        dispatch({ type: "SET_SCROLL_TO_MESSAGE", payload: null });
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [state.scrollToMessageId, state.messages, dispatch]);
+
   // Initialization effect
 
   useEffect(() => {

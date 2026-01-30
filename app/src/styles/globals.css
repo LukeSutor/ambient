@@ -213,3 +213,18 @@ body.screen-selector-transparent {
   pointer-events: none;
   z-index: 0;
 }
+
+/* Highlight animation for scrolling to a specific message */
+.highlight-message {
+  animation: highlight-pulse 2s ease-out;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    background-color: rgba(59, 130, 246, 0.3);
+    border-radius: 0.5rem;
+  }
+  100% {
+    background-color: transparent;
+  }
+}

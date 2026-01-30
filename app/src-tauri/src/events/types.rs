@@ -152,3 +152,12 @@ pub const TOKEN_USAGE_CHANGED: &str = "token_usage_changed";
 pub struct TokenUsageChangedEvent {
   pub timestamp: String,
 }
+
+pub const NAVIGATE_TO_CONVERSATION: &str = "navigate_to_conversation";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct NavigateToConversationEvent {
+  pub conversation_id: String,
+  pub message_id: Option<String>,
+  pub timestamp: String,
+}

@@ -140,6 +140,7 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
       windows::open_main_window,
+      windows::open_main_window_at_conversation,
       windows::close_main_window,
       windows::open_secondary_window,
       windows::minimize_secondary_window,
@@ -166,6 +167,9 @@ pub fn run() {
       db::conversations::list_conversations,
       db::conversations::delete_conversation,
       db::conversations::update_conversation_name,
+      db::conversations::list_attachments,
+      db::conversations::delete_attachment,
+      db::conversations::get_attachment_data,
       db::memory::get_memory_entries_with_message,
       db::memory::delete_memory_entry,
       db::memory::delete_all_memories,

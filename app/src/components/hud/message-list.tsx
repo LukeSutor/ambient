@@ -181,6 +181,7 @@ export function MessageList({
               return (
                 <div
                   key={m.message.id}
+                  id={`message-${m.message.id}`}
                   className={cn(
                     "grid transition-[grid-template-rows] duration-300 ease-out",
                     isUser

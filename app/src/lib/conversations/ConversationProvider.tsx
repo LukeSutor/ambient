@@ -68,6 +68,7 @@ const initialState: ConversationState = {
   conversationPage: 0,
   hasMoreConversations: true,
   initializationRef: { current: false },
+  scrollToMessageId: null,
 };
 
 /**
@@ -111,7 +112,9 @@ type ConversationAction =
   | { type: "CLEAR_MESSAGES" }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_STREAMING"; payload: boolean }
-  | { type: "SET_OCR_LOADING"; payload: boolean };
+  | { type: "SET_OCR_LOADING"; payload: boolean }
+  | { type: "SET_SCROLL_TO_MESSAGE"; payload: string | null }
+  | { type: "NAVIGATE_TO_CONVERSATION"; payload: { conversationId: string; messageId: string | null } };
 
 /**
  * Conversation reducer - handles all state updates
@@ -468,6 +471,19 @@ function conversationReducer(
         ocrLoading: action.payload,
       };
 
+    case "SET_SCROLL_TO_MESSAGE":
+      return {
+        ...state,
+        scrollToMessageId: action.payload,
+      };
+
+    case "NAVIGATE_TO_CONVERSATION":
+      return {
+        ...state,
+        conversationId: action.payload.conversationId,
+        scrollToMessageId: action.payload.messageId,
+      };
+
     default:
       return state;
   }
@@ -709,6 +725,22 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                     attachments: [],
                     memory: null,
                   },
+                },
+              });
+            },
+          ),
+
+          // Navigation Listener - handles navigation from uploads page etc.
+          listen<{ conversation_id: string; message_id: string | null; timestamp: string }>(
+            "navigate_to_conversation",
+            (event) => {
+              const { conversation_id, message_id } = event.payload;
+              console.log("[ConversationProvider] Navigate to conversation:", conversation_id, "message:", message_id);
+              dispatch({
+                type: "NAVIGATE_TO_CONVERSATION",
+                payload: {
+                  conversationId: conversation_id,
+                  messageId: message_id,
                 },
               });
             },

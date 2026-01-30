@@ -20,11 +20,11 @@ export function AppProvider({ children }: AppProviderProps) {
     <SettingsProvider>
       <RoleAccessProvider>
         <SetupProvider>
-          <ConversationProvider>
-            <WindowsProvider>
+          <WindowsProvider>
+            <ConversationProvider>
               <TooltipProvider>{children}</TooltipProvider>
-            </WindowsProvider>
-          </ConversationProvider>
+            </ConversationProvider>
+          </WindowsProvider>
         </SetupProvider>
       </RoleAccessProvider>
     </SettingsProvider>

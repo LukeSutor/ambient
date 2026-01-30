@@ -993,3 +993,220 @@ pub async fn get_conversation_history(
   messages.reverse();
   Ok(messages)
 }
+
+/// Attachment item for list display with conversation context.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
+pub struct AttachmentListItem {
+  pub id: String,
+  pub message_id: String,
+  pub conversation_id: String,
+  pub conversation_name: String,
+  pub file_type: String,
+  pub file_name: String,
+  pub file_path: Option<String>,
+  pub extracted_text: Option<String>,
+  pub created_at: String,
+}
+
+/// List attachments with pagination and optional search.
+///
+/// Returns attachments sorted by creation date (newest first).
+/// Includes conversation context for each attachment.
+#[tauri::command]
+pub async fn list_attachments(
+  app_handle: AppHandle,
+  limit: usize,
+  offset: usize,
+  search: Option<String>,
+) -> Result<Vec<AttachmentListItem>, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let (sql, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(ref search_term) = search {
+    let like_pattern = format!("%{}%", search_term);
+    (
+      r#"
+        SELECT a.id, a.message_id, m.conversation_id, c.name as conversation_name,
+               a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        FROM attachments a
+        JOIN conversation_messages m ON a.message_id = m.id
+        JOIN conversations c ON m.conversation_id = c.id
+        WHERE a.file_name LIKE ?1
+        ORDER BY a.created_at DESC
+        LIMIT ?2 OFFSET ?3
+      "#.to_string(),
+      vec![
+        Box::new(like_pattern) as Box<dyn rusqlite::ToSql>,
+        Box::new(limit as i64),
+        Box::new(offset as i64),
+      ],
+    )
+  } else {
+    (
+      r#"
+        SELECT a.id, a.message_id, m.conversation_id, c.name as conversation_name,
+               a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        FROM attachments a
+        JOIN conversation_messages m ON a.message_id = m.id
+        JOIN conversations c ON m.conversation_id = c.id
+        ORDER BY a.created_at DESC
+        LIMIT ?1 OFFSET ?2
+      "#.to_string(),
+      vec![
+        Box::new(limit as i64) as Box<dyn rusqlite::ToSql>,
+        Box::new(offset as i64),
+      ],
+    )
+  };
+
+  let mut stmt = conn
+    .prepare(&sql)
+    .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+  let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+
+  let attachments = stmt
+    .query_map(params_refs.as_slice(), |row| {
+      Ok(AttachmentListItem {
+        id: row.get(0)?,
+        message_id: row.get(1)?,
+        conversation_id: row.get(2)?,
+        conversation_name: row.get(3)?,
+        file_type: row.get(4)?,
+        file_name: row.get(5)?,
+        file_path: row.get(6)?,
+        extracted_text: row.get(7)?,
+        created_at: row.get(8)?,
+      })
+    })
+    .map_err(|e| format!("Failed to query attachments: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("Failed to collect attachments: {}", e))?;
+
+  log::info!(
+    "[conversations] Listed {} attachments (offset: {}, search: {:?})",
+    attachments.len(),
+    offset,
+    search
+  );
+
+  Ok(attachments)
+}
+
+/// Delete an attachment by ID.
+///
+/// Removes both the file from disk and the database row.
+#[tauri::command]
+pub async fn delete_attachment(
+  app_handle: AppHandle,
+  attachment_id: String,
+) -> Result<(), String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  // First get the file path so we can delete it
+  let file_path: Option<String> = conn
+    .query_row(
+      "SELECT file_path FROM attachments WHERE id = ?1",
+      params![attachment_id],
+      |row| row.get(0),
+    )
+    .map_err(|e| format!("Failed to get attachment: {}", e))?;
+
+  // Delete file from disk if it exists
+  if let Some(path) = file_path {
+    let full_path = app_handle
+      .path()
+      .app_data_dir()
+      .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+      .join(&path);
+    
+    if full_path.exists() {
+      std::fs::remove_file(&full_path)
+        .map_err(|e| format!("Failed to delete attachment file: {}", e))?;
+      
+      // Try to remove parent directory if empty
+      if let Some(parent) = full_path.parent() {
+        let _ = std::fs::remove_dir(parent); // Ignore error if not empty
+      }
+    }
+  }
+
+  // Delete from database
+  conn
+    .execute(
+      "DELETE FROM attachments WHERE id = ?1",
+      params![attachment_id],
+    )
+    .map_err(|e| format!("Failed to delete attachment from database: {}", e))?;
+
+  log::info!(
+    "[conversations] Deleted attachment: {}",
+    attachment_id
+  );
+
+  Ok(())
+}
+
+/// Get attachment data as base64 for display.
+///
+/// For files (images, PDFs), reads from disk and returns base64.
+/// For OCR captures, returns the extracted text directly.
+#[tauri::command]
+pub async fn get_attachment_data(
+  app_handle: AppHandle,
+  attachment_id: String,
+) -> Result<String, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let (file_type, file_path, extracted_text): (String, Option<String>, Option<String>) = conn
+    .query_row(
+      "SELECT file_type, file_path, extracted_text FROM attachments WHERE id = ?1",
+      params![attachment_id],
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .map_err(|e| format!("Failed to get attachment: {}", e))?;
+
+  // For OCR captures, return extracted text
+  if file_type == "ambient/ocr" {
+    return Ok(extracted_text.unwrap_or_default());
+  }
+
+  // For files, read and return as base64 data URL
+  let path = file_path.ok_or("Attachment has no file path")?;
+  let full_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+    .join(&path);
+
+  let data = std::fs::read(&full_path)
+    .map_err(|e| format!("Failed to read attachment file: {}", e))?;
+
+  let base64_data = general_purpose::STANDARD.encode(&data);
+  
+  // Construct data URL
+  let data_url = format!("data:{};base64,{}", file_type, base64_data);
+
+  Ok(data_url)
+}
