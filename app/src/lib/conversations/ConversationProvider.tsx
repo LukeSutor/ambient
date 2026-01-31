@@ -680,6 +680,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                       skill_name,
                       tool_name,
                       arguments: args || {},
+                      thought_signature: null,
                     },
                     attachments: [],
                     memory: null,

@@ -201,7 +201,9 @@ impl LlmProvider for CloudflareProvider {
       ).await?;
 
       if !tool_calls.is_empty() {
-        Ok(LlmResponse::ToolCalls(tool_calls))
+        // Include any text generated alongside tool calls (e.g., reasoning)
+        let text = if full.is_empty() { None } else { Some(full) };
+        Ok(LlmResponse::tool_calls(tool_calls, text))
       } else {
         // Final event - only emit if not tool calls so the stop button stays visible during agentic process
         let _ = emit(
@@ -213,7 +215,7 @@ impl LlmProvider for CloudflareProvider {
             conv_id: request.conv_id.clone(),
           },
         );
-        Ok(LlmResponse::Text(full))
+        Ok(LlmResponse::text(full))
       }
     } else {
       let resp = client
@@ -248,16 +250,19 @@ impl LlmProvider for CloudflareProvider {
           .unwrap_or(0);
       }
 
+      // Extract text content
+      let content = extract_text_gemini(&json);
+
       // Check for tool calls or extract text
       let response = if has_tool_calls_gemini(&json) {
-        LlmResponse::ToolCalls(parse_gemini_tool_calls(&json, request.internal_tools.as_deref()))
+        let tool_calls = parse_gemini_tool_calls(&json, request.internal_tools.as_deref());
+        LlmResponse::tool_calls(tool_calls, content)
       } else {
-        let content = extract_text_gemini(&json)
-          .unwrap_or_else(|| {
+        let text = content.unwrap_or_else(|| {
             log::warn!("Failed to extract content from Gemini structure, falling back to as_str()");
             json.as_str().unwrap_or("").to_string()
           });
-        LlmResponse::Text(content)
+        LlmResponse::text(text)
       };
 
       // Save token usage

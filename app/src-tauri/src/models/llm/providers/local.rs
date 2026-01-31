@@ -244,7 +244,9 @@ impl LlmProvider for LocalProvider {
             thought_signature: None,
           });
         }
-        Ok(LlmResponse::ToolCalls(tool_calls))
+        // Include any text that was generated alongside tool calls
+        let text = if full_response.is_empty() { None } else { Some(full_response) };
+        Ok(LlmResponse::tool_calls(tool_calls, text))
       } else {
         // Final text response - emit is_finished: true to signal streaming complete
         let final_stream_data = ChatStreamEvent {
@@ -305,9 +307,11 @@ impl LlmProvider for LocalProvider {
       // Extract tool calls if present
       if has_tool_calls_openai(&result) {
         let tool_calls = parse_openai_tool_calls(&result, request.internal_tools.as_deref());
-        Ok(LlmResponse::ToolCalls(tool_calls))
+        // Include any text generated alongside tool calls
+        let text = if generated_text.is_empty() { None } else { Some(generated_text) };
+        Ok(LlmResponse::tool_calls(tool_calls, text))
       } else {
-        Ok(LlmResponse::Text(generated_text))
+        Ok(LlmResponse::text(generated_text))
       }
     }
   }

@@ -333,7 +333,7 @@ impl AgentRuntime {
                     return Ok(text);
                 }
 
-                LlmResponse::ToolCalls(tool_calls) => {
+                LlmResponse::ToolCalls { text, calls: tool_calls } => {
                     // Model wants to execute tools
                     // Check if we have too many tool calls
                     if tool_calls.len() > self.config.max_tool_calls_per_turn {
@@ -341,6 +341,16 @@ impl AgentRuntime {
                             tool_calls.len(),
                             self.config.max_tool_calls_per_turn,
                         ));
+                    }
+
+                    // Save reasoning text if present
+                    if let Some(reasoning) = text {
+                        if !reasoning.is_empty() {
+                            let metadata = MessageMetadata::Thinking {
+                                stage: "Reasoning".to_string(),
+                            };
+                            self.save_assistant_message(&reasoning, MessageType::Thinking, Some(metadata)).await?;
+                        }
                     }
 
                     // Save tool calls as messages

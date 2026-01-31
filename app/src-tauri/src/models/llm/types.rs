@@ -90,6 +90,44 @@ pub trait LlmProvider: Send + Sync {
 pub enum LlmResponse {
     /// Final text response
     Text(String),
-    /// Tool calls to execute
-    ToolCalls(Vec<crate::skills::types::ToolCall>),
+    /// Tool calls to execute, with optional accompanying text (reasoning/thinking)
+    ToolCalls {
+        /// Optional text generated alongside tool calls (e.g., reasoning)
+        text: Option<String>,
+        /// The tool calls requested by the model
+        calls: Vec<crate::skills::types::ToolCall>,
+    },
+}
+
+impl LlmResponse {
+    /// Create a text-only response
+    pub fn text(content: String) -> Self {
+        LlmResponse::Text(content)
+    }
+
+    /// Create a tool calls response with optional text
+    pub fn tool_calls(calls: Vec<crate::skills::types::ToolCall>, text: Option<String>) -> Self {
+        LlmResponse::ToolCalls { text, calls }
+    }
+
+    /// Check if this response contains tool calls
+    pub fn has_tool_calls(&self) -> bool {
+        matches!(self, LlmResponse::ToolCalls { .. })
+    }
+
+    /// Get text content if present (from either variant)
+    pub fn get_text(&self) -> Option<&str> {
+        match self {
+            LlmResponse::Text(s) => Some(s),
+            LlmResponse::ToolCalls { text, .. } => text.as_deref(),
+        }
+    }
+
+    /// Get tool calls if present
+    pub fn get_tool_calls(&self) -> Option<&[crate::skills::types::ToolCall]> {
+        match self {
+            LlmResponse::Text(_) => None,
+            LlmResponse::ToolCalls { calls, .. } => Some(calls),
+        }
+    }
 }
