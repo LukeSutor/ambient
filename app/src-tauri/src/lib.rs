@@ -58,15 +58,11 @@ pub fn run() {
         log::info!("[skills] Skill registry initialized successfully");
       }
 
-      // Register deep link scheme for development/testing
-      #[cfg(any(windows, target_os = "linux"))]
-      {
-        use tauri_plugin_deep_link::DeepLinkExt;
-        if let Err(e) = app.deep_link().register_all() {
-          log::error!("[deep_link] Failed to register deep link schemes: {}", e);
-        } else {
-          log::info!("[deep_link] Deep link schemes registered successfully");
-        }
+      // Register deep link scheme for development/testing (all desktop platforms)
+      if let Err(e) = app.deep_link().register_all() {
+        log::error!("[deep_link] Failed to register deep link schemes: {}", e);
+      } else {
+        log::info!("[deep_link] Deep link schemes registered successfully");
       }
 
       // Initialize the event emitter and listeners
