@@ -21,6 +21,8 @@ pub struct LlmRequest {
     pub stream: Option<bool>,
     pub internal_tools: Option<Vec<ToolDefinition>>,
     pub messages: Option<Vec<crate::db::conversations::Message>>,
+    /// Override model type (e.g., "computer-use" for computer use sessions)
+    pub model_type: Option<String>,
     /// Cancellation signal for aborting generation (not serialized)
     #[serde(skip)]
     pub cancel_signal: Option<Arc<AtomicBool>>,
@@ -71,6 +73,11 @@ impl LlmRequest {
 
     pub fn with_cancel_signal(mut self, signal: Option<Arc<AtomicBool>>) -> Self {
         self.cancel_signal = signal;
+        self
+    }
+
+    pub fn with_model_type(mut self, model_type: Option<String>) -> Self {
+        self.model_type = model_type;
         self
     }
 }

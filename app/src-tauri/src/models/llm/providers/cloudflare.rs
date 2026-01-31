@@ -20,11 +20,15 @@ impl LlmProvider for CloudflareProvider {
     app_handle: AppHandle,
     request: LlmRequest,
   ) -> Result<LlmResponse, String> {
-    // Load user settings to get model selection
-    let settings = crate::settings::service::load_user_settings(app_handle.clone())
-      .await
-      .map_err(|e| format!("Failed to load user settings: {}", e))?;
-    let model = &settings.model_selection.as_str();
+    // Use model_type override if provided, otherwise get from settings
+    let model = if let Some(ref model_type) = request.model_type {
+      model_type.clone()
+    } else {
+      let settings = crate::settings::service::load_user_settings(app_handle.clone())
+        .await
+        .map_err(|e| format!("Failed to load user settings: {}", e))?;
+      settings.model_selection.as_str().to_string()
+    };
 
     let should_stream = request.stream.unwrap_or(false);
     let mut content = Vec::new();
@@ -195,7 +199,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          model,
+          &model,
           prompt_tokens,
           completion_tokens,
       ).await?;
@@ -268,7 +272,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          model,
+          &model,
           prompt_tokens,
           completion_tokens,
       ).await?;

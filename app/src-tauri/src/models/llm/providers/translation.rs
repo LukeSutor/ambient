@@ -368,7 +368,7 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                 }
 
                 // Format tool result with tool_call_id
-                if let Some(MessageMetadata::ToolResult { call_id, result, success, error }) = &msg.metadata {
+                if let Some(MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id }) = &msg.metadata {
                     let mut response_obj = if *success {
                         result.clone().unwrap_or_else(|| json!({"status": "success"}))
                     } else {
@@ -392,10 +392,40 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                         }
                     }
 
+                    // Build content - can be array with image for computer-use
+                    let mut content_parts = vec![json!({
+                        "type": "text",
+                        "text": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string())
+                    })];
+
+                    // If there's a screenshot attachment, add it as an image
+                    if let Some(screenshot_id) = screenshot_attachment_id {
+                        if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                            if attachment.file_type.starts_with("image/") {
+                                if let Some(rel_path) = &attachment.file_path {
+                                    if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                        let full_path = app_data.join(rel_path);
+                                        if full_path.exists() {
+                                            if let Ok(bytes) = fs::read(&full_path) {
+                                                let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                content_parts.push(json!({
+                                                    "type": "image_url",
+                                                    "image_url": {
+                                                        "url": format!("data:{};base64,{}", attachment.file_type, base64_data)
+                                                    }
+                                                }));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     formatted.push(json!({
                         "role": "tool",
                         "tool_call_id": call_id,
-                        "content": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string())
+                        "content": content_parts
                     }));
                 }
             }
@@ -551,7 +581,7 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
             }
 
             MessageType::ToolResult => {
-                if let Some(MessageMetadata::ToolResult { call_id, result, success, error }) = &msg.metadata {
+                if let Some(MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id }) = &msg.metadata {
                     let mut tool_name = "unknown".to_string();
                     
                     // Try to find the matching tool call to get the name
@@ -595,12 +625,41 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
                         }
                     }
 
-                    ("function", vec![json!({
+                    // Build functionResponse with optional screenshot parts
+                    let mut func_response = json!({
                         "functionResponse": {
                             "name": tool_name,
                             "response": response_obj
                         }
-                    })])
+                    });
+
+                    // If there's a screenshot attachment, add it as parts with inlineData
+                    if let Some(screenshot_id) = screenshot_attachment_id {
+                        // Find the attachment in the message
+                        if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                            if attachment.file_type.starts_with("image/") {
+                                if let Some(rel_path) = &attachment.file_path {
+                                    if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                        let full_path = app_data.join(rel_path);
+                                        if full_path.exists() {
+                                            if let Ok(bytes) = fs::read(&full_path) {
+                                                let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                // Add parts array with inlineData for Gemini computer-use
+                                                func_response["functionResponse"]["parts"] = json!([{
+                                                    "inlineData": {
+                                                        "mimeType": attachment.file_type,
+                                                        "data": base64_data,
+                                                    }
+                                                }]);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ("function", vec![func_response])
                 } else {
                     continue;
                 }

@@ -282,6 +282,11 @@ export function ToolStep({
   const resultMetadata = result?.message.metadata;
   const isSuccess =
     resultMetadata?.type === "ToolResult" ? resultMetadata.success : null;
+  
+  // Get screenshot attachment from result if it exists
+  const screenshotAttachment = result?.message.attachments?.find(
+    (a) => a.file_type.startsWith("image/")
+  );
 
   return (
     <div className="flex flex-col gap-1.5 py-1">
@@ -322,6 +327,13 @@ export function ToolStep({
             {resultMetadata.error}
           </div>
         )}
+
+      {/* Display screenshot attached to function response */}
+      {screenshotAttachment && (
+        <div className="ml-7 mt-2">
+          <PreviewAttachment a={screenshotAttachment} />
+        </div>
+      )}
     </div>
   );
 }

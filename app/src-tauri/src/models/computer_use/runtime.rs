@@ -4,13 +4,14 @@
 //! patterns as the main agentic chat runtime. It:
 //! 1. Uses the unified LlmRequest/LlmResponse types
 //! 2. Stores messages and attachments in the conversation database
-//! 3. Handles coordinate denormalization for Gemini (0-1000 scale)
-//! 4. Saves screenshots as attachments that can be loaded for multi-turn context
+//! 3. Handles coordinate denormalization for both Gemini (0-1000 scale) and local models
+//! 4. Saves screenshots as function responses (per Gemini computer-use spec)
 //! 5. Emits agentic runtime events for UI updates
+//! 6. Resizes screenshots to 1000x1000 for local models
 
 use crate::db::conversations::{
     add_message, create_attachments, add_attachments, get_conversation_history,
-    MessageMetadata, MessageType, Role, Attachment,
+    MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::*};
 use crate::images::take_screenshot;
@@ -28,7 +29,9 @@ use crate::skills::types::{ToolCall, ToolResult};
 use crate::windows::{open_main_window, close_main_window, open_computer_use_window, close_computer_use_window};
 use base64::{Engine as _, engine::general_purpose};
 use chrono::Utc;
+use image::ImageFormat;
 use serde_json::json;
+use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager, Listener};
@@ -63,6 +66,8 @@ pub struct ComputerUseRuntime {
     screen_height: i32,
     iteration: usize,
     cancel_signal: Arc<AtomicBool>,
+    /// Last screenshot bytes for attaching to function responses
+    last_screenshot_bytes: Option<Vec<u8>>,
 }
 
 impl ComputerUseRuntime {
@@ -96,6 +101,7 @@ impl ComputerUseRuntime {
             screen_height,
             iteration: 0,
             cancel_signal,
+            last_screenshot_bytes: None,
         })
     }
 
@@ -111,6 +117,22 @@ impl ComputerUseRuntime {
         (1920, 1080)
     }
 
+    /// Resize PNG image bytes to 1000x1000 for local model.
+    /// Note: This is used for local models to ensure consistent coordinate output.
+    #[allow(dead_code)]
+    fn resize_screenshot_for_local(png_bytes: &[u8]) -> Result<Vec<u8>, String> {
+        let img = image::load_from_memory_with_format(png_bytes, ImageFormat::Png)
+            .map_err(|e| format!("Failed to load screenshot: {}", e))?;
+        
+        let resized = img.resize_exact(1000, 1000, image::imageops::FilterType::Lanczos3);
+        
+        let mut output = Cursor::new(Vec::new());
+        resized.write_to(&mut output, ImageFormat::Png)
+            .map_err(|e| format!("Failed to encode resized screenshot: {}", e))?;
+        
+        Ok(output.into_inner())
+    }
+
     /// Run the computer use session.
     pub async fn run(&mut self, prompt: String) -> Result<String, String> {
         log::info!("[computer_use_runtime] Starting session with prompt: {}", prompt);
@@ -122,9 +144,8 @@ impl ComputerUseRuntime {
         // Emit initial toast
         self.emit_toast("Starting computer use session").await;
 
-        // Save user message
-        let user_message_id = Uuid::new_v4().to_string();
-        self.save_user_message(&prompt, &user_message_id).await?;
+        // Save user message with initial screenshot
+        self.save_user_message_with_screenshot(&prompt).await?;
 
         // Main loop
         let final_response: String;
@@ -145,9 +166,6 @@ impl ComputerUseRuntime {
             }
 
             log::info!("[computer_use_runtime] Iteration {}/{}", self.iteration, self.config.max_iterations);
-
-            // Take a screenshot and save as attachment
-            let screenshot_attachment = self.take_and_save_screenshot().await?;
             self.emit_toast("Analyzing screen...").await;
 
             // Get conversation history
@@ -158,7 +176,7 @@ impl ComputerUseRuntime {
             ).await?;
 
             // Build LLM request
-            let request = self.build_llm_request(&messages, &screenshot_attachment).await?;
+            let request = self.build_llm_request(&messages).await?;
 
             // Generate response
             let response = match generate(
@@ -201,8 +219,13 @@ impl ComputerUseRuntime {
                         break;
                     }
 
-                    // Execute each tool call
-                    for call in calls {
+                    // Save the tool calls as assistant message first
+                    for call in &calls {
+                        self.save_tool_call_message(call).await?;
+                    }
+
+                    // Execute each tool call and save function responses with screenshots
+                    for call in &calls {
                         // Check for safety confirmation
                         if let Some(safety) = call.arguments.get("safety_decision") {
                             if safety.get("decision").and_then(|d| d.as_str()) == Some("require_confirmation") {
@@ -216,13 +239,17 @@ impl ComputerUseRuntime {
                         }
 
                         // Execute the action
-                        let result = self.execute_computer_action(&call).await;
-
-                        // Save tool call and result
-                        self.save_tool_call_and_result(&call, &result).await?;
+                        let result = self.execute_computer_action(call).await;
 
                         // Wait for UI to update
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                        // Take new screenshot after action
+                        let screenshot_bytes = take_screenshot();
+                        self.last_screenshot_bytes = Some(screenshot_bytes.clone());
+
+                        // Save function response with screenshot (per Gemini computer-use spec)
+                        self.save_tool_result_with_screenshot(call, &result, &screenshot_bytes).await?;
                     }
                 }
             }
@@ -247,11 +274,11 @@ impl ComputerUseRuntime {
     async fn build_llm_request(
         &self,
         messages: &[crate::db::conversations::Message],
-        _screenshot_attachment: &Attachment,
     ) -> Result<LlmRequest, String> {
         let system_prompt = if self.is_local {
             "You are a computer use assistant. You can see the screen and interact with it using the provided tools. \
              Look at the screenshot carefully and determine what actions to take to accomplish the user's goal. \
+             The screenshot is 1000x1000 pixels, so coordinates should be in the range 0-999. \
              When you're done, respond with a summary of what you accomplished.".to_string()
         } else {
             // Gemini computer-use has its own system prompt
@@ -265,28 +292,48 @@ impl ComputerUseRuntime {
             None
         };
 
+        // Use computer-use model type for cloud models (overrides any model selection in settings)
+        let model_type = if self.is_local {
+            None
+        } else {
+            Some("computer-use".to_string())
+        };
+
         Ok(LlmRequest::new(String::new())
             .with_system_prompt(Some(system_prompt))
             .with_messages(Some(messages.to_vec()))
             .with_internal_tools(tools)
             .with_conv_id(Some(self.conversation_id.clone()))
             .with_stream(Some(false))  // Computer use works better non-streaming
-            .with_cancel_signal(Some(self.cancel_signal.clone())))
+            .with_cancel_signal(Some(self.cancel_signal.clone()))
+            .with_model_type(model_type))
     }
 
-    /// Take a screenshot and save it as an attachment to the last assistant message.
-    async fn take_and_save_screenshot(&self) -> Result<Attachment, String> {
+    /// Save the initial user message with a screenshot attachment.
+    async fn save_user_message_with_screenshot(&mut self, prompt: &str) -> Result<(), String> {
+        // Take screenshot
         let screenshot_bytes = take_screenshot();
-        let screenshot_base64 = general_purpose::STANDARD.encode(&screenshot_bytes);
+        self.last_screenshot_bytes = Some(screenshot_bytes.clone());
 
-        // Create a placeholder message for the screenshot attachment
+        // Create user message first
         let message_id = Uuid::new_v4().to_string();
+        let message = add_message(
+            &self.app_handle,
+            self.conversation_id.clone(),
+            Role::User,
+            prompt.to_string(),
+            Some(MessageType::Text),
+            None,
+            Some(message_id.clone()),
+        ).await?;
+
+        // Create and attach screenshot (save full resolution)
         let timestamp = Utc::now().to_rfc3339();
         let filename = format!("screenshot_{}.png", timestamp.replace(":", "-"));
-
-        // Save to disk via attachment system
+        let screenshot_base64 = general_purpose::STANDARD.encode(&screenshot_bytes);
+        
         let attachment_data = AttachmentData {
-            name: filename.clone(),
+            name: filename,
             file_type: "image/png".to_string(),
             data: screenshot_base64,
         };
@@ -297,23 +344,22 @@ impl ComputerUseRuntime {
             vec![attachment_data],
         ).await?;
 
-        // Create a user message to hold the screenshot context
-        let screenshot_msg = add_message(
-            &self.app_handle,
-            self.conversation_id.clone(),
-            Role::User,
-            "[Screenshot taken]".to_string(),
-            Some(MessageType::Text),
-            None,
-            Some(message_id.clone()),
-        ).await?;
-
-        // Add attachment to message
+        // Emit attachment created event so UI updates
         if !attachments.is_empty() {
-            add_attachments(&self.app_handle, screenshot_msg.id.clone(), attachments.clone()).await?;
+            let attachments_event = AttachmentsCreatedEvent {
+                message_id: message_id.clone(),
+                attachments: attachments.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+            };
+            let _ = emit(ATTACHMENTS_CREATED, attachments_event);
         }
 
-        attachments.into_iter().next().ok_or("Failed to create screenshot attachment".to_string())
+        // Link attachments to message
+        if !attachments.is_empty() {
+            add_attachments(&self.app_handle, message.id.clone(), attachments).await?;
+        }
+
+        Ok(())
     }
 
     /// Execute a computer action based on the tool call.
@@ -342,18 +388,21 @@ impl ComputerUseRuntime {
         self.emit_toast(&toast_msg).await;
 
         let result: Result<serde_json::Value, String> = match tool_name {
-            // Local model tools
+            // Local model tools (coordinates are 0-999 because they see 1000x1000 image)
+            // Need to denormalize to actual screen pixels
             "click" => {
                 let x = call.arguments.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let y = call.arguments.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                click_at(x, y).map(|r| json!({"status": "clicked", "action": r.function_name, "x": x, "y": y}))
+                let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
+                click_at(actual_x, actual_y).map(|r| json!({"status": "clicked", "action": r.function_name, "x": actual_x, "y": actual_y}))
             }
             "type_text" => {
                 let x = call.arguments.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let y = call.arguments.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let text = call.arguments.get("text").and_then(|v| v.as_str()).unwrap_or("");
                 let press_enter = call.arguments.get("press_enter").and_then(|v| v.as_bool());
-                type_text_at(x, y, text, press_enter, Some(true))
+                let (actual_x, actual_y) = self.denormalize_coordinates(x, y);
+                type_text_at(actual_x, actual_y, text, press_enter, Some(true))
                     .map(|r| json!({"status": "typed", "action": r.function_name, "text": text}))
             }
             "scroll" => {
@@ -534,17 +583,23 @@ impl ComputerUseRuntime {
         }
     }
 
-    /// Save user message.
-    async fn save_user_message(&self, content: &str, message_id: &str) -> Result<(), String> {
-        add_message(
-            &self.app_handle,
-            self.conversation_id.clone(),
-            Role::User,
-            content.to_string(),
-            Some(MessageType::Text),
-            None,
-            Some(message_id.to_string()),
-        ).await?;
+    /// Save tool call message (assistant requesting action).
+    async fn save_tool_call_message(&self, call: &ToolCall) -> Result<(), String> {
+        let call_metadata = MessageMetadata::ToolCall {
+            call_id: call.id.clone(),
+            skill_name: "computer-use".to_string(),
+            tool_name: call.tool_name.clone(),
+            arguments: call.arguments.clone(),
+            thought_signature: call.thought_signature.clone(),
+        };
+
+        let call_content = format!(
+            "{}: {}",
+            call.tool_name,
+            serde_json::to_string_pretty(&call.arguments).unwrap_or_default()
+        );
+
+        self.save_assistant_message(&call_content, MessageType::ToolCall, Some(call_metadata)).await?;
         Ok(())
     }
 
@@ -584,35 +639,52 @@ impl ComputerUseRuntime {
         Ok(())
     }
 
-    /// Save tool call and result as messages.
-    async fn save_tool_call_and_result(
+    /// Save tool result with screenshot as function response (per Gemini spec).
+    async fn save_tool_result_with_screenshot(
         &self,
-        call: &ToolCall,
+        _call: &ToolCall,
         result: &ToolResult,
+        screenshot_bytes: &[u8],
     ) -> Result<(), String> {
-        // Save tool call
-        let call_metadata = MessageMetadata::ToolCall {
-            call_id: call.id.clone(),
-            skill_name: "computer-use".to_string(),
-            tool_name: call.tool_name.clone(),
-            arguments: call.arguments.clone(),
-            thought_signature: call.thought_signature.clone(),
+        // Create the tool result message
+        let message_id = Uuid::new_v4().to_string();
+        
+        // Save full-resolution screenshot to disk
+        let timestamp = Utc::now().to_rfc3339();
+        let filename = format!("screenshot_{}.png", timestamp.replace(":", "-"));
+        let screenshot_base64 = general_purpose::STANDARD.encode(screenshot_bytes);
+        
+        let attachment_data = AttachmentData {
+            name: filename,
+            file_type: "image/png".to_string(),
+            data: screenshot_base64,
         };
 
-        let call_content = format!(
-            "{}: {}",
-            call.tool_name,
-            serde_json::to_string_pretty(&call.arguments).unwrap_or_default()
-        );
+        let attachments = create_attachments(
+            &self.app_handle,
+            message_id.clone(),
+            vec![attachment_data],
+        ).await?;
 
-        self.save_assistant_message(&call_content, MessageType::ToolCall, Some(call_metadata)).await?;
+        // Emit attachment created event so UI updates
+        if !attachments.is_empty() {
+            let attachments_event = AttachmentsCreatedEvent {
+                message_id: message_id.clone(),
+                attachments: attachments.clone(),
+                timestamp: Utc::now().to_rfc3339(),
+            };
+            let _ = emit(ATTACHMENTS_CREATED, attachments_event);
+        }
 
-        // Save tool result
+        let screenshot_attachment_id = attachments.first().map(|a| a.id.clone());
+
+        // Create tool result metadata with screenshot reference
         let result_metadata = MessageMetadata::ToolResult {
             call_id: result.call_id.clone(),
             success: result.success,
             error: result.error.clone(),
             result: result.result.clone(),
+            screenshot_attachment_id,
         };
 
         let result_content = if result.success {
@@ -621,15 +693,20 @@ impl ComputerUseRuntime {
             format!("Error: {:?}", result.error)
         };
 
-        add_message(
+        let message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
             Role::Tool,
             result_content,
             Some(MessageType::ToolResult),
             Some(result_metadata),
-            None,
+            Some(message_id.clone()),
         ).await?;
+
+        // Link attachments to message
+        if !attachments.is_empty() {
+            add_attachments(&self.app_handle, message.id.clone(), attachments).await?;
+        }
 
         Ok(())
     }

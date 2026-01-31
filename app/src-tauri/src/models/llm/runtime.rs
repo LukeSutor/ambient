@@ -386,6 +386,7 @@ impl AgentRuntime {
                             success: result.success,
                             error: result.error.clone(),
                             result: result.result.clone(),
+                            screenshot_attachment_id: None,  // Chat runtime doesn't capture screenshots
                         };
 
                         let content = if result.success {
