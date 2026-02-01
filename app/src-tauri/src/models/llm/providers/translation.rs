@@ -236,9 +236,6 @@ pub fn parse_gemini_tool_calls(response: &Value, available_tools: Option<&[ToolD
 pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> Vec<Value> {
     let mut formatted = Vec::new();
 
-    // Track pending tool calls to merge consecutive tool call messages
-    let mut pending_tool_calls: Vec<Value> = Vec::new();
-
     // Collect IDs of most recent images/pdfs across all messages
     let mut valid_attachments = Vec::new();
     for msg in msgs.iter().rev() {
@@ -251,110 +248,114 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
 
     for msg in msgs {
         match msg.message_type {
-            // Skip "Thinking" messages - these are internal state and confuse the model
+            // Skip "Thinking" messages - these are internal state
             MessageType::Thinking => {
                 continue;
             }
 
-            MessageType::ToolCall => {
-                // Extract tool call from metadata and add to pending list
-                if let Some(MessageMetadata::ToolCall { call_id, tool_name, arguments, thought_signature: _, skill_name: _ }) = &msg.metadata {
-                    pending_tool_calls.push(json!({
-                        "id": call_id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string())
-                        }
-                    }));
-                }
-            }
+            MessageType::ToolCalls => {
+                let mut content_blocks = Vec::new();
 
-            MessageType::ToolResult => {
-                // First, flush any pending tool calls as a single assistant message
-                if !pending_tool_calls.is_empty() {
-                    formatted.push(json!({
-                        "role": "assistant",
-                        "content": null,
-                        "tool_calls": pending_tool_calls.clone()
-                    }));
-                    pending_tool_calls.clear();
-                }
-
-                // Format tool result with tool_call_id
-                if let Some(MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id }) = &msg.metadata {
-                    let mut response_obj = if *success {
-                        result.clone().unwrap_or_else(|| json!({"status": "success"}))
-                    } else {
-                        json!({"error": error.as_deref().unwrap_or("Unknown error")})
-                    };
-
-                    // Enrichment: If this is a skill activation, inject the skill instructions
-                    // but don't save them to the database. This allows the LLM to get the
-                    // instructions immediately without bloating the database records.
-                    if *success {
-                        if let Some(res_val) = result {
-                            if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
-                                if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
-                                    if let Some(skill) = get_skill(skill_name) {
-                                        if let Some(obj) = response_obj.as_object_mut() {
-                                            obj.insert("instructions".to_string(), json!(skill.instructions));
-                                        }
-                                    }
+                // Add tool calls from metadata array
+                // Add tool calls from metadata array
+                if let Some(metadata_vec) = &msg.metadata {
+                    for meta in metadata_vec {
+                        if let MessageMetadata::ToolCall { call_id, tool_name, arguments, thought_signature: _, skill_name: _ } = meta {
+                            content_blocks.push(json!({
+                                "id": call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string())
                                 }
-                            }
+                            }));
                         }
                     }
+                }
 
-                    // Build content - can be array with image for computer-use
-                    let mut content_parts = vec![json!({
+                // Add text content
+                if !msg.content.is_empty() {
+                    content_blocks.push(json!({
                         "type": "text",
-                        "text": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string())
-                    })];
+                        "text": msg.content
+                    }));
+                }
 
-                    // If there's a screenshot attachment, add it as an image
-                    if let Some(screenshot_id) = screenshot_attachment_id {
-                        if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
-                            if attachment.file_type.starts_with("image/") {
-                                if let Some(rel_path) = &attachment.file_path {
-                                    if let Ok(app_data) = app_handle.path().app_data_dir() {
-                                        let full_path = app_data.join(rel_path);
-                                        if full_path.exists() {
-                                            if let Ok(bytes) = fs::read(&full_path) {
-                                                let base64_data = general_purpose::STANDARD.encode(bytes);
-                                                content_parts.push(json!({
-                                                    "type": "image_url",
-                                                    "image_url": {
-                                                        "url": format!("data:{};base64,{}", attachment.file_type, base64_data)
-                                                    }
-                                                }));
+                formatted.push(json!({
+                    "role": "assistant",
+                    "tool_calls": content_blocks
+                }));
+            }
+
+            MessageType::ToolResults => {
+                // Format tool results with tool_call_id
+                if let Some(metadata_vec) = &msg.metadata {
+                    for meta in metadata_vec {
+                        if let MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id } = meta {
+                            let mut response_obj = if *success {
+                                result.clone().unwrap_or_else(|| json!({"status": "success"}))
+                            } else {
+                                json!({"error": error.as_deref().unwrap_or("Unknown error")})
+                            };
+        
+                            // Enrichment: If this is a skill activation, inject the skill instructions
+                            // but don't save them to the database. This allows the LLM to get the
+                            // instructions immediately without bloating the database records.
+                            if *success {
+                                if let Some(res_val) = result {
+                                    if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
+                                        if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
+                                            if let Some(skill) = get_skill(skill_name) {
+                                                if let Some(obj) = response_obj.as_object_mut() {
+                                                    obj.insert("instructions".to_string(), json!(skill.instructions));
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
+        
+                            // Build content - can be array with image for computer-use
+                            let mut content_parts = vec![json!({
+                                "type": "text",
+                                "text": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string())
+                            })];
+        
+                            // If there's a screenshot attachment, add it as an image
+                            if let Some(screenshot_id) = screenshot_attachment_id {
+                                if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                                    if attachment.file_type.starts_with("image/") {
+                                        if let Some(rel_path) = &attachment.file_path {
+                                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                                let full_path = app_data.join(rel_path);
+                                                if full_path.exists() {
+                                                    if let Ok(bytes) = fs::read(&full_path) {
+                                                        let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                        content_parts.push(json!({
+                                                            "type": "image_url",
+                                                            "image_url": {
+                                                                "url": format!("data:{};base64,{}", attachment.file_type, base64_data)
+                                                            }
+                                                        }));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+        
+                            formatted.push(json!({
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "content": content_parts
+                            }));
                         }
                     }
-
-                    formatted.push(json!({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": content_parts
-                    }));
                 }
             }
 
             MessageType::Text => {
-                // Flush any pending tool calls first
-                if !pending_tool_calls.is_empty() {
-                    formatted.push(json!({
-                        "role": "assistant",
-                        "content": null,
-                        "tool_calls": pending_tool_calls.clone()
-                    }));
-                    pending_tool_calls.clear();
-                }
-
                 let mut content_blocks = Vec::new();
 
                 // Add attachments if any (multimodal support)
@@ -431,15 +432,6 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
         }
     }
 
-    // Flush any remaining pending tool calls
-    if !pending_tool_calls.is_empty() {
-        formatted.push(json!({
-            "role": "assistant",
-            "content": null,
-            "tool_calls": pending_tool_calls
-        }));
-    }
-
     formatted
 }
 
@@ -453,8 +445,6 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
 /// - Merges consecutive parts with the same role (required by Gemini API)
 pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> Vec<Value> {
     let mut formatted = Vec::new();
-    let mut pending_parts = Vec::new();
-    let mut current_role: Option<&str> = None;
 
     // Collect IDs of most recent images/pdfs across all messages
     let mut valid_attachments = Vec::new();
@@ -467,116 +457,151 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
     }
 
     for msg in msgs {
-        let (role, parts) = match msg.message_type {
+        match msg.message_type {
             MessageType::Thinking => {
-                // Skip "Thinking" messages - these are internal state and confuse the model
+                // Skip "Thinking" messages - these are internal state
                 continue;
             }
 
-            MessageType::ToolCall => {
-                if let Some(MessageMetadata::ToolCall { tool_name, arguments, thought_signature, skill_name: _, .. }) = &msg.metadata {
-                    let mut part = json!({
-                        "functionCall": {
-                            "name": tool_name,
-                            "args": arguments
+            MessageType::ToolCalls => {
+                let mut parts = Vec::new();
+                log::debug!("Formatting ToolCall message for Gemini: {:?}", msg);
+
+                // Add text content first
+                if !msg.content.is_empty() {
+                    parts.push(json!({"text": msg.content}));
+                }
+
+                // Add tool calls
+                if let Some(metadata_vec) = &msg.metadata {
+                    for meta in metadata_vec {
+                        if let MessageMetadata::ToolCall { tool_name, arguments, thought_signature, skill_name: _, .. } = meta {
+                            parts.push(json!({
+                                "functionCall": {
+                                    "name": tool_name,
+                                    "args": arguments
+                                }
+                            }));
+        
+                            // Re-attach thought signature if we have one
+                            if let Some(signature) = thought_signature {
+                                parts.last_mut().unwrap()["thoughtSignature"] = json!(signature);
+                            }                    
                         }
-                    });
-
-                    // Re-attach thought signature if we have one
-                    if let Some(signature) = thought_signature {
-                        part["thoughtSignature"] = json!(signature);
                     }
-
-                    ("model", vec![part])
-                } else {
-                    continue;
+                }
+                if !parts.is_empty() {
+                    formatted.push(json!({
+                        "role": "model",
+                        "parts": parts
+                    }));
                 }
             }
 
-            MessageType::ToolResult => {
-                if let Some(MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id }) = &msg.metadata {
-                    let mut tool_name = "unknown".to_string();
-                    
-                    // Try to find the matching tool call to get the name
-                    if let Some(call_msg) = msgs.iter().find(|m| {
-                        if let Some(MessageMetadata::ToolCall { call_id: cid, .. }) = &m.metadata {
-                            cid == call_id
-                        } else {
-                            false
-                        }
-                    }) {
-                        tool_name = if let Some(MessageMetadata::ToolCall { tool_name, .. }) = &call_msg.metadata {
-                            tool_name.clone()
-                        } else {
-                            "unknown".to_string()
-                        };
-                    }
+            MessageType::ToolResults => {
+                let mut parts = Vec::new();
 
-                    let mut response_obj = if *success {
-                        result.clone().unwrap_or_else(|| json!({"status": "success"}))
-                    } else {
-                        json!({"error": error.as_deref().unwrap_or("Unknown error")})
-                    };
-
-                    // Ensure response is an object as Gemini expects a Struct
-                    if !response_obj.is_object() {
-                        response_obj = json!({ "output": response_obj });
-                    }
-
-                    // Enrichment: If this is a skill activation, inject the skill instructions
-                    // but don't save them to the database. This allows the LLM to get the
-                    // instructions immediately without bloating the database records.
-                    if *success {
-                        if let Some(res_val) = result {
-                            if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
-                                if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
-                                    if let Some(skill) = get_skill(skill_name) {
-                                        if let Some(obj) = response_obj.as_object_mut() {
-                                            obj.insert("instructions".to_string(), json!(skill.instructions));
+                if let Some(metadata_vec) = &msg.metadata {
+                    for meta in metadata_vec {
+                        if let MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id } = meta {
+                            let mut tool_name = "unknown".to_string();
+                            
+                            // Try to find the matching tool call to get the name
+                            if let Some(call_msg) = msgs.iter().find(|m| {
+                                if let Some(m_meta_vec) = &m.metadata {
+                                    m_meta_vec.iter().any(|m_meta| {
+                                        if let MessageMetadata::ToolCall { call_id: cid, .. } = m_meta {
+                                            cid == call_id
+                                        } else {
+                                            false
                                         }
-                                    }
+                                    })
+                                } else {
+                                    false
                                 }
-                            }
-                        }
-                    }
-
-                    // Build functionResponse with optional screenshot parts
-                    let mut func_response = json!({
-                        "functionResponse": {
-                            "name": tool_name,
-                            "response": response_obj
-                        }
-                    });
-
-                    // If there's a screenshot attachment, add it as parts with inlineData
-                    if let Some(screenshot_id) = screenshot_attachment_id {
-                        // Find the attachment in the message
-                        if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
-                            if attachment.file_type.starts_with("image/") {
-                                if let Some(rel_path) = &attachment.file_path {
-                                    if let Ok(app_data) = app_handle.path().app_data_dir() {
-                                        let full_path = app_data.join(rel_path);
-                                        if full_path.exists() {
-                                            if let Ok(bytes) = fs::read(&full_path) {
-                                                let base64_data = general_purpose::STANDARD.encode(bytes);
-                                                // Add parts array with inlineData for Gemini computer-use
-                                                func_response["functionResponse"]["parts"] = json!([{
-                                                    "inlineData": {
-                                                        "mimeType": attachment.file_type,
-                                                        "data": base64_data,
-                                                    }
-                                                }]);
+                            }) {
+                                if let Some(call_meta_vec) = &call_msg.metadata {
+                                    for call_meta in call_meta_vec {
+                                        if let MessageMetadata::ToolCall { call_id: cid, tool_name: tn, .. } = call_meta {
+                                            if cid == call_id {
+                                                tool_name = tn.clone();
+                                                break;
                                             }
                                         }
                                     }
                                 }
                             }
+        
+                            let mut response_obj = if *success {
+                                result.clone().unwrap_or_else(|| json!({"status": "success"}))
+                            } else {
+                                json!({"error": error.as_deref().unwrap_or("Unknown error")})
+                            };
+        
+                            // Ensure response is an object as Gemini expects a Struct
+                            if !response_obj.is_object() {
+                                response_obj = json!({ "output": response_obj });
+                            }
+        
+                            // Enrichment: If this is a skill activation, inject the skill instructions
+                            // but don't save them to the database. This allows the LLM to get the
+                            // instructions immediately without bloating the database records.
+                            if *success {
+                                if let Some(res_val) = result {
+                                    if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
+                                        if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
+                                            if let Some(skill) = get_skill(skill_name) {
+                                                if let Some(obj) = response_obj.as_object_mut() {
+                                                    obj.insert("instructions".to_string(), json!(skill.instructions));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+        
+                            // Build functionResponse with optional screenshot parts
+                            let mut func_response = json!({
+                                "functionResponse": {
+                                    "name": tool_name,
+                                    "response": response_obj
+                                }
+                            });
+        
+                            // If there's a screenshot attachment, add it as parts with inlineData
+                            if let Some(screenshot_id) = screenshot_attachment_id {
+                                // Find the attachment in the message
+                                if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                                    if attachment.file_type.starts_with("image/") {
+                                        if let Some(rel_path) = &attachment.file_path {
+                                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                                let full_path = app_data.join(rel_path);
+                                                if full_path.exists() {
+                                                    if let Ok(bytes) = fs::read(&full_path) {
+                                                        let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                        // Add parts array with inlineData for Gemini computer-use
+                                                        func_response["functionResponse"]["parts"] = json!([{
+                                                            "inlineData": {
+                                                                "mimeType": attachment.file_type,
+                                                                "data": base64_data,
+                                                            }
+                                                        }]);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            parts.push(func_response);
                         }
                     }
-
-                    ("function", vec![func_response])
-                } else {
-                    continue;
+                }
+                if !parts.is_empty() {
+                    formatted.push(json!({
+                        "role": "user",
+                        "parts": parts
+                    }));
                 }
             }
 
@@ -624,32 +649,14 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
                         }
                     }
                 }
-                
-                (role, parts)
+                if !parts.is_empty() {
+                    formatted.push(json!({
+                        "role": role,
+                        "parts": parts
+                    }));
+                }
             }
         };
-
-        // Merge logic for Gemini
-        if current_role == Some(role) {
-            pending_parts.extend(parts);
-        } else {
-            if let Some(prev_role) = current_role {
-                formatted.push(json!({
-                    "role": prev_role,
-                    "parts": pending_parts
-                }));
-            }
-            current_role = Some(role);
-            pending_parts = parts;
-        }
-    }
-
-    // Flush remaining
-    if let Some(role) = current_role {
-        formatted.push(json!({
-            "role": role,
-            "parts": pending_parts
-        }));
     }
 
     formatted

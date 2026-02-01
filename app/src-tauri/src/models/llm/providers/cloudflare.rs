@@ -43,16 +43,6 @@ impl LlmProvider for CloudflareProvider {
       }));
     };
 
-    // remove the images and log the content
-    // Remove images from content for logging (base64 data is too large)
-    let mut content_for_logging = content.clone();
-    for msg in &mut content_for_logging {
-      if let Some(parts) = msg.get_mut("parts").and_then(|p| p.as_array_mut()) {
-        parts.retain(|part| part.get("inlineData").is_none());
-      }
-    }
-    log::debug!("Cloudflare LLM Request Content (images removed): {}", serde_json::to_string_pretty(&content_for_logging).unwrap());
-
     // Get user access token
     let access_token = get_access_token_command()
       .await?
@@ -208,10 +198,10 @@ impl LlmProvider for CloudflareProvider {
 
       // Save token usage
       add_token_usage(
-          app_handle.clone(),
-          &model,
-          prompt_tokens,
-          completion_tokens,
+        app_handle.clone(),
+        &model,
+        prompt_tokens,
+        completion_tokens,
       ).await?;
 
       if !tool_calls.is_empty() {

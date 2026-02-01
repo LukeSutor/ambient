@@ -449,7 +449,7 @@ impl ComputerUseEngine {
             self.conversation_id.clone(),
             Role::Assistant,
             function_call_message.clone(),
-            Some(MessageType::ToolCall),
+            Some(MessageType::ToolCalls),
             None,
             None,
         ).await;

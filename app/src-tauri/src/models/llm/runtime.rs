@@ -343,18 +343,8 @@ impl AgentRuntime {
                         ));
                     }
 
-                    // Save reasoning text if present
-                    if let Some(reasoning) = text {
-                        if !reasoning.is_empty() {
-                            let metadata = MessageMetadata::Thinking {
-                                stage: "Reasoning".to_string(),
-                            };
-                            self.save_assistant_message(&reasoning, MessageType::Thinking, Some(metadata)).await?;
-                        }
-                    }
-
-                    // Save tool calls as messages
-                    let mut call_message_ids = Vec::with_capacity(tool_calls.len());
+                    // Save tool calls as a message
+                    let mut tool_call_metadatas = Vec::with_capacity(tool_calls.len());
                     for call in &tool_calls {
                         let metadata = MessageMetadata::ToolCall {
                             call_id: call.id.clone(),
@@ -363,23 +353,16 @@ impl AgentRuntime {
                             arguments: call.arguments.clone(),
                             thought_signature: call.thought_signature.clone(),
                         };
-
-                        let content = format!(
-                            "Calling {}.{} with: {}",
-                            call.skill_name,
-                            call.tool_name,
-                            serde_json::to_string_pretty(&call.arguments).unwrap_or_default()
-                        );
-
-                        let msg_id = self.save_assistant_message(&content, MessageType::ToolCall, Some(metadata))
-                            .await?;
-                        call_message_ids.push(msg_id);
+                        tool_call_metadatas.push(metadata.clone());
                     }
+                    let content = text.unwrap_or_default();
+                    let tool_call_msg_id = self.save_assistant_message(&content, MessageType::ToolCalls, Some(tool_call_metadatas)).await?;
 
                     // Execute tools in parallel
-                    let results = self.execute_tool_calls(tool_calls.clone(), call_message_ids).await?;
+                    let results = self.execute_tool_calls(tool_calls.clone(), tool_call_msg_id).await?;
 
                     // Add results to context and continue
+                    let mut tool_result_metadatas = Vec::with_capacity(results.len());
                     for result in &results {
                         let metadata = MessageMetadata::ToolResult {
                             call_id: result.call_id.clone(),
@@ -388,28 +371,16 @@ impl AgentRuntime {
                             result: result.result.clone(),
                             screenshot_attachment_id: None,  // Chat runtime doesn't capture screenshots
                         };
+                        tool_result_metadatas.push(metadata.clone());
+                    }
 
-                        let content = if result.success {
-                            format!(
-                                "Tool result: {}",
-                                result.result
-                                    .as_ref()
-                                    .map(|r| serde_json::to_string_pretty(r).unwrap_or_default())
-                                    .unwrap_or_else(|| "Success".to_string())
-                            )
-                        } else {
-                            format!(
-                                "Tool error: {}",
-                                result.error.as_deref().unwrap_or("Unknown error")
-                            )
-                        };
-
-                        let msg_id = self.save_tool_result_message(&content, metadata).await?;
-
-                        // Emit completion event with message id and result
+                    // Save message and emit tool completion events
+                    let tool_result_msg_id = self.save_tool_result_message(&content, tool_result_metadatas).await?;
+                    
+                    for result in &results {
                         let completed_event = ToolExecutionCompletedEvent {
                             tool_call_id: result.call_id.clone(),
-                            message_id: msg_id,
+                            message_id: tool_result_msg_id.clone(),
                             skill_name: tool_calls
                                 .iter()
                                 .find(|c| c.id == result.call_id)
@@ -549,7 +520,7 @@ impl AgentRuntime {
             let metadata = MessageMetadata::Thinking {
                 stage: format!("Skill Activated: {}", skill_name),
             };
-            let message_id = self.save_assistant_message(&content, MessageType::Thinking, Some(metadata)).await?;
+            let message_id = self.save_assistant_message(&content, MessageType::Thinking, Some(vec![metadata])).await?;
 
             // Emit skill activated event
             let event = SkillActivatedEvent {
@@ -571,18 +542,18 @@ impl AgentRuntime {
     async fn execute_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
-        message_ids: Vec<String>,
+        message_id: String,
     ) -> Result<Vec<ToolResult>, AgentError> {
         log::info!("[agent] Executing {} tool calls", tool_calls.len());
 
         // Save tool call records
-        for (call, msg_id) in tool_calls.iter().zip(message_ids.iter()) {
-            save_tool_call_record(&self.app_handle, msg_id, &self.conv_id, call).await?;
+        for call in tool_calls.iter() {
+            save_tool_call_record(&self.app_handle, &message_id, &self.conv_id, call).await?;
 
             // Emit tool execution started event
             let started_event = ToolExecutionStartedEvent {
                 tool_call_id: call.id.clone(),
-                message_id: msg_id.clone(),
+                message_id: message_id.clone(),
                 skill_name: call.skill_name.clone(),
                 tool_name: call.tool_name.clone(),
                 arguments: call.arguments.clone(),
@@ -670,7 +641,7 @@ impl AgentRuntime {
         &self,
         content: &str,
         message_type: MessageType,
-        metadata: Option<MessageMetadata>,
+        metadata: Option<Vec<MessageMetadata>>,
     ) -> Result<String, AgentError> {
         let message = add_message(
             &self.app_handle,
@@ -690,14 +661,14 @@ impl AgentRuntime {
     async fn save_tool_result_message(
         &self,
         content: &str,
-        metadata: MessageMetadata,
+        metadata: Vec<MessageMetadata>,
     ) -> Result<String, AgentError> {
         let message = add_message(
             &self.app_handle,
             self.conv_id.clone(),
             Role::Tool,
             content.to_string(),
-            Some(MessageType::ToolResult),
+            Some(MessageType::ToolResults),
             Some(metadata),
             None,
         )

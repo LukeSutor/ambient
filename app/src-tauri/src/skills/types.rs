@@ -185,7 +185,7 @@ impl ToolCall {
 
     /// Returns the full qualified tool name (skill.tool format).
     pub fn qualified_name(&self) -> String {
-        format!("{}.{}", self.skill_name, self.tool_name)
+        self.tool_name.clone()
     }
 }
 

@@ -205,33 +205,18 @@ impl ComputerUseRuntime {
                 }
 
                 LlmResponse::ToolCalls { text, calls } => {
-                    // Save reasoning if present
-                    if let Some(reasoning) = text {
-                        if !reasoning.is_empty() {
-                            self.save_thinking_message(&reasoning).await?;
-                        }
-                    }
-
-                    if calls.is_empty() {
-                        log::warn!("[computer_use_runtime] Empty tool calls, treating as final");
-                        final_response = "*Task completed*".to_string();
-                        self.save_assistant_message(&final_response, MessageType::Text, None).await?;
-                        break;
-                    }
-
-                    // Save the tool calls as assistant message first
-                    for call in &calls {
-                        self.save_tool_call_message(call).await?;
-                    }
+                    // Save the tool calls as an assistant message with optional reasoning text
+                    self.save_tool_call_message(&calls, text.as_deref()).await?;
 
                     // Execute each tool call and save function responses with screenshots
+                    let mut results = Vec::with_capacity(calls.len());
                     for call in &calls {
                         // Check for safety confirmation
                         if let Some(safety) = call.arguments.get("safety_decision") {
                             if safety.get("decision").and_then(|d| d.as_str()) == Some("require_confirmation") {
                                 let confirmed = self.get_safety_confirmation(safety).await?;
                                 if !confirmed {
-                                    final_response = "*Safety confirmation denied. Session stopped*".to_string();
+                                    final_response = "*Safety confirmation denied by user*".to_string();
                                     self.save_assistant_message(&final_response, MessageType::Text, None).await?;
                                     break 'main_loop;
                                 }
@@ -240,17 +225,17 @@ impl ComputerUseRuntime {
 
                         // Execute the action
                         let result = self.execute_computer_action(call).await;
+                        results.push(result.clone());
 
                         // Wait for UI to update
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-                        // Take new screenshot after action
-                        let screenshot_bytes = take_screenshot();
-                        self.last_screenshot_bytes = Some(screenshot_bytes.clone());
-
-                        // Save function response with screenshot (per Gemini computer-use spec)
-                        self.save_tool_result_with_screenshot(call, &result, &screenshot_bytes).await?;
                     }
+                    // Take new screenshot after actions
+                    let screenshot_bytes = take_screenshot();
+                    self.last_screenshot_bytes = Some(screenshot_bytes.clone());
+
+                    // Save function response with screenshot (per Gemini computer-use spec)
+                    self.save_tool_result_with_screenshot(&calls, &results, &screenshot_bytes).await?;
                 }
             }
         }
@@ -585,22 +570,25 @@ impl ComputerUseRuntime {
     }
 
     /// Save tool call message (assistant requesting action).
-    async fn save_tool_call_message(&self, call: &ToolCall) -> Result<(), String> {
-        let call_metadata = MessageMetadata::ToolCall {
-            call_id: call.id.clone(),
-            skill_name: "computer-use".to_string(),
-            tool_name: call.tool_name.clone(),
-            arguments: call.arguments.clone(),
-            thought_signature: call.thought_signature.clone(),
-        };
+    async fn save_tool_call_message(
+        &self, calls: &Vec<ToolCall>, reasoning: Option<&str>
+    ) -> Result<(), String> {
+        // Create all tool call metadata
+        let mut call_metadata_list = Vec::new();
+        for call in calls {
+            let call_metadata = MessageMetadata::ToolCall {
+                call_id: call.id.clone(),
+                skill_name: "computer-use".to_string(),
+                tool_name: call.tool_name.clone(),
+                arguments: call.arguments.clone(),
+                thought_signature: call.thought_signature.clone(),
+            };
+            call_metadata_list.push(call_metadata);
+        }
 
-        let call_content = format!(
-            "{}: {}",
-            call.tool_name,
-            serde_json::to_string_pretty(&call.arguments).unwrap_or_default()
-        );
+        let call_content = reasoning.unwrap_or_default().to_string();
 
-        self.save_assistant_message(&call_content, MessageType::ToolCall, Some(call_metadata)).await?;
+        self.save_assistant_message(&call_content, MessageType::ToolCalls, Some(call_metadata_list)).await?;
         Ok(())
     }
 
@@ -609,7 +597,7 @@ impl ComputerUseRuntime {
         &self,
         content: &str,
         message_type: MessageType,
-        metadata: Option<MessageMetadata>,
+        metadata: Option<Vec<MessageMetadata>>,
     ) -> Result<crate::db::conversations::Message, String> {
         let message = add_message(
             &self.app_handle,
@@ -631,20 +619,11 @@ impl ComputerUseRuntime {
         Ok(message)
     }
 
-    /// Save thinking message.
-    async fn save_thinking_message(&self, reasoning: &str) -> Result<(), String> {
-        let metadata = MessageMetadata::Thinking {
-            stage: "Reasoning".to_string(),
-        };
-        self.save_assistant_message(reasoning, MessageType::Thinking, Some(metadata)).await?;
-        Ok(())
-    }
-
     /// Save tool result with screenshot as function response (per Gemini spec).
     async fn save_tool_result_with_screenshot(
         &self,
-        _call: &ToolCall,
-        result: &ToolResult,
+        _calls: &Vec<ToolCall>,
+        results: &Vec<ToolResult>,
         screenshot_bytes: &[u8],
     ) -> Result<(), String> {
         // Create the tool result message
@@ -667,40 +646,28 @@ impl ComputerUseRuntime {
             vec![attachment_data],
         ).await?;
 
-        // Emit attachment created event so UI updates
-        if !attachments.is_empty() {
-            let attachments_event = AttachmentsCreatedEvent {
-                message_id: message_id.clone(),
-                attachments: attachments.clone(),
-                timestamp: Utc::now().to_rfc3339(),
-            };
-            let _ = emit(ATTACHMENTS_CREATED, attachments_event);
-        }
-
         let screenshot_attachment_id = attachments.first().map(|a| a.id.clone());
 
         // Create tool result metadata with screenshot reference
-        let result_metadata = MessageMetadata::ToolResult {
-            call_id: result.call_id.clone(),
-            success: result.success,
-            error: result.error.clone(),
-            result: result.result.clone(),
-            screenshot_attachment_id,
-        };
-
-        let result_content = if result.success {
-            format!("Success: {:?}", result.result)
-        } else {
-            format!("Error: {:?}", result.error)
-        };
+        let mut result_metadata_list = Vec::with_capacity(results.len());
+        for result in results {
+            let result_metadata = MessageMetadata::ToolResult {
+                call_id: result.call_id.clone(),
+                success: result.success,
+                error: result.error.clone(),
+                result: result.result.clone(),
+                screenshot_attachment_id: screenshot_attachment_id.clone(),
+            };
+            result_metadata_list.push(result_metadata);
+        }
 
         let message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
             Role::Tool,
-            result_content,
-            Some(MessageType::ToolResult),
-            Some(result_metadata),
+            "".to_string(),
+            Some(MessageType::ToolResults),
+            Some(result_metadata_list),
             Some(message_id.clone()),
         ).await?;
 

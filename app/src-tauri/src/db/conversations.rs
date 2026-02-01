@@ -32,9 +32,9 @@ pub enum MessageType {
   /// Regular text message from user or assistant.
   Text,
   /// Assistant requesting tool execution.
-  ToolCall,
+  ToolCalls,
   /// Result returned from tool execution.
-  ToolResult,
+  ToolResults,
   /// Internal reasoning/thinking step (optional).
   Thinking,
 }
@@ -44,8 +44,8 @@ impl MessageType {
   pub fn as_str(&self) -> &'static str {
         match self {
             MessageType::Text => "text",
-            MessageType::ToolCall => "tool_call",
-            MessageType::ToolResult => "tool_result",
+            MessageType::ToolCalls => "tool_calls",
+            MessageType::ToolResults => "tool_results",
             MessageType::Thinking => "thinking",
         }
     }
@@ -54,8 +54,8 @@ impl MessageType {
   pub fn from_str(s: &str) -> Self {
         match s {
             "text" => MessageType::Text,
-            "tool_call" => MessageType::ToolCall,
-            "tool_result" => MessageType::ToolResult,
+            "tool_calls" => MessageType::ToolCalls,
+            "tool_results" => MessageType::ToolResults,
             "thinking" => MessageType::Thinking,
             _ => MessageType::Text,
         }
@@ -106,7 +106,7 @@ pub struct Message {
   pub content: String,
   pub timestamp: String,
   pub message_type: MessageType,
-  pub metadata: Option<MessageMetadata>,
+  pub metadata: Option<Vec<MessageMetadata>>,
   pub attachments: Vec<Attachment>,
   pub memory: Option<MemoryEntry>,
 }
@@ -251,7 +251,7 @@ pub async fn add_message(
   role: Role,
   content: String,
   message_type: Option<MessageType>,
-  metadata: Option<MessageMetadata>,
+  metadata: Option<Vec<MessageMetadata>>,
   message_id: Option<String>,
 ) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
@@ -395,7 +395,7 @@ pub async fn get_messages(
             .unwrap_or(MessageType::Text),
           metadata: row.get::<_, Option<String>>(6)
             .map_err(|e| e.to_string())?
-            .and_then(|m| serde_json::from_str::<MessageMetadata>(&m)
+            .and_then(|m| serde_json::from_str::<Vec<MessageMetadata>>(&m)
               .map_err(|e| format!("Failed to parse metadata: {}", e))
               .ok()),
           attachments: Vec::new(),
@@ -482,7 +482,7 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
           .unwrap_or(MessageType::Text),
         metadata: row.get::<_, Option<String>>(6)
           .map_err(|e| e.to_string())?
-          .and_then(|m| serde_json::from_str::<MessageMetadata>(&m)
+          .and_then(|m| serde_json::from_str::<Vec<MessageMetadata>>(&m)
             .map_err(|e| format!("Failed to parse metadata: {}", e))
             .ok()),
         attachments: Vec::new(),
@@ -969,14 +969,14 @@ pub async fn get_conversation_history(
 
   for msg in all_messages.into_iter().rev() {
     // Always include tool results with their calls
-    if msg.message_type == MessageType::ToolResult {
+    if msg.message_type == MessageType::ToolResults {
       messages.push(msg);
       continue;
     }
 
     if count >= limit {
       // Check if next message is a tool call that has results we included
-      if msg.message_type == MessageType::ToolCall {
+      if msg.message_type == MessageType::ToolCalls {
         messages.push(msg);
       }
       break;
