@@ -8,7 +8,7 @@
 //! - **Provider → Internal**: Parses tool calls from provider responses
 
 use crate::db::conversations::{Message, MessageType, MessageMetadata, Role};
-use crate::skills::types::{ToolDefinition, ToolCall, ToolResult};
+use crate::skills::types::{ToolDefinition, ToolCall};
 use crate::skills::registry::get_skill;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
@@ -40,16 +40,10 @@ pub fn tools_to_openai_format(tools: &[ToolDefinition]) -> Vec<Value> {
                 }
             }
 
-            let name = if let Some(skill) = &tool.skill_name {
-                format!("{}.{}", skill, tool.name)
-            } else {
-                tool.name.clone()
-            };
-
             json!({
                 "type": "function",
                 "function": {
-                    "name": name,
+                    "name": tool.name,
                     "description": tool.description,
                     "parameters": {
                         "type": "object",
@@ -84,15 +78,8 @@ pub fn tools_to_gemini_format(tools: &[ToolDefinition]) -> Value {
                     required.push(param.name.clone());
                 }
             }
-
-            let name = if let Some(skill) = &tool.skill_name {
-                format!("{}.{}", skill, tool.name)
-            } else {
-                tool.name.clone()
-            };
-
             json!({
-                "name": name,
+                "name": tool.name,
                 "description": tool.description,
                 "parameters": {
                     "type": "OBJECT",
@@ -271,13 +258,12 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
 
             MessageType::ToolCall => {
                 // Extract tool call from metadata and add to pending list
-                if let Some(MessageMetadata::ToolCall { call_id, skill_name, tool_name, arguments, thought_signature: _ }) = &msg.metadata {
-                    let tool_name_full = format!("{}.{}", skill_name, tool_name);
+                if let Some(MessageMetadata::ToolCall { call_id, tool_name, arguments, thought_signature: _, skill_name: _ }) = &msg.metadata {
                     pending_tool_calls.push(json!({
                         "id": call_id,
                         "type": "function",
                         "function": {
-                            "name": tool_name_full,
+                            "name": tool_name,
                             "arguments": serde_json::to_string(arguments).unwrap_or_else(|_| "{}".to_string())
                         }
                     }));
@@ -488,11 +474,10 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
             }
 
             MessageType::ToolCall => {
-                if let Some(MessageMetadata::ToolCall { skill_name, tool_name, arguments, thought_signature, .. }) = &msg.metadata {
-                    let tool_name_full = format!("{}.{}", skill_name, tool_name);
+                if let Some(MessageMetadata::ToolCall { tool_name, arguments, thought_signature, skill_name: _, .. }) = &msg.metadata {
                     let mut part = json!({
                         "functionCall": {
-                            "name": tool_name_full,
+                            "name": tool_name,
                             "args": arguments
                         }
                     });
@@ -520,9 +505,11 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
                             false
                         }
                     }) {
-                        if let Some(MessageMetadata::ToolCall { skill_name, tool_name: tname, .. }) = &call_msg.metadata {
-                            tool_name = format!("{}.{}", skill_name, tname);
-                        }
+                        tool_name = if let Some(MessageMetadata::ToolCall { tool_name, .. }) = &call_msg.metadata {
+                            tool_name.clone()
+                        } else {
+                            "unknown".to_string()
+                        };
                     }
 
                     let mut response_obj = if *success {
