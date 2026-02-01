@@ -66,8 +66,6 @@ pub struct ComputerUseRuntime {
     screen_height: i32,
     iteration: usize,
     cancel_signal: Arc<AtomicBool>,
-    /// Last screenshot bytes for attaching to function responses
-    last_screenshot_bytes: Option<Vec<u8>>,
 }
 
 impl ComputerUseRuntime {
@@ -101,7 +99,6 @@ impl ComputerUseRuntime {
             screen_height,
             iteration: 0,
             cancel_signal,
-            last_screenshot_bytes: None,
         })
     }
 
@@ -145,7 +142,7 @@ impl ComputerUseRuntime {
         self.emit_toast("Starting computer use session").await;
 
         // Save user message with initial screenshot
-        self.save_user_message_with_screenshot(&prompt).await?;
+        self.save_user_message(&prompt).await?;
 
         // Main loop
         let final_response: String;
@@ -232,7 +229,6 @@ impl ComputerUseRuntime {
                     }
                     // Take new screenshot after actions
                     let screenshot_bytes = take_screenshot();
-                    self.last_screenshot_bytes = Some(screenshot_bytes.clone());
 
                     // Save function response with screenshot (per Gemini computer-use spec)
                     self.save_tool_result_with_screenshot(&calls, &results, &screenshot_bytes).await?;
@@ -295,11 +291,7 @@ impl ComputerUseRuntime {
     }
 
     /// Save the initial user message with a screenshot attachment.
-    async fn save_user_message_with_screenshot(&mut self, prompt: &str) -> Result<(), String> {
-        // Take screenshot
-        let screenshot_bytes = take_screenshot();
-        self.last_screenshot_bytes = Some(screenshot_bytes.clone());
-
+    async fn save_user_message(&mut self, prompt: &str) -> Result<(), String> {
         // Create user message first
         let message_id = Uuid::new_v4().to_string();
         let _ = add_message(
@@ -311,38 +303,6 @@ impl ComputerUseRuntime {
             None,
             Some(message_id.clone()),
         ).await?;
-
-        // Create and attach screenshot (save full resolution)
-        let timestamp = Utc::now().to_rfc3339();
-        let filename = format!("screenshot_{}.png", timestamp.replace(":", "-"));
-        let screenshot_base64 = general_purpose::STANDARD.encode(&screenshot_bytes);
-        
-        let attachment_data = AttachmentData {
-            name: filename,
-            file_type: "image/png".to_string(),
-            data: screenshot_base64,
-        };
-
-        let attachments = create_attachments(
-            &self.app_handle,
-            message_id.clone(),
-            vec![attachment_data],
-        ).await?;
-
-        // Emit attachment created event so UI updates
-        if !attachments.is_empty() {
-            let attachments_event = AttachmentsCreatedEvent {
-                message_id: message_id.clone(),
-                attachments: attachments.clone(),
-                timestamp: Utc::now().to_rfc3339(),
-            };
-            let _ = emit(ATTACHMENTS_CREATED, attachments_event);
-        }
-
-        // Link attachments to message
-        if !attachments.is_empty() {
-            add_attachments(&self.app_handle, attachments).await?;
-        }
 
         Ok(())
     }

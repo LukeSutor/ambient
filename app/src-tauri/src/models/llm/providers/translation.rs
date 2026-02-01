@@ -323,20 +323,24 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
         
                             // If there's a screenshot attachment, add it as an image
                             if let Some(screenshot_id) = screenshot_attachment_id {
-                                if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
-                                    if attachment.file_type.starts_with("image/") {
-                                        if let Some(rel_path) = &attachment.file_path {
-                                            if let Ok(app_data) = app_handle.path().app_data_dir() {
-                                                let full_path = app_data.join(rel_path);
-                                                if full_path.exists() {
-                                                    if let Ok(bytes) = fs::read(&full_path) {
-                                                        let base64_data = general_purpose::STANDARD.encode(bytes);
-                                                        content_parts.push(json!({
-                                                            "type": "image_url",
-                                                            "image_url": {
-                                                                "url": format!("data:{};base64,{}", attachment.file_type, base64_data)
-                                                            }
-                                                        }));
+                                if !valid_attachments.contains(screenshot_id) {
+                                    // Skip if not a valid attachment
+                                } else {
+                                    if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                                        if attachment.file_type.starts_with("image/") {
+                                            if let Some(rel_path) = &attachment.file_path {
+                                                if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                                    let full_path = app_data.join(rel_path);
+                                                    if full_path.exists() {
+                                                        if let Ok(bytes) = fs::read(&full_path) {
+                                                            let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                            content_parts.push(json!({
+                                                                "type": "image_url",
+                                                                "image_url": {
+                                                                    "url": format!("data:{};base64,{}", attachment.file_type, base64_data)
+                                                                }
+                                                            }));
+                                                        }
                                                     }
                                                 }
                                             }
@@ -569,22 +573,26 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
         
                             // If there's a screenshot attachment, add it as parts with inlineData
                             if let Some(screenshot_id) = screenshot_attachment_id {
-                                // Find the attachment in the message
-                                if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
-                                    if attachment.file_type.starts_with("image/") {
-                                        if let Some(rel_path) = &attachment.file_path {
-                                            if let Ok(app_data) = app_handle.path().app_data_dir() {
-                                                let full_path = app_data.join(rel_path);
-                                                if full_path.exists() {
-                                                    if let Ok(bytes) = fs::read(&full_path) {
-                                                        let base64_data = general_purpose::STANDARD.encode(bytes);
-                                                        // Add parts array with inlineData for Gemini computer-use
-                                                        func_response["functionResponse"]["parts"] = json!([{
-                                                            "inlineData": {
-                                                                "mimeType": attachment.file_type,
-                                                                "data": base64_data,
-                                                            }
-                                                        }]);
+                                if !valid_attachments.contains(screenshot_id) {
+                                    // Skip if not a valid attachment
+                                } else {
+                                    // Find the attachment in the message
+                                    if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                                        if attachment.file_type.starts_with("image/") {
+                                            if let Some(rel_path) = &attachment.file_path {
+                                                if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                                    let full_path = app_data.join(rel_path);
+                                                    if full_path.exists() {
+                                                        if let Ok(bytes) = fs::read(&full_path) {
+                                                            let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                            // Add parts array with inlineData for Gemini computer-use
+                                                            func_response["functionResponse"]["parts"] = json!([{
+                                                                "inlineData": {
+                                                                    "mimeType": attachment.file_type,
+                                                                    "data": base64_data,
+                                                                }
+                                                            }]);
+                                                        }
                                                     }
                                                 }
                                             }
