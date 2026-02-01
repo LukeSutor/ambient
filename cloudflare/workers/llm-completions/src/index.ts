@@ -94,6 +94,23 @@ export default {
 			};
 		}
 
+		// Log contents without any images
+		const logContents = body.content.map(part => {
+			const newPart: any = { ...part };
+			newPart.parts = newPart.parts.map((p: any) => {
+				// log all keys in the part
+				console.log("Part keys:", Object.keys(p));
+				if (p.inlineData) {
+					const { data, ...restInlineData } = p.inlineData;
+					return { ...p, inlineData: restInlineData };
+				}
+				return p;
+			});
+			return newPart;
+		});
+		console.log("User ID:", user.id, "Model:", modelName, "Content:", JSON.stringify(logContents), "Config:", JSON.stringify(chatConfig));
+		
+
 		const ai = new GoogleGenAI({ apiKey: env["GEMINI_API_KEY"] });
 		if (body.stream) {
 			const result = await ai.models.generateContentStream({
@@ -134,6 +151,7 @@ export default {
 				contents: body.content,
 				config: chatConfig
 			});
+			console.log(JSON.stringify(response))
 			return new Response(JSON.stringify(response), {
 				headers: { 'Content-Type': 'application/json' },
 			});

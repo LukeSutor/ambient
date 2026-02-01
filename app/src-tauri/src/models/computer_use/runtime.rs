@@ -487,7 +487,8 @@ impl ComputerUseRuntime {
         };
 
         let tool_result = match result {
-            Ok(value) => ToolResult::success(call.id.clone(), value),
+            // Gemini expects the result to have the current URL, use placeholder for now
+            Ok(_) => {ToolResult::success(call.id.clone(), json!({"url": ""}))},
             Err(e) => ToolResult::error(call.id.clone(), e),
         };
 

@@ -239,78 +239,6 @@ pub fn parse_gemini_tool_calls(response: &Value, available_tools: Option<&[ToolD
     calls
 }
 
-/// Formats tool results for OpenAI format.
-///
-/// Creates the proper structure for sending tool results back to OpenAI
-/// format (role: "tool", tool_call_id, content).
-pub fn format_openai_tool_results(results: &[ToolResult]) -> Vec<Value> {
-    results
-        .iter()
-        .map(|result| {
-            let mut response_obj = if result.success {
-                result.result.clone().unwrap_or_else(|| json!({"status": "success"}))
-            } else {
-                json!({ "error": result.error.as_deref().unwrap_or("Unknown error") })
-            };
-
-            // Enrichment for skill activation
-            if result.success {
-                if let Some(res_val) = &result.result {
-                    if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
-                        if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
-                            if let Some(skill) = get_skill(skill_name) {
-                                if let Some(obj) = response_obj.as_object_mut() {
-                                    obj.insert("instructions".to_string(), json!(skill.instructions));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            json!({
-                "role": "tool",
-                "tool_call_id": result.call_id,
-                "content": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string()),
-            })
-        })
-        .collect()
-}
-
-/// Formats tool results for Gemini format.
-///
-/// Creates the proper structure for sending tool results back to Gemini
-/// format (role: "user", parts with functionResponse).
-pub fn format_gemini_tool_results(results: &[ToolResult], tool_calls: &[ToolCall]) -> Value {
-    let parts: Vec<Value> = results
-        .iter()
-        .zip(tool_calls.iter())
-        .map(|(result, call)| {
-            let response_obj = if result.success {
-                let mut res = result.result.clone().unwrap_or_else(|| json!({"status": "success"}));
-                if !res.is_object() {
-                    res = json!({ "output": res });
-                }
-                res
-            } else {
-                json!({ "error": result.error.as_deref().unwrap_or("Unknown error") })
-            };
-
-            json!({
-                "functionResponse": {
-                    "name": call.tool_name.clone(),
-                    "response": response_obj
-                }
-            })
-        })
-        .collect();
-
-    json!({
-        "role": "user",
-        "parts": parts
-    })
-}
-
 /// Format conversation messages for OpenAI-compatible API according to the spec.
 ///
 /// This properly formats:
@@ -673,6 +601,11 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
 
                 let mut parts = Vec::new();
                 
+                // Add text content first
+                if !msg.content.is_empty() {
+                    parts.push(json!({"text": msg.content}));
+                }
+                
                 // Add attachments
                 for attachment in &msg.attachments {
                     if !valid_attachments.contains(&attachment.id) {
@@ -704,11 +637,6 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
                         }
                     }
                 }
-
-                // Add text content
-                parts.push(json!({
-                    "text": msg.content
-                }));
                 
                 (role, parts)
             }

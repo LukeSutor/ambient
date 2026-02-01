@@ -45,7 +45,7 @@ pub const SUPABASE_URL: &str = "https://sipccjuzzgcjaulkvwkg.supabase.co";
 pub const SUPABASE_ANON_KEY: &str = "sb_publishable_LxTjFAXSpnDlB9d_8pYWAg_vs87qhqE";
 
 // Cloudflare configuration
-pub const CLOUDFLARE_COMPLETIONS_WORKER_URL: &str = "https://llm-completions.lukesutor.workers.dev/";
+pub const CLOUDFLARE_COMPLETIONS_WORKER_URL: &str = "http://127.0.0.1:8787/";
 
 // Server setup
 pub const MAX_PORT: u16 = 9999;
