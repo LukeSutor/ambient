@@ -786,7 +786,6 @@ pub async fn create_attachments(
 /// Add multiple attachments to a message
 pub async fn add_attachments(
   app_handle: &AppHandle,
-  message_id: String,
   attachments: Vec<Attachment>,
 ) -> Result<Vec<Attachment>, String> {
   let state = app_handle.state::<DbState>();
@@ -798,7 +797,6 @@ pub async fn add_attachments(
     .as_mut()
     .ok_or("Database connection not available.".to_string())?;
 
-  let now = Utc::now();
   let mut created_attachments = Vec::new();
 
   // Use a transaction for batch insertion
@@ -806,12 +804,7 @@ pub async fn add_attachments(
     .transaction()
     .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
-  for mut attachment in attachments {
-    let attachment_id = Uuid::new_v4().to_string();
-    attachment.id = attachment_id.clone();
-    attachment.message_id = message_id.clone();
-    attachment.created_at = now.to_rfc3339();
-
+  for attachment in attachments {
     tx.execute(
       "INSERT INTO attachments (id, message_id, file_type, file_name, file_path, extracted_text, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -834,9 +827,8 @@ pub async fn add_attachments(
     .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
   log::info!(
-    "[conversations] Added {} attachments to message: {}",
+    "[conversations] Added {} attachments to database",
     created_attachments.len(),
-    message_id
   );
   Ok(created_attachments)
 }

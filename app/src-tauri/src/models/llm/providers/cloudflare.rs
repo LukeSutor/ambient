@@ -70,9 +70,6 @@ impl LlmProvider for CloudflareProvider {
       body["tools"] = tools_to_gemini_format(internal_tools);
     }
 
-    // Pretty print the request body for debugging
-    log::debug!("Cloudflare LLM Request Body: {}", serde_json::to_string_pretty(&body).unwrap());
-
     let client = reqwest::Client::new();
 
     let mut headers = HeaderMap::new();

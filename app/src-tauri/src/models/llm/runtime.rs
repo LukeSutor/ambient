@@ -628,7 +628,7 @@ impl AgentRuntime {
             .await
             .map_err(|e| AgentError::DatabaseError(format!("Failed to create attachments: {}", e)))?;
 
-            add_attachments(&self.app_handle, self.message_id.clone(), atts)
+            add_attachments(&self.app_handle, atts)
                 .await
                 .map_err(|e| AgentError::DatabaseError(format!("Failed to add attachments: {}", e)))?;
         }

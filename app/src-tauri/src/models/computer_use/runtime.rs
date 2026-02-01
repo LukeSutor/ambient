@@ -302,7 +302,7 @@ impl ComputerUseRuntime {
 
         // Create user message first
         let message_id = Uuid::new_v4().to_string();
-        let message = add_message(
+        let _ = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
             Role::User,
@@ -341,7 +341,7 @@ impl ComputerUseRuntime {
 
         // Link attachments to message
         if !attachments.is_empty() {
-            add_attachments(&self.app_handle, message.id.clone(), attachments).await?;
+            add_attachments(&self.app_handle, attachments).await?;
         }
 
         Ok(())
@@ -661,7 +661,7 @@ impl ComputerUseRuntime {
             result_metadata_list.push(result_metadata);
         }
 
-        let message = add_message(
+        let _ = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
             Role::Tool,
@@ -673,7 +673,7 @@ impl ComputerUseRuntime {
 
         // Link attachments to message
         if !attachments.is_empty() {
-            add_attachments(&self.app_handle, message.id.clone(), attachments).await?;
+            add_attachments(&self.app_handle, attachments).await?;
         }
 
         Ok(())

@@ -465,7 +465,6 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
 
             MessageType::ToolCalls => {
                 let mut parts = Vec::new();
-                log::debug!("Formatting ToolCall message for Gemini: {:?}", msg);
 
                 // Add text content first
                 if !msg.content.is_empty() {
