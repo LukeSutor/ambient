@@ -27,7 +27,7 @@
 
 use super::ToolCall;
 use once_cell::sync::Lazy;
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -287,6 +287,11 @@ async fn search_web(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, St
     // Scrape the page using WebView
     let html = scrape_url_with_webview(app_handle, &search_url, SEARCH_TIMEOUT_SECS).await?;
 
+    log::debug!(
+        "[web_search] Retrieved HTML: {}",
+        html
+    );
+
     // Parse the results
     let results = parse_ddg_results(&html)?;
 
@@ -314,45 +319,47 @@ fn parse_ddg_results(html: &str) -> Result<Vec<SearchResult>, String> {
         );
     }
 
-    let result_selector =
-        Selector::parse(".result").map_err(|_| "Failed to parse result selector")?;
-    let title_selector =
-        Selector::parse(".result__a").map_err(|_| "Failed to parse title selector")?;
-    let snippet_selector =
-        Selector::parse(".result__snippet").map_err(|_| "Failed to parse snippet selector")?;
-
     let mut results = Vec::new();
 
-    for element in document.select(&result_selector) {
-        // Skip ads
-        if let Some(class) = element.value().attr("class") {
-            if class.contains("result--ad") {
-                continue;
-            }
+    // Select all h2 elements under #links (each represents a search result)
+    for h2 in document.select(&Selector::parse("#links h2").map_err(|_| "Failed to parse h2 selector")?) {
+        // The result div is the grandparent of h2 (h2 -> div -> div)
+        let result_div = h2.parent()
+            .and_then(|p| p.parent())
+            .ok_or_else(|| "Unexpected HTML structure: h2 not nested correctly".to_string())?;
+
+        let result_element = ElementRef::wrap(result_div)
+            .ok_or_else(|| "Result div is not an element".to_string())?;
+
+        // Extract title from h2 > a
+        let title_a = h2.select(&Selector::parse("a").map_err(|_| "Failed to parse a selector")?)
+            .next()
+            .ok_or_else(|| "No title link found".to_string())?;
+        let title = title_a.text().collect::<String>().trim().to_string();
+
+        // Extract raw URL from href
+        let raw_url = title_a.value().attr("href").unwrap_or("");
+
+        // Clean the URL
+        let clean_url = clean_ddg_url(raw_url);
+
+        // Extract snippet from the last <a> in the result div
+        let snippet = result_element.select(&Selector::parse("a").map_err(|_| "Failed to parse a selector")?)
+            .last()
+            .map(|a| a.text().collect::<String>().trim().to_string())
+            .unwrap_or_default();
+
+        // Skip empty results
+        if !title.is_empty() && !clean_url.is_empty() {
+            results.push(SearchResult {
+                title,
+                url: clean_url,
+                snippet,
+            });
         }
 
-        let title_elem = element.select(&title_selector).next();
-        let snippet_elem = element.select(&snippet_selector).next();
-
-        if let (Some(title_node), Some(snippet_node)) = (title_elem, snippet_elem) {
-            let raw_url = title_node.value().attr("href").unwrap_or("");
-            let clean_url = clean_ddg_url(raw_url);
-
-            // Skip empty results
-            let title = title_node.text().collect::<String>().trim().to_string();
-            let snippet = snippet_node.text().collect::<String>().trim().to_string();
-
-            if !title.is_empty() && !clean_url.is_empty() {
-                results.push(SearchResult {
-                    title,
-                    url: clean_url,
-                    snippet,
-                });
-            }
-        }
-
-        // Limit to 5 results
-        if results.len() >= 5 {
+        // Limit to 3 results
+        if results.len() >= 3 {
             break;
         }
     }
