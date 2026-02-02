@@ -38,8 +38,6 @@ export type SafetyConfirmationEvent = { reason: string, timestamp: string, };
 
 export type SafetyConfirmationResponseEvent = { user_confirmed: boolean, timestamp: string, };
 
-export type SkillActivatedEvent = { skill_name: string, message_id: string, conversation_id: string, timestamp: string, };
-
 export type TokenUsageChangedEvent = { timestamp: string, };
 
 export type ToolExecutionCompletedEvent = { tool_call_id: string, message_id: string, skill_name: string, tool_name: string, success: boolean, result: any, error: string | null, timestamp: string, };

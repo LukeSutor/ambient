@@ -248,11 +248,6 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
 
     for msg in msgs {
         match msg.message_type {
-            // Skip "Thinking" messages - these are internal state
-            MessageType::Thinking => {
-                continue;
-            }
-
             MessageType::ToolCalls => {
                 let mut content_blocks = Vec::new();
 
@@ -462,11 +457,6 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
 
     for msg in msgs {
         match msg.message_type {
-            MessageType::Thinking => {
-                // Skip "Thinking" messages - these are internal state
-                continue;
-            }
-
             MessageType::ToolCalls => {
                 let mut parts = Vec::new();
 

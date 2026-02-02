@@ -35,8 +35,6 @@ pub enum MessageType {
   ToolCalls,
   /// Result returned from tool execution.
   ToolResults,
-  /// Internal reasoning/thinking step (optional).
-  Thinking,
 }
 
 impl MessageType {
@@ -46,7 +44,6 @@ impl MessageType {
             MessageType::Text => "text",
             MessageType::ToolCalls => "tool_calls",
             MessageType::ToolResults => "tool_results",
-            MessageType::Thinking => "thinking",
         }
     }
 
@@ -56,7 +53,6 @@ impl MessageType {
             "text" => MessageType::Text,
             "tool_calls" => MessageType::ToolCalls,
             "tool_results" => MessageType::ToolResults,
-            "thinking" => MessageType::Thinking,
             _ => MessageType::Text,
         }
     }
@@ -135,9 +131,6 @@ pub enum MessageMetadata {
     result: Option<serde_json::Value>,
     /// Optional screenshot attachment ID for computer-use function responses
     screenshot_attachment_id: Option<String>,
-  },
-  Thinking {
-    stage: String,
   },
 }
 

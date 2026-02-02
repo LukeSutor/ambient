@@ -13,7 +13,6 @@ import type {
   MemoryExtractedEvent,
   OcrResponseEvent,
   RenameConversationEvent,
-  SkillActivatedEvent,
   ToolExecutionStartedEvent,
   ToolExecutionCompletedEvent,
 } from "@/types/events";
@@ -656,34 +655,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             dispatch({
               type: "RENAME_CONVERSATION",
               payload: { id: conv_id, newName: new_name },
-            });
-          }),
-
-          // Agentic Runtime Listeners
-          listen<SkillActivatedEvent>("skill_activated", (event) => {
-            const { skill_name, message_id, conversation_id, timestamp } =
-              event.payload;
-
-            if (conversation_id !== convIdRef.current) return;
-
-            dispatch({
-              type: "ADD_AGENTIC_MESSAGE",
-              payload: {
-                message: {
-                  id: message_id,
-                  conversation_id,
-                  role: "assistant",
-                  content: `Activated skill: ${skill_name}`,
-                  timestamp,
-                  message_type: "thinking",
-                  metadata: [{
-                    type: "Thinking",
-                    stage: `Skill Activated: ${skill_name}`,
-                  }],
-                  attachments: [],
-                  memory: null,
-                },
-              },
             });
           }),
 

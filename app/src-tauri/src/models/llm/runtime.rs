@@ -55,18 +55,6 @@ use super::prompts::get_prompt;
 // Event Types for Agentic Runtime
 // ============================================================================
 
-/// Event emitted when a skill is activated.
-pub const SKILL_ACTIVATED: &str = "skill_activated";
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct SkillActivatedEvent {
-    pub skill_name: String,
-    pub message_id: String,
-    pub conversation_id: String,
-    pub timestamp: String,
-}
-
 /// Event emitted when a tool execution starts.
 pub const TOOL_EXECUTION_STARTED: &str = "tool_execution_started";
 
@@ -514,22 +502,6 @@ impl AgentRuntime {
             // Persist to database
             save_conversation_skill(&self.app_handle, &self.conv_id, skill_name)
                 .await?;
-
-            // Save a thinking message for skill activation
-            let content = format!("Activated skill: {}", skill_name);
-            let metadata = MessageMetadata::Thinking {
-                stage: format!("Skill Activated: {}", skill_name),
-            };
-            let message_id = self.save_assistant_message(&content, MessageType::Thinking, Some(vec![metadata])).await?;
-
-            // Emit skill activated event
-            let event = SkillActivatedEvent {
-                skill_name: skill_name.to_string(),
-                message_id,
-                conversation_id: self.conv_id.clone(),
-                timestamp: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = emit(SKILL_ACTIVATED, event);
         }
 
         Ok(())
