@@ -255,7 +255,6 @@ export function useConversation(
           conversationId: conversation.id,
         });
         const messages = backendMessages.map(transformBackendMessage);
-        console.log({messages})
         dispatch({ type: "LOAD_MESSAGES", payload: messages });
       } catch (error) {
         console.error("[useConversation] Failed to load messages:", error);

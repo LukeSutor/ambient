@@ -5,23 +5,12 @@ import {
   preprocessMarkdownCurrency,
 } from "@/components/ui/markdown-config";
 import type { ChatMessage } from "@/lib/conversations";
-import type { Attachment } from "@/types/conversations";
+import type { Attachment, MessageMetadata } from "@/types/conversations";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import {
-  Camera,
-  ChevronDown,
-  FileText,
-  Hammer,
-  NotebookPen,
-  Search,
-  Sparkles,
-  SquareDashed,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
+import { Camera, Hammer, Search, Sparkles, CheckCircle2, XCircle, NotebookPen, SquareDashed, FileText, ChevronDown } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo, useMemo } from "react";
 import Markdown from "react-markdown";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
@@ -39,7 +28,13 @@ import {
   HoverCardTrigger,
 } from "../ui/hover-card";
 
-function PreviewAttachment({ a }: { a: Attachment }) {
+function PreviewAttachment({
+  a,
+  variant = "default",
+}: {
+  a: Attachment;
+  variant?: "default" | "small";
+}) {
   const [fileSrc, setFileSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,24 +49,35 @@ function PreviewAttachment({ a }: { a: Attachment }) {
   }, [a.file_path]);
 
   if (a.file_type.startsWith("image/") && fileSrc) {
+    const isSmall = variant === "small";
     return (
-      <div className="my-2 max-w-[80%] ml-auto">
+      <div
+        className={cn(
+          "my-2",
+          variant === "default" ? "max-w-[80%] ml-auto" : "max-w-[200px] ml-0",
+        )}
+      >
         <Dialog>
           <DialogTrigger asChild>
             <button
               type="button"
-              className="relative w-full group outline-none"
+              className="relative w-full group outline-none text-left"
             >
               <Image
                 src={fileSrc}
                 alt={a.file_name}
-                className="h-auto rounded-lg transition-all group-hover:brightness-75"
-                width={400}
-                height={400}
+                className={cn(
+                  "h-auto rounded-lg transition-all group-hover:brightness-75 border border-black/5 shadow-sm",
+                  isSmall ? "w-full" : "w-full",
+                )}
+                width={isSmall ? 200 : 400}
+                height={isSmall ? 200 : 400}
                 unoptimized
               />
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                <Search className="w-8 h-8 text-white drop-shadow-md" />
+                <Search
+                  className={cn("text-white drop-shadow-md", isSmall ? "w-4 h-4" : "w-8 h-8")}
+                />
               </div>
             </button>
           </DialogTrigger>
@@ -211,7 +217,7 @@ function PreviewAttachment({ a }: { a: Attachment }) {
   return null;
 }
 
-export function UserMessage({
+export const UserMessage = memo(function UserMessage({
   m,
   openSecondary,
 }: {
@@ -267,89 +273,114 @@ export function UserMessage({
       </div>
     </>
   );
-}
+});
 
-export function ToolStep({
+export const ToolStep = memo(function ToolStep({
   call,
   result,
+  attachments,
 }: {
-  call: ChatMessage;
-  result?: ChatMessage;
+  call: MessageMetadata;
+  result?: MessageMetadata;
+  attachments?: Attachment[];
 }) {
-  const metadata = call.message.metadata;
-  if (metadata?.type !== "ToolCall") return null;
+  if (call.type !== "ToolCall") return null;
 
-  const resultMetadata = result?.message.metadata;
-  const isSuccess =
-    resultMetadata?.type === "ToolResult" ? resultMetadata.success : null;
-  
+  const resultMetadata = result?.type === "ToolResult" ? result : null;
+  const isSuccess = resultMetadata?.success ?? null;
+
   // Get screenshot attachment from result if it exists
-  const screenshotAttachment = result?.message.attachments?.find(
-    (a) => a.file_type.startsWith("image/")
+  const screenshotId = resultMetadata?.screenshot_attachment_id;
+  const screenshotAttachment = attachments?.find(
+    (a) =>
+      (screenshotId && a.id === screenshotId) ||
+      (!screenshotId && a.file_type.startsWith("image/")),
   );
 
   return (
-    <div className="flex flex-col gap-1.5 py-1">
-      <div className="flex items-center gap-2 text-zinc-600">
-        <div className="p-1 rounded bg-zinc-100">
-          <Hammer className="w-3.5 h-3.5" />
+    <div className="flex flex-col gap-1.5 py-2 border-b border-zinc-50 last:border-0 first:pt-0">
+      <div className="flex items-center gap-2 text-zinc-700">
+        <div className="p-1 rounded bg-zinc-100 shadow-sm border border-zinc-200/50">
+          <Hammer className="w-3.5 h-3.5 text-zinc-500" />
         </div>
-        <span className="text-sm font-medium">
-          {metadata.skill_name}.{metadata.tool_name}
+        <span className="text-sm font-semibold tracking-tight">
+          {call.skill_name}.{call.tool_name}
         </span>
         {isSuccess === true && (
           <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
         )}
         {isSuccess === false && <XCircle className="w-3.5 h-3.5 text-red-500" />}
-      </div>
-
-      <div className="ml-7 text-xs text-zinc-500 font-mono bg-zinc-50/50 p-2 rounded border border-zinc-100 overflow-x-auto">
-        {JSON.stringify(metadata.arguments, null, 2)}
-      </div>
-
-      {result && resultMetadata?.type === "ToolResult" && resultMetadata.result && (
-        <div className="ml-7 mt-1 text-xs text-zinc-600 bg-white p-2 rounded border border-zinc-100 shadow-sm">
-          <div className="font-semibold mb-1 uppercase text-[10px] text-zinc-400 tracking-wider">
-            Result
-          </div>
-          <pre className="whitespace-pre-wrap break-all">
-            {typeof resultMetadata.result === "string"
-              ? resultMetadata.result
-              : JSON.stringify(resultMetadata.result, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {result &&
-        resultMetadata?.type === "ToolResult" &&
-        resultMetadata.error && (
-          <div className="ml-7 mt-1 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100 font-mono">
-            {resultMetadata.error}
+        {isSuccess === null && (
+          <div className="flex gap-0.5">
+            <div className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" />
+            <div className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce [animation-delay:0.2s]" />
+            <div className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce [animation-delay:0.4s]" />
           </div>
         )}
+      </div>
 
-      {/* Display screenshot attached to function response */}
-      {screenshotAttachment && (
-        <div className="ml-7 mt-2">
-          <PreviewAttachment a={screenshotAttachment} />
+      <div className="ml-7 text-xs text-zinc-500 font-mono bg-zinc-50/80 p-2.5 rounded-lg border border-zinc-100 overflow-x-auto shadow-inner">
+        <pre className="whitespace-pre-wrap break-all">
+          {JSON.stringify(call.arguments, null, 2)}
+        </pre>
+      </div>
+
+      {resultMetadata && (
+        <div className="ml-7 mt-1 space-y-2">
+          {resultMetadata.result && (
+            <div className="text-xs text-zinc-600 bg-white p-2.5 rounded-lg border border-zinc-100 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-zinc-200/50" />
+              <div className="font-bold mb-1 uppercase text-[9px] text-zinc-400 tracking-widest pl-2">
+                Output
+              </div>
+              <pre className="whitespace-pre-wrap break-all pl-2">
+                {typeof resultMetadata.result === "string"
+                  ? resultMetadata.result
+                  : JSON.stringify(resultMetadata.result, null, 2)}
+              </pre>
+            </div>
+          )}
+
+          {resultMetadata.error && (
+            <div className="text-xs text-red-600 bg-red-50/50 p-2.5 rounded-lg border border-red-100 font-mono shadow-sm">
+              <div className="font-bold mb-1 uppercase text-[9px] text-red-400 tracking-widest">
+                Error
+              </div>
+              {resultMetadata.error}
+            </div>
+          )}
+
+          {screenshotAttachment && (
+            <div className="mt-2">
+              <PreviewAttachment a={screenshotAttachment} variant="small" />
+            </div>
+          )}
         </div>
       )}
     </div>
   );
-}
+});
 
-export function GenericThinkingStep({ m }: { m: ChatMessage }) {
+export const GenericThinkingStep = memo(function GenericThinkingStep({ m }: { m: ChatMessage }) {
+  if (!m.message.content) return null;
   return (
-    <div className="flex items-center gap-2 text-zinc-500 py-1">
-      <div className="p-1 rounded bg-zinc-100">
-        <Sparkles className="w-3.5 h-3.5" />
+    <div className="flex flex-col gap-1.5 py-1">
+      <div className="flex items-center gap-2 text-zinc-400">
+        <Sparkles className="w-3 h-3" />
+        <span className="text-[10px] items-center font-bold uppercase tracking-wider">
+          Thought
+        </span>
       </div>
-      <span className="text-sm">{m.message.content}</span>
+      <div className="ml-5 text-sm text-zinc-600 font-medium border-l-2 border-zinc-100 pl-3 py-0.5 mb-2">
+        <Markdown {...llmMarkdownConfig}>
+          {preprocessMarkdownCurrency(m.message.content)}
+        </Markdown>
+      </div>
     </div>
   );
-}
+});
 
-export function ThinkingBlock({
+export const ThinkingBlock = memo(function ThinkingBlock({
   messages,
   isExpanded,
   onToggle,
@@ -360,16 +391,24 @@ export function ThinkingBlock({
 }) {
   if (messages.length === 0) return null;
 
-  const resultsMap = new Map();
-  for (const m of messages) {
-    const mType = (m.message.message_type || "").toLowerCase();
-    if (
-      (mType === "tool_result" || mType === "toolresult") &&
-      m.message.metadata?.type === "ToolResult"
-    ) {
-      resultsMap.set(m.message.metadata.call_id, m);
+  // Map call_id -> { message, metadata }
+  const resultsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { message: ChatMessage; metadata: MessageMetadata }
+    >();
+    for (const m of messages) {
+      const metadata = m.message.metadata;
+      if (Array.isArray(metadata)) {
+        for (const meta of metadata) {
+          if (meta.type === "ToolResult") {
+            map.set(meta.call_id, { message: m, metadata: meta });
+          }
+        }
+      }
     }
-  }
+    return map;
+  }, [messages]);
 
   return (
     <div className="flex flex-col mb-4">
@@ -377,14 +416,17 @@ export function ThinkingBlock({
         variant="ghost"
         size="sm"
         onClick={onToggle}
-        className="w-fit text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100 h-8 px-2 -ml-2 transition-colors flex items-center gap-1.5"
+        className="w-fit text-zinc-600 hover:text-zinc-700 hover:bg-zinc-100 h-8 px-2 -ml-2 transition-colors flex items-center gap-1.5 rounded-full"
       >
-        <span className="text-xs font-semibold uppercase tracking-wider">
+        <div className="p-0.5 rounded-full bg-zinc-50 border border-zinc-200">
+          <Sparkles className="w-3 h-3 text-zinc-400" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-widest">
           {isExpanded ? "Hide" : "Show"} Thinking
         </span>
         <ChevronDown
           className={cn(
-            "w-3.5 h-3.5 transition-transform duration-200",
+            "w-3 h-3 transition-transform duration-300",
             isExpanded && "rotate-180",
           )}
         />
@@ -392,59 +434,92 @@ export function ThinkingBlock({
 
       <div
         className={cn(
-          "grid transition-all duration-300 ease-in-out overflow-hidden",
+          "grid transition-all duration-500 ease-in-out overflow-hidden",
           isExpanded
-            ? "grid-rows-[1fr] opacity-100 mt-2"
+            ? "grid-rows-[1fr] opacity-100 mt-3"
             : "grid-rows-[0fr] opacity-0",
         )}
       >
-        <div className="min-h-0">
-          <div className="ml-2 border-l-2 border-zinc-100 pl-4 space-y-1">
+        <div className={cn(
+          "min-h-0 bg-zinc-50/30 rounded-xl border border-dashed border-zinc-200 ml-1 transition-padding duration-[0]",
+          isExpanded
+            ? "p-3 delay-0"
+            : "p-0 delay-300"
+        )}>
+          <div className="ml-2 border-l-2 border-zinc-100/50 pl-4 space-y-4">
             {messages.map((m) => {
-              const mType = (m.message.message_type || "").toLowerCase();
-              const role = m.message.role.toLowerCase();
+              const metadataList = m.message.metadata;
+              const content = m.message.content;
 
-              if (mType === "tool_call" || mType === "toolcall") {
-                const result = resultsMap.get(
-                  m.message.metadata?.type === "ToolCall"
-                    ? m.message.metadata.call_id
-                    : "",
-                );
-                return <ToolStep key={m.message.id} call={m} result={result} />;
-              }
-
-              // Only render individual steps for non-result messages
-              // (Results are rendered inside ToolStep)
-              if (
-                mType !== "tool_result" &&
-                mType !== "toolresult" &&
-                role !== "tool"
-              ) {
-                return <GenericThinkingStep key={m.message.id} m={m} />;
-              }
-
-              return null;
+              return (
+                <div key={m.message.id}>
+                  {content && <GenericThinkingStep m={m} />}
+                  {Array.isArray(metadataList) &&
+                    metadataList.map((meta, idx) => {
+                      if (meta.type === "ToolCall") {
+                        const resultObj = resultsMap.get(meta.call_id);
+                        return (
+                          <ToolStep
+                            key={`${m.message.id}-${idx}`}
+                            call={meta}
+                            result={resultObj?.metadata}
+                            attachments={resultObj?.message.message.attachments}
+                          />
+                        );
+                      }
+                      if (meta.type === "Thinking") {
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 text-zinc-400 py-1"
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-200" />
+                            <span className="text-xs italic">{meta.stage}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                </div>
+              );
             })}
           </div>
         </div>
       </div>
     </div>
   );
-}
+});
 
-export function AssistantMessage({ m }: { m: ChatMessage }) {
-  if (!m.message.content) return null;
+export const AssistantMessage = memo(function AssistantMessage({ m }: { m: ChatMessage }) {
+  const content = m.message.content;
+  const metadata = m.message.metadata;
 
   return (
-    <div className="overflow-hidden">
-      <Markdown {...llmMarkdownConfig}>
-        {preprocessMarkdownCurrency(m.message.content)}
-      </Markdown>
+    <div className="flex flex-col gap-4">
+      {content && (
+        <div className="overflow-hidden">
+          <Markdown {...llmMarkdownConfig}>
+            {preprocessMarkdownCurrency(content)}
+          </Markdown>
+        </div>
+      )}
+
+      {Array.isArray(metadata) &&
+        metadata.some((meta) => meta.type === "ToolCall") && (
+          <div className="mt-2 space-y-2 border-t pt-4 border-zinc-100">
+            {metadata.map((meta, idx) => {
+              if (meta.type === "ToolCall") {
+                return <ToolStep key={idx} call={meta} />;
+              }
+              return null;
+            })}
+          </div>
+        )}
     </div>
   );
-}
+});
 
-export function FunctionMessage({ m }: { m: ChatMessage }) {
+export const FunctionMessage = memo(function FunctionMessage({ m }: { m: ChatMessage }) {
   // If this is rendered outside a thinking block (fallback)
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
@@ -453,4 +528,4 @@ export function FunctionMessage({ m }: { m: ChatMessage }) {
       </Markdown>
     </div>
   );
-}
+});

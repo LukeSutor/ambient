@@ -92,37 +92,7 @@ export default {
 			chatConfig.thinkingConfig = {
 				thinkingLevel: body.modelType === "fast" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
 			};
-		}
-
-		// Log contents without any images
-		const logContents = body.content.map(part => {
-			const newPart: any = { ...part };
-			newPart.parts = newPart.parts.map((p: any) => {
-				// log all keys in the part
-				console.log("Part keys:", Object.keys(p));
-				if (p.functionResponse) {
-					const newFunctionResponse: any = { ...p.functionResponse };
-					if (newFunctionResponse.parts) {
-						newFunctionResponse.parts = newFunctionResponse.parts.map((fp: any) => {
-							if (fp.inlineData) {
-								const { data, ...restInlineData } = fp.inlineData;
-								return { ...fp, inlineData: restInlineData };
-							}
-							return fp;
-						});
-					}
-					return { ...p, functionResponse: newFunctionResponse };
-				}
-				if (p.inlineData) {
-					const { data, ...restInlineData } = p.inlineData;
-					return { ...p, inlineData: restInlineData };
-				}
-				return p;
-			});
-			return newPart;
-		});
-		console.log("User ID:", user.id, "Model:", modelName, "Content:", JSON.stringify(logContents), "Config:", JSON.stringify(chatConfig));
-		
+		}		
 
 		const ai = new GoogleGenAI({ apiKey: env["GEMINI_API_KEY"] });
 		if (body.stream) {

@@ -1,6 +1,10 @@
 "use client";
 
-import type { Attachment, Conversation } from "@/types/conversations";
+import type {
+  Attachment,
+  Conversation,
+  MessageMetadata,
+} from "@/types/conversations";
 import type {
   AttachmentData,
   AttachmentsCreatedEvent,
@@ -208,6 +212,37 @@ function conversationReducer(
 
     case "ADD_AGENTIC_MESSAGE": {
       const messages = [...state.messages];
+      const existingIdx = messages.findIndex(
+        (m) => m.message.id === action.payload.message.id,
+      );
+
+      if (existingIdx !== -1) {
+        const existing = messages[existingIdx];
+        const combinedMetadata = [
+          ...(Array.isArray(existing.message.metadata)
+            ? existing.message.metadata
+            : existing.message.metadata
+              ? [existing.message.metadata]
+              : []),
+          ...(Array.isArray(action.payload.message.metadata)
+            ? action.payload.message.metadata
+            : action.payload.message.metadata
+              ? [action.payload.message.metadata]
+              : []),
+        ];
+
+        messages[existingIdx] = {
+          ...existing,
+          message: {
+            ...existing.message,
+            metadata: combinedMetadata as MessageMetadata[],
+            // Keep content if new content is empty or generic
+            content: action.payload.message.content || existing.message.content,
+          },
+        };
+        return { ...state, messages };
+      }
+
       const lastIdx = messages.length - 1;
 
       // If the last message is an assistant text message, insert BEFORE it
@@ -641,10 +676,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                   content: `Activated skill: ${skill_name}`,
                   timestamp,
                   message_type: "thinking",
-                  metadata: {
+                  metadata: [{
                     type: "Thinking",
                     stage: `Skill Activated: ${skill_name}`,
-                  },
+                  }],
                   attachments: [],
                   memory: null,
                 },
@@ -673,15 +708,17 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                     role: "assistant",
                     content: `Calling ${skill_name}.${tool_name}...`,
                     timestamp,
-                    message_type: "tool_call",
-                    metadata: {
-                      type: "ToolCall",
-                      call_id: tool_call_id,
-                      skill_name,
-                      tool_name,
-                      arguments: args || {},
-                      thought_signature: null,
-                    },
+                    message_type: "tool_calls",
+                    metadata: [
+                      {
+                        type: "ToolCall",
+                        call_id: tool_call_id,
+                        skill_name,
+                        tool_name,
+                        arguments: args || {},
+                        thought_signature: null,
+                      },
+                    ],
                     attachments: [],
                     memory: null,
                   },
@@ -715,14 +752,17 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                       ? "Tool execution successful"
                       : `Tool error: ${error}`,
                     timestamp,
-                    message_type: "tool_result",
-                    metadata: {
-                      type: "ToolResult",
-                      call_id: tool_call_id,
-                      success,
-                      error: error || null,
-                      result: result || null,
-                    },
+                    message_type: "tool_results",
+                    metadata: [
+                      {
+                        type: "ToolResult",
+                        call_id: tool_call_id,
+                        success,
+                        error: error || null,
+                        result: result || null,
+                        screenshot_attachment_id: null,
+                      },
+                    ],
                     attachments: [],
                     memory: null,
                   },

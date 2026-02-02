@@ -19,7 +19,7 @@ export type Conversation = { id: string, name: string, conv_type: string, create
 /**
  * Message structure
  */
-export type Message = { id: string, conversation_id: string, role: Role, content: string, timestamp: string, message_type: MessageType, metadata: MessageMetadata | null, attachments: Array<Attachment>, memory: MemoryEntry | null, };
+export type Message = { id: string, conversation_id: string, role: Role, content: string, timestamp: string, message_type: MessageType, metadata: Array<MessageMetadata> | null, attachments: Array<Attachment>, memory: MemoryEntry | null, };
 
 /**
  * Structured metadata for messages.
@@ -27,7 +27,11 @@ export type Message = { id: string, conversation_id: string, role: Role, content
  * Different message types carry different metadata
  * that helps with displaying and tracking.
  */
-export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name: string, tool_name: string, arguments: any, thought_signature: string | null, } | { "type": "ToolResult", call_id: string, success: boolean, error: string | null, result: any, } | { "type": "Thinking", stage: string, };
+export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name: string, tool_name: string, arguments: any, thought_signature: string | null, } | { "type": "ToolResult", call_id: string, success: boolean, error: string | null, result: any, 
+/**
+ * Optional screenshot attachment ID for computer-use function responses
+ */
+screenshot_attachment_id: string | null, } | { "type": "Thinking", stage: string, };
 
 /**
  * The type of a message in the conversation.
@@ -35,6 +39,6 @@ export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name:
  * Different message types represent different stages of agentic
  * processing and are displayed differently in the UI.
  */
-export type MessageType = "text" | "tool_call" | "tool_result" | "thinking";
+export type MessageType = "text" | "tool_calls" | "tool_results" | "thinking";
 
 export type Role = "system" | "user" | "assistant" | "tool";

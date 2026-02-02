@@ -753,7 +753,7 @@ mod tests {
         let result = tools_to_openai_format(&[tool]);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0]["type"], "function");
-        assert_eq!(result[0]["function"]["name"], "test.test_tool");
+        assert_eq!(result[0]["function"]["name"], "test_tool");
     }
 
     #[test]
@@ -796,7 +796,7 @@ mod tests {
 
         let result = tools_to_gemini_format(&[tool]);
         assert!(result["functionDeclarations"].is_array());
-        assert_eq!(result["functionDeclarations"][0]["name"], "test.test_tool");
+        assert_eq!(result["functionDeclarations"][0]["name"], "test_tool");
     }
 
     #[test]

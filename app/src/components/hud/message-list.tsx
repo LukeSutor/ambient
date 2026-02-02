@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
 import type React from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   AssistantMessage,
   ThinkingBlock,
@@ -67,42 +67,49 @@ export function MessageList({
   const isLoading = conversationName === "";
 
   // Grouping logic for thinking messages
-  const groupedMessages: Array<
-    | { type: "message"; message: ChatMessage }
-    | { type: "thinking"; messages: ChatMessage[] }
-  > = [];
-  let currentThinkingGroup: ChatMessage[] = [];
+  const groupedMessages = useMemo(() => {
+    const groups: Array<
+      | { type: "message"; message: ChatMessage }
+      | { type: "thinking"; messages: ChatMessage[] }
+    > = [];
+    let currentThinkingGroup: ChatMessage[] = [];
 
-  for (const m of messages) {
-    const mType = (m.message.message_type || "").toLowerCase();
-    const isThinking =
-      mType === "thinking" ||
-      mType === "tool_call" ||
-      mType === "toolcall" ||
-      mType === "tool_result" ||
-      mType === "toolresult" ||
-      m.message.role.toLowerCase() === "tool";
+    for (const m of messages) {
+      const mType = (m.message.message_type || "").toLowerCase();
+      const isThinking =
+        mType === "thinking" ||
+        mType === "toolcalls" ||
+        mType === "tool_calls" ||
+        mType === "tool_results" ||
+        mType === "toolresults" ||
+        m.message.role.toLowerCase() === "tool" ||
+        (Array.isArray(m.message.metadata) &&
+          m.message.metadata.length > 0 &&
+          m.message.role.toLowerCase() !== "user");
 
-    if (isThinking) {
-      currentThinkingGroup.push(m);
-    } else {
-      if (currentThinkingGroup.length > 0) {
-        groupedMessages.push({
-          type: "thinking",
-          messages: [...currentThinkingGroup],
-        });
-        currentThinkingGroup = [];
+      if (isThinking) {
+        currentThinkingGroup.push(m);
+      } else {
+        if (currentThinkingGroup.length > 0) {
+          groups.push({
+            type: "thinking",
+            messages: [...currentThinkingGroup],
+          });
+          currentThinkingGroup = [];
+        }
+        groups.push({ type: "message", message: m });
       }
-      groupedMessages.push({ type: "message", message: m });
     }
-  }
 
-  if (currentThinkingGroup.length > 0) {
-    groupedMessages.push({
-      type: "thinking",
-      messages: currentThinkingGroup,
-    });
-  }
+    if (currentThinkingGroup.length > 0) {
+      groups.push({
+        type: "thinking",
+        messages: currentThinkingGroup,
+      });
+    }
+
+    return groups;
+  }, [messages]);
 
   return (
     <ContentContainer>
