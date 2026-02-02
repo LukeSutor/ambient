@@ -1,7 +1,7 @@
 import type { Conversation } from "@/types/conversations";
-import {
-  type AttachmentData,
-  type GenerateConversationNameEvent,
+import type {
+  AttachmentData,
+  GenerateConversationNameEvent,
 } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
@@ -98,10 +98,7 @@ export async function stopAgentChat(): Promise<void> {
   try {
     await invoke("stop_agent_chat");
   } catch (error) {
-    console.error(
-      "[ConversationAPI] Failed to stop agent chat:",
-      error,
-    );
+    console.error("[ConversationAPI] Failed to stop agent chat:", error);
     throw new Error("Failed to stop agent chat");
   }
 }

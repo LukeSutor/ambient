@@ -26,17 +26,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { AttachmentListItem } from "@/types/conversations";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  Camera,
   ExternalLink,
-  FileText,
   FolderOpen,
   Image as ImageIcon,
   Search,
@@ -47,7 +45,6 @@ import {
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { AttachmentListItem } from "@/types/conversations";
 
 const PAGE_SIZE = 20;
 
@@ -63,8 +60,12 @@ export default function UploadsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [previewItem, setPreviewItem] = useState<AttachmentWithData | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<AttachmentWithData | null>(null);
+  const [previewItem, setPreviewItem] = useState<AttachmentWithData | null>(
+    null,
+  );
+  const [deleteTarget, setDeleteTarget] = useState<AttachmentWithData | null>(
+    null,
+  );
 
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const didInitRef = useRef(false);
@@ -75,15 +76,19 @@ export default function UploadsPage() {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchTerm);
     }, 300);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [searchTerm]);
 
   // Reset list when search changes
   useEffect(() => {
-    setItems([]);
-    serverCountRef.current = 0;
-    setHasMore(true);
-    didInitRef.current = false;
+    if (typeof debouncedSearch === "string") {
+      setItems([]);
+      serverCountRef.current = 0;
+      setHasMore(true);
+      didInitRef.current = false;
+    }
   }, [debouncedSearch]);
 
   const loadPage = useCallback(async () => {
@@ -97,7 +102,7 @@ export default function UploadsPage() {
         offset,
         search: debouncedSearch || null,
       });
-      
+
       // Deduplicate by id
       setItems((prev) => {
         const prevIds = new Set(prev.map((i) => i.id));
@@ -148,41 +153,42 @@ export default function UploadsPage() {
   // Load attachment data for preview
   const loadAttachmentData = useCallback(async (item: AttachmentWithData) => {
     if (item.dataUrl || item.isLoadingData) return item;
-    
+
     setItems((prev) =>
-      prev.map((i) =>
-        i.id === item.id ? { ...i, isLoadingData: true } : i
-      )
+      prev.map((i) => (i.id === item.id ? { ...i, isLoadingData: true } : i)),
     );
 
     try {
       const data = await invoke<string>("get_attachment_data", {
         attachmentId: item.id,
       });
-      
+
       setItems((prev) =>
         prev.map((i) =>
-          i.id === item.id ? { ...i, dataUrl: data, isLoadingData: false } : i
-        )
+          i.id === item.id ? { ...i, dataUrl: data, isLoadingData: false } : i,
+        ),
       );
-      
+
       return { ...item, dataUrl: data, isLoadingData: false };
     } catch (e) {
       console.error("Failed to load attachment data:", e);
       setItems((prev) =>
         prev.map((i) =>
-          i.id === item.id ? { ...i, isLoadingData: false } : i
-        )
+          i.id === item.id ? { ...i, isLoadingData: false } : i,
+        ),
       );
       return item;
     }
   }, []);
 
   // Handle opening preview
-  const handleOpenPreview = useCallback(async (item: AttachmentWithData) => {
-    const updatedItem = await loadAttachmentData(item);
-    setPreviewItem(updatedItem);
-  }, [loadAttachmentData]);
+  const handleOpenPreview = useCallback(
+    async (item: AttachmentWithData) => {
+      const updatedItem = await loadAttachmentData(item);
+      setPreviewItem(updatedItem);
+    },
+    [loadAttachmentData],
+  );
 
   // Delete handler
   const onDelete = useCallback(async (item: AttachmentWithData) => {
@@ -227,9 +233,7 @@ export default function UploadsPage() {
       return <ImageIcon className="h-5 w-5 text-emerald-600" />;
     }
     if (fileType === "application/pdf") {
-      return (
-        <Image src="/pdf-icon.png" alt="PDF" width={20} height={20} />
-      );
+      return <Image src="/pdf-icon.png" alt="PDF" width={20} height={20} />;
     }
     return <SquareDashed className="h-5 w-5 text-blue-600" />;
   }, []);
@@ -269,7 +273,9 @@ export default function UploadsPage() {
               <Input
                 placeholder="Search by file name..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                }}
                 className="pl-9"
               />
               {searchTerm && (
@@ -277,7 +283,9 @@ export default function UploadsPage() {
                   variant="ghost"
                   size="icon"
                   className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                  onClick={() => setSearchTerm("")}
+                  onClick={() => {
+                    setSearchTerm("");
+                  }}
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -285,9 +293,7 @@ export default function UploadsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {error && (
-              <div className="mb-3 text-sm text-red-600">{error}</div>
-            )}
+            {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
 
             {items.length === 0 && !isLoading ? (
               <Empty className="border rounded-lg py-12">
@@ -311,9 +317,15 @@ export default function UploadsPage() {
                   <UploadCard
                     key={item.id}
                     item={item}
-                    onPreview={() => handleOpenPreview(item)}
-                    onDelete={() => setDeleteTarget(item)}
-                    onOpenConversation={() => onOpenInConversation(item)}
+                    onPreview={() => {
+                      void handleOpenPreview(item);
+                    }}
+                    onDelete={() => {
+                      setDeleteTarget(item);
+                    }}
+                    onOpenConversation={() => {
+                      void onOpenInConversation(item);
+                    }}
                     getAttachmentIcon={getAttachmentIcon}
                     getTypeLabel={getTypeLabel}
                     getTypeBadgeColor={getTypeBadgeColor}
@@ -340,18 +352,26 @@ export default function UploadsPage() {
       {/* Preview Dialog */}
       <PreviewDialog
         item={previewItem}
-        onClose={() => setPreviewItem(null)}
+        onClose={() => {
+          setPreviewItem(null);
+        }}
         onOpenConversation={onOpenInConversation}
         getAttachmentIcon={getAttachmentIcon}
       />
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete this upload?</DialogTitle>
             <DialogDescription>
-              This will permanently delete "{deleteTarget?.file_name}" and remove it from the conversation.
+              This will permanently delete &quot;{deleteTarget?.file_name}&quot;
+              and remove it from the conversation.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -360,7 +380,11 @@ export default function UploadsPage() {
             </DialogClose>
             <Button
               variant="destructive"
-              onClick={() => deleteTarget && onDelete(deleteTarget)}
+              onClick={() => {
+                if (deleteTarget) {
+                  void onDelete(deleteTarget);
+                }
+              }}
             >
               Delete
             </Button>
@@ -471,9 +495,7 @@ function UploadCard({
           <div className="flex-1 min-w-0">
             <Tooltip>
               <TooltipTrigger asChild>
-                <p className="text-sm font-medium truncate">
-                  {item.file_name}
-                </p>
+                <p className="text-sm font-medium truncate">{item.file_name}</p>
               </TooltipTrigger>
               <TooltipContent>{item.file_name}</TooltipContent>
             </Tooltip>
@@ -511,7 +533,9 @@ function UploadCard({
                 Open Chat
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Open this attachment in its conversation</TooltipContent>
+            <TooltipContent>
+              Open this attachment in its conversation
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -541,13 +565,20 @@ function PreviewDialog({
 }: {
   item: AttachmentWithData | null;
   onClose: () => void;
-  onOpenConversation: (item: AttachmentWithData) => void;
+  onOpenConversation: (item: AttachmentWithData) => void | Promise<void>;
   getAttachmentIcon: (fileType: string) => React.ReactNode;
 }) {
   if (!item) return null;
 
   return (
-    <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={!!item}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-[90vw] max-h-[90vh] p-0 overflow-hidden border-none shadow-2xl bg-zinc-100 flex flex-col gap-0">
         <DialogDescription className="sr-only">
           Preview of {item.file_name}
@@ -581,13 +612,18 @@ function PreviewDialog({
         </div>
         <div className="shrink-0 p-4 border-t bg-white flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            From conversation: <span className="font-medium text-foreground">{item.conversation_name}</span>
+            From conversation:{" "}
+            <span className="font-medium text-foreground">
+              {item.conversation_name}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onOpenConversation(item)}
+              onClick={() => {
+                void onOpenConversation(item);
+              }}
             >
               <ExternalLink className="h-4 w-4 mr-2" />
               Open in Chat

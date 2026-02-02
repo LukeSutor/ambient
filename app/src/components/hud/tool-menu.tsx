@@ -23,11 +23,8 @@ interface ToolMenuProps {
 }
 
 export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
-  const {
-    conversationType,
-    dispatchOCRCapture,
-    toggleComputerUse,
-  } = useConversation();
+  const { conversationType, dispatchOCRCapture, toggleComputerUse } =
+    useConversation();
   const showToolsLabel = conversationType === "chat";
 
   const handleDispatchOCRCapture = useCallback(() => {

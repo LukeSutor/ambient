@@ -9,7 +9,6 @@ import {
   LifeBuoy,
   NotebookPen,
   Settings2,
-  SquareTerminal,
 } from "lucide-react";
 import type * as React from "react";
 

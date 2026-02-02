@@ -13,8 +13,8 @@ import type {
   MemoryExtractedEvent,
   OcrResponseEvent,
   RenameConversationEvent,
-  ToolExecutionStartedEvent,
   ToolExecutionCompletedEvent,
+  ToolExecutionStartedEvent,
 } from "@/types/events";
 import type { MemoryEntry } from "@/types/memory";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
@@ -117,7 +117,10 @@ type ConversationAction =
   | { type: "SET_STREAMING"; payload: boolean }
   | { type: "SET_OCR_LOADING"; payload: boolean }
   | { type: "SET_SCROLL_TO_MESSAGE"; payload: string | null }
-  | { type: "NAVIGATE_TO_CONVERSATION"; payload: { conversationId: string; messageId: string | null } };
+  | {
+      type: "NAVIGATE_TO_CONVERSATION";
+      payload: { conversationId: string; messageId: string | null };
+    };
 
 /**
  * Conversation reducer - handles all state updates
@@ -220,21 +223,17 @@ function conversationReducer(
         const combinedMetadata = [
           ...(Array.isArray(existing.message.metadata)
             ? existing.message.metadata
-            : existing.message.metadata
-              ? [existing.message.metadata]
-              : []),
+            : []),
           ...(Array.isArray(action.payload.message.metadata)
             ? action.payload.message.metadata
-            : action.payload.message.metadata
-              ? [action.payload.message.metadata]
-              : []),
+            : []),
         ];
 
         messages[existingIdx] = {
           ...existing,
           message: {
             ...existing.message,
-            metadata: combinedMetadata as MessageMetadata[],
+            metadata: combinedMetadata,
             // Keep content if new content is empty or generic
             content: action.payload.message.content || existing.message.content,
           },
@@ -249,7 +248,7 @@ function conversationReducer(
       if (lastIdx >= 0) {
         const lastMsg = messages[lastIdx];
         const role = lastMsg.message.role.toLowerCase();
-        const mType = (lastMsg.message.message_type || "").toLowerCase();
+        const mType = lastMsg.message.message_type.toLowerCase();
 
         if (role === "assistant" && mType === "text") {
           messages.splice(lastIdx, 0, action.payload);
@@ -336,7 +335,7 @@ function conversationReducer(
         .reverse()
         .findIndex((m) => {
           const role = m.message.role.toLowerCase();
-          const mType = (m.message.message_type || "").toLowerCase();
+          const mType = m.message.message_type.toLowerCase();
           return role === "assistant" && mType === "text";
         });
 
@@ -361,13 +360,11 @@ function conversationReducer(
     case "FINALIZE_STREAM": {
       // Update the last assistant text message with final content
       const finalizedMessages = [...state.messages];
-      const lastAssistIdx = [...finalizedMessages]
-        .reverse()
-        .findIndex((m) => {
-          const role = m.message.role.toLowerCase();
-          const mType = (m.message.message_type || "").toLowerCase();
-          return role === "assistant" && mType === "text";
-        });
+      const lastAssistIdx = [...finalizedMessages].reverse().findIndex((m) => {
+        const role = m.message.role.toLowerCase();
+        const mType = m.message.message_type.toLowerCase();
+        return role === "assistant" && mType === "text";
+      });
 
       if (lastAssistIdx !== -1) {
         const actualIdx = finalizedMessages.length - 1 - lastAssistIdx;
@@ -575,8 +572,8 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           // Stream Listener
           listen<ChatStreamEvent>("chat_stream", (event) => {
             const { delta, full_response, is_finished, conv_id } =
-            event.payload;
-            
+              event.payload;
+
             // Filter by conversation ID using ref
             if (!conv_id || (conv_id && conv_id !== convIdRef.current)) {
               return;
@@ -661,32 +658,28 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionStartedEvent>(
             "tool_execution_started",
             (event) => {
-              const {
-                tool_call_id,
-                message_id,
-                skill_name,
-                tool_name,
-                arguments: args,
-                timestamp,
-              } = event.payload;
+              const p = event.payload;
+              const skill_name = p.skill_name;
+              const tool_name = p.tool_name;
+              const args = p.arguments as Record<string, unknown>;
 
               dispatch({
                 type: "ADD_AGENTIC_MESSAGE",
                 payload: {
                   message: {
-                    id: message_id,
+                    id: p.message_id,
                     conversation_id: convIdRef.current || "",
                     role: "assistant",
                     content: `Calling ${skill_name}.${tool_name}...`,
-                    timestamp,
+                    timestamp: p.timestamp,
                     message_type: "tool_calls",
                     metadata: [
                       {
                         type: "ToolCall",
-                        call_id: tool_call_id,
+                        call_id: p.tool_call_id,
                         skill_name,
                         tool_name,
-                        arguments: args || {},
+                        arguments: args,
                         thought_signature: null,
                       },
                     ],
@@ -701,36 +694,30 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionCompletedEvent>(
             "tool_execution_completed",
             (event) => {
-              const {
-                tool_call_id,
-                message_id,
-                skill_name,
-                tool_name,
-                success,
-                result,
-                error,
-                timestamp,
-              } = event.payload;
+              const p = event.payload;
+              const success = p.success;
+              const error = p.error;
+              const result = p.result as unknown;
 
               dispatch({
                 type: "ADD_AGENTIC_MESSAGE",
                 payload: {
                   message: {
-                    id: message_id,
+                    id: p.message_id,
                     conversation_id: convIdRef.current || "",
                     role: "tool",
                     content: success
                       ? "Tool execution successful"
                       : `Tool error: ${error}`,
-                    timestamp,
+                    timestamp: p.timestamp,
                     message_type: "tool_results",
                     metadata: [
                       {
                         type: "ToolResult",
-                        call_id: tool_call_id,
+                        call_id: p.tool_call_id,
                         success,
-                        error: error || null,
-                        result: result || null,
+                        error: error,
+                        result: result,
                         screenshot_attachment_id: null,
                       },
                     ],
@@ -743,20 +730,26 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           ),
 
           // Navigation Listener - handles navigation from uploads page etc.
-          listen<{ conversation_id: string; message_id: string | null; timestamp: string }>(
-            "navigate_to_conversation",
-            (event) => {
-              const { conversation_id, message_id } = event.payload;
-              console.log("[ConversationProvider] Navigate to conversation:", conversation_id, "message:", message_id);
-              dispatch({
-                type: "NAVIGATE_TO_CONVERSATION",
-                payload: {
-                  conversationId: conversation_id,
-                  messageId: message_id,
-                },
-              });
-            },
-          ),
+          listen<{
+            conversation_id: string;
+            message_id: string | null;
+            timestamp: string;
+          }>("navigate_to_conversation", (event) => {
+            const { conversation_id, message_id } = event.payload;
+            console.log(
+              "[ConversationProvider] Navigate to conversation:",
+              conversation_id,
+              "message:",
+              message_id,
+            );
+            dispatch({
+              type: "NAVIGATE_TO_CONVERSATION",
+              payload: {
+                conversationId: conversation_id,
+                messageId: message_id,
+              },
+            });
+          }),
         ];
 
         const results = await Promise.all(listenerPromises);

@@ -5,15 +5,28 @@ import {
   preprocessMarkdownCurrency,
 } from "@/components/ui/markdown-config";
 import type { ChatMessage } from "@/lib/conversations";
+import { cn } from "@/lib/utils";
 import type { Attachment, MessageMetadata } from "@/types/conversations";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { Camera, Hammer, Search, Sparkles, CheckCircle2, XCircle, NotebookPen, SquareDashed, FileText, ChevronDown, RefreshCw, Copy } from "lucide-react";
+import {
+  Camera,
+  CheckCircle2,
+  ChevronDown,
+  Copy,
+  FileText,
+  Hammer,
+  NotebookPen,
+  RefreshCw,
+  Search,
+  Sparkles,
+  SquareDashed,
+  XCircle,
+} from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState, memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
 import { Button } from "../ui/button";
-import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +42,7 @@ import {
 } from "../ui/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
-function PreviewAttachment({
+export const PreviewAttachment = memo(function PreviewAttachment({
   a,
   variant = "default",
 }: {
@@ -77,7 +90,10 @@ function PreviewAttachment({
               />
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                 <Search
-                  className={cn("text-white drop-shadow-md", isSmall ? "w-4 h-4" : "w-8 h-8")}
+                  className={cn(
+                    "text-white drop-shadow-md",
+                    isSmall ? "w-4 h-4" : "w-8 h-8",
+                  )}
                 />
               </div>
             </button>
@@ -216,7 +232,7 @@ function PreviewAttachment({
     );
   }
   return null;
-}
+});
 
 export const UserMessage = memo(function UserMessage({
   m,
@@ -310,7 +326,9 @@ export const ToolStep = memo(function ToolStep({
         {isSuccess === true && (
           <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
         )}
-        {isSuccess === false && <XCircle className="w-3.5 h-3.5 text-red-500" />}
+        {isSuccess === false && (
+          <XCircle className="w-3.5 h-3.5 text-red-500" />
+        )}
         {isSuccess === null && (
           <div className="flex gap-0.5">
             <div className="w-1 h-1 rounded-full bg-zinc-400 animate-bounce" />
@@ -362,7 +380,9 @@ export const ToolStep = memo(function ToolStep({
   );
 });
 
-export const GenericThinkingStep = memo(function GenericThinkingStep({ m }: { m: ChatMessage }) {
+export const GenericThinkingStep = memo(function GenericThinkingStep({
+  m,
+}: { m: ChatMessage }) {
   if (!m.message.content) return null;
   return (
     <div className="flex flex-col gap-1.5 py-1">
@@ -390,14 +410,13 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
-  if (messages.length === 0) return null;
-
   // Map call_id -> { message, metadata }
   const resultsMap = useMemo(() => {
     const map = new Map<
       string,
       { message: ChatMessage; metadata: MessageMetadata }
     >();
+    if (messages.length === 0) return map;
     for (const m of messages) {
       const metadata = m.message.metadata;
       if (Array.isArray(metadata)) {
@@ -410,6 +429,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
     }
     return map;
   }, [messages]);
+
+  if (messages.length === 0) return null;
 
   return (
     <div className="flex flex-col mb-4">
@@ -441,12 +462,12 @@ export const ThinkingBlock = memo(function ThinkingBlock({
             : "grid-rows-[0fr] opacity-0",
         )}
       >
-        <div className={cn(
-          "min-h-0 bg-zinc-50/30 rounded-xl border border-dashed border-zinc-200 ml-1 transition-padding duration-[0]",
-          isExpanded
-            ? "p-3 delay-0"
-            : "p-0 delay-300"
-        )}>
+        <div
+          className={cn(
+            "min-h-0 bg-zinc-50/30 rounded-xl border border-dashed border-zinc-200 ml-1 transition-padding duration-[0]",
+            isExpanded ? "p-3 delay-0" : "p-0 delay-300",
+          )}
+        >
           <div className="ml-2 border-l-2 border-zinc-100/50 pl-4 space-y-4">
             {messages.map((m) => {
               const metadataList = m.message.metadata;
@@ -480,12 +501,14 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   );
 });
 
-export const AssistantMessage = memo(function AssistantMessage({ m }: { m: ChatMessage }) {
+export const AssistantMessage = memo(function AssistantMessage({
+  m,
+}: { m: ChatMessage }) {
   const content = m.message.content;
 
   const handleCopy = () => {
     if (content) {
-      navigator.clipboard.writeText(content);
+      void navigator.clipboard.writeText(content);
     }
   };
 
@@ -500,7 +523,11 @@ export const AssistantMessage = memo(function AssistantMessage({ m }: { m: ChatM
       <div className="flex flex-row">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full h-7 w-7">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full h-7 w-7"
+            >
               <RefreshCw className="!w-3 !h-3" />
             </Button>
           </TooltipTrigger>
@@ -510,7 +537,12 @@ export const AssistantMessage = memo(function AssistantMessage({ m }: { m: ChatM
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button onClick={handleCopy} variant="ghost" size="icon" className="rounded-full h-7 w-7">
+            <Button
+              onClick={handleCopy}
+              variant="ghost"
+              size="icon"
+              className="rounded-full h-7 w-7"
+            >
               <Copy className="!w-3 !h-3" />
             </Button>
           </TooltipTrigger>
@@ -523,12 +555,16 @@ export const AssistantMessage = memo(function AssistantMessage({ m }: { m: ChatM
   );
 });
 
-export const FunctionMessage = memo(function FunctionMessage({ m }: { m: ChatMessage }) {
+export const FunctionMessage = memo(function FunctionMessage({
+  m,
+}: { m: ChatMessage }) {
   // If this is rendered outside a thinking block (fallback)
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
       <Markdown {...llmMarkdownConfig}>
-        {preprocessMarkdownCurrency(m.message.content || "*No response content*")}
+        {preprocessMarkdownCurrency(
+          m.message.content || "*No response content*",
+        )}
       </Markdown>
     </div>
   );

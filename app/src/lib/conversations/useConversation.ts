@@ -5,8 +5,8 @@ import type { AttachmentData } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
-import { useConversationContext } from "./ConversationProvider";
 import { useWindows } from "../windows/useWindows";
+import { useConversationContext } from "./ConversationProvider";
 import {
   createConversation,
   deleteConversation as deleteApiConversation,
@@ -97,24 +97,27 @@ export function useConversation(
       state.scrollToMessageId !== null
     ) {
       prevConversationIdRef.current = state.conversationId;
-      
+
       const loadNavigatedConversation = async () => {
         try {
           const conversation = await invoke<Conversation>("get_conversation", {
             conversationId: state.conversationId,
           });
           dispatch({ type: "LOAD_CONVERSATION", payload: conversation });
-          
+
           const backendMessages = await invoke<Message[]>("get_messages", {
             conversationId: state.conversationId,
           });
           const messages = backendMessages.map(transformBackendMessage);
           dispatch({ type: "LOAD_MESSAGES", payload: messages });
         } catch (error) {
-          console.error("[useConversation] Failed to load navigated conversation:", error);
+          console.error(
+            "[useConversation] Failed to load navigated conversation:",
+            error,
+          );
         }
       };
-      
+
       void loadNavigatedConversation();
     } else {
       prevConversationIdRef.current = state.conversationId;
@@ -127,9 +130,14 @@ export function useConversation(
       setChatExpanded();
       // Give the DOM time to render the messages
       const timer = setTimeout(() => {
-        const messageElement = document.getElementById(`message-${state.scrollToMessageId}`);
+        const messageElement = document.getElementById(
+          `message-${state.scrollToMessageId}`,
+        );
         if (messageElement) {
-          messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+          messageElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
           // Optionally highlight the message temporarily
           messageElement.classList.add("highlight-message");
           setTimeout(() => {
@@ -139,8 +147,10 @@ export function useConversation(
         // Clear the scroll target
         dispatch({ type: "SET_SCROLL_TO_MESSAGE", payload: null });
       }, 100);
-      
-      return () => clearTimeout(timer);
+
+      return () => {
+        clearTimeout(timer);
+      };
     }
   }, [state.scrollToMessageId, state.messages, dispatch, setChatExpanded]);
 

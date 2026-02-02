@@ -85,7 +85,7 @@ export default function Dev() {
         console.error("Failed to fetch skills:", err);
       }
     };
-    fetchSkills();
+    void fetchSkills();
   }, []);
 
   useEffect(() => {
@@ -111,7 +111,7 @@ export default function Dev() {
         console.error("Failed to fetch tools:", err);
       }
     };
-    fetchTools();
+    void fetchTools();
   }, [selectedSkill]);
 
   useEffect(() => {
@@ -141,9 +141,9 @@ export default function Dev() {
     setToolError(null);
     setToolResult(null);
 
-    let parsedArgs;
+    let parsedArgs: Record<string, unknown> = {};
     try {
-      parsedArgs = JSON.parse(toolArguments);
+      parsedArgs = JSON.parse(toolArguments) as Record<string, unknown>;
     } catch (e) {
       setToolError(
         `Invalid JSON in arguments: ${e instanceof Error ? e.message : String(e)}`,
@@ -659,7 +659,9 @@ export default function Dev() {
               id="skill-select"
               className="w-full p-2 border rounded bg-white text-sm"
               value={selectedSkill}
-              onChange={(e) => setSelectedSkill(e.target.value)}
+              onChange={(e) => {
+                setSelectedSkill(e.target.value);
+              }}
             >
               <option value="">Select a skill...</option>
               {skills.map((skill) => (
@@ -677,7 +679,9 @@ export default function Dev() {
               className="w-full p-2 border rounded bg-white text-sm"
               value={selectedTool}
               disabled={!selectedSkill}
-              onChange={(e) => setSelectedTool(e.target.value)}
+              onChange={(e) => {
+                setSelectedTool(e.target.value);
+              }}
             >
               <option value="">Select a tool...</option>
               {availableTools.map((tool) => (
@@ -694,7 +698,9 @@ export default function Dev() {
           <Textarea
             id="tool-args"
             value={toolArguments}
-            onChange={(e) => setToolArguments(e.target.value)}
+            onChange={(e) => {
+              setToolArguments(e.target.value);
+            }}
             rows={8}
             placeholder="Enter tool arguments as JSON..."
             className="font-mono text-xs"

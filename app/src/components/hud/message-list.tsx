@@ -13,11 +13,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useState } from "react";
-import {
-  AssistantMessage,
-  ThinkingBlock,
-  UserMessage,
-} from "./message-types";
+import { AssistantMessage, ThinkingBlock, UserMessage } from "./message-types";
 
 interface MessageListProps {
   conversationName: string;
@@ -75,7 +71,7 @@ export function MessageList({
     let currentThinkingGroup: ChatMessage[] = [];
 
     for (const m of messages) {
-      const mType = (m.message.message_type || "").toLowerCase();
+      const mType = m.message.message_type.toLowerCase();
       const isThinking =
         mType === "thinking" ||
         mType === "toolcalls" ||
@@ -175,7 +171,9 @@ export function MessageList({
                     <ThinkingBlock
                       messages={group.messages}
                       isExpanded={showReasoning.has(firstId)}
-                      onToggle={() => toggleReasoning(firstId)}
+                      onToggle={() => {
+                        toggleReasoning(firstId);
+                      }}
                     />
                   </div>
                 );
