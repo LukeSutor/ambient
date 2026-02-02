@@ -28,6 +28,7 @@
 use super::ToolCall;
 use once_cell::sync::Lazy;
 use scraper::{ElementRef, Html, Selector};
+use htmd::convert;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -97,7 +98,7 @@ pub async fn execute(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, S
 }
 
 /// Generate a unique window label for each scraper instance
-fn generate_window_label() -> String {
+fn generate_request_id() -> String {
     let id = WINDOW_COUNTER.fetch_add(1, Ordering::SeqCst);
     format!("{}{}", SEARCH_WINDOW_PREFIX, id)
 }
@@ -287,11 +288,6 @@ async fn search_web(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, St
     // Scrape the page using WebView
     let html = scrape_url_with_webview(app_handle, &search_url, SEARCH_TIMEOUT_SECS).await?;
 
-    log::debug!(
-        "[web_search] Retrieved HTML: {}",
-        html
-    );
-
     // Parse the results
     let results = parse_ddg_results(&html)?;
 
@@ -342,6 +338,11 @@ fn parse_ddg_results(html: &str) -> Result<Vec<SearchResult>, String> {
 
         // Clean the URL
         let clean_url = clean_ddg_url(raw_url);
+
+        // Skip ads
+        if clean_url.contains("ad_domain=") {
+            continue;
+        }
 
         // Extract snippet from the last <a> in the result div
         let snippet = result_element.select(&Selector::parse("a").map_err(|_| "Failed to parse a selector")?)
@@ -412,8 +413,7 @@ async fn fetch_webpage(app_handle: &AppHandle, call: &ToolCall) -> Result<Value,
     let html = scrape_url_with_webview(app_handle, url, FETCH_TIMEOUT_SECS).await?;
 
     // Extract main content as markdown
-    let document = Html::parse_document(&html);
-    let markdown = extract_content_as_markdown(&document)?;
+    let markdown = extract_content_as_markdown(&html)?;
 
     Ok(serde_json::json!({
         "url": url,
@@ -423,25 +423,9 @@ async fn fetch_webpage(app_handle: &AppHandle, call: &ToolCall) -> Result<Value,
 
 /// Extract main content from HTML document as markdown.
 ///
-/// Uses dom-content-extraction for intelligent content extraction,
-/// with fallback to basic text extraction.
-fn extract_content_as_markdown(document: &Html) -> Result<String, String> {
-    use dom_content_extraction::{extract_content_as_markdown as extract_md, DensityTree};
-
-    match DensityTree::from_document(document) {
-        Ok(dtree) => extract_md(&dtree, document)
-            .map_err(|_| "Failed to convert content to markdown".to_string()),
-        Err(_) => {
-            // Fallback: extract all text from body
-            let body_selector = Selector::parse("body").map_err(|_| "Failed to parse selector")?;
-            let text = document
-                .select(&body_selector)
-                .next()
-                .map(|body| body.text().collect::<Vec<_>>().join(" "))
-                .unwrap_or_default();
-            Ok(text.trim().to_string())
-        }
-    }
+/// Uses htmd for HTML to markdown conversion.
+fn extract_content_as_markdown(html: &str) -> Result<String, String> {
+    convert(html).map_err(|e| format!("Failed to convert HTML to markdown: {}", e))
 }
 
 /// JavaScript code to extract text content and send it via navigation.
@@ -524,8 +508,8 @@ fn get_extraction_script(request_id: &str, execution_token: &str) -> String {
         // Elements to completely remove (they contain no useful text)
         const elementsToRemove = [
             'script', 'style', 'noscript', 'svg', 'canvas',
-            'img', 'video', 'audio', 'picture', 'source', 'track',
-            'iframe', 'object', 'embed', 'applet',
+            'img', 'video', 'audio', 'picture', 'source', 'track', 'nav',
+            'iframe', 'object', 'embed', 'applet', 'footer', 'header', 'aside',
             'map', 'area',
             'link[rel="stylesheet"]', 'link[rel="preload"]', 'link[rel="prefetch"]',
             'meta', 'base',
@@ -553,27 +537,13 @@ fn get_extraction_script(request_id: &str, execution_token: &str) -> String {
                 el.remove();
             }}
         }});
-        
-        // Remove all style attributes to reduce size
-        docClone.querySelectorAll('[style]').forEach(el => {{
-            el.removeAttribute('style');
-        }});
-        
-        // Remove all class attributes (not needed for text extraction)
-        docClone.querySelectorAll('[class]').forEach(el => {{
-            el.removeAttribute('class');
-        }});
-        
-        // Remove data-* attributes
+
+        // Remove all attributes except 'id' and 'href'
         docClone.querySelectorAll('*').forEach(el => {{
             Array.from(el.attributes).forEach(attr => {{
-                if (attr.name.startsWith('data-') || 
-                    attr.name.startsWith('aria-') ||
-                    attr.name === 'onclick' ||
-                    attr.name === 'onload' ||
-                    attr.name === 'onerror') {{
-                    el.removeAttribute(attr.name);
-                }}
+            if (attr.name !== 'id' && attr.name !== 'href') {{
+                el.removeAttribute(attr.name);
+            }}
             }});
         }});
         
@@ -582,7 +552,7 @@ fn get_extraction_script(request_id: &str, execution_token: &str) -> String {
             let removed = true;
             while (removed) {{
                 removed = false;
-                root.querySelectorAll('div, span, p, section, article, aside, header, footer, nav').forEach(el => {{
+                root.querySelectorAll('div, span, p, section, article').forEach(el => {{
                     if (el.textContent.trim() === '' && el.children.length === 0) {{
                         el.remove();
                         removed = true;
@@ -770,8 +740,7 @@ async fn scrape_url_with_webview(
     url: &str,
     timeout_secs: u64,
 ) -> Result<String, String> {
-    let window_label = generate_window_label();
-    let request_id = window_label.clone();
+    let request_id = generate_request_id();
     let execution_token = generate_execution_token();
     let url_string = url.to_string();
 
@@ -914,9 +883,6 @@ async fn scrape_url_with_webview(
     let extraction_script = get_extraction_script(&request_id, &execution_token);
 
     tokio::spawn(async move {
-        // Wait for page to load (give it enough time)
-        tokio::time::sleep(Duration::from_millis(2000)).await;
-
         // Inject the extraction script exactly once
         match window_clone.eval(&extraction_script) {
             Ok(_) => {
