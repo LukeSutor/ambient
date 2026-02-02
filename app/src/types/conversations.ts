@@ -31,7 +31,7 @@ export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name:
 /**
  * Optional screenshot attachment ID for computer-use function responses
  */
-screenshot_attachment_id: string | null, } | { "type": "Thinking", stage: string, };
+screenshot_attachment_id: string | null, };
 
 /**
  * The type of a message in the conversation.
@@ -39,6 +39,6 @@ screenshot_attachment_id: string | null, } | { "type": "Thinking", stage: string
  * Different message types represent different stages of agentic
  * processing and are displayed differently in the UI.
  */
-export type MessageType = "text" | "tool_calls" | "tool_results" | "thinking";
+export type MessageType = "text" | "tool_calls" | "tool_results";
 
 export type Role = "system" | "user" | "assistant" | "tool";

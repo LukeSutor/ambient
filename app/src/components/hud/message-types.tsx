@@ -8,7 +8,7 @@ import type { ChatMessage } from "@/lib/conversations";
 import type { Attachment, MessageMetadata } from "@/types/conversations";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
-import { Camera, Hammer, Search, Sparkles, CheckCircle2, XCircle, NotebookPen, SquareDashed, FileText, ChevronDown } from "lucide-react";
+import { Camera, Hammer, Search, Sparkles, CheckCircle2, XCircle, NotebookPen, SquareDashed, FileText, ChevronDown, RefreshCw, Copy } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState, memo, useMemo } from "react";
 import Markdown from "react-markdown";
@@ -27,6 +27,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "../ui/hover-card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 function PreviewAttachment({
   a,
@@ -467,17 +468,6 @@ export const ThinkingBlock = memo(function ThinkingBlock({
                           />
                         );
                       }
-                      if (meta.type === "Thinking") {
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-2 text-zinc-400 py-1"
-                          >
-                            <div className="w-1.5 h-1.5 rounded-full bg-zinc-200" />
-                            <span className="text-xs italic">{meta.stage}</span>
-                          </div>
-                        );
-                      }
                       return null;
                     })}
                 </div>
@@ -492,29 +482,43 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 
 export const AssistantMessage = memo(function AssistantMessage({ m }: { m: ChatMessage }) {
   const content = m.message.content;
-  const metadata = m.message.metadata;
+
+  const handleCopy = () => {
+    if (content) {
+      navigator.clipboard.writeText(content);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-4">
-      {content && (
-        <div className="overflow-hidden">
-          <Markdown {...llmMarkdownConfig}>
-            {preprocessMarkdownCurrency(content)}
-          </Markdown>
-        </div>
-      )}
-
-      {Array.isArray(metadata) &&
-        metadata.some((meta) => meta.type === "ToolCall") && (
-          <div className="mt-2 space-y-2 border-t pt-4 border-zinc-100">
-            {metadata.map((meta, idx) => {
-              if (meta.type === "ToolCall") {
-                return <ToolStep key={idx} call={meta} />;
-              }
-              return null;
-            })}
-          </div>
-        )}
+    <div className="flex flex-col space-y-1 mb-4">
+      <div className="overflow-hidden">
+        <Markdown {...llmMarkdownConfig}>
+          {preprocessMarkdownCurrency(content || "*No response content*")}
+        </Markdown>
+      </div>
+      {/* Redo and copy section */}
+      <div className="flex flex-row">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="rounded-full h-7 w-7">
+              <RefreshCw className="!w-3 !h-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Redo</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button onClick={handleCopy} variant="ghost" size="icon" className="rounded-full h-7 w-7">
+              <Copy className="!w-3 !h-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Copy</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   );
 });
@@ -524,7 +528,7 @@ export const FunctionMessage = memo(function FunctionMessage({ m }: { m: ChatMes
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
       <Markdown {...llmMarkdownConfig}>
-        {preprocessMarkdownCurrency(m.message.content)}
+        {preprocessMarkdownCurrency(m.message.content || "*No response content*")}
       </Markdown>
     </div>
   );
