@@ -15,10 +15,10 @@ use crate::db::conversations::{
 };
 use crate::events::{emitter::emit, types::*};
 use crate::images::take_screenshot;
-use crate::models::computer_use::actions::*;
-use crate::models::computer_use::tools::{get_local_computer_use_tools, is_gemini_computer_use_function};
+use super::actions::*;
+use super::tools::{get_local_computer_use_tools, is_gemini_computer_use_function};
 use crate::models::llm::client::generate;
-use crate::models::llm::runtime::{
+use crate::agents::types::{
     ToolExecutionStartedEvent, ToolExecutionCompletedEvent,
     TOOL_EXECUTION_STARTED, TOOL_EXECUTION_COMPLETED,
 };

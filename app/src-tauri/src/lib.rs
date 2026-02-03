@@ -6,6 +6,7 @@ pub mod events;
 pub mod images;
 pub mod memory;
 pub mod models;
+pub mod agents;
 pub mod settings;
 pub mod screen_selection;
 pub mod skills;
@@ -48,8 +49,8 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
-    .manage(crate::models::computer_use::ComputerUseState::default())
-    .manage(crate::models::llm::state::AgentRuntimeState::default())
+    .manage(crate::agents::computer_use::ComputerUseState::default())
+    .manage(crate::agents::chat::state::AgentRuntimeState::default())
     .setup(|app| {
       // Initialize the skill registry
       if let Err(e) = crate::skills::registry::initialize_registry(&app.handle()) {
@@ -176,13 +177,13 @@ pub fn run() {
       setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
-      models::llm::runtime::handle_agent_chat,
-      models::llm::state::stop_agent_chat,
+      agents::chat::runtime::handle_agent_chat,
+      agents::chat::state::stop_agent_chat,
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,
-      models::computer_use::commands::start_computer_use,
-      models::computer_use::commands::stop_computer_use,
-      models::computer_use::commands::execute_computer_action,
+      agents::computer_use::commands::start_computer_use,
+      agents::computer_use::commands::stop_computer_use,
+      agents::computer_use::commands::execute_computer_action,
       auth::auth_flow::sign_up,
       auth::auth_flow::sign_in_with_password,
       auth::auth_flow::sign_in_with_google,

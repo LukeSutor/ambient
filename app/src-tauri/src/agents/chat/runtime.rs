@@ -6,27 +6,6 @@
 //! 3. Executes agentic loop: model request > response > tool execution
 //! 4. Handles skill activation and tool calling
 //! 5. Persists all messages to database
-//!
-//! # Flow
-//!
-//! ```
-//! User Message
-//!     v
-//! [Check context limit] > [Build system prompt with skill summaries]
-//!     v
-//! Model Generation (Phase 1 - summaries only)
-//!     v
-//! Response: Text | Tool Calls
-//!     v
-//! Tool Calls? > [Execute tools] > [Check for skill activation] > [Add results] > Continue
-//! Text? > [Save and return]
-//! ```
-//!
-//! The loop continues until:
-//! - Model returns plain text (final answer)
-//! - Maximum iterations exceeded
-//! - Error occurs
-//! - User cancels generation
 
 use crate::db::conversations::{
     add_message, get_conversation_history, load_conversation_skills,
@@ -34,7 +13,6 @@ use crate::db::conversations::{
 };
 use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY}};
 use crate::models::llm::client::generate;
-use crate::models::llm::state::AgentRuntimeState;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
@@ -44,52 +22,16 @@ use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
     SkillSummary, ToolCall, ToolDefinition, ToolResult,
 };
+use crate::agents::types::{
+    ToolExecutionStartedEvent, ToolExecutionCompletedEvent,
+    TOOL_EXECUTION_STARTED, TOOL_EXECUTION_COMPLETED,
+};
 use chrono::Local;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::AppHandle;
-use ts_rs::TS;
-use super::prompts::get_prompt;
-
-// ============================================================================
-// Event Types for Agentic Runtime
-// ============================================================================
-
-/// Event emitted when a tool execution starts.
-pub const TOOL_EXECUTION_STARTED: &str = "tool_execution_started";
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct ToolExecutionStartedEvent {
-    pub tool_call_id: String,
-    pub message_id: String,
-    pub skill_name: String,
-    pub tool_name: String,
-    #[ts(type = "any")]
-    pub arguments: serde_json::Value,
-    pub timestamp: String,
-}
-
-/// Event emitted when a tool execution completes.
-pub const TOOL_EXECUTION_COMPLETED: &str = "tool_execution_completed";
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct ToolExecutionCompletedEvent {
-    pub tool_call_id: String,
-    pub message_id: String,
-    pub skill_name: String,
-    pub tool_name: String,
-    pub success: bool,
-    #[ts(type = "any")]
-    pub result: Option<serde_json::Value>,
-    pub error: Option<String>,
-    pub timestamp: String,
-}
-
-// ============================================================================
-// Agentic Runtime
-// ============================================================================
+use crate::models::llm::prompts::get_prompt;
+use super::state::AgentRuntimeState;
 
 /// Main entry point for agentic chat.
 ///

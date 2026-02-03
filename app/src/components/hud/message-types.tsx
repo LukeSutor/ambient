@@ -516,7 +516,7 @@ export const AssistantMessage = memo(function AssistantMessage({
     <div className="flex flex-col space-y-1 mb-4">
       <div className="overflow-hidden">
         <Markdown {...llmMarkdownConfig}>
-          {preprocessMarkdownCurrency(content || "*No response content*")}
+          {preprocessMarkdownCurrency(content)}
         </Markdown>
       </div>
       {/* Redo and copy section */}
@@ -563,7 +563,7 @@ export const FunctionMessage = memo(function FunctionMessage({
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
       <Markdown {...llmMarkdownConfig}>
         {preprocessMarkdownCurrency(
-          m.message.content || "*No response content*",
+          m.message.content,
         )}
       </Markdown>
     </div>
