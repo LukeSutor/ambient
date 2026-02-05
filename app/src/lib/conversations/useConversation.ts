@@ -265,6 +265,7 @@ export function useConversation(
           conversationId: conversation.id,
         });
         const messages = backendMessages.map(transformBackendMessage);
+        console.log({messages})
         dispatch({ type: "LOAD_MESSAGES", payload: messages });
       } catch (error) {
         console.error("[useConversation] Failed to load messages:", error);
@@ -328,17 +329,23 @@ export function useConversation(
           });
         });
 
-        dispatch({
-          type: "START_ASSISTANT_MESSAGE",
-          payload: { conversationId: activeConversationId },
-        });
-        dispatch({ type: "SET_LOADING", payload: true });
-        dispatch({ type: "SET_STREAMING", payload: true });
-
-        // Send agentic chat or computer use event
         if (state.conversationType === "computer_use") {
-          void startComputerUseSession(activeConversationId, content);
+          dispatch({ type: "SET_LOADING", payload: true });
+          // Note: we don't use START_ASSISTANT_MESSAGE for computer use 
+          // because it emits its own messages with stable IDs
+          void startComputerUseSession(
+            activeConversationId,
+            content,
+            userMessage.message.id,
+          );
         } else {
+          dispatch({
+            type: "START_ASSISTANT_MESSAGE",
+            payload: { conversationId: activeConversationId },
+          });
+          dispatch({ type: "SET_LOADING", payload: true });
+          dispatch({ type: "SET_STREAMING", payload: true });
+          
           await sendAgentMessage(
             activeConversationId,
             content,
@@ -352,7 +359,7 @@ export function useConversation(
         // Remove the placeholder assistant message on error
         dispatch({
           type: "FINALIZE_STREAM",
-          payload: "[Error generating response]",
+          payload: { content: "[Error generating response]" },
         });
         dispatch({ type: "SET_LOADING", payload: false });
         dispatch({ type: "SET_STREAMING", payload: false });
@@ -439,6 +446,145 @@ export function useConversation(
       }
     },
     [dispatch, refreshConversations],
+  );
+
+  /**
+   * Retries a message.
+   * If it's an assistant message, it deletes all messages after the preceding user message
+   * and restarts the agent from that user message.
+   */
+  const retryMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      try {
+        const messageIndex = state.messages.findIndex(
+          (m) => m.message.id === messageId,
+        );
+        if (messageIndex === -1) return;
+
+        const conversationId = state.conversationId;
+        if (!conversationId) return;
+
+        // Find the user message to retry from
+        let userMessageIndex = messageIndex;
+        while (
+          userMessageIndex >= 0 &&
+          state.messages[userMessageIndex].message.role !== "user"
+        ) {
+          userMessageIndex--;
+        }
+
+        if (userMessageIndex === -1) {
+          toast.error("Could not find user message to retry from.");
+          return;
+        }
+
+        const userMessage = state.messages[userMessageIndex];
+
+        // Delete EVERYTHING after that user message in DB
+        const firstMessageToDeleteIndex = userMessageIndex + 1;
+        if (firstMessageToDeleteIndex < state.messages.length) {
+          const firstToDeleteId =
+            state.messages[firstMessageToDeleteIndex].message.id;
+          await invoke("delete_messages_after", { messageId: firstToDeleteId });
+        }
+
+        // Update local state
+        const remainingMessages = state.messages.slice(0, userMessageIndex + 1);
+        dispatch({ type: "LOAD_MESSAGES", payload: remainingMessages });
+
+        // Restart agentic runtime
+        if (state.conversationType === "computer_use") {
+          dispatch({ type: "SET_LOADING", payload: true });
+          void startComputerUseSession(
+            conversationId,
+            userMessage.message.content,
+            userMessage.message.id,
+          );
+        } else {
+          dispatch({
+            type: "START_ASSISTANT_MESSAGE",
+            payload: { conversationId },
+          });
+          dispatch({ type: "SET_LOADING", payload: true });
+          dispatch({ type: "SET_STREAMING", payload: true });
+
+          await sendAgentMessage(
+            conversationId,
+            userMessage.message.content,
+            [], // Attachments are already in the DB for this user message
+            userMessage.message.id,
+          );
+        }
+      } catch (error) {
+        console.error("[useConversation] Failed to retry message:", error);
+        dispatch({ type: "SET_LOADING", payload: false });
+        dispatch({ type: "SET_STREAMING", payload: false });
+      }
+    },
+    [dispatch, state.messages, state.conversationId, state.conversationType],
+  );
+
+  /**
+   * Resubmits a user message with new content.
+   */
+  const resubmitMessage = useCallback(
+    async (messageId: string, content: string): Promise<void> => {
+      try {
+        const conversationId = state.conversationId;
+        if (!conversationId) return;
+
+        // Find message and its index
+        const messageIndex = state.messages.findIndex(
+          (m) => m.message.id === messageId,
+        );
+        if (messageIndex === -1) return;
+
+        // 1. Update the message content in DB
+        await invoke("update_message_content", { messageId, content });
+
+        // 2. Delete everything AFTER this message in DB
+        if (messageIndex < state.messages.length - 1) {
+          const nextMessageId = state.messages[messageIndex + 1].message.id;
+          await invoke("delete_messages_after", { messageId: nextMessageId });
+        }
+
+        // 3. Update local state
+        const updatedMessages = [...state.messages.slice(0, messageIndex + 1)];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          message: {
+            ...updatedMessages[messageIndex].message,
+            content,
+          },
+        };
+        dispatch({ type: "LOAD_MESSAGES", payload: updatedMessages });
+
+        // 4. Restart agentic runtime
+        if (state.conversationType === "computer_use") {
+          dispatch({ type: "SET_LOADING", payload: true });
+          void startComputerUseSession(conversationId, content, messageId);
+        } else {
+          dispatch({
+            type: "START_ASSISTANT_MESSAGE",
+            payload: { conversationId },
+          });
+          dispatch({ type: "SET_LOADING", payload: true });
+          dispatch({ type: "SET_STREAMING", payload: true });
+
+          await sendAgentMessage(
+            conversationId,
+            content,
+            [], // Attachments are already in the DB
+            messageId,
+          );
+        }
+      } catch (error) {
+        console.error("[useConversation] Failed to resubmit message:", error);
+        dispatch({ type: "SET_LOADING", payload: false });
+        dispatch({ type: "SET_STREAMING", payload: false });
+      }
+    },
+    [dispatch, state.messages, state.conversationId, state.conversationType],
   );
 
   /**
@@ -548,6 +694,8 @@ export function useConversation(
     loadMoreConversations,
     refreshConversations,
     renameConversation,
+    retryMessage,
+    resubmitMessage,
     dispatchOCRCapture,
     toggleComputerUse,
     stopComputerUse,

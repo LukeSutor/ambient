@@ -26,6 +26,7 @@ pub async fn start_computer_use(
     state: tauri::State<'_, ComputerUseState>,
     conversation_id: String,
     prompt: String,
+    message_id: Option<String>,
 ) -> Result<String, String> {
     // Check if a session is already running
     {
@@ -46,7 +47,7 @@ pub async fn start_computer_use(
         state.should_stop.clone(),
     ).await?;
 
-    let result = runtime.run(prompt).await;
+    let result = runtime.run(prompt, message_id).await;
 
     // Reset running state
     {

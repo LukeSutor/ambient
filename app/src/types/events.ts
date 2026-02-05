@@ -6,11 +6,9 @@ export type AttachmentData = { name: string, file_type: string, data: string, };
 
 export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<Attachment>, timestamp: string, };
 
-export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, };
+export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, message_id: string | null, };
 
 export type ComputerUseToastEvent = { message: string, timestamp: string, };
-
-export type ComputerUseUpdateEvent = { status: string, message: Message, };
 
 export type DownloadFinishedEvent = { id: bigint, };
 
@@ -40,6 +38,6 @@ export type SafetyConfirmationResponseEvent = { user_confirmed: boolean, timesta
 
 export type TokenUsageChangedEvent = { timestamp: string, };
 
-export type ToolExecutionCompletedEvent = { tool_call_id: string, message_id: string, skill_name: string, tool_name: string, success: boolean, result: any, error: string | null, timestamp: string, };
+export type ToolExecutionCompletedEvent = { content: string, tool_call_id: string, message_id: string, skill_name: string, tool_name: string, success: boolean, result: any, error: string | null, timestamp: string, };
 
-export type ToolExecutionStartedEvent = { tool_call_id: string, message_id: string, skill_name: string, tool_name: string, arguments: any, timestamp: string, };
+export type ToolExecutionStartedEvent = { content: string, tool_call_id: string, message_id: string, skill_name: string, tool_name: string, arguments: any, timestamp: string, };

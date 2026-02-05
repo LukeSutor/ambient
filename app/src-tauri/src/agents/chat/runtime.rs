@@ -190,6 +190,7 @@ impl AgentRuntime {
                     is_finished: true,
                     full_response: text.clone(),
                     conv_id: Some(self.conv_id.clone()),
+                    message_id: None, // We don't have one yet if it's cancelled immediately
                 };
                 let _ = emit(crate::events::types::CHAT_STREAM, stream_data);
 
@@ -215,6 +216,9 @@ impl AgentRuntime {
             // Determine what tools to include in request
             let available_tools = self.get_available_tools();
 
+            // Pre-generate message ID for the assistant response if it turns out to be a text response
+            let assistant_msg_id = uuid::Uuid::new_v4().to_string();
+
             // Build LLM request with cancel signal
             let request = LlmRequest::new(String::new())
                 .with_system_prompt(Some(system_prompt.clone()))
@@ -222,6 +226,7 @@ impl AgentRuntime {
                 .with_internal_tools(Some(available_tools))
                 .with_conv_id(Some(self.conv_id.clone()))
                 .with_stream(Some(true))
+                .with_assistant_message_id(Some(assistant_msg_id.clone()))
                 .with_cancel_signal(Some(self.cancel_signal.clone()));
 
             // Generate response from LLM
@@ -244,10 +249,11 @@ impl AgentRuntime {
                             is_finished: true,
                             full_response: text.clone(),
                             conv_id: Some(self.conv_id.clone()),
+                            message_id: Some(assistant_msg_id.clone()),
                         };
                         let _ = emit(crate::events::types::CHAT_STREAM, stream_data);
 
-                        self.save_assistant_message(&text, MessageType::Text, None).await?;
+                        self.save_assistant_message_with_id(&assistant_msg_id, &text, MessageType::Text, None).await?;
                         return Ok(text);
                     }
                     return Err(AgentError::LlmError(e));
@@ -259,7 +265,7 @@ impl AgentRuntime {
                 LlmResponse::Text(text) => {
                     // Final response - save and return
                     log::info!("[agent] Final response received, saving and returning");
-                    self.save_assistant_message(&text, MessageType::Text, None).await?;
+                    self.save_assistant_message_with_id(&assistant_msg_id, &text, MessageType::Text, None).await?;
                     return Ok(text);
                 }
 
@@ -286,7 +292,7 @@ impl AgentRuntime {
                         tool_call_metadatas.push(metadata.clone());
                     }
                     let content = text.unwrap_or_default();
-                    let tool_call_msg_id = self.save_assistant_message(&content, MessageType::ToolCalls, Some(tool_call_metadatas)).await?;
+                    let tool_call_msg_id = self.save_assistant_message_with_id(&assistant_msg_id, &content, MessageType::ToolCalls, Some(tool_call_metadatas)).await?;
 
                     // Execute tools in parallel
                     let results = self.execute_tool_calls(tool_calls.clone(), tool_call_msg_id).await?;
@@ -517,8 +523,13 @@ impl AgentRuntime {
         content: &str,
         attachments: &[AttachmentData],
     ) -> Result<(), AgentError> {
-        use crate::db::conversations::create_attachments;
-        use crate::db::conversations::add_attachments;
+        use crate::db::conversations::{create_attachments, add_attachments, get_message};
+
+        // Check if message already exists
+        if let Ok(_) = get_message(self.app_handle.clone(), self.message_id.clone()).await {
+            log::info!("[agent] User message {} already exists, skipping save", self.message_id);
+            return Ok(());
+        }
 
         // Save message
         add_message(
@@ -550,9 +561,10 @@ impl AgentRuntime {
         Ok(())
     }
 
-    /// Saves an assistant message to the database.
-    async fn save_assistant_message(
+    /// Saves an assistant message to the database with a specific ID.
+    async fn save_assistant_message_with_id(
         &self,
+        id: &str,
         content: &str,
         message_type: MessageType,
         metadata: Option<Vec<MessageMetadata>>,
@@ -564,11 +576,27 @@ impl AgentRuntime {
             content.to_string(),
             Some(message_type),
             metadata,
-            None,
+            Some(id.to_string()),
         )
         .await?;
 
         Ok(message.id)
+    }
+
+    /// Saves an assistant message to the database.
+    async fn save_assistant_message(
+        &self,
+        content: &str,
+        message_type: MessageType,
+        metadata: Option<Vec<MessageMetadata>>,
+    ) -> Result<String, AgentError> {
+        self.save_assistant_message_with_id(
+            &uuid::Uuid::new_v4().to_string(),
+            content,
+            message_type,
+            metadata,
+        )
+        .await
     }
 
     /// Saves a tool result message to the database.

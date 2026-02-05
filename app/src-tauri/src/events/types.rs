@@ -41,6 +41,7 @@ pub struct ChatStreamEvent {
   pub is_finished: bool,
   pub full_response: String,
   pub conv_id: Option<String>,
+  pub message_id: Option<String>,
 }
 
 pub const HUD_CHAT: &str = "hud_chat";

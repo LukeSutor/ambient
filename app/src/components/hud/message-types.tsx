@@ -4,7 +4,7 @@ import {
   llmMarkdownConfig,
   preprocessMarkdownCurrency,
 } from "@/components/ui/markdown-config";
-import type { ChatMessage } from "@/lib/conversations";
+import { useConversation, type ChatMessage } from "@/lib/conversations";
 import { cn } from "@/lib/utils";
 import type { Attachment, MessageMetadata } from "@/types/conversations";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -18,6 +18,7 @@ import {
   Hammer,
   NotebookPen,
   RefreshCw,
+  Pencil,
   Search,
   Sparkles,
   SquareDashed,
@@ -241,13 +242,102 @@ export const UserMessage = memo(function UserMessage({
   m: ChatMessage;
   openSecondary: (dest: string) => void;
 }) {
+  const { resubmitMessage, isStreaming } = useConversation();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(m.message.content);
+
+  const handleCopy = () => {
+    void navigator.clipboard.writeText(m.message.content);
+  };
+
+  const handleUpdate = () => {
+    if (editContent.trim() && editContent !== m.message.content) {
+      void resubmitMessage(m.message.id, editContent);
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditContent(m.message.content);
+    setIsEditing(false);
+  };
+
   return (
     <>
       {m.message.attachments.map((a) => (
         <PreviewAttachment key={a.id} a={a} />
       ))}
-      <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 ml-auto w-fit max-w-[85%]">
-        <div className="whitespace-pre-wrap break-all">{m.message.content}</div>
+      <div className="flex items-start gap-1 justify-end group">
+        <div className="w-14">
+          {!isEditing && !isStreaming && (
+            <div className="flex flex-row opacity-0 group-hover:opacity-100 transition-opacity">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleCopy}
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full h-7 w-7"
+                  >
+                    <Copy className="!w-3 !h-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Copy</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={() => setIsEditing(true)}
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full h-7 w-7"
+                  >
+                    <Pencil className="!w-3 !h-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Edit</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </div>
+
+        {isEditing ? (
+          <div className="flex flex-col gap-2 w-full">
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="w-full bg-white/80 border border-black/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black/20 min-h-[80px] resize-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 px-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancel}
+                className="h-7 text-xs font-semibold text-zinc-500 hover:text-zinc-700 hover:bg-black/5"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleUpdate}
+                className="h-7 text-xs font-bold bg-zinc-900 text-white hover:bg-zinc-800"
+                disabled={
+                  !editContent.trim() || editContent === m.message.content
+                }
+              >
+                Update
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-hidden bg-white/60 border border-black/20 rounded-lg px-3 py-2 w-fit max-w-[85%]">
+            <div className="whitespace-pre-wrap break-all text-sm leading-relaxed text-zinc-800">
+              {m.message.content}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Persistent memory area to avoid layout shifts and provide spacing */}
@@ -504,12 +594,17 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 export const AssistantMessage = memo(function AssistantMessage({
   m,
 }: { m: ChatMessage }) {
+  const { isStreaming, retryMessage } = useConversation();
   const content = m.message.content;
 
   const handleCopy = () => {
     if (content) {
       void navigator.clipboard.writeText(content);
     }
+  };
+
+  const handleRetry = () => {
+    void retryMessage(m.message.id);
   };
 
   return (
@@ -520,36 +615,41 @@ export const AssistantMessage = memo(function AssistantMessage({
         </Markdown>
       </div>
       {/* Redo and copy section */}
-      <div className="flex flex-row">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full h-7 w-7"
-            >
-              <RefreshCw className="!w-3 !h-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>Redo</p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={handleCopy}
-              variant="ghost"
-              size="icon"
-              className="rounded-full h-7 w-7"
-            >
-              <Copy className="!w-3 !h-3" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>Copy</p>
-          </TooltipContent>
-        </Tooltip>
+      <div className="h-7">
+        {!isStreaming && (
+          <div className="flex flex-row">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleCopy}
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full h-7 w-7"
+                >
+                  <Copy className="!w-3 !h-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Copy</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleRetry}
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full h-7 w-7"
+                >
+                  <RefreshCw className="!w-3 !h-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Redo</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </div>
     </div>
   );

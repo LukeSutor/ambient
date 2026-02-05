@@ -98,7 +98,7 @@ type ConversationAction =
   | { type: "FINALIZE_USER_MESSAGE"; payload: { id: string; content: string } }
   | { type: "START_ASSISTANT_MESSAGE"; payload: { conversationId: string } }
   | { type: "UPDATE_STREAMING_CONTENT"; payload: string }
-  | { type: "FINALIZE_STREAM"; payload: string }
+  | { type: "FINALIZE_STREAM"; payload: { content: string; messageId?: string } }
   | { type: "ADD_ATTACHMENT_DATA"; payload: AttachmentData }
   | { type: "REMOVE_ATTACHMENT_DATA"; payload: number }
   | { type: "CLEAR_ATTACHMENT_DATA" }
@@ -368,11 +368,13 @@ function conversationReducer(
 
       if (lastAssistIdx !== -1) {
         const actualIdx = finalizedMessages.length - 1 - lastAssistIdx;
+        const currentMessage = finalizedMessages[actualIdx].message;
         finalizedMessages[actualIdx] = {
           ...finalizedMessages[actualIdx],
           message: {
-            ...finalizedMessages[actualIdx].message,
-            content: action.payload,
+            ...currentMessage,
+            content: action.payload.content,
+            id: action.payload.messageId ?? currentMessage.id,
           },
         };
       }
@@ -571,7 +573,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         const listenerPromises = [
           // Stream Listener
           listen<ChatStreamEvent>("chat_stream", (event) => {
-            const { delta, full_response, is_finished, conv_id } =
+            const { delta, full_response, is_finished, conv_id, message_id } =
               event.payload;
 
             // Filter by conversation ID using ref
@@ -581,7 +583,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
             if (is_finished) {
               const finalText = extractThinkingContent(full_response);
-              dispatch({ type: "FINALIZE_STREAM", payload: finalText });
+              dispatch({
+                type: "FINALIZE_STREAM",
+                payload: { content: finalText, messageId: message_id ?? undefined },
+              });
               return;
             }
 
@@ -600,13 +605,14 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
               message: event.payload.message,
             };
 
-            if (event.payload.status === "completed") {
-              dispatch({
-                type: "FINALIZE_STREAM",
-                payload: event.payload.message.content,
-              });
-            } else {
-              dispatch({ type: "ADD_CHAT_MESSAGE", payload: chatMessage });
+            const isCompleted = event.payload.status === "completed";
+            
+            // Use ADD_AGENTIC_MESSAGE to avoid duplicates and ensure updates
+            dispatch({ type: "ADD_AGENTIC_MESSAGE", payload: chatMessage });
+            
+            if (isCompleted) {
+              dispatch({ type: "SET_LOADING", payload: false });
+              dispatch({ type: "SET_STREAMING", payload: false });
             }
           }),
 

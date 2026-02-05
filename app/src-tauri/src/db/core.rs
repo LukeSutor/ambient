@@ -61,16 +61,6 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_message_id ON memory_entries(message_id);
 
-        -- Computer use sessions
-        CREATE TABLE IF NOT EXISTS computer_use_sessions (
-          id TEXT PRIMARY KEY,
-          conversation_id TEXT NOT NULL UNIQUE,
-          data TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
-        );
-
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS models (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

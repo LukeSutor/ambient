@@ -60,13 +60,19 @@ export async function sendAgentMessage(
  * Starts a computer use session
  * @param conversationId - ID of the conversation
  * @param prompt - The prompt to initiate computer use
+ * @param messageId - Optional ID of the user message
  */
 export async function startComputerUseSession(
   conversationId: string,
   prompt: string,
+  messageId?: string,
 ): Promise<void> {
   try {
-    await invoke("start_computer_use", { conversationId, prompt });
+    await invoke("start_computer_use", {
+      conversationId,
+      prompt,
+      messageId: messageId || null,
+    });
   } catch (error) {
     console.error(
       "[ConversationAPI] Failed to start computer use session:",

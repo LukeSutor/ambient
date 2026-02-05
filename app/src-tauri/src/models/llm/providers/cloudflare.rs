@@ -164,6 +164,7 @@ impl LlmProvider for CloudflareProvider {
                   is_finished: false,
                   full_response: full.clone(),
                   conv_id: request.conv_id.clone(),
+                  message_id: request.assistant_message_id.clone(),
                 },
               );
             }
@@ -186,6 +187,7 @@ impl LlmProvider for CloudflareProvider {
           is_finished: true,
           full_response: final_text.clone(),
           conv_id: request.conv_id.clone(),
+          message_id: request.assistant_message_id.clone(),
         };
         let _ = emit(CHAT_STREAM, final_stream_data);
 
@@ -214,6 +216,7 @@ impl LlmProvider for CloudflareProvider {
             is_finished: true,
             full_response: full.clone(),
             conv_id: request.conv_id.clone(),
+            message_id: request.assistant_message_id.clone(),
           },
         );
         Ok(LlmResponse::text(full))

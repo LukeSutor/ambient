@@ -164,6 +164,8 @@ pub fn run() {
       db::conversations::get_conversation,
       db::conversations::list_conversations,
       db::conversations::delete_conversation,
+      db::conversations::delete_messages_after,
+      db::conversations::update_message_content,
       db::conversations::update_conversation_name,
       db::conversations::list_attachments,
       db::conversations::delete_attachment,

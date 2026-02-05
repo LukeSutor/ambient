@@ -131,7 +131,7 @@ impl ComputerUseRuntime {
     }
 
     /// Run the computer use session.
-    pub async fn run(&mut self, prompt: String) -> Result<String, String> {
+    pub async fn run(&mut self, prompt: String, message_id: Option<String>) -> Result<String, String> {
         log::info!("[computer_use_runtime] Starting session with prompt: {}", prompt);
 
         // Close main window and open computer use toast
@@ -142,7 +142,7 @@ impl ComputerUseRuntime {
         self.emit_toast("Starting computer use session").await;
 
         // Save user message with initial screenshot
-        self.save_user_message(&prompt).await?;
+        self.save_user_message(&prompt, message_id).await?;
 
         // Main loop
         let final_response: String;
@@ -197,7 +197,6 @@ impl ComputerUseRuntime {
                     // Final response - no more actions needed
                     log::info!("[computer_use_runtime] Final response received");
                     final_response = text.clone();
-                    self.save_assistant_message(&text, MessageType::Text, None).await?;
                     break;
                 }
 
@@ -214,7 +213,7 @@ impl ComputerUseRuntime {
                                 let confirmed = self.get_safety_confirmation(safety).await?;
                                 if !confirmed {
                                     final_response = "*Safety confirmation denied by user*".to_string();
-                                    self.save_assistant_message(&final_response, MessageType::Text, None).await?;
+                                    self.save_assistant_message(&final_response, MessageType::Text, None, "completed", None).await?;
                                     break 'main_loop;
                                 }
                             }
@@ -240,13 +239,8 @@ impl ComputerUseRuntime {
         let _ = open_main_window(self.app_handle.clone()).await;
         let _ = close_computer_use_window(self.app_handle.clone()).await;
 
-        // Emit final update
-        let final_message = self.save_assistant_message(&final_response, MessageType::Text, None).await?;
-        let final_update = ComputerUseUpdateEvent {
-            status: "completed".to_string(),
-            message: final_message,
-        };
-        let _ = emit(COMPUTER_USE_UPDATE, final_update);
+        // Save final message and emit completed status
+        let _ = self.save_assistant_message(&final_response, MessageType::Text, None, "completed", None).await?;
 
         Ok(final_response)
     }
@@ -291,9 +285,17 @@ impl ComputerUseRuntime {
     }
 
     /// Save the initial user message with a screenshot attachment.
-    async fn save_user_message(&mut self, prompt: &str) -> Result<(), String> {
+    async fn save_user_message(&mut self, prompt: &str, message_id: Option<String>) -> Result<(), String> {
+        // If message_id provided, check if it already exists
+        if let Some(ref id) = message_id {
+            if let Ok(_) = crate::db::conversations::get_message(self.app_handle.clone(), id.clone()).await {
+                log::info!("[computer_use_runtime] User message {} already exists, skipping save", id);
+                return Ok(());
+            }
+        }
+
         // Create user message first
-        let message_id = Uuid::new_v4().to_string();
+        let id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let _ = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
@@ -301,7 +303,7 @@ impl ComputerUseRuntime {
             prompt.to_string(),
             Some(MessageType::Text),
             None,
-            Some(message_id.clone()),
+            Some(id.clone()),
         ).await?;
 
         Ok(())
@@ -548,7 +550,13 @@ impl ComputerUseRuntime {
 
         let call_content = reasoning.unwrap_or_default().to_string();
 
-        self.save_assistant_message(&call_content, MessageType::ToolCalls, Some(call_metadata_list)).await?;
+        self.save_assistant_message(
+            &call_content, 
+            MessageType::ToolCalls, 
+            Some(call_metadata_list),
+            "in_progress",
+            None
+        ).await?;
         Ok(())
     }
 
@@ -558,6 +566,8 @@ impl ComputerUseRuntime {
         content: &str,
         message_type: MessageType,
         metadata: Option<Vec<MessageMetadata>>,
+        status: &str,
+        message_id: Option<String>,
     ) -> Result<crate::db::conversations::Message, String> {
         let message = add_message(
             &self.app_handle,
@@ -566,15 +576,15 @@ impl ComputerUseRuntime {
             content.to_string(),
             Some(message_type.clone()),
             metadata,
-            None,
+            message_id,
         ).await?;
 
-        // Emit update event
-        let update_event = ComputerUseUpdateEvent {
-            status: "in_progress".to_string(),
-            message: message.clone(),
-        };
-        let _ = emit(COMPUTER_USE_UPDATE, update_event);
+        // // Emit update event
+        // let update_event = ComputerUseUpdateEvent {
+        //     status: status.to_string(),
+        //     message: message.clone(),
+        // };
+        // let _ = emit(COMPUTER_USE_UPDATE, update_event);
 
         Ok(message)
     }
@@ -621,7 +631,7 @@ impl ComputerUseRuntime {
             result_metadata_list.push(result_metadata);
         }
 
-        let _ = add_message(
+        let mut message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
             Role::Tool,
@@ -633,8 +643,16 @@ impl ComputerUseRuntime {
 
         // Link attachments to message
         if !attachments.is_empty() {
-            add_attachments(&self.app_handle, attachments).await?;
+            add_attachments(&self.app_handle, attachments.clone()).await?;
+            message.attachments = attachments;
         }
+
+        // // Emit update event for tool results so HUD can show screenshot in thinking trace
+        // let update_event = ComputerUseUpdateEvent {
+        //     status: "in_progress".to_string(),
+        //     message,
+        // };
+        // let _ = emit(COMPUTER_USE_UPDATE, update_event);
 
         Ok(())
     }

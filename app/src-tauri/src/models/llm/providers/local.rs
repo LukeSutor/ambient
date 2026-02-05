@@ -157,6 +157,7 @@ impl LlmProvider for LocalProvider {
                             is_finished: false,
                             full_response: full_response.clone(),
                             conv_id: request.conv_id.clone(),
+                            message_id: request.assistant_message_id.clone(),
                           };
 
                           if let Err(e) = emit(CHAT_STREAM, stream_data) {
@@ -210,6 +211,7 @@ impl LlmProvider for LocalProvider {
           is_finished: true,
           full_response: final_text.clone(),
           conv_id: request.conv_id.clone(),
+          message_id: request.assistant_message_id.clone(),
         };
         let _ = emit(CHAT_STREAM, final_stream_data);
 
@@ -254,6 +256,7 @@ impl LlmProvider for LocalProvider {
           is_finished: true,
           full_response: full_response.clone(),
           conv_id: request.conv_id.clone(),
+          message_id: request.assistant_message_id.clone(),
         };
         let _ = emit(CHAT_STREAM, final_stream_data);
 

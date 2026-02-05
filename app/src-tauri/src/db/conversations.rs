@@ -666,6 +666,121 @@ pub async fn delete_conversation(
   Ok(())
 }
 
+/// Delete a specific message and all messages that come after it in the same conversation.
+/// This is used for retrying and resubmitting messages.
+#[tauri::command]
+pub async fn delete_messages_after(
+    app_handle: AppHandle,
+    message_id: String,
+) -> Result<(), String> {
+    let state = app_handle.state::<DbState>();
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    // 1. Get the timestamp and conversation_id of the target message
+    let (timestamp, conversation_id): (String, String) = conn
+        .query_row(
+            "SELECT timestamp, conversation_id FROM conversation_messages WHERE id = ?1",
+            params![message_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Failed to find message: {}", e))?;
+
+    // 2. Find all messages to be deleted (>= timestamp)
+    let mut stmt = conn
+        .prepare(
+            "SELECT id FROM conversation_messages 
+             WHERE conversation_id = ?1 AND timestamp >= ?2",
+        )
+        .map_err(|e| format!("Failed to prepare delete statement: {}", e))?;
+
+    let message_ids: Vec<String> = stmt
+        .query_map(params![conversation_id, timestamp], |row| row.get(0))
+        .map_err(|e| format!("Failed to query messages to delete: {}", e))?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|e| format!("Failed to collect message IDs: {}", e))?;
+
+    let deleted_count = message_ids.len();
+
+    // 3. Delete attachments for these messages
+    for id in &message_ids {
+        let mut stmt = conn
+            .prepare("SELECT file_path FROM attachments WHERE message_id = ?1")
+            .map_err(|e| format!("Failed to prepare attachment query: {}", e))?;
+
+        let attachment_paths = stmt
+            .query_map(params![id], |row| row.get::<_, Option<String>>(0))
+            .map_err(|e| format!("Failed to query attachment paths: {}", e))?;
+
+        for path_result in attachment_paths {
+            if let Ok(Some(file_path)) = path_result {
+                let full_path = app_handle
+                    .path()
+                    .app_data_dir()
+                    .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+                    .join(file_path);
+                if full_path.exists() {
+                    let _ = std::fs::remove_file(&full_path);
+                }
+            }
+        }
+    }
+
+    // 4. Delete the messages
+    conn.execute(
+        "DELETE FROM conversation_messages 
+         WHERE conversation_id = ?1 AND timestamp >= ?2",
+        params![conversation_id, timestamp],
+    )
+    .map_err(|e| format!("Failed to delete messages: {}", e))?;
+
+    // 5. Update conversation message count
+    conn.execute(
+        "UPDATE conversations SET message_count = message_count - ?1, updated_at = ?2 WHERE id = ?3",
+        params![deleted_count as i32, Utc::now().to_rfc3339(), conversation_id],
+    )
+    .map_err(|e| format!("Failed to update conversation: {}", e))?;
+
+    log::info!(
+        "[conversations] Deleted {} messages from conversation {} starting from {}",
+        deleted_count,
+        conversation_id,
+        message_id
+    );
+
+    Ok(())
+}
+
+/// Update a message's content.
+#[tauri::command]
+pub async fn update_message_content(
+    app_handle: AppHandle,
+    message_id: String,
+    content: String,
+) -> Result<(), String> {
+    let state = app_handle.state::<DbState>();
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    conn.execute(
+        "UPDATE conversation_messages SET content = ?1 WHERE id = ?2",
+        params![content, message_id],
+    )
+    .map_err(|e| format!("Failed to update message: {}", e))?;
+
+    Ok(())
+}
+
 /// Update conversation name
 #[tauri::command]
 pub async fn update_conversation_name(

@@ -21,6 +21,8 @@ pub struct LlmRequest {
     pub stream: Option<bool>,
     pub internal_tools: Option<Vec<ToolDefinition>>,
     pub messages: Option<Vec<crate::db::conversations::Message>>,
+    /// ID for the assistant message being generated (for streaming)
+    pub assistant_message_id: Option<String>,
     /// Override model type (e.g., "computer-use" for computer use sessions)
     pub model_type: Option<String>,
     /// Cancellation signal for aborting generation (not serialized)
@@ -68,6 +70,11 @@ impl LlmRequest {
 
     pub fn with_messages(mut self, messages: Option<Vec<crate::db::conversations::Message>>) -> Self {
         self.messages = messages;
+        self
+    }
+
+    pub fn with_assistant_message_id(mut self, assistant_message_id: Option<String>) -> Self {
+        self.assistant_message_id = assistant_message_id;
         self
     }
 

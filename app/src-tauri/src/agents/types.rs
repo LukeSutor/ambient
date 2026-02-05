@@ -16,6 +16,7 @@ pub struct ToolExecutionStartedEvent {
     pub message_id: String,
     pub skill_name: String,
     pub tool_name: String,
+    // pub content: String,
     #[ts(type = "any")]
     pub arguments: Value,
     pub timestamp: String,
@@ -31,6 +32,7 @@ pub struct ToolExecutionCompletedEvent {
     pub message_id: String,
     pub skill_name: String,
     pub tool_name: String,
+    // pub content: String,
     pub success: bool,
     #[ts(type = "any")]
     pub result: Option<Value>,
