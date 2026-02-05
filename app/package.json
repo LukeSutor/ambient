@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "node --max-old-space-size=4096 --max-semi-space-size=128 ./node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "biome check src/ && next lint",
     "tauri": "tauri"

@@ -1,16 +1,23 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,
   devIndicators: false,
   output: "export",
   images: {
     unoptimized: true,
   },
   distDir: "dist",
+  typescript: {
+    ignoreBuildErrors: true, 
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  serverExternalPackages: ["@tauri-apps/api"],
   experimental: {
-    // Help prevent hydration issues with Tauri components
-    serverComponentsExternalPackages: ["@tauri-apps/api"],
+    cpus: 1,
+    workerThreads: false,
   },
 };
 

@@ -245,7 +245,12 @@ export const UserMessage = memo(function UserMessage({
 }) {
   const { resubmitMessage, isStreaming } = useConversation();
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(m.message.content);
+  const [editContent, setEditContent] = useState("");
+
+  useEffect(() => {
+    // Set the content when the message loads or changes
+    setEditContent(m.message.content);
+  }, [m.message.content]);
 
   const handleCopy = () => {
     void navigator.clipboard.writeText(m.message.content);

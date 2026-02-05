@@ -24,11 +24,10 @@
     }
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".next/types/**/*.ts",
-    "next-env.d.ts",
-    "dist/types/**/*.ts"
+    "next-env.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "src-tauri", "dist"]
 }
