@@ -95,7 +95,7 @@ type ConversationAction =
       payload: { id: string; conversationId: string; timestamp: string };
     }
   | { type: "FINALIZE_USER_MESSAGE"; payload: { id: string; content: string } }
-  | { type: "START_ASSISTANT_MESSAGE"; payload: { conversationId: string } }
+  | { type: "START_ASSISTANT_MESSAGE"; payload: { conversationId: string; assistantMessageId: string; } }
   | { type: "UPDATE_STREAMING_CONTENT"; payload: string }
   | { type: "FINALIZE_STREAM"; payload: { content: string; messageId?: string } }
   | { type: "ADD_ATTACHMENT_DATA"; payload: AttachmentData }
@@ -308,7 +308,7 @@ function conversationReducer(
     case "START_ASSISTANT_MESSAGE": {
       const newMessage: ChatMessage = {
         message: {
-          id: crypto.randomUUID(),
+          id: action.payload.assistantMessageId,
           conversation_id: action.payload.conversationId,
           role: "assistant",
           content: "",
@@ -357,7 +357,6 @@ function conversationReducer(
     }
 
     case "FINALIZE_STREAM": {
-      console.log("finalize stream called with payload:", action.payload);
       // Update the last assistant text message with final content
       const finalizedMessages = [...state.messages];
       const lastAssistIdx = [...finalizedMessages].reverse().findIndex((m) => {

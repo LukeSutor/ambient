@@ -82,6 +82,7 @@ impl ComputerUseRuntime {
     pub async fn new(
         app_handle: AppHandle,
         conversation_id: String,
+        assistant_message_id: String,
         cancel_signal: Arc<AtomicBool>,
     ) -> Result<Self, String> {
         // Load settings to determine model type
@@ -98,9 +99,6 @@ impl ComputerUseRuntime {
             "[computer_use_runtime] Created runtime: is_local={}, screen={}x{}",
             is_local, screen_width, screen_height
         );
-
-        // Pre-generate message ID for the assistant response if it turns out to be a text response
-        let assistant_message_id = uuid::Uuid::new_v4().to_string();
 
         Ok(Self {
             app_handle,

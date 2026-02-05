@@ -25,6 +25,7 @@ pub async fn start_computer_use(
     app_handle: AppHandle,
     state: tauri::State<'_, ComputerUseState>,
     conversation_id: String,
+    assistant_message_id: String,
     prompt: String,
     message_id: Option<String>,
 ) -> Result<String, String> {
@@ -44,6 +45,7 @@ pub async fn start_computer_use(
     let mut runtime = ComputerUseRuntime::new(
         app_handle.clone(),
         conversation_id,
+        assistant_message_id,
         state.should_stop.clone(),
     ).await?;
 

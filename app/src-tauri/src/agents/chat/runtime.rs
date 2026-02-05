@@ -55,6 +55,7 @@ pub async fn handle_agent_chat(
     app_handle: AppHandle,
     state: tauri::State<'_, AgentRuntimeState>,
     conv_id: String,
+    assistant_message_id: String,
     message_id: String,
     user_message: String,
     attachments: Vec<AttachmentData>,
@@ -70,7 +71,7 @@ pub async fn handle_agent_chat(
 
     // Create runtime and run
     let cancel_signal = state.get_stop_signal();
-    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, message_id, cancel_signal).await?;
+    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal).await?;
     let result = runtime.run(user_message, attachments).await;
 
     // Mark generation as finished
@@ -117,6 +118,7 @@ impl AgentRuntime {
     async fn new(
         app_handle: AppHandle,
         conv_id: String,
+        assistant_message_id: String,
         message_id: String,
         cancel_signal: Arc<AtomicBool>,
     ) -> Result<Self, AgentError> {
@@ -142,9 +144,6 @@ impl AgentRuntime {
             "[agent] Runtime created: active_skills={:?}",
             active_skills
         );
-
-        // Pre-generate message ID for assistant response
-        let assistant_message_id = uuid::Uuid::new_v4().to_string();
 
         Ok(Self {
             app_handle,

@@ -30,6 +30,7 @@ export async function createConversation(
 /**
  * Sends a message using the agentic runtime
  * @param conversationId - ID of the conversation
+ * @param assistantMessageId - ID for the assistant's message
  * @param content - Message content
  * @param attachmentData - Attachments to include
  * @param messageId - The message ID to use
@@ -37,6 +38,7 @@ export async function createConversation(
  */
 export async function sendAgentMessage(
   conversationId: string,
+  assistantMessageId: string,
   content: string,
   attachmentData: AttachmentData[],
   messageId: string,
@@ -44,6 +46,7 @@ export async function sendAgentMessage(
   try {
     const finalText = await invoke<string>("handle_agent_chat", {
       convId: conversationId,
+      assistantMessageId: assistantMessageId,
       messageId: messageId,
       userMessage: content,
       attachments: attachmentData,
@@ -59,17 +62,20 @@ export async function sendAgentMessage(
 /**
  * Starts a computer use session
  * @param conversationId - ID of the conversation
+ * @param assistantMessageId - ID for the assistant's message
  * @param prompt - The prompt to initiate computer use
  * @param messageId - Optional ID of the user message
  */
 export async function startComputerUseSession(
   conversationId: string,
+  assistantMessageId: string,
   prompt: string,
   messageId?: string,
 ): Promise<void> {
   try {
     await invoke("start_computer_use", {
       conversationId,
+      assistantMessageId,
       prompt,
       messageId: messageId || null,
     });

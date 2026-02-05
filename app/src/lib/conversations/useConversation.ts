@@ -197,7 +197,7 @@ export function useConversation(
    * Resets the conversation state
    */
   const resetConversation = useCallback(
-    async (delay?: number): Promise<string | null> => {
+    async (): Promise<string | null> => {
       if (state.messages.length === 0) {
         return null;
       }
@@ -205,17 +205,12 @@ export function useConversation(
       try {
         setChatMinimized();
         dispatch({ type: "SET_CONVERSATION_ID", payload: null });
-        if (delay && delay > 0) {
-          setTimeout(() => {
-            dispatch({ type: "CLEAR_MESSAGES" });
-          }, delay);
-        } else {
-          dispatch({ type: "CLEAR_MESSAGES" });
-        }
+        dispatch({ type: "CLEAR_MESSAGES" });
         return null;
       } catch (error) {
+        toast.error("Failed to reset conversation. Please try again.");
         console.error(
-          "[useConversation] Failed to create conversation:",
+          "[useConversation] Failed to reset conversation:",
           error,
         );
         return null;
@@ -233,6 +228,7 @@ export function useConversation(
         await deleteApiConversation(id);
         dispatch({ type: "DELETE_CONVERSATION", payload: { id } });
       } catch (error) {
+        toast.error("Failed to delete conversation. Please try again.");
         console.error(
           "[useConversation] Failed to delete conversation:",
           error,
@@ -254,6 +250,7 @@ export function useConversation(
         dispatch({ type: "LOAD_CONVERSATION", payload: conversation });
         await loadMessages(conversation);
       } catch (error) {
+        toast.error("Failed to load conversation. Please try again.");
         console.error("[useConversation] Failed to load conversation:", error);
       }
     },
@@ -272,6 +269,7 @@ export function useConversation(
         const messages = backendMessages.map(transformBackendMessage);
         dispatch({ type: "LOAD_MESSAGES", payload: messages });
       } catch (error) {
+        toast.error("Failed to load messages. Please try again.");
         console.error("[useConversation] Failed to load messages:", error);
       }
     },
@@ -306,6 +304,9 @@ export function useConversation(
         // Create user message with ID and timestamp
         const userMessage = createUserMessage(content, activeConversationId);
 
+        // Create assistant message id in advance
+        const assistantMessageId = crypto.randomUUID();
+
         // Clear attachment data
         const attachmentData = state.attachmentData;
         dispatch({ type: "CLEAR_ATTACHMENT_DATA" });
@@ -334,32 +335,34 @@ export function useConversation(
 
         dispatch({
           type: "START_ASSISTANT_MESSAGE",
-          payload: { conversationId: activeConversationId },
+          payload: { conversationId: activeConversationId, assistantMessageId },
         });
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
-        //TODO: handle errors with a toast here
         if (state.conversationType === "computer_use") {
           void startComputerUseSession(
             activeConversationId,
+            assistantMessageId,
             content,
             userMessage.message.id,
           );
         } else {
           await sendAgentMessage(
             activeConversationId,
+            assistantMessageId,
             content,
             attachmentData,
             userMessage.message.id,
           );
         }
       } catch (error) {
+        toast.error("Failed to send message. Please try again.");
         console.error("[useConversation] Failed to send message:", error);
 
         // Remove the placeholder assistant message on error
         dispatch({
           type: "FINALIZE_STREAM",
-          payload: { content: "[Error generating response]" },
+          payload: { content: "*Error generating response*" },
         });
         dispatch({ type: "SET_LOADING", payload: false });
         dispatch({ type: "SET_STREAMING", payload: false });
@@ -480,13 +483,23 @@ export function useConversation(
 
         const userMessage = state.messages[userMessageIndex];
 
-        // Delete EVERYTHING after that user message in DB
-        const firstMessageToDeleteIndex = userMessageIndex + 1;
-        if (firstMessageToDeleteIndex < state.messages.length) {
-          const firstToDeleteId =
-            state.messages[firstMessageToDeleteIndex].message.id;
-          await invoke("delete_messages_after", { messageId: firstToDeleteId });
+        // Try to delete everything after that user message in DB and continue if it doesn't work
+        try {
+          const firstMessageToDeleteIndex = userMessageIndex + 1;
+          if (firstMessageToDeleteIndex < state.messages.length) {
+            const firstToDeleteId =
+              state.messages[firstMessageToDeleteIndex].message.id;
+            await invoke("delete_messages_after", { messageId: firstToDeleteId });
+          }
+        } catch (error) {
+          console.warn(
+            "[useConversation] Failed to delete messages after for retry:",
+            error,
+          );
         }
+
+        // Create assistant message id in advance
+        const assistantMessageId = crypto.randomUUID();
 
         // Update local state
         const remainingMessages = state.messages.slice(0, userMessageIndex + 1);
@@ -494,7 +507,7 @@ export function useConversation(
 
         dispatch({
           type: "START_ASSISTANT_MESSAGE",
-          payload: { conversationId },
+          payload: { conversationId, assistantMessageId },
         });
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
@@ -509,13 +522,20 @@ export function useConversation(
         } else {
           await sendAgentMessage(
             conversationId,
+            assistantMessageId,
             userMessage.message.content,
             [], // Attachments are already in the DB for this user message
             userMessage.message.id,
           );
         }
       } catch (error) {
+        toast.error("Failed to retry message. Please try again.");
         console.error("[useConversation] Failed to retry message:", error);
+        // Remove the placeholder assistant message on error
+        dispatch({
+          type: "FINALIZE_STREAM",
+          payload: { content: "*Error generating response*" },
+        });
         dispatch({ type: "SET_LOADING", payload: false });
         dispatch({ type: "SET_STREAMING", payload: false });
       }
@@ -541,11 +561,21 @@ export function useConversation(
         // Update the message content in DB
         await invoke("update_message_content", { messageId, content });
 
-        // Delete everything AFTER this message in DB
-        if (messageIndex < state.messages.length - 1) {
-          const nextMessageId = state.messages[messageIndex + 1].message.id;
-          await invoke("delete_messages_after", { messageId: nextMessageId });
+        // Try to delete everything after this message in DB and continue if it doesn't work
+        try {
+          if (messageIndex < state.messages.length - 1) {
+            const nextMessageId = state.messages[messageIndex + 1].message.id;
+            await invoke("delete_messages_after", { messageId: nextMessageId });
+          }
+        } catch (error) {
+          console.warn(
+            "[useConversation] Failed to delete messages after for resubmit:",
+            error,
+          );
         }
+
+        // Create assistant message id in advance
+        const assistantMessageId = crypto.randomUUID();
 
         // Update local state
         const updatedMessages = [...state.messages.slice(0, messageIndex + 1)];
@@ -560,24 +590,31 @@ export function useConversation(
 
         dispatch({
           type: "START_ASSISTANT_MESSAGE",
-          payload: { conversationId },
+          payload: { conversationId, assistantMessageId },
         });
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
 
         // Restart agentic runtime
         if (state.conversationType === "computer_use") {
-          void startComputerUseSession(conversationId, content, messageId);
+          void startComputerUseSession(conversationId, assistantMessageId, content, messageId);
         } else {
           await sendAgentMessage(
             conversationId,
+            assistantMessageId,
             content,
             [], // Attachments are already in the DB
             messageId,
           );
         }
       } catch (error) {
+        toast.error("Failed to resubmit message. Please try again.");
         console.error("[useConversation] Failed to resubmit message:", error);
+        // Remove the placeholder assistant message on error
+        dispatch({
+          type: "FINALIZE_STREAM",
+          payload: { content: "*Error generating response*" },
+        });
         dispatch({ type: "SET_LOADING", payload: false });
         dispatch({ type: "SET_STREAMING", payload: false });
       }
