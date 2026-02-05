@@ -111,7 +111,6 @@ export function HUDInputBar({
     setInput("");
 
     try {
-      console.log("Sending message:", query, conversationId);
       await sendMessage(conversationId, query);
     } catch (error) {
       console.error("Error in handleSubmit:", error);

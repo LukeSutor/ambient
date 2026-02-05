@@ -14,7 +14,7 @@ use crate::db::conversations::{
     MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::{
-    CHAT_STREAM, ChatStreamEvent, 
+    CHAT_STREAM, ChatStreamEvent,
     COMPUTER_USE_TOAST, ComputerUseToastEvent, 
     GET_SAFETY_CONFIRMATION, SafetyConfirmationEvent,
     SAFETY_CONFIRMATION_RESPONSE, SafetyConfirmationResponseEvent,
@@ -162,7 +162,18 @@ impl ComputerUseRuntime {
             // Check cancellation
             if self.cancel_signal.load(Ordering::SeqCst) {
                 log::info!("[computer_use_runtime] Cancelled by user");
-                final_response = "*Computer use session cancelled by user*".to_string();
+                final_response = "*Request cancelled by you*".to_string();
+
+                // Emit event so UI updates immediately
+                let stream_data = ChatStreamEvent {
+                    delta: "".to_string(),
+                    is_finished: true,
+                    full_response: final_response.clone(),
+                    conv_id: Some(self.conversation_id.clone()),
+                    message_id: Some(self.assistant_message_id.clone()),
+                };
+                let _ = emit(CHAT_STREAM, stream_data);
+
                 break;
             }
 
@@ -195,7 +206,18 @@ impl ComputerUseRuntime {
                 Ok(resp) => resp,
                 Err(e) => {
                     if e.contains("cancelled") {
-                        final_response = "*Computer use session cancelled by user*".to_string();
+                        final_response = "*Request cancelled by you*".to_string();
+
+                        // Emit event so UI updates immediately
+                        let stream_data = ChatStreamEvent {
+                            delta: "".to_string(),
+                            is_finished: true,
+                            full_response: final_response.clone(),
+                            conv_id: Some(self.conversation_id.clone()),
+                            message_id: Some(self.assistant_message_id.clone()),
+                        };
+                        let _ = emit(CHAT_STREAM, stream_data);
+                        
                         break;
                     }
                     return Err(format!("LLM generation failed: {}", e));

@@ -11,7 +11,7 @@ use crate::db::conversations::{
     add_message, get_conversation_history, load_conversation_skills,
     save_conversation_skill, MessageMetadata, MessageType, Role,
 };
-use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY}};
+use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM}};
 use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
@@ -191,14 +191,14 @@ impl AgentRuntime {
                 let text = "*Request cancelled by you*".to_string();
 
                 // Emit event so UI updates immediately
-                let stream_data = crate::events::types::ChatStreamEvent {
+                let stream_data = ChatStreamEvent {
                     delta: "".to_string(),
                     is_finished: true,
                     full_response: text.clone(),
                     conv_id: Some(self.conv_id.clone()),
                     message_id: Some(self.assistant_message_id.clone()),
                 };
-                let _ = emit(crate::events::types::CHAT_STREAM, stream_data);
+                let _ = emit(CHAT_STREAM, stream_data);
 
                 self.save_assistant_message(&text, MessageType::Text, None).await?;
                 return Ok(text);
@@ -247,14 +247,14 @@ impl AgentRuntime {
                         let text = "*Request cancelled by you*".to_string();
                         
                         // Emit event if it hasn't been emitted yet by the provider
-                        let stream_data = crate::events::types::ChatStreamEvent {
+                        let stream_data = ChatStreamEvent {
                             delta: "".to_string(),
                             is_finished: true,
                             full_response: text.clone(),
                             conv_id: Some(self.conv_id.clone()),
                             message_id: Some(self.assistant_message_id.clone()),
                         };
-                        let _ = emit(crate::events::types::CHAT_STREAM, stream_data);
+                        let _ = emit(CHAT_STREAM, stream_data);
 
                         self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
                         return Ok(text);
@@ -295,7 +295,7 @@ impl AgentRuntime {
                         tool_call_metadatas.push(metadata.clone());
                     }
                     let content = text.unwrap_or_default();
-                    let tool_call_msg_id = self.save_assistant_message_with_id(&self.assistant_message_id, &content, MessageType::ToolCalls, Some(tool_call_metadatas)).await?;
+                    let tool_call_msg_id = self.save_assistant_message(&content, MessageType::ToolCalls, Some(tool_call_metadatas)).await?;
 
                     // Execute tools in parallel
                     let results = self.execute_tool_calls(tool_calls.clone(), &content, tool_call_msg_id).await?;

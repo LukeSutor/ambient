@@ -82,7 +82,7 @@ impl LlmProvider for CloudflareProvider {
 
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
-
+    
     if should_stream {
       let resp = client
         .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
