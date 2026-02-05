@@ -1,5 +1,5 @@
 use crate::memory::types::MemoryEntry;
-use crate::db::conversations::{Attachment, Message};
+use crate::db::conversations::Attachment;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -113,14 +113,6 @@ pub struct RenameConversationEvent {
   pub conv_id: String,
   pub new_name: String,
   pub timestamp: String,
-}
-
-pub const COMPUTER_USE_UPDATE: &str = "computer_use_update";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct ComputerUseUpdateEvent {
-  pub status: String,
-  pub message: Message,
 }
 
 pub const COMPUTER_USE_TOAST: &str = "computer_use_toast";

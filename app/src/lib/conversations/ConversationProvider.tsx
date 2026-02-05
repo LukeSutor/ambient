@@ -9,7 +9,6 @@ import type {
   AttachmentData,
   AttachmentsCreatedEvent,
   ChatStreamEvent,
-  ComputerUseUpdateEvent,
   MemoryExtractedEvent,
   OcrResponseEvent,
   RenameConversationEvent,
@@ -599,23 +598,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             }
           }),
 
-          // Computer Use Listener
-          listen<ComputerUseUpdateEvent>("computer_use_update", (event) => {
-            const chatMessage: ChatMessage = {
-              message: event.payload.message,
-            };
-
-            const isCompleted = event.payload.status === "completed";
-            
-            // Use ADD_AGENTIC_MESSAGE to avoid duplicates and ensure updates
-            dispatch({ type: "ADD_AGENTIC_MESSAGE", payload: chatMessage });
-            
-            if (isCompleted) {
-              dispatch({ type: "SET_LOADING", payload: false });
-              dispatch({ type: "SET_STREAMING", payload: false });
-            }
-          }),
-
           // Memory Listener
           listen<MemoryExtractedEvent>("memory_extracted", (event) => {
             const { memory } = event.payload;
@@ -645,6 +627,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
           // Attachments created listener
           listen<AttachmentsCreatedEvent>("attachments_created", (event) => {
+            console.log({event})
             const { attachments } = event.payload;
             dispatch({
               type: "ADD_ATTACHMENTS_TO_MESSAGE",
@@ -664,10 +647,12 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionStartedEvent>(
             "tool_execution_started",
             (event) => {
+              console.log({event})
               const p = event.payload;
               const skill_name = p.skill_name;
               const tool_name = p.tool_name;
               const args = p.arguments as Record<string, unknown>;
+              const content = p.content;
 
               dispatch({
                 type: "ADD_AGENTIC_MESSAGE",
@@ -676,7 +661,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                     id: p.message_id,
                     conversation_id: convIdRef.current || "",
                     role: "assistant",
-                    content: `Calling ${skill_name}.${tool_name}...`,
+                    content: content,
                     timestamp: p.timestamp,
                     message_type: "tool_calls",
                     metadata: [
@@ -700,6 +685,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionCompletedEvent>(
             "tool_execution_completed",
             (event) => {
+              console.log({event})
               const p = event.payload;
               const success = p.success;
               const error = p.error;
@@ -712,9 +698,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                     id: p.message_id,
                     conversation_id: convIdRef.current || "",
                     role: "tool",
-                    content: success
-                      ? "Tool execution successful"
-                      : `Tool error: ${error}`,
+                    content: "",
                     timestamp: p.timestamp,
                     message_type: "tool_results",
                     metadata: [

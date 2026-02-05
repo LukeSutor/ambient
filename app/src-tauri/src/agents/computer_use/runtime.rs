@@ -13,7 +13,15 @@ use crate::db::conversations::{
     add_message, create_attachments, add_attachments, get_conversation_history,
     MessageMetadata, MessageType, Role,
 };
-use crate::events::{emitter::emit, types::*};
+use crate::events::{emitter::emit, types::{
+    CHAT_STREAM, ChatStreamEvent, 
+    COMPUTER_USE_TOAST, ComputerUseToastEvent, 
+    GET_SAFETY_CONFIRMATION, SafetyConfirmationEvent,
+    SAFETY_CONFIRMATION_RESPONSE, SafetyConfirmationResponseEvent,
+    ATTACHMENTS_CREATED, AttachmentsCreatedEvent,
+    AttachmentData,
+}};
+use crate::db::conversations::Message;
 use crate::images::take_screenshot;
 use super::actions::*;
 use super::tools::{get_local_computer_use_tools, is_gemini_computer_use_function};
@@ -202,7 +210,8 @@ impl ComputerUseRuntime {
 
                 LlmResponse::ToolCalls { text, calls } => {
                     // Save the tool calls as an assistant message with optional reasoning text
-                    self.save_tool_call_message(&calls, text.as_deref()).await?;
+                    let tool_call_msg = self.save_tool_call_message(&calls, text.as_deref()).await?;
+                    let tool_call_msg_id = tool_call_msg.id.clone();
 
                     // Execute each tool call and save function responses with screenshots
                     let mut results = Vec::with_capacity(calls.len());
@@ -213,14 +222,14 @@ impl ComputerUseRuntime {
                                 let confirmed = self.get_safety_confirmation(safety).await?;
                                 if !confirmed {
                                     final_response = "*Safety confirmation denied by user*".to_string();
-                                    self.save_assistant_message(&final_response, MessageType::Text, None, "completed", None).await?;
+                                    self.save_assistant_message(&final_response, MessageType::Text, None, None).await?;
                                     break 'main_loop;
                                 }
                             }
                         }
 
                         // Execute the action
-                        let result = self.execute_computer_action(call).await;
+                        let result = self.execute_computer_action(call, text.as_deref(), tool_call_msg_id.clone()).await;
                         results.push(result.clone());
 
                         // Wait for UI to update
@@ -229,8 +238,28 @@ impl ComputerUseRuntime {
                     // Take new screenshot after actions
                     let screenshot_bytes = take_screenshot();
 
-                    // Save function response with screenshot (per Gemini computer-use spec)
-                    self.save_tool_result_with_screenshot(&calls, &results, &screenshot_bytes).await?;
+                    // Save function response with screenshot
+                    let tool_result_msg = self.save_tool_result_with_screenshot(&calls, &results, &screenshot_bytes).await?;
+                    let tool_result_msg_id = tool_result_msg.id.clone();
+
+                    // Emit tool response events
+                    for result in &results {
+                        let completed_event = ToolExecutionCompletedEvent {
+                            tool_call_id: result.call_id.clone(),
+                            message_id: tool_result_msg_id.clone(),
+                            skill_name: "computer-use".to_string(),
+                            tool_name: calls
+                                .iter()
+                                .find(|c| c.id == result.call_id)
+                                .map(|c| c.tool_name.clone())
+                                .unwrap_or_default(),
+                            success: result.success,
+                            result: result.result.clone(),
+                            error: result.error.clone(),
+                            timestamp: Utc::now().to_rfc3339(),
+                        };
+                        let _ = emit(TOOL_EXECUTION_COMPLETED, completed_event);
+                    }
                 }
             }
         }
@@ -240,7 +269,7 @@ impl ComputerUseRuntime {
         let _ = close_computer_use_window(self.app_handle.clone()).await;
 
         // Save final message and emit completed status
-        let _ = self.save_assistant_message(&final_response, MessageType::Text, None, "completed", None).await?;
+        let _ = self.save_assistant_message(&final_response, MessageType::Text, None, None).await?;
 
         Ok(final_response)
     }
@@ -310,7 +339,7 @@ impl ComputerUseRuntime {
     }
 
     /// Execute a computer action based on the tool call.
-    async fn execute_computer_action(&self, call: &ToolCall) -> ToolResult {
+    async fn execute_computer_action(&self, call: &ToolCall, content: Option<&str>, message_id: String) -> ToolResult {
         let tool_name = if call.skill_name == "computer-use" {
             call.tool_name.as_str()
         } else if is_gemini_computer_use_function(&call.tool_name) {
@@ -322,9 +351,10 @@ impl ComputerUseRuntime {
         // Emit tool execution started
         let started_event = ToolExecutionStartedEvent {
             tool_call_id: call.id.clone(),
-            message_id: String::new(),
+            message_id: message_id.clone(),
             skill_name: "computer-use".to_string(),
             tool_name: tool_name.to_string(),
+            content: content.unwrap_or("").to_string(),
             arguments: call.arguments.clone(),
             timestamp: Utc::now().to_rfc3339(),
         };
@@ -335,8 +365,6 @@ impl ComputerUseRuntime {
         self.emit_toast(&toast_msg).await;
 
         let result: Result<serde_json::Value, String> = match tool_name {
-            // Local model tools (coordinates are 0-999 because they see 1000x1000 image)
-            // Need to denormalize to actual screen pixels
             "click" => {
                 let x = call.arguments.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                 let y = call.arguments.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -439,19 +467,6 @@ impl ComputerUseRuntime {
             Err(e) => ToolResult::error(call.id.clone(), e),
         };
 
-        // Emit tool execution completed
-        let completed_event = ToolExecutionCompletedEvent {
-            tool_call_id: call.id.clone(),
-            message_id: String::new(),
-            skill_name: "computer-use".to_string(),
-            tool_name: tool_name.to_string(),
-            success: tool_result.success,
-            result: tool_result.result.clone(),
-            error: tool_result.error.clone(),
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        let _ = emit(TOOL_EXECUTION_COMPLETED, completed_event);
-
         tool_result
     }
 
@@ -534,7 +549,7 @@ impl ComputerUseRuntime {
     /// Save tool call message (assistant requesting action).
     async fn save_tool_call_message(
         &self, calls: &Vec<ToolCall>, reasoning: Option<&str>
-    ) -> Result<(), String> {
+    ) -> Result<Message, String> {
         // Create all tool call metadata
         let mut call_metadata_list = Vec::new();
         for call in calls {
@@ -554,10 +569,8 @@ impl ComputerUseRuntime {
             &call_content, 
             MessageType::ToolCalls, 
             Some(call_metadata_list),
-            "in_progress",
             None
-        ).await?;
-        Ok(())
+        ).await
     }
 
     /// Save assistant message.
@@ -566,9 +579,8 @@ impl ComputerUseRuntime {
         content: &str,
         message_type: MessageType,
         metadata: Option<Vec<MessageMetadata>>,
-        status: &str,
         message_id: Option<String>,
-    ) -> Result<crate::db::conversations::Message, String> {
+    ) -> Result<Message, String> {
         let message = add_message(
             &self.app_handle,
             self.conversation_id.clone(),
@@ -579,13 +591,6 @@ impl ComputerUseRuntime {
             message_id,
         ).await?;
 
-        // // Emit update event
-        // let update_event = ComputerUseUpdateEvent {
-        //     status: status.to_string(),
-        //     message: message.clone(),
-        // };
-        // let _ = emit(COMPUTER_USE_UPDATE, update_event);
-
         Ok(message)
     }
 
@@ -595,7 +600,7 @@ impl ComputerUseRuntime {
         _calls: &Vec<ToolCall>,
         results: &Vec<ToolResult>,
         screenshot_bytes: &[u8],
-    ) -> Result<(), String> {
+    ) -> Result<Message, String> {
         // Create the tool result message
         let message_id = Uuid::new_v4().to_string();
         
@@ -644,16 +649,17 @@ impl ComputerUseRuntime {
         // Link attachments to message
         if !attachments.is_empty() {
             add_attachments(&self.app_handle, attachments.clone()).await?;
-            message.attachments = attachments;
+            message.attachments = attachments.clone();
         }
 
-        // // Emit update event for tool results so HUD can show screenshot in thinking trace
-        // let update_event = ComputerUseUpdateEvent {
-        //     status: "in_progress".to_string(),
-        //     message,
-        // };
-        // let _ = emit(COMPUTER_USE_UPDATE, update_event);
+        // Re-emit attachments created event to link screenshot to message
+        let attachments_event = AttachmentsCreatedEvent {
+            message_id: message_id.clone(),
+            attachments: attachments,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        let _ = emit(ATTACHMENTS_CREATED, attachments_event);
 
-        Ok(())
+        Ok(message)
     }
 }

@@ -295,7 +295,7 @@ impl AgentRuntime {
                     let tool_call_msg_id = self.save_assistant_message_with_id(&assistant_msg_id, &content, MessageType::ToolCalls, Some(tool_call_metadatas)).await?;
 
                     // Execute tools in parallel
-                    let results = self.execute_tool_calls(tool_calls.clone(), tool_call_msg_id).await?;
+                    let results = self.execute_tool_calls(tool_calls.clone(), &content, tool_call_msg_id).await?;
 
                     // Add results to context and continue
                     let mut tool_result_metadatas = Vec::with_capacity(results.len());
@@ -462,6 +462,7 @@ impl AgentRuntime {
     async fn execute_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
+        content: &str,
         message_id: String,
     ) -> Result<Vec<ToolResult>, AgentError> {
         log::info!("[agent] Executing {} tool calls", tool_calls.len());
@@ -476,6 +477,7 @@ impl AgentRuntime {
                 message_id: message_id.clone(),
                 skill_name: call.skill_name.clone(),
                 tool_name: call.tool_name.clone(),
+                content: content.to_string(),
                 arguments: call.arguments.clone(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
