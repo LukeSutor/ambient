@@ -265,7 +265,6 @@ export function useConversation(
           conversationId: conversation.id,
         });
         const messages = backendMessages.map(transformBackendMessage);
-        console.log({messages})
         dispatch({ type: "LOAD_MESSAGES", payload: messages });
       } catch (error) {
         console.error("[useConversation] Failed to load messages:", error);
@@ -287,7 +286,6 @@ export function useConversation(
         }
 
         // Create conversation and generate name if first message
-        //TODO: look into moving name generation to backend
         let activeConversationId = conversationId;
         if (!activeConversationId) {
           const conversation = await createConversation(
@@ -329,23 +327,20 @@ export function useConversation(
           });
         });
 
+        dispatch({
+          type: "START_ASSISTANT_MESSAGE",
+          payload: { conversationId: activeConversationId },
+        });
+        dispatch({ type: "SET_LOADING", payload: true });
+        dispatch({ type: "SET_STREAMING", payload: true });
+        //TODO: handle errors with a toast here
         if (state.conversationType === "computer_use") {
-          dispatch({ type: "SET_LOADING", payload: true });
-          // Note: we don't use START_ASSISTANT_MESSAGE for computer use 
-          // because it emits its own messages with stable IDs
           void startComputerUseSession(
             activeConversationId,
             content,
             userMessage.message.id,
           );
         } else {
-          dispatch({
-            type: "START_ASSISTANT_MESSAGE",
-            payload: { conversationId: activeConversationId },
-          });
-          dispatch({ type: "SET_LOADING", payload: true });
-          dispatch({ type: "SET_STREAMING", payload: true });
-          
           await sendAgentMessage(
             activeConversationId,
             content,
@@ -492,22 +487,21 @@ export function useConversation(
         const remainingMessages = state.messages.slice(0, userMessageIndex + 1);
         dispatch({ type: "LOAD_MESSAGES", payload: remainingMessages });
 
+        dispatch({
+          type: "START_ASSISTANT_MESSAGE",
+          payload: { conversationId },
+        });
+        dispatch({ type: "SET_LOADING", payload: true });
+        dispatch({ type: "SET_STREAMING", payload: true });
+
         // Restart agentic runtime
         if (state.conversationType === "computer_use") {
-          dispatch({ type: "SET_LOADING", payload: true });
           void startComputerUseSession(
             conversationId,
             userMessage.message.content,
             userMessage.message.id,
           );
         } else {
-          dispatch({
-            type: "START_ASSISTANT_MESSAGE",
-            payload: { conversationId },
-          });
-          dispatch({ type: "SET_LOADING", payload: true });
-          dispatch({ type: "SET_STREAMING", payload: true });
-
           await sendAgentMessage(
             conversationId,
             userMessage.message.content,
@@ -539,16 +533,16 @@ export function useConversation(
         );
         if (messageIndex === -1) return;
 
-        // 1. Update the message content in DB
+        // Update the message content in DB
         await invoke("update_message_content", { messageId, content });
 
-        // 2. Delete everything AFTER this message in DB
+        // Delete everything AFTER this message in DB
         if (messageIndex < state.messages.length - 1) {
           const nextMessageId = state.messages[messageIndex + 1].message.id;
           await invoke("delete_messages_after", { messageId: nextMessageId });
         }
 
-        // 3. Update local state
+        // Update local state
         const updatedMessages = [...state.messages.slice(0, messageIndex + 1)];
         updatedMessages[messageIndex] = {
           ...updatedMessages[messageIndex],
@@ -559,18 +553,17 @@ export function useConversation(
         };
         dispatch({ type: "LOAD_MESSAGES", payload: updatedMessages });
 
-        // 4. Restart agentic runtime
+        dispatch({
+          type: "START_ASSISTANT_MESSAGE",
+          payload: { conversationId },
+        });
+        dispatch({ type: "SET_LOADING", payload: true });
+        dispatch({ type: "SET_STREAMING", payload: true });
+
+        // Restart agentic runtime
         if (state.conversationType === "computer_use") {
-          dispatch({ type: "SET_LOADING", payload: true });
           void startComputerUseSession(conversationId, content, messageId);
         } else {
-          dispatch({
-            type: "START_ASSISTANT_MESSAGE",
-            payload: { conversationId },
-          });
-          dispatch({ type: "SET_LOADING", payload: true });
-          dispatch({ type: "SET_STREAMING", payload: true });
-
           await sendAgentMessage(
             conversationId,
             content,

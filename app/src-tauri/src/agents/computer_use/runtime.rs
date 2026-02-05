@@ -21,7 +21,7 @@ use crate::events::{emitter::emit, types::{
     ATTACHMENTS_CREATED, AttachmentsCreatedEvent,
     AttachmentData,
 }};
-use crate::db::conversations::Message;
+use crate::db::conversations::{Message, Attachment};
 use crate::images::take_screenshot;
 use super::actions::*;
 use super::tools::{get_local_computer_use_tools, is_gemini_computer_use_function};
@@ -68,6 +68,7 @@ impl Default for ComputerUseConfig {
 pub struct ComputerUseRuntime {
     app_handle: AppHandle,
     conversation_id: String,
+    assistant_message_id: String,
     config: ComputerUseConfig,
     is_local: bool,
     screen_width: i32,
@@ -98,9 +99,13 @@ impl ComputerUseRuntime {
             is_local, screen_width, screen_height
         );
 
+        // Pre-generate message ID for the assistant response if it turns out to be a text response
+        let assistant_message_id = uuid::Uuid::new_v4().to_string();
+
         Ok(Self {
             app_handle,
             conversation_id,
+            assistant_message_id,
             config: ComputerUseConfig::default(),
             is_local,
             screen_width,
@@ -239,10 +244,10 @@ impl ComputerUseRuntime {
                     let screenshot_bytes = take_screenshot();
 
                     // Save function response with screenshot
-                    let tool_result_msg = self.save_tool_result_with_screenshot(&calls, &results, &screenshot_bytes).await?;
+                    let (tool_result_msg, attachments) = self.save_tool_result_with_screenshot(&calls, &results, &screenshot_bytes).await?;
                     let tool_result_msg_id = tool_result_msg.id.clone();
 
-                    // Emit tool response events
+                    // Emit tool response events and attachment created event
                     for result in &results {
                         let completed_event = ToolExecutionCompletedEvent {
                             tool_call_id: result.call_id.clone(),
@@ -260,6 +265,12 @@ impl ComputerUseRuntime {
                         };
                         let _ = emit(TOOL_EXECUTION_COMPLETED, completed_event);
                     }
+                    let attachments_event = AttachmentsCreatedEvent {
+                        message_id: tool_result_msg_id.clone(),
+                        attachments: attachments,
+                        timestamp: Utc::now().to_rfc3339(),
+                    };
+                    let _ = emit(ATTACHMENTS_CREATED, attachments_event);
                 }
             }
         }
@@ -308,8 +319,9 @@ impl ComputerUseRuntime {
             .with_messages(Some(messages.to_vec()))
             .with_internal_tools(tools)
             .with_conv_id(Some(self.conversation_id.clone()))
-            .with_stream(Some(false))  // Computer use works better non-streaming
+            .with_stream(Some(true))
             .with_cancel_signal(Some(self.cancel_signal.clone()))
+            .with_assistant_message_id(Some(self.assistant_message_id.clone()))
             .with_model_type(model_type))
     }
 
@@ -600,7 +612,7 @@ impl ComputerUseRuntime {
         _calls: &Vec<ToolCall>,
         results: &Vec<ToolResult>,
         screenshot_bytes: &[u8],
-    ) -> Result<Message, String> {
+    ) -> Result<(Message, Vec<Attachment>), String> {
         // Create the tool result message
         let message_id = Uuid::new_v4().to_string();
         
@@ -652,14 +664,6 @@ impl ComputerUseRuntime {
             message.attachments = attachments.clone();
         }
 
-        // Re-emit attachments created event to link screenshot to message
-        let attachments_event = AttachmentsCreatedEvent {
-            message_id: message_id.clone(),
-            attachments: attachments,
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        let _ = emit(ATTACHMENTS_CREATED, attachments_event);
-
-        Ok(message)
+        Ok((message, attachments))
     }
 }

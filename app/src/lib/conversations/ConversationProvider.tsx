@@ -357,6 +357,7 @@ function conversationReducer(
     }
 
     case "FINALIZE_STREAM": {
+      console.log("finalize stream called with payload:", action.payload);
       // Update the last assistant text message with final content
       const finalizedMessages = [...state.messages];
       const lastAssistIdx = [...finalizedMessages].reverse().findIndex((m) => {
@@ -572,6 +573,7 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         const listenerPromises = [
           // Stream Listener
           listen<ChatStreamEvent>("chat_stream", (event) => {
+            console.log({event})//TODO: computer use w/ gemini doesn't use stream so these events are never emitted, fix this
             const { delta, full_response, is_finished, conv_id, message_id } =
               event.payload;
 
@@ -627,7 +629,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
 
           // Attachments created listener
           listen<AttachmentsCreatedEvent>("attachments_created", (event) => {
-            console.log({event})
             const { attachments } = event.payload;
             dispatch({
               type: "ADD_ATTACHMENTS_TO_MESSAGE",
@@ -647,7 +648,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionStartedEvent>(
             "tool_execution_started",
             (event) => {
-              console.log({event})
               const p = event.payload;
               const skill_name = p.skill_name;
               const tool_name = p.tool_name;
@@ -685,7 +685,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
           listen<ToolExecutionCompletedEvent>(
             "tool_execution_completed",
             (event) => {
-              console.log({event})
               const p = event.payload;
               const success = p.success;
               const error = p.error;
