@@ -95,9 +95,15 @@ type ConversationAction =
       payload: { id: string; conversationId: string; timestamp: string };
     }
   | { type: "FINALIZE_USER_MESSAGE"; payload: { id: string; content: string } }
-  | { type: "START_ASSISTANT_MESSAGE"; payload: { conversationId: string; assistantMessageId: string; } }
+  | {
+      type: "START_ASSISTANT_MESSAGE";
+      payload: { conversationId: string; assistantMessageId: string };
+    }
   | { type: "UPDATE_STREAMING_CONTENT"; payload: string }
-  | { type: "FINALIZE_STREAM"; payload: { content: string; messageId?: string } }
+  | {
+      type: "FINALIZE_STREAM";
+      payload: { content: string; messageId?: string };
+    }
   | { type: "ADD_ATTACHMENT_DATA"; payload: AttachmentData }
   | { type: "REMOVE_ATTACHMENT_DATA"; payload: number }
   | { type: "CLEAR_ATTACHMENT_DATA" }
@@ -584,7 +590,10 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
               const finalText = extractThinkingContent(full_response);
               dispatch({
                 type: "FINALIZE_STREAM",
-                payload: { content: finalText, messageId: message_id ?? undefined },
+                payload: {
+                  content: finalText,
+                  messageId: message_id ?? undefined,
+                },
               });
               return;
             }

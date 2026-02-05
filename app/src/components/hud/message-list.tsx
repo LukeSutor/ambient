@@ -8,13 +8,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { ChatMessage } from "@/lib/conversations/types";
+import { useConversation } from "@/lib/conversations/useConversation";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { AssistantMessage, ThinkingBlock, UserMessage } from "./message-types";
-import { useConversation } from "@/lib/conversations/useConversation";
 
 const SCROLL_MASK_STYLE = {
   maskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
@@ -24,7 +24,8 @@ const SCROLL_MASK_STYLE = {
 export function MessageList() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const { conversationName, messages, resetConversation } = useConversation(messagesEndRef);
+  const { conversationName, messages, resetConversation } =
+    useConversation(messagesEndRef);
 
   const [showReasoning, setShowReasoning] = useState(new Set<string>());
   const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =

@@ -4,7 +4,7 @@ import {
   llmMarkdownConfig,
   preprocessMarkdownCurrency,
 } from "@/components/ui/markdown-config";
-import { useConversation, type ChatMessage } from "@/lib/conversations";
+import { type ChatMessage, useConversation } from "@/lib/conversations";
 import { cn } from "@/lib/utils";
 import type { Attachment, MessageMetadata } from "@/types/conversations";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -17,8 +17,8 @@ import {
   FileText,
   Hammer,
   NotebookPen,
-  RefreshCw,
   Pencil,
+  RefreshCw,
   Search,
   Sparkles,
   SquareDashed,
@@ -264,11 +264,11 @@ export const UserMessage = memo(function UserMessage({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (!e.shiftKey && !e.altKey && !e.ctrlKey)) {
+    if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey) {
       e.preventDefault();
-      void handleUpdate();
+      handleUpdate();
     }
-  }
+  };
 
   return (
     <>
@@ -295,7 +295,9 @@ export const UserMessage = memo(function UserMessage({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                      setIsEditing(true);
+                    }}
                     variant="ghost"
                     size="icon"
                     className="rounded-full h-7 w-7"
@@ -315,7 +317,9 @@ export const UserMessage = memo(function UserMessage({
               minRows={1}
               maxRows={10}
               value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
+              onChange={(e) => {
+                setEditContent(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
               className="w-full bg-white/80 border border-black/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black/20 resize-none"
               autoFocus
@@ -335,7 +339,8 @@ export const UserMessage = memo(function UserMessage({
                 onClick={handleUpdate}
                 className="h-7 text-xs font-bold bg-zinc-900 text-white hover:bg-zinc-800"
                 disabled={
-                  !editContent.trim() || editContent.trim() === m.message.content
+                  !editContent.trim() ||
+                  editContent.trim() === m.message.content
                 }
               >
                 Update
@@ -673,9 +678,7 @@ export const FunctionMessage = memo(function FunctionMessage({
   return (
     <div className="overflow-hidden bg-white/20 border border-white/30 rounded-lg px-3 py-2 max-w-[95%] w-fit text-left mt-6">
       <Markdown {...llmMarkdownConfig}>
-        {preprocessMarkdownCurrency(
-          m.message.content,
-        )}
+        {preprocessMarkdownCurrency(m.message.content)}
       </Markdown>
     </div>
   );

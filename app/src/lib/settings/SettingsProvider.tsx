@@ -162,7 +162,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
             max_tool_calls_per_turn: 5,
             max_iterations: 10,
             enable_thinking: false,
-          }
+          },
         };
         dispatch({ type: "SET_SETTINGS", payload: defaults });
       }

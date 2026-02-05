@@ -196,28 +196,22 @@ export function useConversation(
   /**
    * Resets the conversation state
    */
-  const resetConversation = useCallback(
-    async (): Promise<string | null> => {
-      if (state.messages.length === 0) {
-        return null;
-      }
+  const resetConversation = useCallback(async (): Promise<string | null> => {
+    if (state.messages.length === 0) {
+      return null;
+    }
 
-      try {
-        setChatMinimized();
-        dispatch({ type: "SET_CONVERSATION_ID", payload: null });
-        dispatch({ type: "CLEAR_MESSAGES" });
-        return null;
-      } catch (error) {
-        toast.error("Failed to reset conversation. Please try again.");
-        console.error(
-          "[useConversation] Failed to reset conversation:",
-          error,
-        );
-        return null;
-      }
-    },
-    [state.messages.length, setChatMinimized, dispatch],
-  );
+    try {
+      setChatMinimized();
+      dispatch({ type: "SET_CONVERSATION_ID", payload: null });
+      dispatch({ type: "CLEAR_MESSAGES" });
+      return null;
+    } catch (error) {
+      toast.error("Failed to reset conversation. Please try again.");
+      console.error("[useConversation] Failed to reset conversation:", error);
+      return null;
+    }
+  }, [state.messages.length, setChatMinimized, dispatch]);
 
   /**
    * Deletes a conversation by ID
@@ -489,7 +483,9 @@ export function useConversation(
           if (firstMessageToDeleteIndex < state.messages.length) {
             const firstToDeleteId =
               state.messages[firstMessageToDeleteIndex].message.id;
-            await invoke("delete_messages_after", { messageId: firstToDeleteId });
+            await invoke("delete_messages_after", {
+              messageId: firstToDeleteId,
+            });
           }
         } catch (error) {
           console.warn(
@@ -597,7 +593,12 @@ export function useConversation(
 
         // Restart agentic runtime
         if (state.conversationType === "computer_use") {
-          void startComputerUseSession(conversationId, assistantMessageId, content, messageId);
+          void startComputerUseSession(
+            conversationId,
+            assistantMessageId,
+            content,
+            messageId,
+          );
         } else {
           await sendAgentMessage(
             conversationId,

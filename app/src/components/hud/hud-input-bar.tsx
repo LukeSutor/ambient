@@ -7,6 +7,7 @@ import {
   InputGroupButton,
 } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
+import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
@@ -20,7 +21,6 @@ import { AttachmentList } from "./attachment-list";
 import { ModelSelector } from "./model-selector";
 import { PlusMenu } from "./plus-menu";
 import { ToolMenu } from "./tool-menu";
-import { useSettings } from "@/lib/settings";
 
 interface HUDInputBarProps {
   onDragStart: () => void;
@@ -119,7 +119,7 @@ export function HUDInputBar({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && (!e.shiftKey && !e.altKey && !e.ctrlKey)) {
+      if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey) {
         e.preventDefault();
         void handleSubmit();
       }
@@ -189,7 +189,9 @@ export function HUDInputBar({
           maxRows={4}
           minRows={2}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
           placeholder="Ask anything"
@@ -252,7 +254,9 @@ export function HUDInputBar({
               className="rounded-full bg-black/80 hover:bg-black"
               size="icon-xs"
               type="submit"
-              onClick={handleSubmit}
+              onClick={() => {
+                void handleSubmit();
+              }}
               disabled={ocrLoading || !input.trim()}
             >
               <ArrowUpIcon />
