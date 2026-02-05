@@ -573,7 +573,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         const listenerPromises = [
           // Stream Listener
           listen<ChatStreamEvent>("chat_stream", (event) => {
-            console.log({event})//TODO: computer use w/ gemini doesn't use stream so these events are never emitted, fix this
             const { delta, full_response, is_finished, conv_id, message_id } =
               event.payload;
 

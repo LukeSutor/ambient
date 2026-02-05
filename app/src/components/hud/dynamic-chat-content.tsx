@@ -1,25 +1,15 @@
 import { ConversationList } from "@/components/hud/conversation-list";
 import { MessageList } from "@/components/hud/message-list";
 import { useConversation } from "@/lib/conversations";
+import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
-import type { HudDimensions } from "@/types/settings";
 import type React from "react";
 import { useMemo } from "react";
 
-interface DynamicChatContentProps {
-  hudDimensions: HudDimensions | null;
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-  handleNewChat: () => void;
-}
-
-export function DynamicChatContent({
-  hudDimensions,
-  messagesEndRef,
-  handleNewChat,
-}: DynamicChatContentProps) {
+export function DynamicChatContent() {
   const { isChatExpanded, isChatHistoryExpanded } = useWindows();
-  const { conversationName, messages } = useConversation();
+  const { hudDimensions } = useSettings();
 
   const isVisible = isChatExpanded || isChatHistoryExpanded;
   const showBothPanels = isChatExpanded && isChatHistoryExpanded;
@@ -76,12 +66,7 @@ export function DynamicChatContent({
             messagesClass,
           )}
         >
-          <MessageList
-            conversationName={conversationName}
-            messages={messages}
-            messagesEndRef={messagesEndRef}
-            handleNewChat={handleNewChat}
-          />
+          <MessageList />
         </div>
       </div>
     </div>

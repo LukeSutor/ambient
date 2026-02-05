@@ -7,7 +7,7 @@ import type {
   UserSettings,
 } from "@/types/settings";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useSettingsContext } from "./SettingsProvider";
 
 /**
@@ -48,6 +48,18 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
  */
 export function useSettings() {
   const { state, dispatch } = useSettingsContext();
+
+  // ============================================================
+  // Effects
+  // ============================================================
+
+  // Update hud dumensions when hud size setting changes
+  useEffect(() => {
+    if (state.settings) {
+      const dimensions = hudSizeOptionToDimensions(state.settings.hud_size);
+      dispatch({ type: "UPDATE_HUD_DIMENSIONS", payload: dimensions });
+    }
+  }, [state.settings, dispatch]);
 
   // ============================================================
   // Operations
@@ -216,6 +228,7 @@ export function useSettings() {
   return {
     // State
     settings: state.settings,
+    hudDimensions: state.hudDimensions,
     isLoading: state.isLoading,
 
     // Operations

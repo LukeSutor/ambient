@@ -12,27 +12,20 @@ import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
 import type React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { AssistantMessage, ThinkingBlock, UserMessage } from "./message-types";
-
-interface MessageListProps {
-  conversationName: string;
-  messages: ChatMessage[];
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-  handleNewChat: () => void;
-}
+import { useConversation } from "@/lib/conversations/useConversation";
 
 const SCROLL_MASK_STYLE = {
   maskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
   WebkitMaskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
 } as const;
 
-export function MessageList({
-  conversationName,
-  messages,
-  messagesEndRef,
-  handleNewChat,
-}: MessageListProps) {
+export function MessageList() {
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const { conversationName, messages, resetConversation } = useConversation(messagesEndRef);
+
   const [showReasoning, setShowReasoning] = useState(new Set<string>());
   const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =
     useWindows();
@@ -143,7 +136,9 @@ export function MessageList({
                 size="icon"
                 variant="ghost"
                 className="pointer-events-auto"
-                onClick={handleNewChat}
+                onClick={() => {
+                  void resetConversation();
+                }}
               >
                 <MessageSquarePlus className="w-5 h-5" />
               </Button>

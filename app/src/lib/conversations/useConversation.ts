@@ -68,7 +68,7 @@ export function useConversation(
 ) {
   const { state, dispatch } = useConversationContext();
   const isLoadingMoreRef = useRef(false);
-  const { setChatExpanded } = useWindows();
+  const { setChatExpanded, setChatMinimized } = useWindows();
 
   // Auto-scroll effect for streaming messages
   useEffect(() => {
@@ -198,7 +198,12 @@ export function useConversation(
    */
   const resetConversation = useCallback(
     async (delay?: number): Promise<string | null> => {
+      if (state.messages.length === 0) {
+        return null;
+      }
+
       try {
+        setChatMinimized();
         dispatch({ type: "SET_CONVERSATION_ID", payload: null });
         if (delay && delay > 0) {
           setTimeout(() => {
@@ -216,7 +221,7 @@ export function useConversation(
         return null;
       }
     },
-    [dispatch],
+    [state.messages.length, setChatMinimized, dispatch],
   );
 
   /**

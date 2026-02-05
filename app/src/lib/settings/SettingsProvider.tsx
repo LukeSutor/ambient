@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  HudDimensions,
   HudSizeOption,
   ModelSelection,
   UserSettings,
@@ -15,7 +16,6 @@ import {
   useContext,
   useEffect,
   useReducer,
-  useRef,
 } from "react";
 
 /**
@@ -23,6 +23,7 @@ import {
  */
 interface SettingsState {
   settings: UserSettings | null;
+  hudDimensions: HudDimensions | null;
   isLoading: boolean;
   initializationRef: RefObject<boolean>;
 }
@@ -32,6 +33,7 @@ interface SettingsState {
  */
 const initialState: SettingsState = {
   settings: null,
+  hudDimensions: null,
   isLoading: true,
   initializationRef: { current: false },
 };
@@ -43,6 +45,7 @@ type SettingsAction =
   | { type: "SET_SETTINGS"; payload: UserSettings }
   | { type: "UPDATE_HUD_SIZE"; payload: HudSizeOption }
   | { type: "UPDATE_MODEL_SELECTION"; payload: ModelSelection }
+  | { type: "UPDATE_HUD_DIMENSIONS"; payload: HudDimensions }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "INVALIDATE_CACHE" };
 
@@ -79,6 +82,12 @@ function settingsReducer(
           ...state.settings,
           model_selection: action.payload,
         },
+      };
+
+    case "UPDATE_HUD_DIMENSIONS":
+      return {
+        ...state,
+        hudDimensions: action.payload,
       };
 
     case "SET_LOADING":
@@ -147,6 +156,13 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         const defaults: UserSettings = {
           hud_size: "Normal",
           model_selection: "Local",
+          agent_config: {
+            local_context_limit: 10,
+            cloud_context_limit: 20,
+            max_tool_calls_per_turn: 5,
+            max_iterations: 10,
+            enable_thinking: false,
+          }
         };
         dispatch({ type: "SET_SETTINGS", payload: defaults });
       }
