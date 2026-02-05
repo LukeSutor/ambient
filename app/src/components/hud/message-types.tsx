@@ -25,8 +25,9 @@ import {
   XCircle,
 } from "lucide-react";
 import Image from "next/image";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import Markdown from "react-markdown";
+import TextareaAutosize from "react-textarea-autosize";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -262,6 +263,13 @@ export const UserMessage = memo(function UserMessage({
     setIsEditing(false);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (!e.shiftKey && !e.altKey && !e.ctrlKey)) {
+      e.preventDefault();
+      void handleUpdate();
+    }
+  }
+
   return (
     <>
       {m.message.attachments.map((a) => (
@@ -303,10 +311,13 @@ export const UserMessage = memo(function UserMessage({
 
         {isEditing ? (
           <div className="flex flex-col gap-2 w-full">
-            <textarea
+            <TextareaAutosize
+              minRows={1}
+              maxRows={10}
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="w-full bg-white/80 border border-black/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black/20 min-h-[80px] resize-none"
+              onKeyDown={handleKeyDown}
+              className="w-full bg-white/80 border border-black/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-black/20 resize-none"
               autoFocus
             />
             <div className="flex justify-end gap-2 px-1">
@@ -324,7 +335,7 @@ export const UserMessage = memo(function UserMessage({
                 onClick={handleUpdate}
                 className="h-7 text-xs font-bold bg-zinc-900 text-white hover:bg-zinc-800"
                 disabled={
-                  !editContent.trim() || editContent === m.message.content
+                  !editContent.trim() || editContent.trim() === m.message.content
                 }
               >
                 Update
