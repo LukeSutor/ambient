@@ -31,11 +31,52 @@ pub async fn generate(
         }
     };
 
-    if provider_is_local {
-        let provider = LocalProvider;
-        provider.generate(app_handle, request).await
-    } else {
-        let provider = CloudflareProvider;
-        provider.generate(app_handle, request).await
+    let max_attempts = request.max_attempts.unwrap_or(1);
+    let timeout_duration = request.timeout_duration.map(std::time::Duration::from_secs);
+    let mut attempts = 0;
+    let mut last_error = String::new();
+
+    while attempts < max_attempts {
+        attempts += 1;
+        log::info!("[llm_client] Generation attempt {}/{}", attempts, max_attempts);
+
+        let attempt_request = request.clone();
+        let app_handle_clone = app_handle.clone();
+
+        let gen_future = async move {
+            if provider_is_local {
+                let provider = LocalProvider;
+                provider.generate(app_handle_clone, attempt_request).await
+            } else {
+                let provider = CloudflareProvider;
+                provider.generate(app_handle_clone, attempt_request).await
+            }
+        };
+
+        let result = if let Some(duration) = timeout_duration {
+            match tokio::time::timeout(duration, gen_future).await {
+                Ok(res) => res,
+                Err(_) => Err("Request timed out".to_string()),
+            }
+        } else {
+            gen_future.await
+        };
+
+        match result {
+            Ok(resp) => return Ok(resp),
+            Err(e) => {
+                last_error = e.clone();
+                if e.contains("cancelled") {
+                    return Err(e);
+                }
+                log::warn!("[llm_client] Attempt {} failed: {}", attempts, e);
+                
+                if attempts < max_attempts {
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
     }
+
+    Err(format!("LLM generation failed after {} attempts. Last error: {}", max_attempts, last_error))
 }

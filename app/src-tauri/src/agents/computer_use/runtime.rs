@@ -163,24 +163,13 @@ impl ComputerUseRuntime {
             if self.cancel_signal.load(Ordering::SeqCst) {
                 log::info!("[computer_use_runtime] Cancelled by user");
                 final_response = "*Request cancelled by you*".to_string();
-
-                // Emit event so UI updates immediately
-                let stream_data = ChatStreamEvent {
-                    delta: "".to_string(),
-                    is_finished: true,
-                    full_response: final_response.clone(),
-                    conv_id: Some(self.conversation_id.clone()),
-                    message_id: Some(self.assistant_message_id.clone()),
-                };
-                let _ = emit(CHAT_STREAM, stream_data);
-
                 break;
             }
 
             self.iteration += 1;
             if self.iteration > self.config.max_iterations {
                 log::warn!("[computer_use_runtime] Max iterations exceeded");
-                final_response = "Maximum iterations exceeded. Please try a simpler task.".to_string();
+                final_response = "*Maximum iterations exceeded*".to_string();
                 break;
             }
 
@@ -207,17 +196,9 @@ impl ComputerUseRuntime {
                 Err(e) => {
                     if e.contains("cancelled") {
                         final_response = "*Request cancelled by you*".to_string();
-
-                        // Emit event so UI updates immediately
-                        let stream_data = ChatStreamEvent {
-                            delta: "".to_string(),
-                            is_finished: true,
-                            full_response: final_response.clone(),
-                            conv_id: Some(self.conversation_id.clone()),
-                            message_id: Some(self.assistant_message_id.clone()),
-                        };
-                        let _ = emit(CHAT_STREAM, stream_data);
-                        
+                        break;
+                    } else if e.contains("timed out") {
+                        final_response = "*Request timed out. Please try again.*".to_string();
                         break;
                     }
                     return Err(format!("LLM generation failed: {}", e));
@@ -295,6 +276,16 @@ impl ComputerUseRuntime {
             }
         }
 
+        // Emit event so UI updates immediately
+        let stream_data = ChatStreamEvent {
+            delta: "".to_string(),
+            is_finished: true,
+            full_response: final_response.clone(),
+            conv_id: Some(self.conversation_id.clone()),
+            message_id: Some(self.assistant_message_id.clone()),
+        };
+        let _ = emit(CHAT_STREAM, stream_data);
+
         // Reopen main window and close toast
         let _ = open_main_window(self.app_handle.clone()).await;
         let _ = close_computer_use_window(self.app_handle.clone()).await;
@@ -334,6 +325,8 @@ impl ComputerUseRuntime {
             Some("computer-use".to_string())
         };
 
+        let timeout_duration = if self.is_local { 30 } else { 10 };
+
         Ok(LlmRequest::new(String::new())
             .with_system_prompt(Some(system_prompt))
             .with_messages(Some(messages.to_vec()))
@@ -342,7 +335,9 @@ impl ComputerUseRuntime {
             .with_stream(Some(true))
             .with_cancel_signal(Some(self.cancel_signal.clone()))
             .with_assistant_message_id(Some(self.assistant_message_id.clone()))
-            .with_model_type(model_type))
+            .with_model_type(model_type)
+            .with_attempts(Some(3))
+            .with_timeout_duration(Some(timeout_duration)))
     }
 
     /// Save the initial user message with a screenshot attachment.

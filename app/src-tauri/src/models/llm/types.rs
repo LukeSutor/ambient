@@ -25,6 +25,10 @@ pub struct LlmRequest {
     pub assistant_message_id: Option<String>,
     /// Override model type (e.g., "computer-use" for computer use sessions)
     pub model_type: Option<String>,
+    /// Maximum number of attempts for generation
+    pub max_attempts: Option<usize>,
+    /// Timeout duration in seconds for each attempt
+    pub timeout_duration: Option<u64>,
     /// Cancellation signal for aborting generation (not serialized)
     #[serde(skip)]
     pub cancel_signal: Option<Arc<AtomicBool>>,
@@ -85,6 +89,16 @@ impl LlmRequest {
 
     pub fn with_model_type(mut self, model_type: Option<String>) -> Self {
         self.model_type = model_type;
+        self
+    }
+
+    pub fn with_attempts(mut self, attempts: Option<usize>) -> Self {
+        self.max_attempts = attempts;
+        self
+    }
+
+    pub fn with_timeout_duration(mut self, duration: Option<u64>) -> Self {
+        self.timeout_duration = duration;
         self
     }
 }

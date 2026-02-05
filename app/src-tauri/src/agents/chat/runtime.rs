@@ -223,6 +223,8 @@ impl AgentRuntime {
             let available_tools = self.get_available_tools();
 
             // Build LLM request with cancel signal
+            let timeout_duration = if self.is_local { 30 } else { 10 };
+
             let request = LlmRequest::new(String::new())
                 .with_system_prompt(Some(system_prompt.clone()))
                 .with_messages(Some(messages.clone()))
@@ -230,7 +232,9 @@ impl AgentRuntime {
                 .with_conv_id(Some(self.conv_id.clone()))
                 .with_stream(Some(true))
                 .with_assistant_message_id(Some(self.assistant_message_id.clone()))
-                .with_cancel_signal(Some(self.cancel_signal.clone()));
+                .with_cancel_signal(Some(self.cancel_signal.clone()))
+                .with_attempts(Some(3))
+                .with_timeout_duration(Some(timeout_duration));
 
             // Generate response from LLM
             let response = match generate(
@@ -242,10 +246,16 @@ impl AgentRuntime {
                 Ok(resp) => resp,
                 Err(e) => {
                     // Check if it's a cancellation error
-                    if e.contains("cancelled"){
-                        log::info!("[agent] Generation was cancelled during LLM call");
-                        let text = "*Request cancelled by you*".to_string();
-                        
+                    if e.contains("cancelled") || e.contains("timed out") {
+                        let text: String;
+                        if e.contains("timed out") {
+                            text = "*Request timed out*".to_string();
+                            log::info!("[agent] Generation timed out");
+                        } else {
+                            text = "*Request cancelled by you*".to_string();
+                            log::info!("[agent] Generation was cancelled during LLM call");
+                        }
+                        self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
                         // Emit event if it hasn't been emitted yet by the provider
                         let stream_data = ChatStreamEvent {
                             delta: "".to_string(),
@@ -255,10 +265,9 @@ impl AgentRuntime {
                             message_id: Some(self.assistant_message_id.clone()),
                         };
                         let _ = emit(CHAT_STREAM, stream_data);
-
-                        self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
                         return Ok(text);
                     }
+
                     return Err(AgentError::LlmError(e));
                 }
             };
