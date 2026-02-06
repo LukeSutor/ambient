@@ -1,6 +1,6 @@
 [package]
 name = "ambient"
-version = "0.1.0"
+version = "0.1.1"
 description = "A local-first AI assistant built with Tauri and Next.js"
 authors = ["Luke Sutor"]
 edition = "2021"

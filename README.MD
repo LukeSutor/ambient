@@ -1,10 +1,10 @@
 # Ambient
 
-Local‑first AI assistant that lives on your PC and helps automate everyday tasks.
+Ambient is a local-first AI assistant that aims to have all the features of a cloud-based service like ChatGPT, Claude, or Gemini. It comes with an agentic chat runtime that includes web search, code execution, agentic memory, and Google Mail and Calendar integration.
 
 ## Overview
 
-Ambient is a desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs efficiently in the background and prioritizes privacy and speed by default.
+Ambient is a desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs efficiently in the background and prioritizes privacy and speed.
 
 Built with Tauri (Rust + Next.js).
 
@@ -12,22 +12,25 @@ Built with Tauri (Rust + Next.js).
 
 - Local‑first inference with llama.cpp
   - Ships with a built‑in model downloader
-- Floating chat window
-  - Chat locally with Qwen3VL-2B
-  - Optional Gemini 3 Flash and Gemini 3 Pro
+- Agentic runtime built on top of the [skills](https://agentskills.io/home) specification
+  - Web search using Tauri's webview window as a scraper
+  - Sandboxed code execution using [rustpython](https://github.com/RustPython/RustPython)
+  - Agentic memory for remembering past conversations (WIP)
+  - Google mail and calendar integration for work automation (WIP)
 - Gemini-powered computer use
   - Let Gemini take control of your computer to complete tasks on your behalf
 - Screen region context with OCR
   - Snipping‑tool‑style region capture
-  - Extracts text with OCR and injects it into the conversation
+  - Extracts text with [ocrs](https://github.com/robertknight/ocrs) and injects it into the conversation
 - Runs in the background, designed to be helpful without getting in your way
 
 ## How it works
 
 - The Tauri/Rust backend manages windowing, screen capture, OCR, and model orchestration
 - llama.cpp runs locally; the app communicates with it through a local http server
-- When you choose, Gemini can be used as the model
-- Supabase manages auth, cloud user data, and sessions
+- When you choose, Gemini can be used for more advanced capabilities
+- Supabase for auth and profile data
+- Cloudflare Workers for cloud LLM completions
 - All local artifacts (models, database, caches) never leave your computer
 
 ## Roadmap (vision)
@@ -35,7 +38,6 @@ Built with Tauri (Rust + Next.js).
 - Proactive assistance: draft emails or messages based on detected screen context
 - Scheduling: suggest/create calendar events from chats or on‑screen cues
 - Rich automations: configurable actions triggered by screen activity
-- Cross‑platform: macOS and Linux support
 
 ## Quick start (Windows)
 
@@ -45,36 +47,21 @@ Prerequisites
 
 Steps
 1) Clone the repo and install dependencies
-2) Create and fill in `app/src-tauri/.env` (see `.env.example`)
-3) Start the app in development mode using `pnpm run tauri dev`
-
-Windows PowerShell
-
-```powershell
-cd .\app
-pnpm install
-copy .\src-tauri\.env.example .\src-tauri\.env
-# Edit .\src-tauri\.env to add your keys if needed
-pnpm run tauri dev
-```
+2) Create and fill in `cloudflare/workers/llm-completions/.env` (see `.env.example`)
+3) Start the cloudflare worker using `pnpm run dev`
+4) Start the app in development mode using `pnpm run tauri dev`
 
 ## Configuration
 
 - Local models via llama.cpp
-  - A built‑in downloader fetches models
-  - Default: Qwen3VL-2B
-- Optional Gemini
-
-## OCR and screen capture
-
-- Region selection opens a snipping‑style overlay; the selected area is OCR’d and added to the chat context
-- OCR is powered by the Rust crate [ocrs](https://github.com/robertknight/ocrs)
+  - A built‑in downloader fetches Qwen3VL-2B
+- Optional Gemini 3 Flash and Pro through Cloudflare Worker
 
 ## Privacy
 
 - Local‑first by design: inference and screen processing happen on your machine
-- Optional cloud access through Gemini API is opt‑in
-- Artifacts (models, logs, OCR snippets) are stored locally
+- Optional Gemini access through Cloudflare is opt‑in
+- Artifacts (models, logs, messages, attachments) are stored locally
 
 ## Project structure
 
