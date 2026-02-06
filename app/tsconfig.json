@@ -2,7 +2,11 @@
   "compilerOptions": {
     "forceConsistentCasingInFileNames": true,
     "target": "ES2021",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,14 +24,21 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     }
   },
   "include": [
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
-    ".next/types/**/*.ts",
-    "next-env.d.ts"
+    "dist/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "src-tauri", "dist"]
+  "exclude": [
+    "node_modules",
+    "src-tauri",
+    "dist"
+  ]
 }

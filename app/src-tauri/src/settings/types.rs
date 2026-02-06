@@ -117,6 +117,7 @@ impl ModelSelection {
 #[ts(export, export_to = "settings.ts")]
 pub struct UserSettings {
   pub hud_size: HudSizeOption,
+  pub show_full_thought_traces: bool,
   pub model_selection: ModelSelection,
   pub agent_config: crate::skills::types::AgentRuntimeConfig,
 }
@@ -125,6 +126,7 @@ impl Default for UserSettings {
   fn default() -> Self {
     Self {
       hud_size: HudSizeOption::default(),
+      show_full_thought_traces: false,
       model_selection: ModelSelection::default(),
       agent_config: crate::skills::types::AgentRuntimeConfig::default(),
     }

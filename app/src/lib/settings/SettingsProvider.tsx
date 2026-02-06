@@ -44,6 +44,7 @@ const initialState: SettingsState = {
 type SettingsAction =
   | { type: "SET_SETTINGS"; payload: UserSettings }
   | { type: "UPDATE_HUD_SIZE"; payload: HudSizeOption }
+  | { type: "UPDATE_SHOW_FULL_THOUGHT_TRACES"; payload: boolean }
   | { type: "UPDATE_MODEL_SELECTION"; payload: ModelSelection }
   | { type: "UPDATE_HUD_DIMENSIONS"; payload: HudDimensions }
   | { type: "SET_LOADING"; payload: boolean }
@@ -71,6 +72,16 @@ function settingsReducer(
         settings: {
           ...state.settings,
           hud_size: action.payload,
+        },
+      };
+
+    case "UPDATE_SHOW_FULL_THOUGHT_TRACES":
+      if (!state.settings) return state;
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          show_full_thought_traces: action.payload,
         },
       };
 
@@ -155,6 +166,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
         const defaults: UserSettings = {
           hud_size: "Normal",
+          show_full_thought_traces: false,
           model_selection: "Local",
           agent_config: {
             local_context_limit: 10,

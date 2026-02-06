@@ -20,20 +20,10 @@ export function AutoResizeContainer({
   widthType,
   className = "",
 }: AutoResizeContainerProps) {
-  const { getHudDimensions } = useSettings();
-  const [hudDimensions, setHudDimensions] = useState<HudDimensions | null>(
-    null,
-  );
+  const { hudDimensions } = useSettings();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastHeightRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    void (async () => {
-      const dimensions = await getHudDimensions();
-      setHudDimensions(dimensions);
-    })();
-  }, [getHudDimensions]);
 
   useEffect(() => {
     if (!containerRef.current || !hudDimensions) {
