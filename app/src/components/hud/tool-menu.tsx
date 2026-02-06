@@ -10,6 +10,7 @@ import {
 import { InputGroupButton } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
 import {
+  Bot,
   MousePointerClick,
   SquareDashedMousePointer,
   Wrench,

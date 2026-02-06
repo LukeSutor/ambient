@@ -8,7 +8,6 @@ import type { RefObject } from "react";
  */
 export interface ChatMessage {
   message: Message;
-  reasoningMessages: ChatMessage[];
 }
 
 /**
@@ -29,4 +28,6 @@ export interface ConversationState {
   conversationPage: number;
   hasMoreConversations: boolean;
   initializationRef: RefObject<boolean>;
+  /** Message ID to scroll to after loading conversation */
+  scrollToMessageId: string | null;
 }

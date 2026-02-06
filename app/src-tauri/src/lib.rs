@@ -6,11 +6,14 @@ pub mod events;
 pub mod images;
 pub mod memory;
 pub mod models;
+pub mod agents;
 pub mod settings;
 pub mod screen_selection;
+pub mod skills;
 pub mod setup;
 pub mod tray;
 pub mod windows;
+
 use db::core::DbState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -22,8 +25,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_os::init())
     .plugin(tauri_plugin_store::Builder::new().build())
-    .plugin(
-      tauri_plugin_log::Builder::new()
+    .plugin(tauri_plugin_log::Builder::new()
         .clear_targets()
         .target(Target::new(TargetKind::Stdout))
         .target(Target::new(TargetKind::LogDir {
@@ -36,6 +38,8 @@ pub fn run() {
             || t.starts_with("reqwest")
             || t.starts_with("enigo")
             || t.starts_with("keyring")
+            || t.starts_with("html5ever")
+            || t.starts_with("selectors")
             || t == "tao::platform_impl::platform::event_loop::runner")
         })
         .build(),
@@ -45,24 +49,28 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
-    .manage(crate::models::computer_use::ComputerUseState::default())
+    .manage(crate::agents::computer_use::ComputerUseState::default())
+    .manage(crate::agents::chat::state::AgentRuntimeState::default())
     .setup(|app| {
-      // Register deep link scheme for development/testing
-      #[cfg(any(windows, target_os = "linux"))]
-      {
-        use tauri_plugin_deep_link::DeepLinkExt;
-        if let Err(e) = app.deep_link().register_all() {
-          log::error!("[deep_link] Failed to register deep link schemes: {}", e);
-        } else {
-          log::info!("[deep_link] Deep link schemes registered successfully");
-        }
+      // Initialize the skill registry
+      if let Err(e) = crate::skills::registry::initialize_registry(&app.handle()) {
+        log::error!("[skills] Failed to initialize skill registry: {}", e);
+      } else {
+        log::info!("[skills] Skill registry initialized successfully");
+      }
+
+      // Register deep link scheme for development/testing (all desktop platforms)
+      if let Err(e) = app.deep_link().register_all() {
+        log::error!("[deep_link] Failed to register deep link schemes: {}", e);
+      } else {
+        log::info!("[deep_link] Deep link schemes registered successfully");
       }
 
       // Initialize the event emitter and listeners
       events::get_emitter().set_app_handle(app.handle().clone());
       events::initialize_event_listeners(app.handle().clone());
 
-      // Handle deep link events for OAuth2 callbacks
+      // Handle deep link events for OAuth callbacks
       let app_handle_for_deep_link = app.handle().clone();
       app.deep_link().on_open_url(move |event| {
         let urls = event.urls();
@@ -72,7 +80,7 @@ pub fn run() {
       });
 
       // Initialize the database connection during setup
-      let app_handle = app.handle().clone();
+      let app_handle = app.handle();
       match db::core::initialize_database(&app_handle) {
         Ok(conn) => {
           log::info!("[setup] Database initialized successfully.");
@@ -87,9 +95,9 @@ pub fn run() {
       }
 
       // Start llama.cpp server on startup
-      let app_handle_for_llama = app.handle().clone();
+      let app_handle_for_llama = app_handle.clone();
       tauri::async_runtime::spawn(async move {
-        // Wait to ensure the app is fully initialized
+        // Wait to ensure app is fully initialized
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
         match models::llm::server::spawn_llama_server(app_handle_for_llama).await {
@@ -98,7 +106,7 @@ pub fn run() {
         }
       });
 
-      // Create the system tray
+      // Create system tray
       if let Err(e) = tray::create_tray(&app.handle()) {
         log::error!("[setup] Failed to create system tray: {}", e);
       } else {
@@ -110,18 +118,16 @@ pub fn run() {
     .on_window_event(|window, event| {
       match event {
         tauri::WindowEvent::CloseRequested { api, .. } => {
-          // Prevent the window from closing and hide it instead
+          // Prevent window from closing and hide it instead
           // Only the tray quit option should actually exit the app
           log::info!(
             "[window] Window '{}' close requested - hiding instead of closing",
             window.label()
           );
-
           if let Err(e) = window.hide() {
             log::error!("[window] Failed to hide window '{}': {}", window.label(), e);
           }
-
-          // Prevent the default close behavior
+          // Prevent default close behavior
           api.prevent_close();
         }
         _ => {}
@@ -132,6 +138,7 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
       windows::open_main_window,
+      windows::open_main_window_at_conversation,
       windows::close_main_window,
       windows::open_secondary_window,
       windows::minimize_secondary_window,
@@ -157,7 +164,12 @@ pub fn run() {
       db::conversations::get_conversation,
       db::conversations::list_conversations,
       db::conversations::delete_conversation,
+      db::conversations::delete_messages_after,
+      db::conversations::update_message_content,
       db::conversations::update_conversation_name,
+      db::conversations::list_attachments,
+      db::conversations::delete_attachment,
+      db::conversations::get_attachment_data,
       db::memory::get_memory_entries_with_message,
       db::memory::delete_memory_entry,
       db::memory::delete_all_memories,
@@ -167,12 +179,13 @@ pub fn run() {
       setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
-      models::llm::handlers::handle_hud_chat,
+      agents::chat::runtime::handle_agent_chat,
+      agents::chat::state::stop_agent_chat,
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,
-      models::computer_use::commands::start_computer_use,
-      models::computer_use::commands::stop_computer_use,
-      models::computer_use::commands::execute_computer_action,
+      agents::computer_use::commands::start_computer_use,
+      agents::computer_use::commands::stop_computer_use,
+      agents::computer_use::commands::execute_computer_action,
       auth::auth_flow::sign_up,
       auth::auth_flow::sign_in_with_password,
       auth::auth_flow::sign_in_with_google,
@@ -183,6 +196,9 @@ pub fn run() {
       auth::commands::get_user,
       auth::commands::get_access_token_command,
       auth::commands::emit_auth_changed,
+      skills::registry::get_available_skills,
+      skills::registry::get_skill_tools_command,
+      skills::executor::execute_skill_tool,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

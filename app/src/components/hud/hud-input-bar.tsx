@@ -7,12 +7,13 @@ import {
   InputGroupButton,
 } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
+import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUpIcon, MousePointerClick, Move, X } from "lucide-react";
+import { ArrowUpIcon, MousePointerClick, Move, Square, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -22,13 +23,6 @@ import { PlusMenu } from "./plus-menu";
 import { ToolMenu } from "./tool-menu";
 
 interface HUDInputBarProps {
-  hudDimensions: HudDimensions | null;
-  inputValue: string;
-  setInputValue: (v: string) => void;
-  handleSubmit: () => Promise<void>;
-  onKeyDown: (
-    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => void;
   onDragStart: () => void;
   onMouseLeave: (e: React.MouseEvent) => void;
   isDraggingWindow: boolean;
@@ -37,17 +31,14 @@ interface HUDInputBarProps {
 }
 
 export function HUDInputBar({
-  hudDimensions,
-  inputValue,
-  setInputValue,
-  handleSubmit,
-  onKeyDown,
   onDragStart,
   onMouseLeave,
   isDraggingWindow,
   isHoveringGroup,
   setIsHoveringGroup,
 }: HUDInputBarProps) {
+  const [input, setInput] = useState("");
+
   const inputRef = useRef<HTMLDivElement | null>(null);
   const dimensionsRef = useRef<HudDimensions | null>(null);
 
@@ -60,10 +51,14 @@ export function HUDInputBar({
     ocrLoading,
     isStreaming,
     conversationType,
+    conversationId,
     addAttachmentData,
     toggleComputerUse,
+    sendMessage,
+    stopGeneration,
   } = useConversation();
-  const { closeHUD } = useWindows();
+  const { closeHUD, setChatExpanded } = useWindows();
+  const { hudDimensions } = useSettings();
 
   // Computed values
   const isLoading = ocrLoading || isStreaming;
@@ -85,13 +80,6 @@ export function HUDInputBar({
   const handleMouseEnter = useCallback(() => {
     setIsHoveringGroup(true);
   }, [setIsHoveringGroup]);
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setInputValue(e.target.value);
-    },
-    [setInputValue],
-  );
 
   const handleUploadFiles = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,6 +103,30 @@ export function HUDInputBar({
     [addAttachmentData],
   );
 
+  const handleSubmit = useCallback(async () => {
+    const query = input.trim();
+    if (!query || isLoading) return;
+
+    setChatExpanded();
+    setInput("");
+
+    try {
+      await sendMessage(conversationId, query);
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+    }
+  }, [input, isLoading, conversationId, sendMessage, setChatExpanded]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+        e.preventDefault();
+        void handleSubmit();
+      }
+    },
+    [handleSubmit],
+  );
+
   const handleToggleComputerUse = useCallback(() => {
     toggleComputerUse();
   }, [toggleComputerUse]);
@@ -123,9 +135,9 @@ export function HUDInputBar({
     void closeHUD();
   }, [closeHUD]);
 
-  const onSubmit = useCallback(() => {
-    void handleSubmit();
-  }, [handleSubmit]);
+  const onStopGeneration = useCallback(() => {
+    void stopGeneration();
+  }, [stopGeneration]);
 
   // Input bar enter animation
   useGSAP(() => {
@@ -176,9 +188,11 @@ export function HUDInputBar({
           data-slot="input-group-control"
           maxRows={4}
           minRows={2}
-          value={inputValue}
-          onChange={handleInputChange}
-          onKeyDown={onKeyDown}
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+          }}
+          onKeyDown={handleKeyDown}
           className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
           placeholder="Ask anything"
           autoComplete="off"
@@ -222,17 +236,33 @@ export function HUDInputBar({
             disabled={isLoading}
           />
 
-          <InputGroupButton
-            variant="default"
-            className="rounded-full bg-black/80 hover:bg-black"
-            size="icon-xs"
-            type="submit"
-            onClick={onSubmit}
-            disabled={isLoading || !inputValue.trim()}
-          >
-            <ArrowUpIcon />
-            <span className="sr-only">Send</span>
-          </InputGroupButton>
+          {isStreaming ? (
+            <InputGroupButton
+              variant="ghost"
+              className="rounded-full hover:bg-red-50 text-black/80 hover:text-red-600 transition-colors"
+              size="icon-xs"
+              type="button"
+              onClick={onStopGeneration}
+              title="Stop generation"
+            >
+              <Square className="!h-3 !w-3 fill-current" />
+              <span className="sr-only">Stop</span>
+            </InputGroupButton>
+          ) : (
+            <InputGroupButton
+              variant="default"
+              className="rounded-full bg-black/80 hover:bg-black"
+              size="icon-xs"
+              type="submit"
+              onClick={() => {
+                void handleSubmit();
+              }}
+              disabled={ocrLoading || !input.trim()}
+            >
+              <ArrowUpIcon />
+              <span className="sr-only">Send</span>
+            </InputGroupButton>
+          )}
         </InputGroupAddon>
 
         {/* Window Controls */}
@@ -268,7 +298,7 @@ export function HUDInputBar({
         className={cn(
           "pointer-events-none overflow-hidden transition-all duration-0",
           isPlusDropdownOpen && "h-[112px]",
-          isToolsDropdownOpen && "h-[70px]",
+          isToolsDropdownOpen && "h-[102px]",
           isModelDropdownOpen && "h-[155px]",
           !isPlusDropdownOpen &&
             !isToolsDropdownOpen &&

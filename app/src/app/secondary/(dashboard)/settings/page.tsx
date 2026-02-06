@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/lib/settings";
 import type { HudSizeOption, ModelSelection } from "@/types/settings";
 import { invoke } from "@tauri-apps/api/core";
@@ -27,7 +28,7 @@ interface SettingRowProps {
 
 function SettingRow({ title, description, children }: SettingRowProps) {
   return (
-    <div className="flex flex-row justify-between p-4">
+    <div className="flex flex-row items-center justify-between p-4">
       <div className="flex flex-col">
         <p className="font-semibold text-sm">{title}</p>
         <p className="text-sm text-gray-600">{description}</p>
@@ -38,7 +39,13 @@ function SettingRow({ title, description, children }: SettingRowProps) {
 }
 
 export default function Settings() {
-  const { settings, isLoading, setHudSize, setModelSelection } = useSettings();
+  const {
+    settings,
+    isLoading,
+    setHudSize,
+    setShowFullThoughtTraces,
+    setModelSelection,
+  } = useSettings();
 
   const hudSize = settings?.hud_size ?? "Normal";
   const modelSelection = settings?.model_selection ?? "Local";
@@ -114,6 +121,17 @@ export default function Settings() {
               ))}
             </SelectContent>
           </Select>
+        </SettingRow>
+        <SettingRow
+          title="Show Full Thought Traces"
+          description="Toggle whether to show the full thought traces in the HUD"
+        >
+          <Switch
+            checked={settings?.show_full_thought_traces ?? false}
+            onCheckedChange={(checked) => {
+              void setShowFullThoughtTraces(checked);
+            }}
+          />
         </SettingRow>
       </SettingsSection>
 

@@ -7,7 +7,7 @@ import type {
   UserSettings,
 } from "@/types/settings";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useSettingsContext } from "./SettingsProvider";
 
 /**
@@ -48,6 +48,18 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
  */
 export function useSettings() {
   const { state, dispatch } = useSettingsContext();
+
+  // ============================================================
+  // Effects
+  // ============================================================
+
+  // Update hud dumensions when hud size setting changes
+  useEffect(() => {
+    if (state.settings) {
+      const dimensions = hudSizeOptionToDimensions(state.settings.hud_size);
+      dispatch({ type: "UPDATE_HUD_DIMENSIONS", payload: dimensions });
+    }
+  }, [state.settings, dispatch]);
 
   // ============================================================
   // Operations
@@ -94,18 +106,6 @@ export function useSettings() {
   );
 
   /**
-   * Gets current HUD size setting
-   */
-  const getHudSize = useCallback(async (): Promise<HudSizeOption> => {
-    // Ensure settings are loaded before returning a value
-    if (state.settings) {
-      return state.settings.hud_size;
-    }
-    const settings = await loadSettings();
-    return settings.hud_size;
-  }, [state.settings, loadSettings]);
-
-  /**
    * Sets HUD size setting
    */
   const setHudSize = useCallback(
@@ -149,24 +149,40 @@ export function useSettings() {
   );
 
   /**
-   * Gets HUD dimensions based on current size setting
+   * Set show full thought traces setting
    */
-  const getHudDimensions = useCallback(async (): Promise<HudDimensions> => {
-    const size = await getHudSize();
-    return hudSizeOptionToDimensions(size);
-  }, [getHudSize]);
+  const setShowFullThoughtTraces = useCallback(
+    async (show: boolean): Promise<void> => {
+      try {
+        if (!state.settings) {
+          throw new Error("Settings not loaded");
+        }
 
-  /**
-   * Gets current model selection setting
-   */
-  const getModelSelection = useCallback(async (): Promise<ModelSelection> => {
-    // Ensure settings are loaded before returning a value
-    if (state.settings) {
-      return state.settings.model_selection;
-    }
-    const settings = await loadSettings();
-    return settings.model_selection;
-  }, [state.settings, loadSettings]);
+        // Optimistically update
+        dispatch({ type: "UPDATE_SHOW_FULL_THOUGHT_TRACES", payload: show });
+
+        // Save to backend
+        const updatedSettings = {
+          ...state.settings,
+          show_full_thought_traces: show,
+        };
+        await invoke("save_user_settings", { settings: updatedSettings });
+
+        // Emit settings changed event
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error(
+          "[useSettings] Failed to set show full thought traces:",
+          error,
+        );
+
+        // Reload settings on error
+        await loadSettings();
+        throw error;
+      }
+    },
+    [state.settings, dispatch, loadSettings],
+  );
 
   /**
    * Sets model selection setting
@@ -216,15 +232,14 @@ export function useSettings() {
   return {
     // State
     settings: state.settings,
+    hudDimensions: state.hudDimensions,
     isLoading: state.isLoading,
 
     // Operations
     loadSettings,
     saveSettings,
-    getHudSize,
     setHudSize,
-    getHudDimensions,
-    getModelSelection,
+    setShowFullThoughtTraces,
     setModelSelection,
     refreshCache,
   };

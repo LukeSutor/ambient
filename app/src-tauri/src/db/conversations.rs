@@ -1,6 +1,7 @@
 use crate::db::core::DbState;
 use crate::events::types::AttachmentData;
 use crate::memory::types::MemoryEntry;
+use crate::events::{emitter::emit, types::{ATTACHMENTS_CREATED, AttachmentsCreatedEvent}};
 use chrono::Utc;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,44 @@ pub enum Role {
   System,
   User,
   Assistant,
-  FunctionCall,
+  Tool,
+}
+
+/// The type of a message in the conversation.
+///
+/// Different message types represent different stages of agentic
+/// processing and are displayed differently in the UI.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[ts(rename_all = "snake_case")]
+#[ts(export, export_to = "conversations.ts")]
+pub enum MessageType {
+  /// Regular text message from user or assistant.
+  Text,
+  /// Assistant requesting tool execution.
+  ToolCalls,
+  /// Result returned from tool execution.
+  ToolResults,
+}
+
+impl MessageType {
+  /// Returns the string representation for database storage.
+  pub fn as_str(&self) -> &'static str {
+        match self {
+            MessageType::Text => "text",
+            MessageType::ToolCalls => "tool_calls",
+            MessageType::ToolResults => "tool_results",
+        }
+    }
+
+  /// Parses a string from database into MessageType.
+  pub fn from_str(s: &str) -> Self {
+        match s {
+            "text" => MessageType::Text,
+            "tool_calls" => MessageType::ToolCalls,
+            "tool_results" => MessageType::ToolResults,
+            _ => MessageType::Text,
+        }
+    }
 }
 
 impl Role {
@@ -26,7 +64,7 @@ impl Role {
       Role::System => "system",
       Role::User => "user",
       Role::Assistant => "assistant",
-      Role::FunctionCall => "functioncall",
+      Role::Tool => "tool",
     }
   }
 
@@ -35,7 +73,7 @@ impl Role {
       "system" => Role::System,
       "user" => Role::User,
       "assistant" => Role::Assistant,
-      "functioncall" => Role::FunctionCall,
+      "tool" => Role::Tool,
       _ => Role::User,
     }
   }
@@ -63,8 +101,54 @@ pub struct Message {
   pub role: Role,
   pub content: String,
   pub timestamp: String,
+  pub message_type: MessageType,
+  pub metadata: Option<Vec<MessageMetadata>>,
   pub attachments: Vec<Attachment>,
   pub memory: Option<MemoryEntry>,
+}
+
+/// Structured metadata for messages.
+///
+/// Different message types carry different metadata
+/// that helps with displaying and tracking.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
+#[serde(tag = "type")]
+pub enum MessageMetadata {
+  ToolCall {
+    call_id: String,
+    skill_name: String,
+    tool_name: String,
+    #[ts(type = "any")]
+    arguments: serde_json::Value,
+    thought_signature: Option<String>,
+  },
+  ToolResult {
+    call_id: String,
+    success: bool,
+    error: Option<String>,
+    #[ts(type = "any")]
+    result: Option<serde_json::Value>,
+    /// Optional screenshot attachment ID for computer-use function responses
+    screenshot_attachment_id: Option<String>,
+  },
+}
+
+impl Message {
+  /// Creates a default text message with minimal fields.
+  pub fn text(id: String, conversation_id: String, role: Role, content: String, timestamp: String) -> Self {
+        Self {
+            id,
+            conversation_id,
+            role,
+            content,
+            timestamp,
+            message_type: MessageType::Text,
+            metadata: None,
+            attachments: Vec::new(),
+            memory: None,
+        }
+    }
 }
 
 /// Conversation structure
@@ -149,21 +233,18 @@ pub async fn create_conversation(
   Ok(conversation)
 }
 
-/// Add a message to a conversation
+/// Add a message to a conversation.
+///
+/// This handles regular text messages, tool calls, and results.
+/// If it's the first user message, it also generates and updates the conversation name.
+#[tauri::command]
 pub async fn add_message(
   app_handle: &AppHandle,
   conversation_id: String,
-  role: String,
+  role: Role,
   content: String,
-) -> Result<Message, String> {
-  add_message_with_id(app_handle, conversation_id, role, content, None).await
-}
-
-pub async fn add_message_with_id(
-  app_handle: &AppHandle,
-  conversation_id: String,
-  role: String,
-  content: String,
+  message_type: Option<MessageType>,
+  metadata: Option<Vec<MessageMetadata>>,
   message_id: Option<String>,
 ) -> Result<Message, String> {
   let state = app_handle.state::<DbState>();
@@ -175,15 +256,22 @@ pub async fn add_message_with_id(
     .as_ref()
     .ok_or("Database connection not available.".to_string())?;
 
-  let message_id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+  let id = message_id.unwrap_or_else(|| Uuid::new_v4().to_string());
   let now = Utc::now();
+  let m_type = message_type.unwrap_or(MessageType::Text);
+  let metadata_json = metadata
+    .as_ref()
+    .map(|m| serde_json::to_string(m).ok())
+    .flatten();
 
   let message = Message {
-    id: message_id.clone(),
+    id: id.clone(),
     conversation_id: conversation_id.clone(),
-    role: Role::from_str(&role),
+    role: role.clone(),
     content: content.clone(),
     timestamp: now.to_rfc3339(),
+    message_type: m_type.clone(),
+    metadata: metadata.clone(),
     attachments: vec![],
     memory: None,
   };
@@ -191,14 +279,16 @@ pub async fn add_message_with_id(
   // Insert the message
   conn
     .execute(
-      "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+      "INSERT INTO conversation_messages (id, conversation_id, role, content, timestamp, message_type, metadata)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
       params![
-        message_id,
-        conversation_id,
-        Role::from_str(&role).as_str(),
-        content,
-        now.to_rfc3339()
+        &id,
+        &conversation_id,
+        role.as_str(),
+        &content,
+        now.to_rfc3339(),
+        m_type.as_str(),
+        &metadata_json,
       ],
     )
     .map_err(|e| format!("Failed to add message: {}", e))?;
@@ -207,12 +297,12 @@ pub async fn add_message_with_id(
   conn
     .execute(
       "UPDATE conversations SET message_count = message_count + 1, updated_at = ?1 WHERE id = ?2",
-      params![now.to_rfc3339(), conversation_id],
+      params![now.to_rfc3339(), &conversation_id],
     )
     .map_err(|e| format!("Failed to update conversation: {}", e))?;
 
   // Auto-update conversation name if it's the first user message
-  if Role::from_str(&role) == Role::User {
+  if role == Role::User {
     let message_count: i32 = conn
       .query_row(
         "SELECT message_count FROM conversations WHERE id = ?1",
@@ -250,7 +340,7 @@ pub async fn get_messages(
 
   let mut stmt = conn
     .prepare(
-      "SELECT m.id, m.conversation_id, m.role, m.content, m.timestamp, 
+      "SELECT m.id, m.conversation_id, m.role, m.content, m.timestamp, m.message_type, m.metadata,
         a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at,
         me.id, me.memory_type, me.text, me.timestamp
         FROM conversation_messages m 
@@ -273,14 +363,14 @@ pub async fn get_messages(
       if messages.is_empty() || messages.last().unwrap().id != msg_id {
         let role_str: String = row.get(2).map_err(|e| e.to_string())?;
 
-        let memory = if let Some(mem_id) = row.get::<_, Option<String>>(12).map_err(|e| e.to_string())? {
+        let memory = if let Some(mem_id) = row.get::<_, Option<String>>(14).map_err(|e| e.to_string())? {
           Some(MemoryEntry {
             id: mem_id,
             message_id: msg_id.clone(),
-            memory_type: row.get(13).map_err(|e| e.to_string())?,
-            text: row.get(14).map_err(|e| e.to_string())?,
+            memory_type: row.get(15).map_err(|e| e.to_string())?,
+            text: row.get(16).map_err(|e| e.to_string())?,
             embedding: vec![],
-            timestamp: row.get(15).map_err(|e| e.to_string())?,
+            timestamp: row.get(17).map_err(|e| e.to_string())?,
             similarity: None,
           })
         } else {
@@ -293,21 +383,29 @@ pub async fn get_messages(
           role: Role::from_str(&role_str),
           content: row.get(3).map_err(|e| e.to_string())?,
           timestamp: row.get(4).map_err(|e| e.to_string())?,
+          message_type: row.get::<_, String>(5)
+            .map(|s| MessageType::from_str(&s))
+            .unwrap_or(MessageType::Text),
+          metadata: row.get::<_, Option<String>>(6)
+            .map_err(|e| e.to_string())?
+            .and_then(|m| serde_json::from_str::<Vec<MessageMetadata>>(&m)
+              .map_err(|e| format!("Failed to parse metadata: {}", e))
+              .ok()),
           attachments: Vec::new(),
           memory,
         });
       }
 
-      if let Some(attachment_id) = row.get::<_, Option<String>>(5).map_err(|e| e.to_string())? {
+      if let Some(attachment_id) = row.get::<_, Option<String>>(7).map_err(|e| e.to_string())? {
         if let Some(msg) = messages.last_mut() {
           msg.attachments.push(Attachment {
             id: attachment_id,
-            message_id: row.get(6).map_err(|e| e.to_string())?,
-            file_type: row.get(7).map_err(|e| e.to_string())?,
-            file_name: row.get(8).map_err(|e| e.to_string())?,
-            file_path: row.get(9).map_err(|e| e.to_string())?,
-            extracted_text: row.get(10).map_err(|e| e.to_string())?,
-            created_at: row.get(11).map_err(|e| e.to_string())?,
+            message_id: row.get(8).map_err(|e| e.to_string())?,
+            file_type: row.get(9).map_err(|e| e.to_string())?,
+            file_name: row.get(10).map_err(|e| e.to_string())?,
+            file_path: row.get(11).map_err(|e| e.to_string())?,
+            extracted_text: row.get(12).map_err(|e| e.to_string())?,
+            created_at: row.get(13).map_err(|e| e.to_string())?,
           });
         }
       }
@@ -330,8 +428,8 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
 
   let mut stmt = conn
     .prepare(
-      "SELECT 
-        m.id, m.conversation_id, m.role, m.content, m.timestamp,
+      "SELECT
+        m.id, m.conversation_id, m.role, m.content, m.timestamp, m.message_type, m.metadata,
         a.id, a.message_id, a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at,
         me.id, me.memory_type, me.text, me.timestamp
         FROM conversation_messages m 
@@ -352,14 +450,14 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
       let role_str: String = row.get(2).map_err(|e| e.to_string())?;
       let msg_id: String = row.get(0).map_err(|e| e.to_string())?;
 
-      let memory = if let Some(mem_id) = row.get::<_, Option<String>>(12).map_err(|e| e.to_string())? {
+      let memory = if let Some(mem_id) = row.get::<_, Option<String>>(14).map_err(|e| e.to_string())? {
         Some(MemoryEntry {
           id: mem_id,
           message_id: msg_id.clone(),
-          memory_type: row.get(13).map_err(|e| e.to_string())?,
-          text: row.get(14).map_err(|e| e.to_string())?,
+          memory_type: row.get(15).map_err(|e| e.to_string())?,
+          text: row.get(16).map_err(|e| e.to_string())?,
           embedding: vec![],
-          timestamp: row.get(15).map_err(|e| e.to_string())?,
+          timestamp: row.get(17).map_err(|e| e.to_string())?,
           similarity: None,
         })
       } else {
@@ -372,21 +470,29 @@ pub async fn get_message(app_handle: AppHandle, message_id: String) -> Result<Me
         role: Role::from_str(&role_str),
         content: row.get(3).map_err(|e| e.to_string())?,
         timestamp: row.get(4).map_err(|e| e.to_string())?,
+        message_type: row.get::<_, String>(5)
+          .map(|s| MessageType::from_str(&s))
+          .unwrap_or(MessageType::Text),
+        metadata: row.get::<_, Option<String>>(6)
+          .map_err(|e| e.to_string())?
+          .and_then(|m| serde_json::from_str::<Vec<MessageMetadata>>(&m)
+            .map_err(|e| format!("Failed to parse metadata: {}", e))
+            .ok()),
         attachments: Vec::new(),
         memory,
       });
     }
 
     if let Some(ref mut msg) = message_acc {
-      if let Some(attachment_id) = row.get::<_, Option<String>>(5).map_err(|e| e.to_string())? {
+      if let Some(attachment_id) = row.get::<_, Option<String>>(7).map_err(|e| e.to_string())? {
         msg.attachments.push(Attachment {
           id: attachment_id,
-          message_id: row.get(6).map_err(|e| e.to_string())?,
-          file_type: row.get(7).map_err(|e| e.to_string())?,
-          file_name: row.get(8).map_err(|e| e.to_string())?,
-          file_path: row.get(9).map_err(|e| e.to_string())?,
-          extracted_text: row.get(10).map_err(|e| e.to_string())?,
-          created_at: row.get(11).map_err(|e| e.to_string())?,
+          message_id: row.get(8).map_err(|e| e.to_string())?,
+          file_type: row.get(9).map_err(|e| e.to_string())?,
+          file_name: row.get(10).map_err(|e| e.to_string())?,
+          file_path: row.get(11).map_err(|e| e.to_string())?,
+          extracted_text: row.get(12).map_err(|e| e.to_string())?,
+          created_at: row.get(13).map_err(|e| e.to_string())?,
         });
       }
     }
@@ -560,6 +666,121 @@ pub async fn delete_conversation(
   Ok(())
 }
 
+/// Delete a specific message and all messages that come after it in the same conversation.
+/// This is used for retrying and resubmitting messages.
+#[tauri::command]
+pub async fn delete_messages_after(
+    app_handle: AppHandle,
+    message_id: String,
+) -> Result<(), String> {
+    let state = app_handle.state::<DbState>();
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    // 1. Get the timestamp and conversation_id of the target message
+    let (timestamp, conversation_id): (String, String) = conn
+        .query_row(
+            "SELECT timestamp, conversation_id FROM conversation_messages WHERE id = ?1",
+            params![message_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| format!("Failed to find message: {}", e))?;
+
+    // 2. Find all messages to be deleted (>= timestamp)
+    let mut stmt = conn
+        .prepare(
+            "SELECT id FROM conversation_messages 
+             WHERE conversation_id = ?1 AND timestamp >= ?2",
+        )
+        .map_err(|e| format!("Failed to prepare delete statement: {}", e))?;
+
+    let message_ids: Vec<String> = stmt
+        .query_map(params![conversation_id, timestamp], |row| row.get(0))
+        .map_err(|e| format!("Failed to query messages to delete: {}", e))?
+        .collect::<Result<Vec<String>, _>>()
+        .map_err(|e| format!("Failed to collect message IDs: {}", e))?;
+
+    let deleted_count = message_ids.len();
+
+    // 3. Delete attachments for these messages
+    for id in &message_ids {
+        let mut stmt = conn
+            .prepare("SELECT file_path FROM attachments WHERE message_id = ?1")
+            .map_err(|e| format!("Failed to prepare attachment query: {}", e))?;
+
+        let attachment_paths = stmt
+            .query_map(params![id], |row| row.get::<_, Option<String>>(0))
+            .map_err(|e| format!("Failed to query attachment paths: {}", e))?;
+
+        for path_result in attachment_paths {
+            if let Ok(Some(file_path)) = path_result {
+                let full_path = app_handle
+                    .path()
+                    .app_data_dir()
+                    .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+                    .join(file_path);
+                if full_path.exists() {
+                    let _ = std::fs::remove_file(&full_path);
+                }
+            }
+        }
+    }
+
+    // 4. Delete the messages
+    conn.execute(
+        "DELETE FROM conversation_messages 
+         WHERE conversation_id = ?1 AND timestamp >= ?2",
+        params![conversation_id, timestamp],
+    )
+    .map_err(|e| format!("Failed to delete messages: {}", e))?;
+
+    // 5. Update conversation message count
+    conn.execute(
+        "UPDATE conversations SET message_count = message_count - ?1, updated_at = ?2 WHERE id = ?3",
+        params![deleted_count as i32, Utc::now().to_rfc3339(), conversation_id],
+    )
+    .map_err(|e| format!("Failed to update conversation: {}", e))?;
+
+    log::info!(
+        "[conversations] Deleted {} messages from conversation {} starting from {}",
+        deleted_count,
+        conversation_id,
+        message_id
+    );
+
+    Ok(())
+}
+
+/// Update a message's content.
+#[tauri::command]
+pub async fn update_message_content(
+    app_handle: AppHandle,
+    message_id: String,
+    content: String,
+) -> Result<(), String> {
+    let state = app_handle.state::<DbState>();
+    let conn_guard = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn_guard
+        .as_ref()
+        .ok_or("Database connection not available.".to_string())?;
+
+    conn.execute(
+        "UPDATE conversation_messages SET content = ?1 WHERE id = ?2",
+        params![content, message_id],
+    )
+    .map_err(|e| format!("Failed to update message: {}", e))?;
+
+    Ok(())
+}
+
 /// Update conversation name
 #[tauri::command]
 pub async fn update_conversation_name(
@@ -653,6 +874,14 @@ pub async fn create_attachments(
     attachments.push(attachment);
   }
 
+  // Emit attachments created event
+  let attachments_event = AttachmentsCreatedEvent {
+    message_id: message_id.clone(),
+    attachments: attachments.clone(),
+    timestamp: now.to_rfc3339(),
+  };
+  let _ = emit(ATTACHMENTS_CREATED, attachments_event);
+
   log::info!(
     "[conversations] Created {} attachments for message: {}",
     attachments.len(),
@@ -665,7 +894,6 @@ pub async fn create_attachments(
 /// Add multiple attachments to a message
 pub async fn add_attachments(
   app_handle: &AppHandle,
-  message_id: String,
   attachments: Vec<Attachment>,
 ) -> Result<Vec<Attachment>, String> {
   let state = app_handle.state::<DbState>();
@@ -677,7 +905,6 @@ pub async fn add_attachments(
     .as_mut()
     .ok_or("Database connection not available.".to_string())?;
 
-  let now = Utc::now();
   let mut created_attachments = Vec::new();
 
   // Use a transaction for batch insertion
@@ -685,12 +912,7 @@ pub async fn add_attachments(
     .transaction()
     .map_err(|e| format!("Failed to start transaction: {}", e))?;
 
-  for mut attachment in attachments {
-    let attachment_id = Uuid::new_v4().to_string();
-    attachment.id = attachment_id.clone();
-    attachment.message_id = message_id.clone();
-    attachment.created_at = now.to_rfc3339();
-
+  for attachment in attachments {
     tx.execute(
       "INSERT INTO attachments (id, message_id, file_type, file_name, file_path, extracted_text, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -713,9 +935,380 @@ pub async fn add_attachments(
     .map_err(|e| format!("Failed to commit transaction: {}", e))?;
 
   log::info!(
-    "[conversations] Added {} attachments to message: {}",
+    "[conversations] Added {} attachments to database",
     created_attachments.len(),
-    message_id
   );
   Ok(created_attachments)
+}
+
+
+/// Load activated skills for a conversation.
+///
+/// Returns the list of skill names that have been activated
+/// for the given conversation.
+pub async fn load_conversation_skills(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+) -> Result<Vec<String>, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let mut stmt = conn
+    .prepare(
+      "SELECT skill_name FROM conversation_skills WHERE conversation_id = ?1"
+    )
+    .map_err(|e| format!("Prepare failed: {}", e))?;
+
+  let skills: Vec<String> = stmt
+    .query_map(params![conversation_id], |row| row.get(0))
+    .map_err(|e| format!("Query failed: {}", e))?
+    .filter_map(|r| r.ok())
+    .collect();
+
+  Ok(skills)
+}
+
+/// Save a skill activation to the database.
+///
+/// Persists the fact that a skill was activated for a conversation.
+pub async fn save_conversation_skill(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+  skill_name: &str,
+) -> Result<(), String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  conn
+    .execute(
+      "INSERT OR IGNORE INTO conversation_skills (id, conversation_id, skill_name, activated_at)
+         VALUES (?1, ?2, ?3, ?4)",
+      params![
+        Uuid::new_v4().to_string(),
+        conversation_id,
+        skill_name,
+        Utc::now().to_rfc3339()
+      ],
+    )
+    .map_err(|e| format!("Insert failed: {}", e))?;
+
+  Ok(())
+}
+
+/// Get tool calls for a conversation.
+///
+/// Returns all tool calls associated with a given conversation,
+/// ordered by creation time.
+pub async fn get_conversation_tool_calls(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+) -> Result<Vec<crate::skills::types::ToolCall>, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let mut stmt = conn
+    .prepare(
+      "SELECT id, skill_name, tool_name, arguments FROM tool_calls
+         WHERE conversation_id = ?1 ORDER BY created_at ASC"
+    )
+    .map_err(|e| format!("Prepare failed: {}", e))?;
+
+  let tool_calls: Vec<crate::skills::types::ToolCall> = stmt
+    .query_map(params![conversation_id], |row| {
+      Ok(crate::skills::types::ToolCall {
+        id: row.get(0)?,
+        skill_name: row.get(1)?,
+        tool_name: row.get(2)?,
+        arguments: row
+          .get::<_, String>(3)
+          .ok()
+          .and_then(|s| serde_json::from_str(&s).ok())
+          .unwrap_or_else(|| serde_json::json!({})),
+        thought_signature: None,
+      })
+    })
+    .map_err(|e| format!("Query failed: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("Collect failed: {}", e))?;
+
+  Ok(tool_calls)
+}
+
+/// Get conversation history with context limiting.
+///
+/// Returns messages respecting tool call/result pairing and
+/// limiting based on the provided limit.
+pub async fn get_conversation_history(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+  limit: usize,
+) -> Result<Vec<Message>, String> {
+  let all_messages = get_messages(app_handle.clone(), conversation_id.to_string()).await?;
+
+  // Take the most recent N messages, ensuring we don't break tool call/result pairs
+  let mut messages: Vec<Message> = Vec::new();
+  let mut count = 0;
+
+  for msg in all_messages.into_iter().rev() {
+    // Always include tool results with their calls
+    if msg.message_type == MessageType::ToolResults {
+      messages.push(msg);
+      continue;
+    }
+
+    if count >= limit {
+      // Check if next message is a tool call that has results we included
+      if msg.message_type == MessageType::ToolCalls {
+        messages.push(msg);
+      }
+      break;
+    }
+
+    // Only count user/assistant text messages toward limit
+    if matches!(msg.message_type, MessageType::Text)
+      && matches!(msg.role, Role::User | Role::Assistant)
+    {
+      count += 1;
+    }
+
+    messages.push(msg);
+  }
+
+  messages.reverse();
+  Ok(messages)
+}
+
+/// Attachment item for list display with conversation context.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "conversations.ts")]
+pub struct AttachmentListItem {
+  pub id: String,
+  pub message_id: String,
+  pub conversation_id: String,
+  pub conversation_name: String,
+  pub file_type: String,
+  pub file_name: String,
+  pub file_path: Option<String>,
+  pub extracted_text: Option<String>,
+  pub created_at: String,
+}
+
+/// List attachments with pagination and optional search.
+///
+/// Returns attachments sorted by creation date (newest first).
+/// Includes conversation context for each attachment.
+#[tauri::command]
+pub async fn list_attachments(
+  app_handle: AppHandle,
+  limit: usize,
+  offset: usize,
+  search: Option<String>,
+) -> Result<Vec<AttachmentListItem>, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let (sql, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(ref search_term) = search {
+    let like_pattern = format!("%{}%", search_term);
+    (
+      r#"
+        SELECT a.id, a.message_id, m.conversation_id, c.name as conversation_name,
+               a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        FROM attachments a
+        JOIN conversation_messages m ON a.message_id = m.id
+        JOIN conversations c ON m.conversation_id = c.id
+        WHERE a.file_name LIKE ?1
+        ORDER BY a.created_at DESC
+        LIMIT ?2 OFFSET ?3
+      "#.to_string(),
+      vec![
+        Box::new(like_pattern) as Box<dyn rusqlite::ToSql>,
+        Box::new(limit as i64),
+        Box::new(offset as i64),
+      ],
+    )
+  } else {
+    (
+      r#"
+        SELECT a.id, a.message_id, m.conversation_id, c.name as conversation_name,
+               a.file_type, a.file_name, a.file_path, a.extracted_text, a.created_at
+        FROM attachments a
+        JOIN conversation_messages m ON a.message_id = m.id
+        JOIN conversations c ON m.conversation_id = c.id
+        ORDER BY a.created_at DESC
+        LIMIT ?1 OFFSET ?2
+      "#.to_string(),
+      vec![
+        Box::new(limit as i64) as Box<dyn rusqlite::ToSql>,
+        Box::new(offset as i64),
+      ],
+    )
+  };
+
+  let mut stmt = conn
+    .prepare(&sql)
+    .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+  let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+
+  let attachments = stmt
+    .query_map(params_refs.as_slice(), |row| {
+      Ok(AttachmentListItem {
+        id: row.get(0)?,
+        message_id: row.get(1)?,
+        conversation_id: row.get(2)?,
+        conversation_name: row.get(3)?,
+        file_type: row.get(4)?,
+        file_name: row.get(5)?,
+        file_path: row.get(6)?,
+        extracted_text: row.get(7)?,
+        created_at: row.get(8)?,
+      })
+    })
+    .map_err(|e| format!("Failed to query attachments: {}", e))?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| format!("Failed to collect attachments: {}", e))?;
+
+  log::info!(
+    "[conversations] Listed {} attachments (offset: {}, search: {:?})",
+    attachments.len(),
+    offset,
+    search
+  );
+
+  Ok(attachments)
+}
+
+/// Delete an attachment by ID.
+///
+/// Removes both the file from disk and the database row.
+#[tauri::command]
+pub async fn delete_attachment(
+  app_handle: AppHandle,
+  attachment_id: String,
+) -> Result<(), String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  // First get the file path so we can delete it
+  let file_path: Option<String> = conn
+    .query_row(
+      "SELECT file_path FROM attachments WHERE id = ?1",
+      params![attachment_id],
+      |row| row.get(0),
+    )
+    .map_err(|e| format!("Failed to get attachment: {}", e))?;
+
+  // Delete file from disk if it exists
+  if let Some(path) = file_path {
+    let full_path = app_handle
+      .path()
+      .app_data_dir()
+      .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+      .join(&path);
+    
+    if full_path.exists() {
+      std::fs::remove_file(&full_path)
+        .map_err(|e| format!("Failed to delete attachment file: {}", e))?;
+      
+      // Try to remove parent directory if empty
+      if let Some(parent) = full_path.parent() {
+        let _ = std::fs::remove_dir(parent); // Ignore error if not empty
+      }
+    }
+  }
+
+  // Delete from database
+  conn
+    .execute(
+      "DELETE FROM attachments WHERE id = ?1",
+      params![attachment_id],
+    )
+    .map_err(|e| format!("Failed to delete attachment from database: {}", e))?;
+
+  log::info!(
+    "[conversations] Deleted attachment: {}",
+    attachment_id
+  );
+
+  Ok(())
+}
+
+/// Get attachment data as base64 for display.
+///
+/// For files (images, PDFs), reads from disk and returns base64.
+/// For OCR captures, returns the extracted text directly.
+#[tauri::command]
+pub async fn get_attachment_data(
+  app_handle: AppHandle,
+  attachment_id: String,
+) -> Result<String, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let (file_type, file_path, extracted_text): (String, Option<String>, Option<String>) = conn
+    .query_row(
+      "SELECT file_type, file_path, extracted_text FROM attachments WHERE id = ?1",
+      params![attachment_id],
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )
+    .map_err(|e| format!("Failed to get attachment: {}", e))?;
+
+  // For OCR captures, return extracted text
+  if file_type == "ambient/ocr" {
+    return Ok(extracted_text.unwrap_or_default());
+  }
+
+  // For files, read and return as base64 data URL
+  let path = file_path.ok_or("Attachment has no file path")?;
+  let full_path = app_handle
+    .path()
+    .app_data_dir()
+    .map_err(|e| format!("Could not resolve app data directory: {}", e))?
+    .join(&path);
+
+  let data = std::fs::read(&full_path)
+    .map_err(|e| format!("Failed to read attachment file: {}", e))?;
+
+  let base64_data = general_purpose::STANDARD.encode(&data);
+  
+  // Construct data URL
+  let data_url = format!("data:{};base64,{}", file_type, base64_data);
+
+  Ok(data_url)
 }

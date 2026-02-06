@@ -2,18 +2,19 @@
 
 import type { Conversation, Message, Role } from "@/types/conversations";
 import type { AttachmentData } from "@/types/events";
-import type { MemoryEntry } from "@/types/memory";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { useWindows } from "../windows/useWindows";
 import { useConversationContext } from "./ConversationProvider";
 import {
   createConversation,
   deleteConversation as deleteApiConversation,
   emitGenerateConversationName,
   ensureLlamaServerRunning,
-  sendMessage as sendChatApiMessage,
+  sendAgentMessage,
   startComputerUseSession,
+  stopAgentChat,
   stopComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
@@ -30,7 +31,6 @@ function transformBackendMessage(backendMessage: Message): ChatMessage {
       ...backendMessage,
       role: backendMessage.role.toLowerCase() as Role,
     },
-    reasoningMessages: [],
   };
 }
 
@@ -49,10 +49,11 @@ function createUserMessage(
     timestamp: new Date().toISOString(),
     attachments: [],
     memory: null,
+    message_type: "text",
+    metadata: null,
   };
   return {
     message,
-    reasoningMessages: [],
   };
 }
 
@@ -67,6 +68,7 @@ export function useConversation(
 ) {
   const { state, dispatch } = useConversationContext();
   const isLoadingMoreRef = useRef(false);
+  const { setChatExpanded, setChatMinimized } = useWindows();
 
   // Auto-scroll effect for streaming messages
   useEffect(() => {
@@ -82,6 +84,76 @@ export function useConversation(
     }
   }, [state.streamingContent, state.isStreaming, messagesEndRef]);
 
+  // Track previous conversationId to detect navigation-triggered changes
+  const prevConversationIdRef = useRef<string | null>(null);
+
+  // Effect to load conversation when navigated to via event
+  useEffect(() => {
+    // Only trigger loading if conversationId changed AND we have messages to potentially scroll to
+    // This handles the case where navigation sets a new conversationId
+    if (
+      state.conversationId &&
+      state.conversationId !== prevConversationIdRef.current &&
+      state.scrollToMessageId !== null
+    ) {
+      prevConversationIdRef.current = state.conversationId;
+
+      const loadNavigatedConversation = async () => {
+        try {
+          const conversation = await invoke<Conversation>("get_conversation", {
+            conversationId: state.conversationId,
+          });
+          dispatch({ type: "LOAD_CONVERSATION", payload: conversation });
+
+          const backendMessages = await invoke<Message[]>("get_messages", {
+            conversationId: state.conversationId,
+          });
+          const messages = backendMessages.map(transformBackendMessage);
+          dispatch({ type: "LOAD_MESSAGES", payload: messages });
+        } catch (error) {
+          console.error(
+            "[useConversation] Failed to load navigated conversation:",
+            error,
+          );
+        }
+      };
+
+      void loadNavigatedConversation();
+    } else {
+      prevConversationIdRef.current = state.conversationId;
+    }
+  }, [state.conversationId, state.scrollToMessageId, dispatch]);
+
+  // Effect to scroll to target message after messages are loaded
+  useEffect(() => {
+    if (state.scrollToMessageId && state.messages.length > 0) {
+      setChatExpanded();
+      // Give the DOM time to render the messages
+      const timer = setTimeout(() => {
+        const messageElement = document.getElementById(
+          `message-${state.scrollToMessageId}`,
+        );
+        if (messageElement) {
+          messageElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          // Optionally highlight the message temporarily
+          messageElement.classList.add("highlight-message");
+          setTimeout(() => {
+            messageElement.classList.remove("highlight-message");
+          }, 2000);
+        }
+        // Clear the scroll target
+        dispatch({ type: "SET_SCROLL_TO_MESSAGE", payload: null });
+      }, 100);
+
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+  }, [state.scrollToMessageId, state.messages, dispatch, setChatExpanded]);
+
   // Initialization effect
 
   useEffect(() => {
@@ -94,7 +166,6 @@ export function useConversation(
     const initialize = async () => {
       console.log("[useConversation] Initializing...");
 
-      // Load the conversations list immediately
       try {
         const conversations = await invoke<Conversation[]>(
           "list_conversations",
@@ -125,28 +196,22 @@ export function useConversation(
   /**
    * Resets the conversation state
    */
-  const resetConversation = useCallback(
-    async (delay?: number): Promise<string | null> => {
-      try {
-        dispatch({ type: "SET_CONVERSATION_ID", payload: null });
-        if (delay && delay > 0) {
-          setTimeout(() => {
-            dispatch({ type: "CLEAR_MESSAGES" });
-          }, delay);
-        } else {
-          dispatch({ type: "CLEAR_MESSAGES" });
-        }
-        return null;
-      } catch (error) {
-        console.error(
-          "[useConversation] Failed to create conversation:",
-          error,
-        );
-        return null;
-      }
-    },
-    [dispatch],
-  );
+  const resetConversation = useCallback(async (): Promise<string | null> => {
+    if (state.messages.length === 0) {
+      return null;
+    }
+
+    try {
+      setChatMinimized();
+      dispatch({ type: "SET_CONVERSATION_ID", payload: null });
+      dispatch({ type: "CLEAR_MESSAGES" });
+      return null;
+    } catch (error) {
+      toast.error("Failed to reset conversation. Please try again.");
+      console.error("[useConversation] Failed to reset conversation:", error);
+      return null;
+    }
+  }, [state.messages.length, setChatMinimized, dispatch]);
 
   /**
    * Deletes a conversation by ID
@@ -157,6 +222,7 @@ export function useConversation(
         await deleteApiConversation(id);
         dispatch({ type: "DELETE_CONVERSATION", payload: { id } });
       } catch (error) {
+        toast.error("Failed to delete conversation. Please try again.");
         console.error(
           "[useConversation] Failed to delete conversation:",
           error,
@@ -178,6 +244,7 @@ export function useConversation(
         dispatch({ type: "LOAD_CONVERSATION", payload: conversation });
         await loadMessages(conversation);
       } catch (error) {
+        toast.error("Failed to load conversation. Please try again.");
         console.error("[useConversation] Failed to load conversation:", error);
       }
     },
@@ -193,44 +260,10 @@ export function useConversation(
         const backendMessages = await invoke<Message[]>("get_messages", {
           conversationId: conversation.id,
         });
-        let messages = backendMessages.map(transformBackendMessage);
-        // Load messages depending on conversation type
-        if (conversation.conv_type === "computer_use") {
-          // Collect all assistant/function messages into the last assistant message's reasoningMessages
-          const finalizedMessages: ChatMessage[] = [];
-          let currentAssistantMessage: ChatMessage | null = null;
-          // Loop reverse through the messages to group reasoning by each final assistant message
-          const reversedMessages = [...messages].reverse();
-          for (const msg of reversedMessages) {
-            if (msg.message.role === "functioncall") {
-              // Add function reasoning if current assistant message
-              if (currentAssistantMessage) {
-                currentAssistantMessage.reasoningMessages.unshift(msg);
-              }
-            } else if (msg.message.role === "user") {
-              // Add current assistant message to finalized and reset
-              if (currentAssistantMessage) {
-                finalizedMessages.unshift(currentAssistantMessage);
-                finalizedMessages.unshift(msg);
-                currentAssistantMessage = null;
-              }
-            } else if (msg.message.role === "assistant") {
-              // If there is a current assistant message, add this as reasoning
-              if (currentAssistantMessage) {
-                currentAssistantMessage.reasoningMessages.unshift(msg);
-              } else {
-                currentAssistantMessage = msg;
-              }
-            }
-          }
-          // If there is a remaining assistant message, add it
-          if (currentAssistantMessage) {
-            finalizedMessages.unshift(currentAssistantMessage);
-          }
-          messages = finalizedMessages;
-        }
+        const messages = backendMessages.map(transformBackendMessage);
         dispatch({ type: "LOAD_MESSAGES", payload: messages });
       } catch (error) {
+        toast.error("Failed to load messages. Please try again.");
         console.error("[useConversation] Failed to load messages:", error);
       }
     },
@@ -265,6 +298,9 @@ export function useConversation(
         // Create user message with ID and timestamp
         const userMessage = createUserMessage(content, activeConversationId);
 
+        // Create assistant message id in advance
+        const assistantMessageId = crypto.randomUUID();
+
         // Clear attachment data
         const attachmentData = state.attachmentData;
         dispatch({ type: "CLEAR_ATTACHMENT_DATA" });
@@ -293,29 +329,34 @@ export function useConversation(
 
         dispatch({
           type: "START_ASSISTANT_MESSAGE",
-          payload: { conversationId: activeConversationId },
+          payload: { conversationId: activeConversationId, assistantMessageId },
         });
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
-
-        // Send hud chat or computer use event
         if (state.conversationType === "computer_use") {
-          void startComputerUseSession(activeConversationId, content);
-        } else {
-          await sendChatApiMessage(
+          void startComputerUseSession(
             activeConversationId,
+            assistantMessageId,
+            content,
+            userMessage.message.id,
+          );
+        } else {
+          await sendAgentMessage(
+            activeConversationId,
+            assistantMessageId,
             content,
             attachmentData,
             userMessage.message.id,
           );
         }
       } catch (error) {
+        toast.error("Failed to send message. Please try again.");
         console.error("[useConversation] Failed to send message:", error);
 
         // Remove the placeholder assistant message on error
         dispatch({
           type: "FINALIZE_STREAM",
-          payload: "[Error generating response]",
+          payload: { content: "*Error generating response*" },
         });
         dispatch({ type: "SET_LOADING", payload: false });
         dispatch({ type: "SET_STREAMING", payload: false });
@@ -405,6 +446,184 @@ export function useConversation(
   );
 
   /**
+   * Retries a message.
+   * If it's an assistant message, it deletes all messages after the preceding user message
+   * and restarts the agent from that user message.
+   */
+  const retryMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      try {
+        const messageIndex = state.messages.findIndex(
+          (m) => m.message.id === messageId,
+        );
+        if (messageIndex === -1) return;
+
+        const conversationId = state.conversationId;
+        if (!conversationId) return;
+
+        // Find the user message to retry from
+        let userMessageIndex = messageIndex;
+        while (
+          userMessageIndex >= 0 &&
+          state.messages[userMessageIndex].message.role !== "user"
+        ) {
+          userMessageIndex--;
+        }
+
+        if (userMessageIndex === -1) {
+          toast.error("Could not find user message to retry from.");
+          return;
+        }
+
+        const userMessage = state.messages[userMessageIndex];
+
+        // Try to delete everything after that user message in DB and continue if it doesn't work
+        try {
+          const firstMessageToDeleteIndex = userMessageIndex + 1;
+          if (firstMessageToDeleteIndex < state.messages.length) {
+            const firstToDeleteId =
+              state.messages[firstMessageToDeleteIndex].message.id;
+            await invoke("delete_messages_after", {
+              messageId: firstToDeleteId,
+            });
+          }
+        } catch (error) {
+          console.warn(
+            "[useConversation] Failed to delete messages after for retry:",
+            error,
+          );
+        }
+
+        // Create assistant message id in advance
+        const assistantMessageId = crypto.randomUUID();
+
+        // Update local state
+        const remainingMessages = state.messages.slice(0, userMessageIndex + 1);
+        dispatch({ type: "LOAD_MESSAGES", payload: remainingMessages });
+
+        dispatch({
+          type: "START_ASSISTANT_MESSAGE",
+          payload: { conversationId, assistantMessageId },
+        });
+        dispatch({ type: "SET_LOADING", payload: true });
+        dispatch({ type: "SET_STREAMING", payload: true });
+
+        // Restart agentic runtime
+        if (state.conversationType === "computer_use") {
+          void startComputerUseSession(
+            conversationId,
+            userMessage.message.content,
+            userMessage.message.id,
+          );
+        } else {
+          await sendAgentMessage(
+            conversationId,
+            assistantMessageId,
+            userMessage.message.content,
+            [], // Attachments are already in the DB for this user message
+            userMessage.message.id,
+          );
+        }
+      } catch (error) {
+        toast.error("Failed to retry message. Please try again.");
+        console.error("[useConversation] Failed to retry message:", error);
+        // Remove the placeholder assistant message on error
+        dispatch({
+          type: "FINALIZE_STREAM",
+          payload: { content: "*Error generating response*" },
+        });
+        dispatch({ type: "SET_LOADING", payload: false });
+        dispatch({ type: "SET_STREAMING", payload: false });
+      }
+    },
+    [dispatch, state.messages, state.conversationId, state.conversationType],
+  );
+
+  /**
+   * Resubmits a user message with new content.
+   */
+  const resubmitMessage = useCallback(
+    async (messageId: string, content: string): Promise<void> => {
+      try {
+        const conversationId = state.conversationId;
+        if (!conversationId) return;
+
+        // Find message and its index
+        const messageIndex = state.messages.findIndex(
+          (m) => m.message.id === messageId,
+        );
+        if (messageIndex === -1) return;
+
+        // Update the message content in DB
+        await invoke("update_message_content", { messageId, content });
+
+        // Try to delete everything after this message in DB and continue if it doesn't work
+        try {
+          if (messageIndex < state.messages.length - 1) {
+            const nextMessageId = state.messages[messageIndex + 1].message.id;
+            await invoke("delete_messages_after", { messageId: nextMessageId });
+          }
+        } catch (error) {
+          console.warn(
+            "[useConversation] Failed to delete messages after for resubmit:",
+            error,
+          );
+        }
+
+        // Create assistant message id in advance
+        const assistantMessageId = crypto.randomUUID();
+
+        // Update local state
+        const updatedMessages = [...state.messages.slice(0, messageIndex + 1)];
+        updatedMessages[messageIndex] = {
+          ...updatedMessages[messageIndex],
+          message: {
+            ...updatedMessages[messageIndex].message,
+            content,
+          },
+        };
+        dispatch({ type: "LOAD_MESSAGES", payload: updatedMessages });
+
+        dispatch({
+          type: "START_ASSISTANT_MESSAGE",
+          payload: { conversationId, assistantMessageId },
+        });
+        dispatch({ type: "SET_LOADING", payload: true });
+        dispatch({ type: "SET_STREAMING", payload: true });
+
+        // Restart agentic runtime
+        if (state.conversationType === "computer_use") {
+          void startComputerUseSession(
+            conversationId,
+            assistantMessageId,
+            content,
+            messageId,
+          );
+        } else {
+          await sendAgentMessage(
+            conversationId,
+            assistantMessageId,
+            content,
+            [], // Attachments are already in the DB
+            messageId,
+          );
+        }
+      } catch (error) {
+        toast.error("Failed to resubmit message. Please try again.");
+        console.error("[useConversation] Failed to resubmit message:", error);
+        // Remove the placeholder assistant message on error
+        dispatch({
+          type: "FINALIZE_STREAM",
+          payload: { content: "*Error generating response*" },
+        });
+        dispatch({ type: "SET_LOADING", payload: false });
+        dispatch({ type: "SET_STREAMING", payload: false });
+      }
+    },
+    [dispatch, state.messages, state.conversationId, state.conversationType],
+  );
+
+  /**
    * Dispatch an OCR capture event
    */
   const dispatchOCRCapture = useCallback(async (): Promise<void> => {
@@ -447,6 +666,24 @@ export function useConversation(
       console.error("[useConversation] Failed to stop computer use:", error);
     }
   }, []);
+
+  /**
+   * Stops the current agent generation
+   */
+  const stopGeneration = useCallback(async (): Promise<void> => {
+    try {
+      // Stop the agent chat if it's a regular chat, or computer use if it's that mode
+      if (state.conversationType === "computer_use") {
+        await stopComputerUseSession();
+      } else {
+        await stopAgentChat();
+      }
+      // Note: We don't manually set isStreaming to false here anymore
+      // The backend will emit a final stream event that settles the state
+    } catch (error) {
+      console.error("[useConversation] Failed to stop generation:", error);
+    }
+  }, [state.conversationType]);
 
   /**
    * Add attachment data
@@ -493,9 +730,12 @@ export function useConversation(
     loadMoreConversations,
     refreshConversations,
     renameConversation,
+    retryMessage,
+    resubmitMessage,
     dispatchOCRCapture,
     toggleComputerUse,
     stopComputerUse,
+    stopGeneration,
     addAttachmentData,
     removeAttachmentData,
   };

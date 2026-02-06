@@ -1,5 +1,5 @@
 use crate::memory::types::MemoryEntry;
-use crate::db::conversations::{Attachment, Message};
+use crate::db::conversations::Attachment;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -41,6 +41,7 @@ pub struct ChatStreamEvent {
   pub is_finished: bool,
   pub full_response: String,
   pub conv_id: Option<String>,
+  pub message_id: Option<String>,
 }
 
 pub const HUD_CHAT: &str = "hud_chat";
@@ -114,14 +115,6 @@ pub struct RenameConversationEvent {
   pub timestamp: String,
 }
 
-pub const COMPUTER_USE_UPDATE: &str = "computer_use_update";
-#[derive(Serialize, Deserialize, Clone, Debug, TS)]
-#[ts(export, export_to = "events.ts")]
-pub struct ComputerUseUpdateEvent {
-  pub status: String,
-  pub message: Message,
-}
-
 pub const COMPUTER_USE_TOAST: &str = "computer_use_toast";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
@@ -150,5 +143,14 @@ pub const TOKEN_USAGE_CHANGED: &str = "token_usage_changed";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
 pub struct TokenUsageChangedEvent {
+  pub timestamp: String,
+}
+
+pub const NAVIGATE_TO_CONVERSATION: &str = "navigate_to_conversation";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct NavigateToConversationEvent {
+  pub conversation_id: String,
+  pub message_id: Option<String>,
   pub timestamp: String,
 }

@@ -1,9 +1,7 @@
 import type { Conversation } from "@/types/conversations";
-import {
-  type AttachmentData,
-  type GenerateConversationNameEvent,
-  type HudChatEvent,
-  OcrResponseEvent,
+import type {
+  AttachmentData,
+  GenerateConversationNameEvent,
 } from "@/types/events";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
@@ -30,50 +28,57 @@ export async function createConversation(
 }
 
 /**
- * Sends a message and triggers LLM generation with streaming
+ * Sends a message using the agentic runtime
  * @param conversationId - ID of the conversation
+ * @param assistantMessageId - ID for the assistant's message
  * @param content - Message content
- * @param ocrResults - OCR context to include with the message
- * @param messageId - The message ID to use for the user message
- * @returns Promise resolving to final response text (may not be needed if streaming)
+ * @param attachmentData - Attachments to include
+ * @param messageId - The message ID to use
+ * @returns Promise resolving to final response text
  */
-export async function sendMessage(
+export async function sendAgentMessage(
   conversationId: string,
+  assistantMessageId: string,
   content: string,
   attachmentData: AttachmentData[],
   messageId: string,
 ): Promise<string> {
   try {
-    const hudChatEvent: HudChatEvent = {
-      text: content,
-      conv_id: conversationId,
-      timestamp: Date.now().toString(),
-      message_id: messageId,
+    const finalText = await invoke<string>("handle_agent_chat", {
+      convId: conversationId,
+      assistantMessageId: assistantMessageId,
+      messageId: messageId,
+      userMessage: content,
       attachments: attachmentData,
-    };
-
-    const finalText = await invoke<string>("handle_hud_chat", {
-      event: hudChatEvent,
     });
 
     return finalText;
   } catch (error) {
-    console.error("[ConversationAPI] Failed to send message:", error);
-    throw new Error("Failed to send message");
+    console.error("[ConversationAPI] Failed to send agent message:", error);
+    throw new Error("Failed to send agent message");
   }
 }
 
 /**
  * Starts a computer use session
  * @param conversationId - ID of the conversation
+ * @param assistantMessageId - ID for the assistant's message
  * @param prompt - The prompt to initiate computer use
+ * @param messageId - Optional ID of the user message
  */
 export async function startComputerUseSession(
   conversationId: string,
+  assistantMessageId: string,
   prompt: string,
+  messageId?: string,
 ): Promise<void> {
   try {
-    await invoke("start_computer_use", { conversationId, prompt });
+    await invoke("start_computer_use", {
+      conversationId,
+      assistantMessageId,
+      prompt,
+      messageId: messageId || null,
+    });
   } catch (error) {
     console.error(
       "[ConversationAPI] Failed to start computer use session:",
@@ -95,6 +100,18 @@ export async function stopComputerUseSession(): Promise<void> {
       error,
     );
     throw new Error("Failed to stop computer use session");
+  }
+}
+
+/**
+ * Stops the current agent chat generation
+ */
+export async function stopAgentChat(): Promise<void> {
+  try {
+    await invoke("stop_agent_chat");
+  } catch (error) {
+    console.error("[ConversationAPI] Failed to stop agent chat:", error);
+    throw new Error("Failed to stop agent chat");
   }
 }
 

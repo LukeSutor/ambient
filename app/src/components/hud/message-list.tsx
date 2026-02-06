@@ -8,46 +8,38 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { ChatMessage } from "@/lib/conversations/types";
+import { useConversation } from "@/lib/conversations/useConversation";
+import { useSettings } from "@/lib/settings/useSettings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
 import type React from "react";
-import { useCallback, useState } from "react";
-import {
-  AssistantMessage,
-  FunctionMessage,
-  UserMessage,
-} from "./message-types";
-
-interface MessageListProps {
-  conversationName: string;
-  messages: ChatMessage[];
-  messagesEndRef: React.RefObject<HTMLDivElement | null>;
-  handleNewChat: () => void;
-}
+import { useCallback, useMemo, useRef, useState } from "react";
+import { AssistantMessage, ThinkingBlock, UserMessage } from "./message-types";
 
 const SCROLL_MASK_STYLE = {
   maskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
   WebkitMaskImage: "linear-gradient(to bottom, transparent 40px, black 50px)",
 } as const;
 
-export function MessageList({
-  conversationName,
-  messages,
-  messagesEndRef,
-  handleNewChat,
-}: MessageListProps) {
-  const [showReasoning, setShowReasoning] = useState(new Set<number>());
+export function MessageList() {
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const { conversationName, messages, resetConversation } =
+    useConversation(messagesEndRef);
+
+  const [showReasoning, setShowReasoning] = useState(new Set<string>());
   const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =
     useWindows();
+  const { settings } = useSettings();
 
-  const toggleReasoning = useCallback((index: number) => {
+  const toggleReasoning = useCallback((id: string) => {
     setShowReasoning((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(index);
+        next.add(id);
       }
       return next;
     });
@@ -65,6 +57,51 @@ export function MessageList({
   );
 
   const isLoading = conversationName === "";
+
+  // Grouping logic for thinking messages
+  const groupedMessages = useMemo(() => {
+    const groups: Array<
+      | { type: "message"; message: ChatMessage }
+      | { type: "thinking"; messages: ChatMessage[] }
+    > = [];
+    let currentThinkingGroup: ChatMessage[] = [];
+
+    for (const m of messages) {
+      const mType = m.message.message_type.toLowerCase();
+      const isThinking =
+        mType === "thinking" ||
+        mType === "toolcalls" ||
+        mType === "tool_calls" ||
+        mType === "tool_results" ||
+        mType === "toolresults" ||
+        m.message.role.toLowerCase() === "tool" ||
+        (Array.isArray(m.message.metadata) &&
+          m.message.metadata.length > 0 &&
+          m.message.role.toLowerCase() !== "user");
+
+      if (isThinking) {
+        currentThinkingGroup.push(m);
+      } else {
+        if (currentThinkingGroup.length > 0) {
+          groups.push({
+            type: "thinking",
+            messages: [...currentThinkingGroup],
+          });
+          currentThinkingGroup = [];
+        }
+        groups.push({ type: "message", message: m });
+      }
+    }
+
+    if (currentThinkingGroup.length > 0) {
+      groups.push({
+        type: "thinking",
+        messages: currentThinkingGroup,
+      });
+    }
+
+    return groups;
+  }, [messages]);
 
   return (
     <ContentContainer>
@@ -102,7 +139,9 @@ export function MessageList({
                 size="icon"
                 variant="ghost"
                 className="pointer-events-auto"
-                onClick={handleNewChat}
+                onClick={() => {
+                  void resetConversation();
+                }}
               >
                 <MessageSquarePlus className="w-5 h-5" />
               </Button>
@@ -119,14 +158,33 @@ export function MessageList({
           style={SCROLL_MASK_STYLE}
         >
           <div className="flex flex-col">
-            {messages.map((m, i) => {
+            {groupedMessages.map((group, groupIdx) => {
+              if (group.type === "thinking") {
+                const firstId = group.messages[0].message.id;
+                return (
+                  <div
+                    key={`thinking-${firstId}`}
+                    className="max-w-[95%] w-full text-left ml-2"
+                  >
+                    <ThinkingBlock
+                      messages={group.messages}
+                      isExpanded={showReasoning.has(firstId)}
+                      onToggle={() => {
+                        toggleReasoning(firstId);
+                      }}
+                    />
+                  </div>
+                );
+              }
+
+              const m = group.message;
               const role = m.message.role.toLowerCase();
               const isUser = role === "user";
-              const isAssistant = role === "assistant";
 
               return (
                 <div
                   key={m.message.id}
+                  id={`message-${m.message.id}`}
                   className={cn(
                     "grid transition-[grid-template-rows] duration-300 ease-out",
                     isUser
@@ -139,15 +197,8 @@ export function MessageList({
                 >
                   {isUser ? (
                     <UserMessage m={m} openSecondary={handleOpenSecondary} />
-                  ) : isAssistant ? (
-                    <AssistantMessage
-                      m={m}
-                      i={i}
-                      toggleReasoning={toggleReasoning}
-                      showReasoning={showReasoning.has(i)}
-                    />
                   ) : (
-                    <FunctionMessage m={m} />
+                    <AssistantMessage m={m} />
                   )}
                 </div>
               );

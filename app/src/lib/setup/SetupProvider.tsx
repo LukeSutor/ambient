@@ -143,7 +143,6 @@ export function SetupProvider({ children }: SetupProviderProps) {
 
         const listenerPromises = [
           listen<DownloadInformationEvent>("download_information", (event) => {
-            console.log({ event });
             dispatch({
               type: "SET_N_MODELS",
               payload: Number(event.payload.n_items),
@@ -154,7 +153,6 @@ export function SetupProvider({ children }: SetupProviderProps) {
             });
           }),
           listen<DownloadStartedEvent>("download_started", (event) => {
-            console.log({ event });
             dispatch({ type: "SET_IS_DOWNLOADING", payload: true });
             dispatch({
               type: "SET_DOWNLOADING_ID",
@@ -171,7 +169,6 @@ export function SetupProvider({ children }: SetupProviderProps) {
             });
           }),
           listen<DownloadFinishedEvent>("download_finished", (event) => {
-            console.log({ event });
             dispatch({ type: "SET_DOWNLOADING_ID", payload: null });
             if (Number(event.payload.id) === stateRef.current.numModels) {
               dispatch({ type: "SET_IS_DOWNLOADING", payload: false });
@@ -194,7 +191,6 @@ export function SetupProvider({ children }: SetupProviderProps) {
         const info = await invoke<DownloadInformationEvent>(
           "get_setup_download_info",
         );
-        console.log({ info });
         dispatch({ type: "SET_N_MODELS", payload: Number(info.n_items) });
         dispatch({
           type: "SET_TOTAL_CONTENT_LENGTH",

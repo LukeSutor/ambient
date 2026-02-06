@@ -1,109 +1,15 @@
-use crate::models::llm::types::{LlmRequest, LlmProvider};
+use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
 use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
+use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini, format_messages_for_gemini};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use base64::{Engine as _, engine::general_purpose};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Manager};
+use std::sync::atomic::Ordering;
+use tauri::AppHandle;
 use tokio_stream::StreamExt;
-use std::fs;
 
-
-const MAX_RECENT_ATTACHMENTS: usize = 3;
-
-/// Map roles to Gemini format
-fn role_to_gemini(role: &str) -> &str {
-  match role {
-    "system" => "model",
-    "assistant" => "model",
-    "user" => "user",
-    _ => "user",
-  }
-}
-
-/// Builds messages in the Gemini API format
-async fn build_content(
-  app_handle: &AppHandle,
-  user_prompt: String,
-  conv_id: &Option<String>,
-  current_message_id: &Option<String>,
-) -> Result<Vec<Value>, String> {
-  let mut content = Vec::new();
-
-  if let Some(conversation_id) = conv_id {
-    if let Ok(conv_messages) =
-      crate::db::conversations::get_messages(app_handle.clone(), conversation_id.clone()).await
-    {
-      // Collect IDs of the most recent images/pdfs across all messages
-      let mut valid_attachments = Vec::new();
-      for msg in conv_messages.iter().rev() {
-        for attachment in msg.attachments.iter().rev() {
-          if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
-            valid_attachments.push(attachment.id.clone());
-          }
-        }
-      }
-
-      for msg in conv_messages {
-        let is_current = current_message_id.as_ref().map_or(false, |id| id == &msg.id);
-        let msg_content = if is_current {
-          &user_prompt
-        } else {
-          &msg.content
-        };
-
-        let mut content_parts = Vec::new();
-
-        for attachment in msg.attachments {
-          if !valid_attachments.contains(&attachment.id) {
-            continue;
-          }
-
-          if attachment.file_type.starts_with("image/") || attachment.file_type == "application/pdf" {
-            // Attach image as base64 data URL
-            if let Some(rel_path) = attachment.file_path {
-              let full_path = app_handle
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("Could not resolve app data directory: {}", e))?
-                .join(rel_path);
-
-              if full_path.exists() {
-                if let Ok(bytes) = fs::read(&full_path) {
-                  let base64_data = general_purpose::STANDARD.encode(bytes);
-                  content_parts.push(json!({
-                    "inlineData": {
-                      "mimeType": attachment.file_type,
-                      "data": base64_data,
-                    },
-                  }));
-                }
-              }
-            }
-          } else if attachment.file_type == "ambient/ocr" {
-            // Attach OCR text
-            if let Some(extracted_text) = attachment.extracted_text {
-              content_parts.push(json!({
-                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
-              }));
-            }
-          }
-        }
-
-        // Add text content last
-        content_parts.push(json!({"text": msg_content}));
-
-        content.push(json!({
-          "role": role_to_gemini(msg.role.as_str()),
-          "parts": content_parts
-        }));
-      }
-    }
-  }
-  Ok(content)
-}
 
 pub struct CloudflareProvider;
 
@@ -113,28 +19,29 @@ impl LlmProvider for CloudflareProvider {
     &self,
     app_handle: AppHandle,
     request: LlmRequest,
-  ) -> Result<String, String> {
-    // Load user settings to get model selection
-    let settings = crate::settings::service::load_user_settings(app_handle.clone())
-      .await
-      .map_err(|e| format!("Failed to load user settings: {}", e))?;
-    let model = &settings.model_selection.as_str();
+  ) -> Result<LlmResponse, String> {
+    // Use model_type override if provided, otherwise get from settings
+    let model = if let Some(ref model_type) = request.model_type {
+      model_type.clone()
+    } else {
+      let settings = crate::settings::service::load_user_settings(app_handle.clone())
+        .await
+        .map_err(|e| format!("Failed to load user settings: {}", e))?;
+      settings.model_selection.as_str().to_string()
+    };
 
     let should_stream = request.stream.unwrap_or(false);
-    let mut content = build_content(
-      &app_handle,
-      request.prompt.clone(),
-      &request.conv_id,
-      &request.current_message_id
-    ).await?;
+    let mut content = Vec::new();
 
-    // Add user prompt if no current message id is provided
-    if request.current_message_id.is_none() {
+    // Build content
+    if let Some(msgs) = request.messages.clone() {
+      content.extend(format_messages_for_gemini(&app_handle, &msgs));
+    } else {
       content.push(json!({
         "role": "user",
         "parts": [{"text": request.prompt.clone()}]
       }));
-    }
+    };
 
     // Get user access token
     let access_token = get_access_token_command()
@@ -146,7 +53,6 @@ impl LlmProvider for CloudflareProvider {
         "modelType": model,
         "content": content,
         "stream": should_stream,
-        "token": access_token,
         "systemPrompt": request.system_prompt.unwrap_or_else(|| "You are a helpful assistant.".to_string()),
     });
 
@@ -159,14 +65,24 @@ impl LlmProvider for CloudflareProvider {
       }
     }
 
+    // Handle internal tools translation
+    if let Some(internal_tools) = &request.internal_tools {
+      body["tools"] = tools_to_gemini_format(internal_tools);
+    }
+
     let client = reqwest::Client::new();
 
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+      reqwest::header::AUTHORIZATION,
+      HeaderValue::from_str(&format!("Bearer {}", access_token))
+        .map_err(|e| format!("Invalid access token format: {}", e))?,
+    );
 
     let mut prompt_tokens = 0u64;
     let mut completion_tokens = 0u64;
-
+    
     if should_stream {
       let resp = client
         .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
@@ -184,9 +100,21 @@ impl LlmProvider for CloudflareProvider {
       }
 
       let mut full = String::new();
+      let mut tool_calls = Vec::new();
       let mut buffer = String::new();
       let mut stream = resp.bytes_stream();
+      let mut was_cancelled = false;
+
       while let Some(chunk) = stream.next().await {
+        // Check cancellation signal
+        if let Some(ref cancel_signal) = request.cancel_signal {
+          if cancel_signal.load(Ordering::SeqCst) {
+            log::info!("[cloudflare] Generation cancelled by user");
+            was_cancelled = true;
+            break;
+          }
+        }
+
         let Ok(chunk) = chunk.map_err(|e| format!("Error reading stream: {}", e)) else {
           log::warn!("Stream chunk error encountered");
           break;
@@ -220,26 +148,23 @@ impl LlmProvider for CloudflareProvider {
               }
             }
 
+            // Extract tool calls from this chunk
+            if has_tool_calls_gemini(&obj) {
+              let chunk_calls = parse_gemini_tool_calls(&obj, request.internal_tools.as_deref());
+              tool_calls.extend(chunk_calls);
+            }
+
             // Extract content piece from Gemini structure
-            if let Some(piece) = obj
-              .get("candidates")
-              .and_then(|c| c.as_array())
-              .and_then(|a| a.get(0))
-              .and_then(|c| c.get("content"))
-              .and_then(|c| c.get("parts"))
-              .and_then(|p| p.as_array())
-              .and_then(|a| a.get(0))
-              .and_then(|p| p.get("text"))
-              .and_then(|t| t.as_str())
-            {
-              full.push_str(piece);
+            if let Some(piece) = extract_text_gemini(&obj) {
+              full.push_str(&piece);
               let _ = emit(
                 CHAT_STREAM,
                 ChatStreamEvent {
-                  delta: piece.to_string(),
+                  delta: piece.clone(),
                   is_finished: false,
                   full_response: full.clone(),
                   conv_id: request.conv_id.clone(),
+                  message_id: request.assistant_message_id.clone(),
                 },
               );
             }
@@ -249,26 +174,53 @@ impl LlmProvider for CloudflareProvider {
         }
       }
 
-      // Final event
-      let _ = emit(
-        CHAT_STREAM,
-        ChatStreamEvent {
+      // If cancelled, return early with what we have so far
+      if was_cancelled {
+        let final_text = if full.is_empty() {
+          "*Request cancelled by you*".to_string()
+        } else {
+          format!("{}\n\n*Request cancelled by you*", full)
+        };
+
+        let final_stream_data = ChatStreamEvent {
           delta: "".to_string(),
           is_finished: true,
-          full_response: full.clone(),
+          full_response: final_text.clone(),
           conv_id: request.conv_id.clone(),
-        },
-      );
+          message_id: request.assistant_message_id.clone(),
+        };
+        let _ = emit(CHAT_STREAM, final_stream_data);
+
+        // Return Text response so the runtime loop can finalize correctly
+        return Ok(LlmResponse::Text(final_text));
+      }
 
       // Save token usage
       add_token_usage(
-          app_handle.clone(),
-          model,
-          prompt_tokens,
-          completion_tokens,
+        app_handle.clone(),
+        &model,
+        prompt_tokens,
+        completion_tokens,
       ).await?;
 
-      Ok(full)
+      if !tool_calls.is_empty() {
+        // Include any text generated alongside tool calls (e.g., reasoning)
+        let text = if full.is_empty() { None } else { Some(full) };
+        Ok(LlmResponse::tool_calls(tool_calls, text))
+      } else {
+        // Final event - only emit if not tool calls so the stop button stays visible during agentic process
+        let _ = emit(
+          CHAT_STREAM,
+          ChatStreamEvent {
+            delta: "".to_string(),
+            is_finished: true,
+            full_response: full.clone(),
+            conv_id: request.conv_id.clone(),
+            message_id: request.assistant_message_id.clone(),
+          },
+        );
+        Ok(LlmResponse::text(full))
+      }
     } else {
       let resp = client
         .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
@@ -302,32 +254,30 @@ impl LlmProvider for CloudflareProvider {
           .unwrap_or(0);
       }
 
-      // Try extraction from full Gemini structure, or fallback to direct string if worker returned response.text
-      let content = json
-        .get("candidates")
-        .and_then(|c| c.as_array())
-        .and_then(|a| a.get(0))
-        .and_then(|c| c.get("content"))
-        .and_then(|c| c.get("parts"))
-        .and_then(|p| p.as_array())
-        .and_then(|a| a.get(0))
-        .and_then(|p| p.get("text"))
-        .and_then(|t| t.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-          log::warn!("Failed to extract content from Gemini structure, falling back to as_str()");
-          json.as_str().unwrap_or("").to_string()
-        });
+      // Extract text content
+      let content = extract_text_gemini(&json);
+
+      // Check for tool calls or extract text
+      let response = if has_tool_calls_gemini(&json) {
+        let tool_calls = parse_gemini_tool_calls(&json, request.internal_tools.as_deref());
+        LlmResponse::tool_calls(tool_calls, content)
+      } else {
+        let text = content.unwrap_or_else(|| {
+            log::warn!("Failed to extract content from Gemini structure, falling back to as_str()");
+            json.as_str().unwrap_or("").to_string()
+          });
+        LlmResponse::text(text)
+      };
 
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          model,
+          &model,
           prompt_tokens,
           completion_tokens,
       ).await?;
 
-      Ok(content)
+      Ok(response)
     }
   }
 }

@@ -1,7 +1,7 @@
 use tauri::{AppHandle};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use super::computer_use::ComputerUseEngine;
+use super::runtime::ComputerUseRuntime;
 use super::actions;
 use super::types::{ActionResponse, ComputerAction};
 
@@ -19,13 +19,15 @@ impl Default for ComputerUseState {
     }
 }
 
-/// Test the computer use engine with a sample prompt
+/// Start a computer use session with the new unified runtime
 #[tauri::command]
 pub async fn start_computer_use(
     app_handle: AppHandle,
     state: tauri::State<'_, ComputerUseState>,
     conversation_id: String,
+    assistant_message_id: String,
     prompt: String,
+    message_id: Option<String>,
 ) -> Result<String, String> {
     // Check if a session is already running
     {
@@ -39,14 +41,15 @@ pub async fn start_computer_use(
     // Reset stop signal
     state.should_stop.store(false, Ordering::SeqCst);
 
-    let mut engine = ComputerUseEngine::new(
+    // Create and run the new unified runtime
+    let mut runtime = ComputerUseRuntime::new(
         app_handle.clone(),
         conversation_id,
-        prompt.clone(),
+        assistant_message_id,
         state.should_stop.clone(),
-    ).await;
+    ).await?;
 
-    let result = engine.run().await;
+    let result = runtime.run(prompt, message_id).await;
 
     // Reset running state
     {
@@ -54,10 +57,7 @@ pub async fn start_computer_use(
         *is_running = false;
     }
 
-    match result {
-        Ok(_) => Ok("Computer use engine ran successfully.".to_string()),
-        Err(e) => Err(format!("Error running computer use engine: {}", e)),
-    }
+    result
 }
 
 /// Stop the current computer use session

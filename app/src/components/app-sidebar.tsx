@@ -4,11 +4,11 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
   Code,
+  FolderOpen,
   House,
   LifeBuoy,
   NotebookPen,
   Settings2,
-  SquareTerminal,
 } from "lucide-react";
 import type * as React from "react";
 
@@ -36,6 +36,11 @@ const data = {
       title: "Memories",
       url: "/secondary/memories",
       icon: NotebookPen,
+    },
+    {
+      title: "Your Uploads",
+      url: "/secondary/uploads",
+      icon: FolderOpen,
     },
   ],
   navSecondary: [

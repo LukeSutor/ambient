@@ -46,7 +46,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["../public/favicon.ico"],
+    "resources": {
+      ".skills": "./.skills"
+    },
     "externalBin": ["binaries/server"]
   },
   "plugins": {

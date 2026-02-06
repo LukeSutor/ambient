@@ -90,7 +90,9 @@ export function ConversationList() {
   }, []);
 
   // Infinite scroll observer
+  // biome-ignore lint/correctness/useExhaustiveDependencies: observerTarget.current is required to re-initialize the observer when the target element mounts/unmounts
   useEffect(() => {
+    if (!observerTarget.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (
@@ -108,12 +110,13 @@ export function ConversationList() {
     );
 
     const target = observerTarget.current;
-    if (target) observer.observe(target);
+    observer.observe(target);
 
     return () => {
-      if (target) observer.unobserve(target);
+      observer.unobserve(target);
     };
-  }, [hasMoreConversations, loadMoreConversations]);
+    // Observer target is needed in the dependency array to re-register on mount, do not remove
+  }, [observerTarget.current, hasMoreConversations, loadMoreConversations]);
 
   const handleLoadConversation = useCallback(
     async (id: string) => {

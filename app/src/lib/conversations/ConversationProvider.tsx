@@ -1,14 +1,19 @@
 "use client";
 
-import type { Attachment, Conversation } from "@/types/conversations";
+import type {
+  Attachment,
+  Conversation,
+  MessageMetadata,
+} from "@/types/conversations";
 import type {
   AttachmentData,
   AttachmentsCreatedEvent,
   ChatStreamEvent,
-  ComputerUseUpdateEvent,
   MemoryExtractedEvent,
   OcrResponseEvent,
   RenameConversationEvent,
+  ToolExecutionCompletedEvent,
+  ToolExecutionStartedEvent,
 } from "@/types/events";
 import type { MemoryEntry } from "@/types/memory";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
@@ -65,6 +70,7 @@ const initialState: ConversationState = {
   conversationPage: 0,
   hasMoreConversations: true,
   initializationRef: { current: false },
+  scrollToMessageId: null,
 };
 
 /**
@@ -83,15 +89,21 @@ type ConversationAction =
   | { type: "LOAD_CONVERSATION"; payload: Conversation }
   | { type: "LOAD_MESSAGES"; payload: ChatMessage[] }
   | { type: "ADD_CHAT_MESSAGE"; payload: ChatMessage }
-  | { type: "ADD_REASONING_MESSAGE"; payload: ChatMessage }
+  | { type: "ADD_AGENTIC_MESSAGE"; payload: ChatMessage }
   | {
       type: "START_USER_MESSAGE";
       payload: { id: string; conversationId: string; timestamp: string };
     }
   | { type: "FINALIZE_USER_MESSAGE"; payload: { id: string; content: string } }
-  | { type: "START_ASSISTANT_MESSAGE"; payload: { conversationId: string } }
+  | {
+      type: "START_ASSISTANT_MESSAGE";
+      payload: { conversationId: string; assistantMessageId: string };
+    }
   | { type: "UPDATE_STREAMING_CONTENT"; payload: string }
-  | { type: "FINALIZE_STREAM"; payload: string }
+  | {
+      type: "FINALIZE_STREAM";
+      payload: { content: string; messageId?: string };
+    }
   | { type: "ADD_ATTACHMENT_DATA"; payload: AttachmentData }
   | { type: "REMOVE_ATTACHMENT_DATA"; payload: number }
   | { type: "CLEAR_ATTACHMENT_DATA" }
@@ -108,7 +120,12 @@ type ConversationAction =
   | { type: "CLEAR_MESSAGES" }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_STREAMING"; payload: boolean }
-  | { type: "SET_OCR_LOADING"; payload: boolean };
+  | { type: "SET_OCR_LOADING"; payload: boolean }
+  | { type: "SET_SCROLL_TO_MESSAGE"; payload: string | null }
+  | {
+      type: "NAVIGATE_TO_CONVERSATION";
+      payload: { conversationId: string; messageId: string | null };
+    };
 
 /**
  * Conversation reducer - handles all state updates
@@ -200,6 +217,56 @@ function conversationReducer(
         messages: [...state.messages, action.payload],
       };
 
+    case "ADD_AGENTIC_MESSAGE": {
+      const messages = [...state.messages];
+      const existingIdx = messages.findIndex(
+        (m) => m.message.id === action.payload.message.id,
+      );
+
+      if (existingIdx !== -1) {
+        const existing = messages[existingIdx];
+        const combinedMetadata = [
+          ...(Array.isArray(existing.message.metadata)
+            ? existing.message.metadata
+            : []),
+          ...(Array.isArray(action.payload.message.metadata)
+            ? action.payload.message.metadata
+            : []),
+        ];
+
+        messages[existingIdx] = {
+          ...existing,
+          message: {
+            ...existing.message,
+            metadata: combinedMetadata,
+            // Keep content if new content is empty or generic
+            content: action.payload.message.content || existing.message.content,
+          },
+        };
+        return { ...state, messages };
+      }
+
+      const lastIdx = messages.length - 1;
+
+      // If the last message is an assistant text message, insert BEFORE it
+      // this ensures thinking/tools appear above the final response
+      if (lastIdx >= 0) {
+        const lastMsg = messages[lastIdx];
+        const role = lastMsg.message.role.toLowerCase();
+        const mType = lastMsg.message.message_type.toLowerCase();
+
+        if (role === "assistant" && mType === "text") {
+          messages.splice(lastIdx, 0, action.payload);
+          return { ...state, messages };
+        }
+      }
+
+      return {
+        ...state,
+        messages: [...state.messages, action.payload],
+      };
+    }
+
     case "START_USER_MESSAGE": {
       const newUserMessage: ChatMessage = {
         message: {
@@ -210,8 +277,9 @@ function conversationReducer(
           timestamp: action.payload.timestamp,
           attachments: [],
           memory: null,
+          message_type: "text",
+          metadata: null,
         },
-        reasoningMessages: [],
       };
       return {
         ...state,
@@ -246,15 +314,16 @@ function conversationReducer(
     case "START_ASSISTANT_MESSAGE": {
       const newMessage: ChatMessage = {
         message: {
-          id: crypto.randomUUID(),
+          id: action.payload.assistantMessageId,
           conversation_id: action.payload.conversationId,
           role: "assistant",
           content: "",
           timestamp: new Date().toISOString(),
           attachments: [],
           memory: null,
+          message_type: "text",
+          metadata: null,
         },
-        reasoningMessages: [],
       };
       return {
         ...state,
@@ -265,11 +334,15 @@ function conversationReducer(
     }
 
     case "UPDATE_STREAMING_CONTENT": {
-      // Find the last assistant message and update its content
+      // Find the last assistant text message and update its content
       const updatedMessages = [...state.messages];
       const lastAssistantIndex = [...updatedMessages]
         .reverse()
-        .findIndex((m) => m.message.role === "assistant");
+        .findIndex((m) => {
+          const role = m.message.role.toLowerCase();
+          const mType = m.message.message_type.toLowerCase();
+          return role === "assistant" && mType === "text";
+        });
 
       if (lastAssistantIndex !== -1) {
         const actualIndex = updatedMessages.length - 1 - lastAssistantIndex;
@@ -289,44 +362,24 @@ function conversationReducer(
       };
     }
 
-    case "ADD_REASONING_MESSAGE": {
-      // Find the last assistant message and add reasoning message to it
-      const updatedMessages = [...state.messages];
-      const lastAssistantIdx = [...updatedMessages]
-        .reverse()
-        .findIndex((m) => m.message.role === "assistant");
-
-      if (lastAssistantIdx !== -1) {
-        const actualIdx = updatedMessages.length - 1 - lastAssistantIdx;
-        const updatedReasoning = [
-          ...updatedMessages[actualIdx].reasoningMessages,
-          action.payload,
-        ];
-        updatedMessages[actualIdx] = {
-          ...updatedMessages[actualIdx],
-          reasoningMessages: updatedReasoning,
-        };
-      }
-      return {
-        ...state,
-        messages: updatedMessages,
-      };
-    }
-
     case "FINALIZE_STREAM": {
-      // Update the last assistant message with final content
+      // Update the last assistant text message with final content
       const finalizedMessages = [...state.messages];
-      const lastAssistIdx = [...finalizedMessages]
-        .reverse()
-        .findIndex((m) => m.message.role === "assistant");
+      const lastAssistIdx = [...finalizedMessages].reverse().findIndex((m) => {
+        const role = m.message.role.toLowerCase();
+        const mType = m.message.message_type.toLowerCase();
+        return role === "assistant" && mType === "text";
+      });
 
       if (lastAssistIdx !== -1) {
         const actualIdx = finalizedMessages.length - 1 - lastAssistIdx;
+        const currentMessage = finalizedMessages[actualIdx].message;
         finalizedMessages[actualIdx] = {
           ...finalizedMessages[actualIdx],
           message: {
-            ...finalizedMessages[actualIdx].message,
-            content: action.payload,
+            ...currentMessage,
+            content: action.payload.content,
+            id: action.payload.messageId ?? currentMessage.id,
           },
         };
       }
@@ -456,6 +509,19 @@ function conversationReducer(
         ocrLoading: action.payload,
       };
 
+    case "SET_SCROLL_TO_MESSAGE":
+      return {
+        ...state,
+        scrollToMessageId: action.payload,
+      };
+
+    case "NAVIGATE_TO_CONVERSATION":
+      return {
+        ...state,
+        conversationId: action.payload.conversationId,
+        scrollToMessageId: action.payload.messageId,
+      };
+
     default:
       return state;
   }
@@ -512,17 +578,23 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
         const listenerPromises = [
           // Stream Listener
           listen<ChatStreamEvent>("chat_stream", (event) => {
-            const { delta, full_response, is_finished, conv_id } =
+            const { delta, full_response, is_finished, conv_id, message_id } =
               event.payload;
 
             // Filter by conversation ID using ref
-            if (conv_id && conv_id !== convIdRef.current) {
+            if (!conv_id || (conv_id && conv_id !== convIdRef.current)) {
               return;
             }
 
             if (is_finished) {
               const finalText = extractThinkingContent(full_response);
-              dispatch({ type: "FINALIZE_STREAM", payload: finalText });
+              dispatch({
+                type: "FINALIZE_STREAM",
+                payload: {
+                  content: finalText,
+                  messageId: message_id ?? undefined,
+                },
+              });
               return;
             }
 
@@ -532,23 +604,6 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                 type: "UPDATE_STREAMING_CONTENT",
                 payload: cleanContent,
               });
-            }
-          }),
-
-          // Computer Use Listener
-          listen<ComputerUseUpdateEvent>("computer_use_update", (event) => {
-            const chatMessage: ChatMessage = {
-              message: event.payload.message,
-              reasoningMessages: [],
-            };
-
-            if (event.payload.status === "completed") {
-              dispatch({
-                type: "FINALIZE_STREAM",
-                payload: event.payload.message.content,
-              });
-            } else {
-              dispatch({ type: "ADD_REASONING_MESSAGE", payload: chatMessage });
             }
           }),
 
@@ -594,6 +649,101 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
             dispatch({
               type: "RENAME_CONVERSATION",
               payload: { id: conv_id, newName: new_name },
+            });
+          }),
+
+          listen<ToolExecutionStartedEvent>(
+            "tool_execution_started",
+            (event) => {
+              const p = event.payload;
+              const skill_name = p.skill_name;
+              const tool_name = p.tool_name;
+              const args = p.arguments as Record<string, unknown>;
+              const content = p.content;
+
+              dispatch({
+                type: "ADD_AGENTIC_MESSAGE",
+                payload: {
+                  message: {
+                    id: p.message_id,
+                    conversation_id: convIdRef.current || "",
+                    role: "assistant",
+                    content: content,
+                    timestamp: p.timestamp,
+                    message_type: "tool_calls",
+                    metadata: [
+                      {
+                        type: "ToolCall",
+                        call_id: p.tool_call_id,
+                        skill_name,
+                        tool_name,
+                        arguments: args,
+                        thought_signature: null,
+                      },
+                    ],
+                    attachments: [],
+                    memory: null,
+                  },
+                },
+              });
+            },
+          ),
+
+          listen<ToolExecutionCompletedEvent>(
+            "tool_execution_completed",
+            (event) => {
+              const p = event.payload;
+              const success = p.success;
+              const error = p.error;
+              const result = p.result as unknown;
+
+              dispatch({
+                type: "ADD_AGENTIC_MESSAGE",
+                payload: {
+                  message: {
+                    id: p.message_id,
+                    conversation_id: convIdRef.current || "",
+                    role: "tool",
+                    content: "",
+                    timestamp: p.timestamp,
+                    message_type: "tool_results",
+                    metadata: [
+                      {
+                        type: "ToolResult",
+                        call_id: p.tool_call_id,
+                        success,
+                        error: error,
+                        result: result,
+                        screenshot_attachment_id: null,
+                      },
+                    ],
+                    attachments: [],
+                    memory: null,
+                  },
+                },
+              });
+            },
+          ),
+
+          // Navigation Listener - handles navigation from uploads page etc.
+          listen<{
+            conversation_id: string;
+            message_id: string | null;
+            timestamp: string;
+          }>("navigate_to_conversation", (event) => {
+            const { conversation_id, message_id } = event.payload;
+            console.log(
+              "[ConversationProvider] Navigate to conversation:",
+              conversation_id,
+              "message:",
+              message_id,
+            );
+            dispatch({
+              type: "NAVIGATE_TO_CONVERSATION",
+              payload: {
+                conversationId: conversation_id,
+                messageId: message_id,
+              },
             });
           }),
         ];
