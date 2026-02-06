@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/tooltip";
 import type { ChatMessage } from "@/lib/conversations/types";
 import { useConversation } from "@/lib/conversations/useConversation";
+import { useSettings } from "@/lib/settings/useSettings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
 import { Menu, MessageSquarePlus } from "lucide-react";
@@ -30,6 +31,7 @@ export function MessageList() {
   const [showReasoning, setShowReasoning] = useState(new Set<string>());
   const { isChatHistoryExpanded, openSecondary, toggleChatHistory } =
     useWindows();
+  const { settings } = useSettings();
 
   const toggleReasoning = useCallback((id: string) => {
     setShowReasoning((prev) => {

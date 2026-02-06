@@ -11,17 +11,21 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import {
   Camera,
+  Check,
+  CheckCircle,
   CheckCircle2,
   ChevronDown,
   Copy,
   FileText,
   Hammer,
+  Loader2,
   NotebookPen,
   Pencil,
   RefreshCw,
   Search,
   Sparkles,
   SquareDashed,
+  X,
   XCircle,
 } from "lucide-react";
 import Image from "next/image";
@@ -43,6 +47,7 @@ import {
   HoverCardTrigger,
 } from "../ui/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { useSettings } from "@/lib/settings";
 
 export const PreviewAttachment = memo(function PreviewAttachment({
   a,
@@ -364,10 +369,10 @@ export const UserMessage = memo(function UserMessage({
       {/* Persistent memory area to avoid layout shifts and provide spacing */}
       <div className="h-10 flex items-end justify-start">
         {m.message.memory && (
-          <div className="mb-1 ml-1">
+          <div className="mb-2 ml-1">
             <HoverCard>
               <HoverCardTrigger asChild>
-                <div className="flex items-center gap-1 text-xs text-black/50 cursor-pointer hover:text-black/70 transition-colors">
+                <div className="flex items-center gap-1 text-xs text-zinc-600 cursor-pointer hover:text-zinc-800 transition-colors">
                   <NotebookPen className="h-4 w-4" />
                   <span className="font-bold">Saved memory</span>
                 </div>
@@ -512,6 +517,116 @@ export const GenericThinkingStep = memo(function GenericThinkingStep({
   );
 });
 
+type FriendlyToolMessage = {
+  loadingPrefix: string;
+  finishedPrefix: string;
+  suffix: string;
+}
+function getFriendlyToolMessage(call: MessageMetadata): FriendlyToolMessage {
+  if (call.type !== "ToolCall") return {
+    loadingPrefix: "Using",
+    finishedPrefix: "Used",
+    suffix: "a tool"
+  };
+  const { skill_name, tool_name, arguments: args } = call;
+  switch (`${skill_name}.${tool_name}`) {
+    case "web-search.search_web":
+      return {
+        loadingPrefix: "Searching",
+        finishedPrefix: "Searched",
+        suffix: `the web for "${args.query}"`
+      };
+    case "web-search.fetch_webpage":
+      return {
+        loadingPrefix: "Fetching",
+        finishedPrefix: "Fetched",
+        suffix: `webpage: ${args.url}`
+      };
+    case "code-execution.execute_code":
+      return {
+        loadingPrefix: "Executing",
+        finishedPrefix: "Executed",
+        suffix: `code`
+      };
+    case "calendar.create_event":
+      return {
+        loadingPrefix: "Creating",
+        finishedPrefix: "Created",
+        suffix: "calendar event"
+      };
+    case "calendar.list_events":
+      return {
+        loadingPrefix: "Checking",
+        finishedPrefix: "Checked",
+        suffix: "calendar"
+      };
+    case "email.send_email":
+      return {
+        loadingPrefix: "Sending",
+        finishedPrefix: "Sent",
+        suffix: "email"
+      };
+    case "email.list_emails":
+      return {
+        loadingPrefix: "Fetching",
+        finishedPrefix: "Fetched",
+        suffix: "emails"
+      };
+    case "memory-search.search_memories":
+      return {
+        loadingPrefix: "Searching",
+        finishedPrefix: "Searched",
+        suffix: `memories for "${args.query}"`
+      };
+    case "system.activate_skill":
+      return {
+        loadingPrefix: "Activating",
+        finishedPrefix: "Activated",
+        suffix: `${args.skill_name.replace("-", " ")} skill`
+      };
+    default:
+      return {
+        loadingPrefix: "Using",
+        finishedPrefix: "Used",
+        suffix: tool_name
+      };
+  }
+}
+
+export const SimplifiedToolStep = memo(function SimplifiedToolStep({
+  call,
+  result,
+}: {
+  call: MessageMetadata;
+  result?: MessageMetadata;
+}) {
+  if (call.type !== "ToolCall") return null;
+
+  const resultMetadata = result?.type === "ToolResult" ? result : null;
+  const isSuccess = resultMetadata?.success ?? null;
+  const friendlyMessage = getFriendlyToolMessage(call);
+
+  return (
+    <div className="flex items-center gap-2 py-1 text-zinc-600">
+      <div className="relative flex items-center justify-center">
+        {isSuccess === null ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : isSuccess ? (
+          <Check className="w-3.5 h-3.5" />
+        ) : (
+          <X className="w-3.5 h-3.5 text-red-500" />
+        )}
+      </div>
+      <span className="text-xs font-medium transition-colors duration-200">
+        {isSuccess === null
+          ? friendlyMessage.loadingPrefix
+          : friendlyMessage.finishedPrefix}{" "}
+        {friendlyMessage.suffix}
+      </span>
+    </div>
+  );
+});
+
 export const ThinkingBlock = memo(function ThinkingBlock({
   messages,
   isExpanded,
@@ -521,6 +636,8 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   isExpanded: boolean;
   onToggle: () => void;
 }) {
+  const { settings } = useSettings();
+  const showFullThoughtTraces = settings?.show_full_thought_traces ?? false;
   // Map call_id -> { message, metadata }
   const resultsMap = useMemo(() => {
     const map = new Map<
@@ -542,6 +659,34 @@ export const ThinkingBlock = memo(function ThinkingBlock({
   }, [messages]);
 
   if (messages.length === 0) return null;
+
+  if (!showFullThoughtTraces) {
+    return (
+      <div className="flex flex-col space-y-1">
+        {messages.map((m) => {
+          const metadataList = m.message.metadata;
+          return (
+            <div key={m.message.id}>
+              {Array.isArray(metadataList) &&
+                metadataList.map((meta, idx) => {
+                  if (meta.type === "ToolCall") {
+                    const resultObj = resultsMap.get(meta.call_id);
+                    return (
+                      <SimplifiedToolStep
+                        key={`${m.message.id}-${idx}`}
+                        call={meta}
+                        result={resultObj?.metadata}
+                      />
+                    );
+                  }
+                  return null;
+                })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col mb-4">
