@@ -26,7 +26,7 @@ export function SettingsSection({
       <p className="text-xl font-semibold w-full pb-2">{title}</p>
       <div className={`outline ${borderClass} w-full rounded-md mb-6`}>
         {childrenArray.map((child, index) => (
-          <React.Fragment key={index}>
+          <React.Fragment key={child as string}>
             {child}
             {index < childrenArray.length - 1 && (
               <div className={`border-t ${separatorClass}`} />

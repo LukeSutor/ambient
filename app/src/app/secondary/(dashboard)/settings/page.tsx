@@ -39,7 +39,13 @@ function SettingRow({ title, description, children }: SettingRowProps) {
 }
 
 export default function Settings() {
-  const { settings, isLoading, setHudSize, setShowFullThoughtTraces, setModelSelection } = useSettings();
+  const {
+    settings,
+    isLoading,
+    setHudSize,
+    setShowFullThoughtTraces,
+    setModelSelection,
+  } = useSettings();
 
   const hudSize = settings?.hud_size ?? "Normal";
   const modelSelection = settings?.model_selection ?? "Local";
@@ -121,10 +127,11 @@ export default function Settings() {
           description="Toggle whether to show the full thought traces in the HUD"
         >
           <Switch
-            checked={settings?.show_full_thought_traces ?? false} 
+            checked={settings?.show_full_thought_traces ?? false}
             onCheckedChange={(checked) => {
               void setShowFullThoughtTraces(checked);
-            }} />
+            }}
+          />
         </SettingRow>
       </SettingsSection>
 

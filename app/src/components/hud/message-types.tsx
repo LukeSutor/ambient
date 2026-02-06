@@ -5,6 +5,7 @@ import {
   preprocessMarkdownCurrency,
 } from "@/components/ui/markdown-config";
 import { type ChatMessage, useConversation } from "@/lib/conversations";
+import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import type { Attachment, MessageMetadata } from "@/types/conversations";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -47,7 +48,6 @@ import {
   HoverCardTrigger,
 } from "../ui/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
-import { useSettings } from "@/lib/settings";
 
 export const PreviewAttachment = memo(function PreviewAttachment({
   a,
@@ -521,76 +521,79 @@ type FriendlyToolMessage = {
   loadingPrefix: string;
   finishedPrefix: string;
   suffix: string;
-}
+};
 function getFriendlyToolMessage(call: MessageMetadata): FriendlyToolMessage {
-  if (call.type !== "ToolCall") return {
-    loadingPrefix: "Using",
-    finishedPrefix: "Used",
-    suffix: "a tool"
-  };
+  if (call.type !== "ToolCall")
+    return {
+      loadingPrefix: "Using",
+      finishedPrefix: "Used",
+      suffix: "a tool",
+    };
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
   const { skill_name, tool_name, arguments: args } = call;
   switch (`${skill_name}.${tool_name}`) {
     case "web-search.search_web":
       return {
         loadingPrefix: "Searching",
         finishedPrefix: "Searched",
-        suffix: `the web for "${args.query}"`
+        suffix: `the web for "${args.query}"`,
       };
     case "web-search.fetch_webpage":
       return {
         loadingPrefix: "Fetching",
         finishedPrefix: "Fetched",
-        suffix: `webpage: ${args.url}`
+        suffix: `webpage: ${args.url}`,
       };
     case "code-execution.execute_code":
       return {
         loadingPrefix: "Executing",
         finishedPrefix: "Executed",
-        suffix: `code`
+        suffix: "code",
       };
     case "calendar.create_event":
       return {
         loadingPrefix: "Creating",
         finishedPrefix: "Created",
-        suffix: "calendar event"
+        suffix: "calendar event",
       };
     case "calendar.list_events":
       return {
         loadingPrefix: "Checking",
         finishedPrefix: "Checked",
-        suffix: "calendar"
+        suffix: "calendar",
       };
     case "email.send_email":
       return {
         loadingPrefix: "Sending",
         finishedPrefix: "Sent",
-        suffix: "email"
+        suffix: "email",
       };
     case "email.list_emails":
       return {
         loadingPrefix: "Fetching",
         finishedPrefix: "Fetched",
-        suffix: "emails"
+        suffix: "emails",
       };
     case "memory-search.search_memories":
       return {
         loadingPrefix: "Searching",
         finishedPrefix: "Searched",
-        suffix: `memories for "${args.query}"`
+        suffix: `memories for "${args.query}"`,
       };
     case "system.activate_skill":
       return {
         loadingPrefix: "Activating",
         finishedPrefix: "Activated",
-        suffix: `${args.skill_name.replace("-", " ")} skill`
+        suffix: `${args.skill_name.replace("-", " ")} skill`,
       };
     default:
       return {
         loadingPrefix: "Using",
         finishedPrefix: "Used",
-        suffix: tool_name
+        suffix: tool_name,
       };
   }
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
 }
 
 export const SimplifiedToolStep = memo(function SimplifiedToolStep({
