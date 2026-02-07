@@ -457,16 +457,6 @@ export default function Dev() {
           <div>
             <strong>Is Google Authenticated:</strong> {authState.isGoogleAuthenticated ? "✅ Yes" : "❌ No"}
           </div>
-          {authState.googleToken ? (
-            <div className="mt-2">
-              <strong>Google Provider Token:</strong>
-              <div className="mt-1 p-2 bg-gray-100 rounded break-all font-mono text-xs">
-                {authState.googleToken}
-              </div>
-            </div>
-          ) : (
-            <div className="mt-2 text-red-600">No Google Provider Token Found</div>
-          )}
         </div>
       </div>
 

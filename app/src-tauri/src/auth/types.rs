@@ -416,7 +416,6 @@ pub struct AuthState {
     pub is_online: bool,
     pub is_authenticated: bool,
     pub is_google_authenticated: bool,
-    pub google_token: Option<String>,
     pub is_setup_complete: bool,
     pub user: Option<UserInfo>,
     pub needs_refresh: bool,
