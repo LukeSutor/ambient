@@ -177,8 +177,23 @@ impl AgentRuntime {
         // Emit memory save event
         self.emit_memory_save_event(&user_message).await?;
 
-        // Get skill summaries for system prompt
-        let skill_summaries = get_all_summaries();
+        // Check if user is Google authenticated to filter skills
+        let is_google_authed = crate::auth::commands::get_auth_state(self.app_handle.clone()).await
+            .map(|s| s.is_google_authenticated)
+            .unwrap_or(false);
+
+        // Get skill summaries for system prompt, filtered by auth requirements
+        let skill_summaries = get_all_summaries()
+            .into_iter()
+            .filter(|s| {
+                if let Some(skill) = crate::skills::registry::get_skill(&s.name) {
+                    if skill.requires_google_auth && !is_google_authed {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect::<Vec<_>>();
 
         // Build system prompt
         let system_prompt = self.build_system_prompt(&skill_summaries);

@@ -58,7 +58,8 @@ When you need capabilities from a skill:
 
 ## Guidelines
 - Only activate skills when necessary for the task
-- Provide clear, helpful responses"#,
+- Provide clear, helpful responses
+- Use markdown when appropriate"#,
   );
   map
 });

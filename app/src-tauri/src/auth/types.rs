@@ -90,6 +90,8 @@ pub struct Session {
     pub expires_at: Option<i64>,
     pub refresh_token: String,
     pub user: SupabaseUser,
+    pub provider_token: Option<String>,
+    pub provider_refresh_token: Option<String>,
 }
 
 /// Weak password indicator from Supabase
@@ -413,6 +415,7 @@ impl std::error::Error for AuthErrorResponse {}
 pub struct AuthState {
     pub is_online: bool,
     pub is_authenticated: bool,
+    pub is_google_authenticated: bool,
     pub is_setup_complete: bool,
     pub user: Option<UserInfo>,
     pub needs_refresh: bool,

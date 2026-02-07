@@ -1,19 +1,12 @@
 //! Email skill implementation.
 //!
-//! This skill provides email sending and management capabilities.
-//!
-//! # Tools
-//!
-//! - `send_email`: Send an email to a recipient
-//! - `list_emails`: List recent emails
-//!
-//! # Status
-//!
-//! **TODO**: This is a stub implementation. Actual email API
-//! integration needs to be implemented.
+//! This skill provides email management capabilities using Gmail API.
 
 use super::ToolCall;
 use serde_json::Value;
+use crate::auth::storage::get_provider_token;
+use crate::auth::auth_flow::refresh_google_token;
+use crate::auth::security::HTTP_CLIENT;
 
 /// Execute an email tool.
 pub async fn execute(
@@ -27,30 +20,11 @@ pub async fn execute(
     }
 }
 
-/// Send an email.
-async fn send_email(call: &ToolCall) -> Result<Value, String> {
-    let to = call
-        .arguments
-        .get("to")
-        .and_then(|t| t.as_str())
-        .ok_or_else(|| "Missing 'to' argument".to_string())?;
-
-    let subject = call
-        .arguments
-        .get("subject")
-        .and_then(|s| s.as_str())
-        .ok_or_else(|| "Missing 'subject' argument".to_string())?;
-
-    log::info!("[email] Sending email to: {} (subject: {})", to, subject);
-
-    // TODO: Implement actual email API integration
+/// Send an email (Not implemented in this version, focused on context retrieval).
+async fn send_email(_call: &ToolCall) -> Result<Value, String> {
     Ok(serde_json::json!({
-        "status": "not_implemented",
-        "message": "Email integration is not yet implemented. This is a stub placeholder.",
-        "email": {
-            "to": to,
-            "subject": subject
-        }
+        "status": "error",
+        "message": "Sending emails is not yet supported. This skill currently only supports retrieving emails for context."
     }))
 }
 
@@ -60,14 +34,73 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
         .arguments
         .get("limit")
         .and_then(|l| l.as_u64())
-        .unwrap_or(10) as usize;
+        .unwrap_or(5);
 
     log::info!("[email] Listing emails (limit: {})", limit);
 
-    // TODO: Implement actual email API integration
-    Ok(serde_json::json!({
-        "status": "not_implemented",
-        "message": "Email integration is not yet implemented. This is a stub placeholder.",
-        "emails": []
-    }))
+    let token = match get_provider_token().map_err(|e| e.to_string())? {
+        Some(t) => t,
+        None => return Ok(serde_json::json!({
+            "status": "error",
+            "message": "Not authenticated with Google"
+        })),
+    };
+
+    let mut response = call_gmail_api(&token, "me/messages", &format!("maxResults={}", limit)).await;
+
+    // Retry once with refresh if unauthorized
+    if let Err(ref e) = response {
+        if e.contains("401") {
+            log::info!("[email] Token expired, refreshing...");
+            if let Ok(new_token) = refresh_google_token().await {
+                response = call_gmail_api(&new_token, "me/messages", &format!("maxResults={}", limit)).await;
+            }
+        }
+    }
+
+    match response {
+        Ok(data) => {
+            let messages = data["messages"].as_array().cloned().unwrap_or_default();
+            let mut detailed_messages = Vec::new();
+            
+            // For each message, fetch details (snappy)
+            let auth_token = if let Ok(Some(t)) = get_provider_token() { t } else { token.clone() };
+            
+            for msg in messages.iter().take(limit as usize) {
+                if let Some(id) = msg["id"].as_str() {
+                    if let Ok(details) = call_gmail_api(&auth_token, &format!("me/messages/{}", id), "format=full").await {
+                        detailed_messages.push(details);
+                    }
+                }
+            }
+
+            Ok(serde_json::json!({
+                "status": "success",
+                "emails": detailed_messages
+            }))
+        },
+        Err(e) => Ok(serde_json::json!({
+            "status": "error",
+            "message": e
+        })),
+    }
+}
+
+async fn call_gmail_api(token: &str, path: &str, query: &str) -> Result<Value, String> {
+    let url = format!("https://gmail.googleapis.com/gmail/v1/users/{}?{}", path, query);
+    
+    let response = HTTP_CLIENT
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+    
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!("Gmail API error: {}", status));
+    }
+    
+    let json: Value = response.json().await.map_err(|e| format!("JSON error: {}", e))?;
+    Ok(json)
 }

@@ -139,7 +139,7 @@ impl LlmProvider for LocalProvider {
                 if let Ok(json_data) = serde_json::from_str::<Value>(data) {
                   // Capture timings if present
                   if let Some(timings) = json_data.get("timings") {
-                    cache_tokens = timings["cache_n"].as_u64().unwrap_or(0);
+                    let cache_tokens = timings["cache_n"].as_u64().unwrap_or(0);
                     log::info!("[llama_server] Cache tokens used: {}", cache_tokens);
                     prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(prompt_tokens);
                     completion_tokens = timings["predicted_n"].as_u64().unwrap_or(completion_tokens);
@@ -291,7 +291,7 @@ impl LlmProvider for LocalProvider {
 
       // Extract token usage
       if let Some(timings) = result.get("timings") {
-        cache_tokens = timings["cache_n"].as_u64().unwrap_or(0);
+        let cache_tokens = timings["cache_n"].as_u64().unwrap_or(0);
         log::info!("[llama_server] Cache tokens used: {}", cache_tokens);
         prompt_tokens = timings["prompt_n"].as_u64().unwrap_or(0);
         completion_tokens = timings["predicted_n"].as_u64().unwrap_or(0);

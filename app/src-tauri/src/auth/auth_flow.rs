@@ -253,6 +253,31 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
     })
 }
 
+/// Refresh the Google provider token via Supabase
+pub async fn refresh_google_token() -> Result<String, String> {
+    log::info!("[supabase_auth] Attempting to refresh Google provider token");
+    
+    // Acquire lock to serialize refresh requests
+    let _guard = REFRESH_MUTEX.lock().await;
+
+    let refresh_token = crate::auth::storage::get_refresh_token()
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No refresh token found".to_string())?;
+    
+    // Refreshing the Supabase session should return new provider tokens if offline access was granted
+    let refreshed = refresh_session_with_token(&refresh_token).await?;
+    
+    if let Some(token) = refreshed.session.provider_token {
+        log::info!("[supabase_auth] Successfully refreshed Google provider token via Supabase session");
+        return Ok(token);
+    }
+    
+    log::error!("[supabase_auth] Google token refresh failed - no provider token returned");
+    // Clear state as requested if refresh fails
+    let _ = clear_auth_state();
+    Err("Google token refresh failed. Please sign in again.".to_string())
+}
+
 #[tauri::command]
 pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) -> Result<VerifyOtpResponse, String> {
     let otp_type = otp_type.unwrap_or_else(|| "signup".to_string());
@@ -415,11 +440,16 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     let redirect_uri = "ambient://auth/callback";
     let provider = "google";
     
+    // We need to request offline access and prompt for consent to ensure we receive a provider_refresh_token
+    // queryParams must be URL encoded and contains key-value pairs for the OAuth provider
+    let query_params = "access_type=offline&prompt=consent";
+    
     let auth_url = format!(
-        "{}/auth/v1/authorize?provider={}&redirect_to={}",
+        "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}",
         SUPABASE_URL,
         provider,
-        urlencoding::encode(redirect_uri)
+        urlencoding::encode(redirect_uri),
+        urlencoding::encode(query_params)
     );
     
     log::info!("[supabase_auth] Generated Google OAuth URL");
@@ -570,6 +600,8 @@ async fn handle_tokens_from_fragment(
         expires_at,
         refresh_token: refresh_token.to_string(),
         user: user.clone(),
+        provider_token: fragment_pairs.get("provider_token").cloned(),
+        provider_refresh_token: fragment_pairs.get("provider_refresh_token").cloned(),
     };
     
     // Store the session

@@ -23,9 +23,8 @@ pub async fn get_auth_state(app_handle: AppHandle) -> Result<AuthState, String> 
         .map_err(|e| e.to_string());
     
     match state_result {
-        Ok(Some(state)) => {
+        Ok(Some(mut state)) => {
             let is_expired = state.is_access_token_expired();
-            let needs_refresh = state.needs_refresh();
             
             let (user, token, expires_at) = if is_expired {
                 match refresh_token().await {
@@ -35,6 +34,7 @@ pub async fn get_auth_state(app_handle: AppHandle) -> Result<AuthState, String> 
                         return Ok(AuthState {
                             is_online,
                             is_authenticated: false,
+                            is_google_authenticated: false,
                             is_setup_complete,
                             user: None,
                             needs_refresh: false,
@@ -46,6 +46,49 @@ pub async fn get_auth_state(app_handle: AppHandle) -> Result<AuthState, String> 
                 (state.session.user.clone(), state.session.access_token.clone(), state.session.expires_at)
             };
 
+            // Re-fetch state to get the most up-to-date provider tokens if they were refreshed
+            if is_expired {
+                if let Ok(Some(new_state)) = retrieve_auth_state() {
+                    state = new_state;
+                }
+            }
+
+            // Check google authentication status
+            let has_google_provider = user.app_metadata.as_ref()
+                .and_then(|m| m.providers.as_ref())
+                .map(|p| p.contains(&"google".to_string()))
+                .unwrap_or(false);
+            
+            let is_google_authenticated = if has_google_provider {
+                match state.session.provider_token.as_ref() {
+                    Some(_) => true,
+                    None => {
+                        // If we have a provider refresh token but no provider access token, try to refresh
+                        if state.session.provider_refresh_token.is_some() {
+                            match crate::auth::auth_flow::refresh_google_token().await {
+                                Ok(_) => true,
+                                Err(_) => {
+                                    // Sign out already handled by refresh_google_token failure
+                                    return Ok(AuthState {
+                                        is_online,
+                                        is_authenticated: false,
+                                        is_google_authenticated: false,
+                                        is_setup_complete,
+                                        user: None,
+                                        needs_refresh: false,
+                                        expires_at: None,
+                                    });
+                                }
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                }
+            } else {
+                false
+            };
+
             let mut user_info = UserInfo::from(&user);
             if let Ok(profile) = fetch_user_profile(&user.id, &token).await {
                 user_info = user_info.with_profile(&profile);
@@ -54,15 +97,17 @@ pub async fn get_auth_state(app_handle: AppHandle) -> Result<AuthState, String> 
             Ok(AuthState {
                 is_online,
                 is_authenticated: true,
+                is_google_authenticated,
                 is_setup_complete,
                 user: Some(user_info),
-                needs_refresh,
+                needs_refresh: state.needs_refresh(),
                 expires_at,
             })
         }
         Ok(None) => Ok(AuthState {
             is_online,
             is_authenticated: false,
+            is_google_authenticated: false,
             is_setup_complete,
             user: None,
             needs_refresh: false,
@@ -73,6 +118,7 @@ pub async fn get_auth_state(app_handle: AppHandle) -> Result<AuthState, String> 
             Ok(AuthState {
                 is_online,
                 is_authenticated: false,
+                is_google_authenticated: false,
                 is_setup_complete,
                 user: None,
                 needs_refresh: false,

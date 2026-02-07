@@ -37,6 +37,8 @@ pub struct Skill {
     pub version: String,
     /// Whether this skill requires authentication/authorization to use.
     pub requires_auth: bool,
+    /// Whether this skill specifically requires Google authentication.
+    pub requires_google_auth: bool,
     /// The tools provided by this skill.
     pub tools: Vec<ToolDefinition>,
     /// Markdown-formatted instructions for using this skill,

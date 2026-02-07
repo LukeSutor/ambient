@@ -15,6 +15,8 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 struct TokenData {
     access_token: String,
     refresh_token: String,
+    provider_token: Option<String>,
+    provider_refresh_token: Option<String>,
 }
 
 fn get_app_handle() -> Option<AppHandle> {
@@ -60,6 +62,8 @@ pub fn store_auth_state(state: &StoredAuthState) -> Result<(), Box<dyn std::erro
     let token_data = TokenData {
         access_token: state.session.access_token.clone(),
         refresh_token: state.session.refresh_token.clone(),
+        provider_token: state.session.provider_token.clone(),
+        provider_refresh_token: state.session.provider_refresh_token.clone(),
     };
     let token_json = serde_json::to_string(&token_data)?;
     
@@ -82,6 +86,8 @@ pub fn store_auth_state(state: &StoredAuthState) -> Result<(), Box<dyn std::erro
         if let Some(session) = obj.get_mut("session").and_then(|s| s.as_object_mut()) {
             session.insert("access_token".to_string(), serde_json::Value::String(String::new()));
             session.insert("refresh_token".to_string(), serde_json::Value::String(String::new()));
+            session.insert("provider_token".to_string(), serde_json::Value::Null);
+            session.insert("provider_refresh_token".to_string(), serde_json::Value::Null);
         }
         // Add the encrypted tokens
         obj.insert("encrypted_tokens".to_string(), serde_json::Value::String(encrypted_tokens_base64));
@@ -131,6 +137,8 @@ pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, Box<dyn std::err
                 Ok(token_data) => {
                     state.session.access_token = token_data.access_token;
                     state.session.refresh_token = token_data.refresh_token;
+                    state.session.provider_token = token_data.provider_token;
+                    state.session.provider_refresh_token = token_data.provider_refresh_token;
                     return Ok(Some(state));
                 }
                 Err(e) => {
@@ -167,6 +175,7 @@ fn decrypt_tokens(encrypted_tokens_base64: &str) -> Result<TokenData, Box<dyn st
     let token_data: TokenData = serde_json::from_slice(&decrypted_bytes)?;
     
     // Validate decrypted tokens are not empty (additional safety check)
+    // We only strictly require the Supabase tokens to be present
     if token_data.access_token.is_empty() || token_data.refresh_token.is_empty() {
         return Err("Decrypted tokens are empty".into());
     }
@@ -193,6 +202,22 @@ pub fn get_access_token() -> Result<Option<String>, Box<dyn std::error::Error>> 
 pub fn get_refresh_token() -> Result<Option<String>, Box<dyn std::error::Error>> {
     match retrieve_auth_state()? {
         Some(state) => Ok(Some(state.session.refresh_token)),
+        None => Ok(None),
+    }
+}
+
+/// Get the google provider token
+pub fn get_provider_token() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match retrieve_auth_state()? {
+        Some(state) => Ok(state.session.provider_token),
+        None => Ok(None),
+    }
+}
+
+/// Get the google provider refresh token
+pub fn get_provider_refresh_token() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match retrieve_auth_state()? {
+        Some(state) => Ok(state.session.provider_refresh_token),
         None => Ok(None),
     }
 }

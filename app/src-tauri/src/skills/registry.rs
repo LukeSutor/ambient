@@ -126,6 +126,10 @@ impl SkillRegistry {
             .as_bool()
             .unwrap_or(false);
 
+        let requires_google_auth = yaml["requires_google_auth"]
+            .as_bool()
+            .unwrap_or(false);
+
         // Parse tools
         let tools = self.parse_tools(&yaml["tools"])?;
 
@@ -134,6 +138,7 @@ impl SkillRegistry {
             description,
             version,
             requires_auth,
+            requires_google_auth,
             tools,
             instructions,
         })

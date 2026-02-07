@@ -113,7 +113,7 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
     isRefreshing.current = true;
     try {
       const fullState = await invokeGetAuthState();
-
+      console.log("Fetched role access state:", fullState);
       dispatch({
         type: "SET_FULL_STATE",
         payload: {
