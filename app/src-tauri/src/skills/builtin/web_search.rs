@@ -42,10 +42,10 @@ use url::Url;
 const SEARCH_WINDOW_PREFIX: &str = "search_scraper_";
 
 /// Timeout for search operations
-const SEARCH_TIMEOUT_SECS: u64 = 600;
+const SEARCH_TIMEOUT_SECS: u64 = 10;
 
 /// Timeout for page fetch operations
-const FETCH_TIMEOUT_SECS: u64 = 30;
+const FETCH_TIMEOUT_SECS: u64 = 10;
 
 /// Custom URL scheme for receiving scraped data
 const SCRAPE_RESULT_SCHEME: &str = "scraperesult";
@@ -78,6 +78,24 @@ struct PendingScrape {
 
 static PENDING_SCRAPE: Lazy<Mutex<Option<PendingScrape>>> = Lazy::new(|| Mutex::new(None));
 
+/// RAII guard to ensure PENDING_SCRAPE is cleared when dropped
+struct ScrapeStateGuard {
+    request_id: String,
+}
+
+impl Drop for ScrapeStateGuard {
+    fn drop(&mut self) {
+        if let Ok(mut slot) = PENDING_SCRAPE.lock() {
+            if let Some(pending) = slot.as_ref() {
+                if pending.request_id == self.request_id {
+                    *slot = None;
+                    log::debug!("[web_search] PENDING_SCRAPE cleared by guard for {}", self.request_id);
+                }
+            }
+        }
+    }
+}
+
 /// Search result returned to the caller
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResult {
@@ -93,7 +111,9 @@ pub async fn execute(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, S
     match call.tool_name.as_str() {
         "search_web" => search_web(app_handle, call).await,
         "fetch_webpage" => fetch_webpage(app_handle, call).await,
-        _ => Err(format!("Unknown tool: {}", call.tool_name)),
+        _ => Ok(serde_json::json!({
+            "error": format!("Unknown tool: {}", call.tool_name)
+        })),
     }
 }
 
@@ -271,11 +291,16 @@ pub fn handle_scrape_error(request_id: &str, execution_token: &str, encoded_erro
 /// Uses a hidden WebView window to navigate to DuckDuckGo's HTML interface,
 /// which provides authentic browser fingerprinting to bypass bot detection.
 async fn search_web(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, String> {
-    let query = call
+    let query = match call
         .arguments
         .get("query")
-        .and_then(|q| q.as_str())
-        .ok_or_else(|| "Missing 'query' argument".to_string())?;
+        .and_then(|q| q.as_str()) {
+            Some(q) if !q.trim().is_empty() => q,
+            _ => return Ok(serde_json::json!({
+                "error": "Missing or empty 'query' argument",
+                "results": []
+            }))
+        };
 
     log::info!("[web_search] Searching for: {} (via WebView)", query);
 
@@ -286,10 +311,24 @@ async fn search_web(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, St
     );
 
     // Scrape the page using WebView
-    let html = scrape_url_with_webview(app_handle, &search_url, SEARCH_TIMEOUT_SECS).await?;
+    let html = match scrape_url_with_webview(app_handle, &search_url, SEARCH_TIMEOUT_SECS).await {
+        Ok(h) => h,
+        Err(e) => return Ok(serde_json::json!({
+            "error": e,
+            "query": query,
+            "results": []
+        }))
+    };
 
     // Parse the results
-    let results = parse_ddg_results(&html)?;
+    let results = match parse_ddg_results(&html) {
+        Ok(r) => r,
+        Err(e) => return Ok(serde_json::json!({
+            "error": e,
+            "query": query,
+            "results": []
+        }))
+    };
 
     log::info!(
         "[web_search] Found {} results for query: {}",
@@ -401,19 +440,38 @@ fn clean_ddg_url(raw_url: &str) -> String {
 
 /// Fetch and extract main content from a specific URL using WebView.
 async fn fetch_webpage(app_handle: &AppHandle, call: &ToolCall) -> Result<Value, String> {
-    let url = call
+    let url = match call
         .arguments
         .get("url")
-        .and_then(|u| u.as_str())
-        .ok_or_else(|| "Missing 'url' argument".to_string())?;
+        .and_then(|u| u.as_str()) {
+            Some(u) if !u.trim().is_empty() => u,
+            _ => return Ok(serde_json::json!({
+                "error": "Missing or empty 'url' argument",
+                "url": ""
+            }))
+        };
 
     log::info!("[web_search] Fetching webpage via WebView: {}", url);
 
     // Scrape the page using WebView
-    let html = scrape_url_with_webview(app_handle, url, FETCH_TIMEOUT_SECS).await?;
+    let html = match scrape_url_with_webview(app_handle, url, FETCH_TIMEOUT_SECS).await {
+        Ok(h) => h,
+        Err(e) => return Ok(serde_json::json!({
+            "error": e,
+            "url": url,
+            "content": ""
+        }))
+    };
 
     // Extract main content as markdown
-    let markdown = extract_content_as_markdown(&html)?;
+    let markdown = match extract_content_as_markdown(&html) {
+        Ok(m) => m,
+        Err(e) => return Ok(serde_json::json!({
+            "error": e,
+            "url": url,
+            "content": ""
+        }))
+    };
 
     Ok(serde_json::json!({
         "url": url,
@@ -771,6 +829,9 @@ async fn scrape_url_with_webview(
         });
     }
 
+    // Create the guard to ensure state is cleared on all exit paths
+    let _guard = ScrapeStateGuard { request_id: request_id.clone() };
+
     // Create the WebView window with navigation interception
     let window = WebviewWindowBuilder::new(
         app_handle,
@@ -900,15 +961,6 @@ async fn scrape_url_with_webview(
     // Clean up: close the window
     if let Err(e) = window.destroy() {
         log::warn!("[web_search] Failed to destroy WebView window: {}", e);
-    }
-
-    // Clear pending scrape state
-    if let Ok(mut slot) = PENDING_SCRAPE.lock() {
-        if let Some(pending) = slot.as_ref() {
-            if pending.request_id == request_id {
-                *slot = None;
-            }
-        }
     }
 
     match result {

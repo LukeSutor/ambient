@@ -289,7 +289,18 @@ pub async fn find_similar_memories(
   k: u32,
   p: f32,
 ) -> Result<Vec<MemoryEntry>, String> {
+  log::info!(
+    "[memory] find_similar_memories called with query: {:?}, start_date: {:?}, end_date: {:?}, k: {}, p: {}",
+    query,
+    start_date,
+    end_date,
+    k,
+    p
+  );
+
   let k_neighbors = if k == 0 { 1 } else { k };
+  log::info!("[memory] Using k_neighbors: {}", k_neighbors);
+
   let mut results: Vec<MemoryEntry> = Vec::new();
 
   if let Some(q) = query {
@@ -303,16 +314,25 @@ pub async fn find_similar_memories(
     // Generate query embedding for the prompt BEFORE acquiring DB lock
     let query_embedding: Vec<f32> = generate_embedding(app_handle.clone(), q.clone())
       .await
-      .map_err(|e| format!("Failed to generate embedding: {}", e))?;
+      .map_err(|e| {
+        log::error!("[memory] Failed to generate embedding: {}", e);
+        format!("Failed to generate embedding: {}", e)
+      })?;
 
     let db_state = app_handle.state::<DbState>();
     let conn_guard = db_state
       .0
       .lock()
-      .map_err(|_| "Failed to acquire DB lock".to_string())?;
+      .map_err(|_| {
+        log::error!("[memory] Failed to acquire DB lock");
+        "Failed to acquire DB lock".to_string()
+      })?;
     let conn = conn_guard
       .as_ref()
-      .ok_or_else(|| "Database connection not available".to_string())?;
+      .ok_or_else(|| {
+        log::error!("[memory] Database connection not available");
+        "Database connection not available".to_string()
+      })?;
 
     // Hybrid search: Vector similarity + FTS5 keyword matching
     // We use a UNION to combine both and take the top K.
@@ -360,8 +380,10 @@ pub async fn find_similar_memories(
 
     let mut stmt = conn
       .prepare(sql)
-      .map_err(|e| format!("Prepare failed: {}", e))?;
-
+      .map_err(|e| {
+        log::error!("[memory] Prepare failed: {}", e);
+        format!("Prepare failed: {}", e)
+      })?;
     let mut rows = stmt
       .query(params![
         query_embedding.as_bytes(),
@@ -371,23 +393,47 @@ pub async fn find_similar_memories(
         q,
         k_neighbors
       ])
-      .map_err(|e| format!("Query execution failed: {}", e))?;
+      .map_err(|e| {
+        log::error!("[memory] Query execution failed: {}", e);
+        format!("Query execution failed: {}", e)
+      })?;
 
     while let Some(row) = rows
       .next()
-      .map_err(|e| format!("Row fetch failed: {}", e))?
+      .map_err(|e| {
+        log::error!("[memory] Row fetch failed: {}", e);
+        format!("Row fetch failed: {}", e)
+      })?
     {
       results.push(MemoryEntry {
-        id: row.get(0).map_err(|e| e.to_string())?,
-        message_id: row.get(1).map_err(|e| e.to_string())?,
-        memory_type: row.get(2).map_err(|e| e.to_string())?,
-        text: row.get(3).map_err(|e| e.to_string())?,
-        timestamp: row.get(4).map_err(|e| e.to_string())?,
+        id: row.get(0).map_err(|e| {
+          log::error!("[memory] Failed to get id: {}", e);
+          e.to_string()
+        })?,
+        message_id: row.get(1).map_err(|e| {
+          log::error!("[memory] Failed to get message_id: {}", e);
+          e.to_string()
+        })?,
+        memory_type: row.get(2).map_err(|e| {
+          log::error!("[memory] Failed to get memory_type: {}", e);
+          e.to_string()
+        })?,
+        text: row.get(3).map_err(|e| {
+          log::error!("[memory] Failed to get text: {}", e);
+          e.to_string()
+        })?,
+        timestamp: row.get(4).map_err(|e| {
+          log::error!("[memory] Failed to get timestamp: {}", e);
+          e.to_string()
+        })?,
         embedding: Vec::new(),
-        similarity: Some(row.get::<_, f64>(5).map_err(|e| e.to_string())?),
+        similarity: Some(row.get::<_, f64>(5).map_err(|e| {
+          log::error!("[memory] Failed to get similarity: {}", e);
+          e.to_string()
+        })?),
       });
     }
-  } else {
+  } else if start_date.is_some() || end_date.is_some() {
     log::info!(
       "[memory] Searching for memories by time range: {:?} to {:?}",
       start_date,
@@ -398,10 +444,16 @@ pub async fn find_similar_memories(
     let conn_guard = db_state
       .0
       .lock()
-      .map_err(|_| "Failed to acquire DB lock".to_string())?;
+      .map_err(|_| {
+        log::error!("[memory] Failed to acquire DB lock for time-based search");
+        "Failed to acquire DB lock".to_string()
+      })?;
     let conn = conn_guard
       .as_ref()
-      .ok_or_else(|| "Database connection not available".to_string())?;
+      .ok_or_else(|| {
+        log::error!("[memory] Database connection not available for time-based search");
+        "Database connection not available".to_string()
+      })?;
 
     // Just time-based log search
     let sql = r#"
@@ -416,27 +468,57 @@ pub async fn find_similar_memories(
 
     let mut stmt = conn
       .prepare(sql)
-      .map_err(|e| format!("Prepare failed: {}", e))?;
+      .map_err(|e| {
+        log::error!("[memory] Prepare failed for time-based search: {}", e);
+        format!("Prepare failed: {}", e)
+      })?;
 
     let mut rows = stmt
       .query(params![start_date, end_date, k_neighbors])
-      .map_err(|e| format!("Query execution failed: {}", e))?;
+      .map_err(|e| {
+        log::error!("[memory] Query execution failed for time-based search: {}", e);
+        format!("Query execution failed: {}", e)
+      })?;
+    log::info!("[memory] Time-based query executed successfully");
 
     while let Some(row) = rows
       .next()
-      .map_err(|e| format!("Row fetch failed: {}", e))?
+      .map_err(|e| {
+        log::error!("[memory] Row fetch failed for time-based search: {}", e);
+        format!("Row fetch failed: {}", e)
+      })?
     {
       results.push(MemoryEntry {
-        id: row.get(0).map_err(|e| e.to_string())?,
-        message_id: row.get(1).map_err(|e| e.to_string())?,
-        memory_type: row.get(2).map_err(|e| e.to_string())?,
-        text: row.get(3).map_err(|e| e.to_string())?,
-        timestamp: row.get(4).map_err(|e| e.to_string())?,
+        id: row.get(0).map_err(|e| {
+          log::error!("[memory] Failed to get id for time-based search: {}", e);
+          e.to_string()
+        })?,
+        message_id: row.get(1).map_err(|e| {
+          log::error!("[memory] Failed to get message_id for time-based search: {}", e);
+          e.to_string()
+        })?,
+        memory_type: row.get(2).map_err(|e| {
+          log::error!("[memory] Failed to get memory_type for time-based search: {}", e);
+          e.to_string()
+        })?,
+        text: row.get(3).map_err(|e| {
+          log::error!("[memory] Failed to get text for time-based search: {}", e);
+          e.to_string()
+        })?,
+        timestamp: row.get(4).map_err(|e| {
+          log::error!("[memory] Failed to get timestamp for time-based search: {}", e);
+          e.to_string()
+        })?,
         embedding: Vec::new(),
         similarity: None,
       });
     }
+  } else {
+    // Return an error if no query or timestamp filters provided to prevent unbounded retrieval
+    log::info!("[memory] No query or time range provided");
+    return Err("Must provide a query or start/end date for memory search".to_string());
   }
 
+  log::info!("[memory] find_similar_memories returning {} results", results.len());
   Ok(results)
 }
