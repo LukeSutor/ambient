@@ -1007,51 +1007,6 @@ pub async fn save_conversation_skill(
   Ok(())
 }
 
-/// Get tool calls for a conversation.
-///
-/// Returns all tool calls associated with a given conversation,
-/// ordered by creation time.
-pub async fn get_conversation_tool_calls(
-  app_handle: &AppHandle,
-  conversation_id: &str,
-) -> Result<Vec<crate::skills::types::ToolCall>, String> {
-  let state = app_handle.state::<DbState>();
-  let conn_guard = state
-    .0
-    .lock()
-    .map_err(|_| "Failed to acquire DB lock".to_string())?;
-  let conn = conn_guard
-    .as_ref()
-    .ok_or("Database connection not available.".to_string())?;
-
-  let mut stmt = conn
-    .prepare(
-      "SELECT id, skill_name, tool_name, arguments FROM tool_calls
-         WHERE conversation_id = ?1 ORDER BY created_at ASC"
-    )
-    .map_err(|e| format!("Prepare failed: {}", e))?;
-
-  let tool_calls: Vec<crate::skills::types::ToolCall> = stmt
-    .query_map(params![conversation_id], |row| {
-      Ok(crate::skills::types::ToolCall {
-        id: row.get(0)?,
-        skill_name: row.get(1)?,
-        tool_name: row.get(2)?,
-        arguments: row
-          .get::<_, String>(3)
-          .ok()
-          .and_then(|s| serde_json::from_str(&s).ok())
-          .unwrap_or_else(|| serde_json::json!({})),
-        thought_signature: None,
-      })
-    })
-    .map_err(|e| format!("Query failed: {}", e))?
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|e| format!("Collect failed: {}", e))?;
-
-  Ok(tool_calls)
-}
-
 /// Get conversation history with context limiting.
 ///
 /// Returns messages respecting tool call/result pairing and

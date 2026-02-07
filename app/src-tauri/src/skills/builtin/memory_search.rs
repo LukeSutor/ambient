@@ -36,39 +36,63 @@ async fn search_memories(
         .arguments
         .get("query")
         .and_then(|q| q.as_str())
-        .ok_or_else(|| "Missing 'query' argument".to_string())?;
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let start_date = call
+        .arguments
+        .get("start_date")
+        .and_then(|d| d.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let end_date = call
+        .arguments
+        .get("end_date")
+        .and_then(|d| d.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
 
     let limit = call
         .arguments
         .get("limit")
         .and_then(|l| l.as_u64())
-        .unwrap_or(5) as usize;
+        .unwrap_or(5) as u32;
 
     let min_similarity = call
         .arguments
         .get("min_similarity")
         .and_then(|s| s.as_f64())
-        .unwrap_or(0.7);
+        .unwrap_or(0.85) as f32;
 
     log::info!(
-        "[memory_search] Searching for: {} (limit: {}, min_similarity: {})",
+        "[memory_search] Searching memories: query={:?}, start={:?}, end={:?}",
         query,
-        limit,
-        min_similarity
+        start_date,
+        end_date
     );
 
-    // Use existing memory search function
-    let memories = crate::db::memory::find_similar_memories(
+    let memories_result = crate::db::memory::find_similar_memories(
         &app_handle,
-        query,
-        limit as u32,
-        min_similarity as f32,
-    )
-    .await
-    .map_err(|e| {
-        log::error!("[memory_search] Failed to search memories: {}", e);
-        e
-    })?;
+        query.clone(),
+        start_date,
+        end_date,
+        limit,
+        min_similarity,
+    ).await;
+
+    let memories = match memories_result {
+        Ok(mem) => mem,
+        Err(e) => {
+            log::error!("[memory_search] Failed to search memories: {}", e);
+            return Ok(serde_json::json!({
+                "error": e,
+                "query": query,
+                "count": 0,
+                "results": []
+            }));
+        }
+    };
 
     // Convert memory entries to result format
     let results: Vec<Value> = memories
@@ -86,6 +110,7 @@ async fn search_memories(
 
     Ok(serde_json::json!({
         "results": results,
-        "query": query
+        "query": query,
+        "count": results.len()
     }))
 }

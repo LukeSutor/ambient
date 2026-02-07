@@ -10,7 +10,7 @@
 //! - **Persistence**: Saves tool call records to database
 //! - **Error Handling**: Captures and returns errors for each tool call
 
-use super::types::{ToolCall, ToolResult, AgentError};
+use super::types::{ToolCall, ToolResult};
 use futures::future::join_all;
 use tauri::AppHandle;
 
@@ -186,118 +186,4 @@ pub async fn execute_tools(
 
     // Wait for all tool calls to complete
     join_all(futures).await
-}
-
-/// Saves a tool call record to the database.
-///
-/// Creates a pending tool call entry that can later be
-/// updated with results.
-///
-/// # Arguments
-///
-/// * `app_handle` - Tauri app handle for database access
-/// * `message_id` - ID of the message requesting this tool call
-/// * `conversation_id` - ID of the conversation
-/// * `call` - The tool call to record
-///
-/// # Returns
-///
-/// `Ok(())` on success, or `Err(String)` on database error
-pub async fn save_tool_call_record(
-    app_handle: &AppHandle,
-    message_id: &str,
-    conversation_id: &str,
-    call: &ToolCall,
-) -> Result<(), AgentError> {
-    use crate::db::core::DbState;
-    use tauri::Manager;
-    use chrono::Utc;
-
-    let state = app_handle.state::<DbState>();
-    let conn_guard = state
-        .0
-        .lock()
-        .map_err(|_| AgentError::DatabaseError("Failed to acquire DB lock".to_string()))?;
-    let conn = conn_guard
-        .as_ref()
-        .ok_or_else(|| AgentError::DatabaseError("Database connection not available".to_string()))?;
-
-    conn
-        .execute(
-            "INSERT INTO tool_calls
-             (id, message_id, conversation_id, skill_name, tool_name, arguments, status, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rusqlite::params![
-                &call.id,
-                message_id,
-                conversation_id,
-                &call.skill_name,
-                &call.tool_name,
-                serde_json::to_string(&call.arguments).unwrap_or_else(|_| "{}".to_string()),
-                "pending",
-                Utc::now().to_rfc3339()
-            ],
-        )
-        .map_err(|e| AgentError::DatabaseError(format!("Insert failed: {}", e)))?;
-
-    Ok(())
-}
-
-/// Updates a tool call record with execution result.
-///
-/// Changes status to 'completed' or 'failed' and stores result.
-///
-/// # Arguments
-///
-/// * `app_handle` - Tauri app handle for database access
-/// * `call_id` - ID of the tool call to update
-/// * `result` - The result of tool execution
-///
-/// # Returns
-///
-/// `Ok(())` on success, or `Err(String)` on database error
-pub async fn update_tool_call_result(
-    app_handle: &AppHandle,
-    call_id: &str,
-    result: &ToolResult,
-) -> Result<(), AgentError> {
-    use crate::db::core::DbState;
-    use tauri::Manager;
-    use chrono::Utc;
-
-    let state = app_handle.state::<DbState>();
-    let conn_guard = state
-        .0
-        .lock()
-        .map_err(|_| AgentError::DatabaseError("Failed to acquire DB lock".to_string()))?;
-    let conn = conn_guard
-        .as_ref()
-        .ok_or_else(|| AgentError::DatabaseError("Database connection not available".to_string()))?;
-
-    let status = if result.success {
-        "completed"
-    } else {
-        "failed"
-    };
-
-    let result_json = result
-        .result
-        .as_ref()
-        .and_then(|r| serde_json::to_string(r).ok());
-
-    conn
-        .execute(
-            "UPDATE tool_calls
-             SET status = ?1, result = ?2, completed_at = ?3
-             WHERE id = ?4",
-            rusqlite::params![
-                status,
-                result_json,
-                Utc::now().to_rfc3339(),
-                call_id
-            ],
-        )
-        .map_err(|e| AgentError::DatabaseError(format!("Update failed: {}", e)))?;
-
-    Ok(())
 }
