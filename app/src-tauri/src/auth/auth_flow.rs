@@ -439,17 +439,19 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     // Build the OAuth authorization URL
     let redirect_uri = "ambient://auth/callback";
     let provider = "google";
+    let scopes = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly";
     
     // We need to request offline access and prompt for consent to ensure we receive a provider_refresh_token
     // queryParams must be URL encoded and contains key-value pairs for the OAuth provider
     let query_params = "access_type=offline&prompt=consent";
     
     let auth_url = format!(
-        "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}",
+        "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}&scopes={}",
         SUPABASE_URL,
         provider,
         urlencoding::encode(redirect_uri),
-        urlencoding::encode(query_params)
+        urlencoding::encode(query_params),
+        urlencoding::encode(scopes)
     );
     
     log::info!("[supabase_auth] Generated Google OAuth URL");
