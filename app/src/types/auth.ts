@@ -52,7 +52,7 @@ delivery_medium: string | null, };
 /**
  * Combined auth state for single-request hydration
  */
-export type AuthState = { is_online: boolean, is_authenticated: boolean, is_google_authenticated: boolean, google_token: string | null, is_setup_complete: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
+export type AuthState = { is_online: boolean, is_authenticated: boolean, is_google_authenticated: boolean, is_setup_complete: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
 
 /**
  * OAuth URL Response

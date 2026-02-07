@@ -441,20 +441,26 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     let provider = "google";
     let scopes = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly";
     
-    // We need to request offline access and prompt for consent to ensure we receive a provider_refresh_token
-    // queryParams must be URL encoded and contains key-value pairs for the OAuth provider
-    let query_params = "access_type=offline&prompt=consent";
+    // Create query params as an object (HashMap) as per Supabase docs
+    let mut query_params = std::collections::HashMap::new();
+    query_params.insert("access_type".to_string(), "offline".to_string());
+    query_params.insert("prompt".to_string(), "consent".to_string());
+    
+    // Serialize to JSON string and URL-encode
+    let query_params_json = serde_json::to_string(&query_params)
+        .map_err(|e| format!("Failed to serialize query params: {}", e))?;
+    let encoded_query_params = urlencoding::encode(&query_params_json);
     
     let auth_url = format!(
         "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}&scopes={}",
         SUPABASE_URL,
         provider,
         urlencoding::encode(redirect_uri),
-        urlencoding::encode(query_params),
+        encoded_query_params,
         urlencoding::encode(scopes)
     );
     
-    log::info!("[supabase_auth] Generated Google OAuth URL");
+    log::info!("[supabase_auth] Generated Google OAuth URL: {}", auth_url);
     
     Ok(OAuthUrlResponse { url: auth_url })
 }
