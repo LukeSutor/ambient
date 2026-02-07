@@ -544,6 +544,11 @@ async fn handle_tokens_from_fragment(
     fragment_pairs: &std::collections::HashMap<String, String>,
 ) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Handling tokens from URL fragment");
+
+    // Log all info for debugging
+    log::debug!("[supabase_auth] Access Token: {}", access_token);
+    log::debug!("[supabase_auth] Refresh Token: {}", refresh_token);
+    log::debug!("[supabase_auth] Fragment Pairs: {:?}", fragment_pairs);
     
     // Validate token format
     if access_token.len() < 10 || refresh_token.len() < 10 {

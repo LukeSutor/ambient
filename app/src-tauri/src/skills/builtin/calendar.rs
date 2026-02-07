@@ -148,7 +148,9 @@ async fn call_google_calendar_api(token: &str, calendar_id: &str, query: &str) -
     
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Google API error: {}", status));
+        let error_body = response.text().await.unwrap_or_else(|_| "Could not read error body".to_string());
+        log::error!("[calendar] Google API GET Error: {} - {}", status, error_body);
+        return Err(format!("Google API error: {} - {}", status, error_body));
     }
     
     let json: Value = response.json().await.map_err(|e| format!("JSON error: {}", e))?;
@@ -168,7 +170,9 @@ async fn post_google_calendar_api(token: &str, calendar_id: &str, body: Value) -
     
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Google API error: {}", status));
+        let error_body = response.text().await.unwrap_or_else(|_| "Could not read error body".to_string());
+        log::error!("[calendar] Google API POST Error: {} - {}", status, error_body);
+        return Err(format!("Google API error: {} - {}", status, error_body));
     }
     
     let json: Value = response.json().await.map_err(|e| format!("JSON error: {}", e))?;

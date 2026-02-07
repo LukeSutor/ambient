@@ -98,7 +98,9 @@ async fn call_gmail_api(token: &str, path: &str, query: &str) -> Result<Value, S
     
     let status = response.status();
     if !status.is_success() {
-        return Err(format!("Gmail API error: {}", status));
+        let error_body = response.text().await.unwrap_or_else(|_| "Could not read error body".to_string());
+        log::error!("[email] Gmail API Error: {} - {}", status, error_body);
+        return Err(format!("Gmail API error: {} - {}", status, error_body));
     }
     
     let json: Value = response.json().await.map_err(|e| format!("JSON error: {}", e))?;

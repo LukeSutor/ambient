@@ -18,6 +18,8 @@ const initialState: RoleAccessState = {
   isHydrated: false,
   isOnline: false,
   isLoggedIn: false,
+  isGoogleAuthenticated: false,
+  googleToken: null,
   isSetupComplete: false,
   isPremiumUser: false,
   userInfo: null,
@@ -26,6 +28,7 @@ const initialState: RoleAccessState = {
 type RoleAccessAction =
   | { type: "SET_IS_ONLINE"; payload: boolean }
   | { type: "SET_LOGGED_IN"; payload: boolean }
+  | { type: "SET_GOOGLE_AUTHENTICATED"; payload: { status: boolean; token: string | null } }
   | { type: "SET_SETUP_COMPLETE"; payload: boolean }
   | { type: "SET_PREMIUM_USER"; payload: boolean }
   | { type: "SET_USER_INFO"; payload: UserInfo | null }
@@ -54,6 +57,12 @@ function roleAccessReducer(
       return {
         ...state,
         isLoggedIn: action.payload,
+      };
+    case "SET_GOOGLE_AUTHENTICATED":
+      return {
+        ...state,
+        isGoogleAuthenticated: action.payload.status,
+        googleToken: action.payload.token,
       };
     case "SET_SETUP_COMPLETE":
       return {
@@ -119,6 +128,8 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
         payload: {
           isOnline: fullState.is_online,
           isLoggedIn: fullState.is_authenticated,
+          isGoogleAuthenticated: fullState.is_google_authenticated,
+          googleToken: fullState.google_token,
           isSetupComplete: fullState.is_setup_complete,
           userInfo: fullState.user,
         },

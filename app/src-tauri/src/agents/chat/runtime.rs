@@ -17,7 +17,7 @@ use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools};
-use crate::skills::registry::{get_all_summaries, get_skill_tools, skill_exists};
+use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
     SkillSummary, ToolCall, ToolDefinition, ToolResult,
@@ -178,22 +178,13 @@ impl AgentRuntime {
         self.emit_memory_save_event(&user_message).await?;
 
         // Check if user is Google authenticated to filter skills
-        let is_google_authed = crate::auth::commands::get_auth_state(self.app_handle.clone()).await
+        let auth_state = crate::auth::commands::get_auth_state(self.app_handle.clone()).await;
+        let is_google_authed = auth_state.as_ref()
             .map(|s| s.is_google_authenticated)
             .unwrap_or(false);
 
         // Get skill summaries for system prompt, filtered by auth requirements
-        let skill_summaries = get_all_summaries()
-            .into_iter()
-            .filter(|s| {
-                if let Some(skill) = crate::skills::registry::get_skill(&s.name) {
-                    if skill.requires_google_auth && !is_google_authed {
-                        return false;
-                    }
-                }
-                true
-            })
-            .collect::<Vec<_>>();
+        let skill_summaries = get_filtered_summaries(is_google_authed);
 
         // Build system prompt
         let system_prompt = self.build_system_prompt(&skill_summaries);
