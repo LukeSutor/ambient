@@ -11,12 +11,20 @@ use aes_gcm::{
 use rand::RngCore;
 use base64::{prelude::BASE64_STANDARD, Engine};
 
+const PROVIDER_TOKEN_VAULT_KEY: &str = "provider_tokens_vault";
+
 #[derive(Serialize, Deserialize)]
 struct TokenData {
     access_token: String,
     refresh_token: String,
     provider_token: Option<String>,
     provider_refresh_token: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+struct ProviderTokenVault {
+    // Maps user_id to encrypted provider_refresh_token
+    tokens: std::collections::HashMap<String, String>,
 }
 
 fn get_app_handle() -> Option<AppHandle> {
@@ -99,7 +107,81 @@ pub fn store_auth_state(state: &StoredAuthState) -> Result<(), Box<dyn std::erro
     let _ = store.save();
     
     log::info!("[auth_storage] Auth state stored successfully");
+
+    // Also store the provider refresh token in the vault for cross-session persistence
+    if let Some(provider_refresh_token) = &state.session.provider_refresh_token {
+        if !provider_refresh_token.is_empty() {
+            let _ = store_persistent_provider_token(&state.session.user.id, provider_refresh_token);
+        }
+    }
+
     Ok(())
+}
+
+/// Store a provider refresh token in the persistent vault
+pub fn store_persistent_provider_token(user_id: &str, token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let app_handle = get_app_handle().ok_or("AppHandle not initialized")?;
+    let key_bytes = get_or_create_encryption_key()?;
+    let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let mut nonce_bytes = [0u8; 12];
+    OsRng.fill_bytes(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher.encrypt(nonce, token.as_bytes())
+        .map_err(|e| format!("Encryption failed: {}", e))?;
+
+    let mut combined = nonce_bytes.to_vec();
+    combined.extend_from_slice(&ciphertext);
+    let encrypted_token_base64 = BASE64_STANDARD.encode(combined);
+
+    let store = app_handle.store(STORE_PATH)?;
+    let mut vault: ProviderTokenVault = store.get(PROVIDER_TOKEN_VAULT_KEY)
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+
+    vault.tokens.insert(user_id.to_string(), encrypted_token_base64);
+    store.set(PROVIDER_TOKEN_VAULT_KEY, serde_json::to_value(vault)?);
+    let _ = store.save();
+
+    log::info!("[auth_storage] Persistent provider token stored for user {}", user_id);
+    Ok(())
+}
+
+/// Get a provider refresh token from the persistent vault
+pub fn get_persistent_provider_token(user_id: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let app_handle = match get_app_handle() {
+        Some(h) => h,
+        None => return Ok(None),
+    };
+
+    let store = app_handle.store(STORE_PATH)?;
+    let vault: ProviderTokenVault = match store.get(PROVIDER_TOKEN_VAULT_KEY) {
+        Some(v) => serde_json::from_value(v).unwrap_or_default(),
+        None => return Ok(None),
+    };
+
+    if let Some(encrypted_base64) = vault.tokens.get(user_id) {
+        let combined = BASE64_STANDARD.decode(encrypted_base64)?;
+        if combined.len() < 12 {
+            return Err("Invalid token data".into());
+        }
+
+        let (nonce_bytes, ciphertext) = combined.split_at(12);
+        let nonce = Nonce::from_slice(nonce_bytes);
+
+        let key_bytes = get_or_create_encryption_key()?;
+        let key = aes_gcm::Key::<Aes256Gcm>::from_slice(&key_bytes);
+        let cipher = Aes256Gcm::new(key);
+
+        let decrypted_bytes = cipher.decrypt(nonce, ciphertext)
+            .map_err(|e| format!("Decryption failed: {}", e))?;
+
+        return Ok(Some(String::from_utf8(decrypted_bytes)?));
+    }
+
+    Ok(None)
 }
 
 /// Store a session (creates a new StoredAuthState)

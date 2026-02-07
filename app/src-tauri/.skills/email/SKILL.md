@@ -33,3 +33,4 @@ Read recent Gmail messages for context.
 ## Guidelines
 1. Only read the number of emails necessary for the context
 2. Respect user privacy - do not expose email contents unless relevant to the task
+3. Use the get_email_details tool when specific information from an email is required

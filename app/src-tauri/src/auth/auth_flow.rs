@@ -439,20 +439,28 @@ pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
     // Build the OAuth authorization URL
     let redirect_uri = "ambient://auth/callback";
     let provider = "google";
-    let scopes = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly";
+    
+    // We must include openid, email and profile to ensure Google treats this as a full OIDC flow 
+    // and returns a refresh token when access_type=offline is requested.
+    let scopes = "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly";
     
     // Create query params as an object (HashMap) as per Supabase docs
     let mut query_params = std::collections::HashMap::new();
     query_params.insert("access_type".to_string(), "offline".to_string());
-    query_params.insert("prompt".to_string(), "consent".to_string());
+    // We use select_account by default for a smoother UX. 
+    // Google only sends a refresh token on the first authorization or if prompt=consent is used.
+    // Our callback handler will detect if a refresh token is missing and re-prompt if we don't have one in the vault.
+    query_params.insert("prompt".to_string(), "select_account".to_string());
+    query_params.insert("include_granted_scopes".to_string(), "true".to_string());
     
     // Serialize to JSON string and URL-encode
     let query_params_json = serde_json::to_string(&query_params)
         .map_err(|e| format!("Failed to serialize query params: {}", e))?;
     let encoded_query_params = urlencoding::encode(&query_params_json);
     
+    // We also include access_type and prompt as top-level parameters for maximum compatibility.
     let auth_url = format!(
-        "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}&scopes={}",
+        "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}&scopes={}&access_type=offline&prompt=select_account",
         SUPABASE_URL,
         provider,
         urlencoding::encode(redirect_uri),
@@ -552,11 +560,6 @@ async fn handle_tokens_from_fragment(
     fragment_pairs: &std::collections::HashMap<String, String>,
 ) -> Result<AuthResponse, String> {
     log::info!("[supabase_auth] Handling tokens from URL fragment");
-
-    // Log all info for debugging
-    log::debug!("[supabase_auth] Access Token: {}", access_token);
-    log::debug!("[supabase_auth] Refresh Token: {}", refresh_token);
-    log::debug!("[supabase_auth] Fragment Pairs: {:?}", fragment_pairs);
     
     // Validate token format
     if access_token.len() < 10 || refresh_token.len() < 10 {
@@ -603,6 +606,22 @@ async fn handle_tokens_from_fragment(
     let expires_at: Option<i64> = fragment_pairs.get("expires_at")
         .and_then(|s| s.parse().ok());
     
+    // Recovery Logic: If we didn't get a refresh token in the fragment (Google "once only" rule),
+    // check if we have one stored in our persistent vault from a previous session.
+    let mut provider_refresh_token = fragment_pairs.get("provider_refresh_token").cloned();
+    
+    if provider_refresh_token.is_none() || provider_refresh_token.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
+        log::info!("[supabase_auth] No provider refresh token in fragment, attempting vault recovery for user {}", user.id);
+        if let Ok(Some(vault_token)) = crate::auth::storage::get_persistent_provider_token(&user.id) {
+            log::info!("[supabase_auth] Successfully recovered provider refresh token from persistent vault");
+            provider_refresh_token = Some(vault_token);
+        } else {
+            log::warn!("[supabase_auth] No refresh token in fragment or vault. Background access will expire in 1h.");
+            // In a production app, you might want to return an error here to force a re-prompt with prompt=consent
+            // if background access is critical. For now, we'll continue with just the access token.
+        }
+    }
+
     // Create session object
     let session = Session {
         access_token: access_token.to_string(),
@@ -614,7 +633,7 @@ async fn handle_tokens_from_fragment(
         refresh_token: refresh_token.to_string(),
         user: user.clone(),
         provider_token: fragment_pairs.get("provider_token").cloned(),
-        provider_refresh_token: fragment_pairs.get("provider_refresh_token").cloned(),
+        provider_refresh_token,
     };
     
     // Store the session

@@ -40,14 +40,15 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
         })),
     };
 
-    let mut response = call_gmail_api(&token, "me/messages", &format!("maxResults={}", limit)).await;
+    let mut response = call_gmail_api(&token, "me/messages", &format!("maxResults={}&format=full", limit)).await;
 
+    log::debug!("[email] Initial API response: {:?}", response);
     // Retry once with refresh if unauthorized
     if let Err(ref e) = response {
         if e.contains("401") {
             log::info!("[email] Token expired, refreshing...");
             if let Ok(new_token) = refresh_google_token().await {
-                response = call_gmail_api(&new_token, "me/messages", &format!("maxResults={}", limit)).await;
+                response = call_gmail_api(&new_token, "me/messages", &format!("maxResults={}&format=full", limit)).await;
             }
         }
     }
@@ -65,6 +66,7 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
                     // Fetch metadata headers we need
                     let query = "format=metadata&metadataHeaders=From&metadataHeaders=Date&metadataHeaders=Subject";
                     if let Ok(details) = call_gmail_api(&auth_token, &format!("me/messages/{}", id), query).await {
+                        log::debug!("[email] Fetched details for message {}: {:?}", id, details);
                         previews.push(format_email_preview(&details));
                     }
                 }
