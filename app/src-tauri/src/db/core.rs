@@ -152,6 +152,30 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE INDEX IF NOT EXISTS idx_conv_skills ON conversation_skills(conversation_id);
       "#,
     ),
+    M::up(
+      r#"
+        -- Memory FTS migration
+        CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
+            text,
+            content='memory_entries'
+        );
+
+        -- Triggers to keep memory_entries_fts in sync
+        CREATE TRIGGER IF NOT EXISTS memory_entries_ai AFTER INSERT ON memory_entries BEGIN
+            INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS memory_entries_ad AFTER DELETE ON memory_entries BEGIN
+            INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS memory_entries_au AFTER UPDATE ON memory_entries BEGIN
+            INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+            INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
+        END;
+
+        -- Initial sync
+        INSERT INTO memory_entries_fts(rowid, text) SELECT rowid, text FROM memory_entries;
+      "#,
+    ),
   ])
 });
 
