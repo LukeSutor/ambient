@@ -582,9 +582,9 @@ function getFriendlyToolMessage(call: MessageMetadata): FriendlyToolMessage {
       };
     case "system.activate_skill":
       return {
-        loadingPrefix: "Activating",
-        finishedPrefix: "Activated",
-        suffix: `${args.skill_name.replace("-", " ")} skill`,
+        loadingPrefix: "Loading",
+        finishedPrefix: "Loaded",
+        suffix: `${args.skill_name.replace("-", " ")} tools`,
       };
     default:
       return {

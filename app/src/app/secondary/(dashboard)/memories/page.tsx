@@ -306,7 +306,8 @@ export default function MemoriesPage() {
                   <DialogHeader>
                     <DialogTitle>Delete all memories?</DialogTitle>
                     <DialogDescription>
-                      This will permanently remove all memories and their indexes.
+                      This will permanently remove all memories and their
+                      indexes.
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
