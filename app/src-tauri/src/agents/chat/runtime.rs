@@ -16,7 +16,7 @@ use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
-use crate::skills::executor::{execute_tools, save_tool_call_record, update_tool_call_result};
+use crate::skills::executor::{execute_tools};
 use crate::skills::registry::{get_all_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
@@ -479,11 +479,8 @@ impl AgentRuntime {
     ) -> Result<Vec<ToolResult>, AgentError> {
         log::info!("[agent] Executing {} tool calls", tool_calls.len());
 
-        // Save tool call records
+        // Emit tool started events
         for call in tool_calls.iter() {
-            save_tool_call_record(&self.app_handle, &message_id, &self.conv_id, call).await?;
-
-            // Emit tool execution started event
             let started_event = ToolExecutionStartedEvent {
                 tool_call_id: call.id.clone(),
                 message_id: message_id.clone(),
@@ -506,11 +503,6 @@ impl AgentRuntime {
                     self.activate_skill_internal(skill_name).await?;
                 }
             }
-        }
-
-        // Update records with results
-        for result in &results {
-            update_tool_call_result(&self.app_handle, &result.call_id, result).await?;
         }
 
         Ok(results)

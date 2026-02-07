@@ -118,27 +118,6 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         -- Create index for efficient filtering by message type
         CREATE INDEX IF NOT EXISTS idx_messages_type ON conversation_messages(message_type);
 
-        -- Tool calls table for structured storage
-        CREATE TABLE IF NOT EXISTS tool_calls (
-            id TEXT PRIMARY KEY,
-            message_id TEXT NOT NULL,
-            conversation_id TEXT NOT NULL,
-            skill_name TEXT NOT NULL,
-            tool_name TEXT NOT NULL,
-            arguments TEXT NOT NULL,
-            result TEXT,
-            status TEXT NOT NULL DEFAULT 'pending',
-            started_at TEXT,
-            completed_at TEXT,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY (message_id) REFERENCES conversation_messages(id) ON DELETE CASCADE,
-            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_tool_calls_message ON tool_calls(message_id);
-        CREATE INDEX IF NOT EXISTS idx_tool_calls_conversation ON tool_calls(conversation_id);
-        CREATE INDEX IF NOT EXISTS idx_tool_calls_status ON tool_calls(status);
-
         -- Active skills per conversation
         CREATE TABLE IF NOT EXISTS conversation_skills (
             id TEXT PRIMARY KEY,
