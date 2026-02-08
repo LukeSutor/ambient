@@ -29,6 +29,11 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
         .get("limit")
         .and_then(|l| l.as_u64())
         .unwrap_or(5);
+    
+    let query = call
+        .arguments.get("query")
+        .and_then(|q| q.as_str())
+        .unwrap_or("");
 
     log::info!("[email] Listing emails (limit: {})", limit);
 
@@ -40,15 +45,20 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
         })),
     };
 
-    let mut response = call_gmail_api(&token, "me/messages", &format!("maxResults={}&format=full", limit)).await;
+    let query_str = if query.is_empty() {
+        format!("maxResults={}", limit)
+    } else {
+        format!("maxResults={}&q={}", limit, query)
+    };
 
-    log::debug!("[email] Initial API response: {:?}", response);
+    let mut response = call_gmail_api(&token, "me/messages", &query_str).await;
+
     // Retry once with refresh if unauthorized
     if let Err(ref e) = response {
         if e.contains("401") {
             log::info!("[email] Token expired, refreshing...");
             if let Ok(new_token) = refresh_google_token().await {
-                response = call_gmail_api(&new_token, "me/messages", &format!("maxResults={}&format=full", limit)).await;
+                response = call_gmail_api(&new_token, "me/messages", &query_str).await;
             }
         }
     }
@@ -66,7 +76,6 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
                     // Fetch metadata headers we need
                     let query = "format=metadata&metadataHeaders=From&metadataHeaders=Date&metadataHeaders=Subject";
                     if let Ok(details) = call_gmail_api(&auth_token, &format!("me/messages/{}", id), query).await {
-                        log::debug!("[email] Fetched details for message {}: {:?}", id, details);
                         previews.push(format_email_preview(&details));
                     }
                 }
@@ -104,6 +113,8 @@ async fn get_email_details(call: &ToolCall) -> Result<Value, String> {
 
     let mut response = call_gmail_api(&token, &format!("me/messages/{}", id), "format=full").await;
 
+    //Pretty print the response json
+    log::debug!("[email] Gmail API response for message {}: {}", id, serde_json::to_string_pretty(&response).unwrap_or_else(|_| "Could not serialize response".to_string()));
     // Retry once with refresh if unauthorized
     if let Err(ref e) = response {
         if e.contains("401") {

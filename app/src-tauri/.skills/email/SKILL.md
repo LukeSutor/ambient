@@ -12,6 +12,10 @@ tools:
         type: integer
         description: Number of emails to retrieve (default 5, max 20)
         required: false
+      query:
+        type: string
+        description: Optional search query to filter emails as per Gmail search syntax (e.g., "from:user@example.com subject:report")
+        required: false
   - name: get_email_details
     description: Retrieve the full content of a specific email by its ID
     parameters:
