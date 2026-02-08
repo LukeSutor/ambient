@@ -45,7 +45,7 @@ pub const SUPABASE_URL: &str = "https://sipccjuzzgcjaulkvwkg.supabase.co";
 pub const SUPABASE_ANON_KEY: &str = "sb_publishable_LxTjFAXSpnDlB9d_8pYWAg_vs87qhqE";
 
 // Cloudflare configuration
-pub const CLOUDFLARE_BACKEND_URL: &str = "https://ambient-backend.lukesutor.workers.dev/";
+pub const CLOUDFLARE_BACKEND_URL: &str = "https://ambient-backend.lukesutor.workers.dev";
 
 // Server setup
 pub const MAX_PORT: u16 = 9999;
