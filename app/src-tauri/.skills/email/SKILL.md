@@ -1,12 +1,12 @@
 ---
 name: email
-description: Access the user's Gmail to read recent messages for context. Use when the user refers to information they received via email or asks for a summary of their recent inbox.
+description: Access the user's emails to read recent messages for context. Use when the conversation needs email information to answer questions or provide responses.
 version: "1.0"
 requires_auth: true
 requires_google_auth: true
 tools:
   - name: list_emails
-    description: Retrieve a list of the user's most recent emails (metadata/previews only)
+    description: Retrieve a reverse-chronological preview list of the user's most recent emails
     parameters:
       limit:
         type: integer
@@ -14,7 +14,7 @@ tools:
         required: false
       query:
         type: string
-        description: Optional search query to filter emails as per Gmail search syntax (e.g., "from:user@example.com subject:report")
+        description: Optional search query to filter emails as per Gmail search syntax (e.g., "from:user@example.com" "subject:report")
         required: false
   - name: get_email_details
     description: Retrieve the full content of a specific email by its ID

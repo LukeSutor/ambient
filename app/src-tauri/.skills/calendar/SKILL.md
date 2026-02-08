@@ -1,6 +1,6 @@
 ---
 name: calendar
-description: Access the user's Google Calendar to view schedules and create events. Use when the user asks about their schedule, meetings, or wants to set reminders and appointments.
+description: Access the user's calendar to view schedules and create events. Use when the user asks about their schedule, meetings, or wants to set reminders and appointments.
 version: "1.0"
 requires_auth: true
 requires_google_auth: true
@@ -10,11 +10,15 @@ tools:
     parameters:
       start:
         type: string
-        description: ISO 8601 start time (e.g., '2024-05-01T00:00:00Z')
+        description: RFC 3339 start time (e.g., '2024-05-01T00:00:00Z')
         required: false
       end:
         type: string
-        description: ISO 8601 end time (e.g., '2024-05-02T00:00:00Z')
+        description: RFC 3339 end time (e.g., '2024-05-02T00:00:00Z')
+        required: false
+      query:
+        type: string
+        description: Optional search query to filter events by text fields (eg. summary, location, attendees, etc.)
         required: false
   - name: create_event
     description: Create a new event in the user's primary calendar
@@ -25,11 +29,11 @@ tools:
         required: true
       start_time:
         type: string
-        description: ISO 8601 start time
+        description: RFC 3339 start time
         required: true
       end_time:
         type: string
-        description: ISO 8601 end time
+        description: RFC 3339 end time
         required: false
       description:
         type: string
@@ -39,13 +43,12 @@ tools:
 
 # Calendar Skill
 
-Manage the user's Google Calendar events.
+Manage the user's calendar events.
 
 ## When to Use
 - Checking availability
 - Listing upcoming meetings or events
-- Scheduling new appointments
-- Setting placeholders in the calendar
+- Scheduling new events or reminders
 
 ## Guidelines
 1. Always confirm details if creating an event from ambiguous text

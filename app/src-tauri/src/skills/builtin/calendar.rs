@@ -96,6 +96,7 @@ async fn create_event(call: &ToolCall) -> Result<Value, String> {
 
 /// List events in a date range.
 async fn list_events(call: &ToolCall) -> Result<Value, String> {
+    //TODO: format the response to only include relevant fields
     let start_time = call
         .arguments
         .get("start")
@@ -110,7 +111,14 @@ async fn list_events(call: &ToolCall) -> Result<Value, String> {
         .map(|e| format!("&timeMax={}", urlencoding::encode(e)))
         .unwrap_or_default();
 
-    log::info!("[calendar] Listing events with query: {}{}", start_time, end_time);
+    let search_query = call
+        .arguments
+        .get("query")
+        .and_then(|q| q.as_str())
+        .map(|q| format!("&q={}", urlencoding::encode(q)))
+        .unwrap_or_default();
+
+    log::info!("[calendar] Listing events with query: {}{}{}", start_time, end_time, search_query);
 
     let token = match get_provider_token().map_err(|e| e.to_string())? {
         Some(t) => t,
@@ -129,7 +137,7 @@ async fn list_events(call: &ToolCall) -> Result<Value, String> {
         }
     };
 
-    let query = format!("{}&singleEvents=true&orderBy=startTime{}", start_time, end_time);
+    let query = format!("{}&singleEvents=true&orderBy=startTime{}{}", start_time, end_time, search_query);
     let mut response = call_google_calendar_api(&token, "primary", &query).await;
 
     // Retry once with refresh if unauthorized
@@ -143,15 +151,43 @@ async fn list_events(call: &ToolCall) -> Result<Value, String> {
     }
 
     match response {
-        Ok(events) => Ok(serde_json::json!({
-            "status": "success",
-            "events": events["items"]
-        })),
+        Ok(events) => {
+            Ok(serde_json::json!({
+                "status": "success",
+                "events": format_events(&events)
+            }))
+        },
         Err(e) => Ok(serde_json::json!({
             "status": "error",
             "message": e
         })),
     }
+}
+
+fn format_events(events: &Value) -> Vec<Value> {
+    events["items"].as_array().map(|items| {
+        items.iter().map(|item| {
+            let start = item["start"]["dateTime"]
+                .as_str()
+                .or(item["start"]["date"].as_str())
+                .unwrap_or_default();
+            let end = item["end"]["dateTime"]
+                .as_str()
+                .or(item["end"]["date"].as_str())
+                .unwrap_or_default();
+
+            serde_json::json!({
+                "id": item["id"].as_str().unwrap_or_default(),
+                "summary": item["summary"].as_str().unwrap_or("No Title"),
+                "description": item["description"].as_str().unwrap_or_default(),
+                "location": item["location"].as_str().unwrap_or_default(),
+                "start": start,
+                "end": end,
+                "status": item["status"].as_str().unwrap_or_default(),
+                "htmlLink": item["htmlLink"].as_str().unwrap_or_default(),
+            })
+        }).collect::<Vec<_>>()
+    }).unwrap_or_default()
 }
 
 async fn call_google_calendar_api(token: &str, calendar_id: &str, query: &str) -> Result<Value, String> {
