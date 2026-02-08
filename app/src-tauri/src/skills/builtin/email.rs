@@ -8,7 +8,7 @@ use crate::auth::storage::get_provider_token;
 use crate::auth::auth_flow::refresh_google_token;
 use crate::auth::security::HTTP_CLIENT;
 use htmd::convert;
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{Engine as _, engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD}};
 
 /// Execute an email tool.
 pub async fn execute(
@@ -134,7 +134,8 @@ async fn get_email_details(call: &ToolCall) -> Result<Value, String> {
             
             // Convert to markdown if it's HTML/text
             let content = if !body_html.is_empty() {
-                convert(&body_html).unwrap_or(body_html)
+                let cleaned = clean_html_content(&body_html);
+                convert(&cleaned).unwrap_or(cleaned)
             } else {
                 details["snippet"].as_str().unwrap_or("No content").to_string()
             };
@@ -205,28 +206,132 @@ fn extract_header(msg: &Value, name: &str) -> String {
         .to_string()
 }
 
+/// Helper to decode Gmail's base64url data.
+fn decode_base64_url(data: &str) -> Result<Vec<u8>, String> {
+    let clean_data = data.replace(|c: char| c.is_whitespace(), "");
+    
+    // Try without padding first (common in Gmail)
+    if let Ok(decoded) = URL_SAFE_NO_PAD.decode(&clean_data) {
+        return Ok(decoded);
+    }
+    
+    // Try with padding (some clients include it)
+    if let Ok(decoded) = URL_SAFE.decode(&clean_data) {
+        return Ok(decoded);
+    }
+
+    Err("Invalid base64 data".to_string())
+}
+
 /// Recursively extract the body from message parts and decode it.
 fn extract_body(part: &Value) -> String {
-    // If this part has a body with data, use it
+    // 1. Try to get data from this part
     if let Some(data) = part["body"]["data"].as_str() {
-        if let Ok(decoded) = URL_SAFE_NO_PAD.decode(data) {
-            return String::from_utf8_lossy(&decoded).to_string();
+        match decode_base64_url(data) {
+            Ok(decoded) => {
+                let text = String::from_utf8_lossy(&decoded).to_string();
+                if !text.is_empty() {
+                    log::info!("[email] Successfully decoded body part ({} bytes)", text.len());
+                    return text;
+                }
+            }
+            Err(e) => {
+                log::warn!("[email] Failed to decode body data: {}", e);
+            }
         }
     }
 
-    // Otherwise, check sub-parts (common in multipart emails)
+    // 2. If no data here, look in parts
     if let Some(parts) = part["parts"].as_array() {
-        // Prefer HTML parts if they exist
+        // Look for text/html in any part (recursive)
         for p in parts {
-            if p["mimeType"].as_str() == Some("text/html") {
-                return extract_body(p);
+            let mime = p["mimeType"].as_str().unwrap_or("").to_lowercase();
+            if mime.starts_with("text/html") {
+                let body = extract_body(p);
+                if !body.is_empty() { return body; }
             }
         }
-        // Fall back to first part (often text/plain)
-        if let Some(first_part) = parts.first() {
-            return extract_body(first_part);
+        
+        // Look for nested multiparts or text/plain
+        for p in parts {
+            let mime = p["mimeType"].as_str().unwrap_or("").to_lowercase();
+            if mime.starts_with("multipart/") || mime.starts_with("text/plain") {
+                let body = extract_body(p);
+                if !body.is_empty() { return body; }
+            }
+        }
+
+        // Fallback to any other text part
+        for p in parts {
+            let mime = p["mimeType"].as_str().unwrap_or("").to_lowercase();
+            if mime.starts_with("text/") {
+                let body = extract_body(p);
+                if !body.is_empty() { return body; }
+            }
         }
     }
 
     "".to_string()
+}
+/// Clean HTML content by removing styles, scripts, and layout-specific tags.
+fn clean_html_content(html: &str) -> String {
+    let mut cleaned = html.to_string();
+
+    // 1. Remove style and script tags with their content
+    let tags_to_remove = ["style", "script", "head", "title", "meta", "link", "xml"];
+    for tag_name in tags_to_remove {
+        let start_tag = format!("<{}", tag_name);
+        let end_tag = format!("</{}>", tag_name);
+        
+        while let Some(start_idx) = cleaned.to_lowercase().find(&start_tag) {
+            if let Some(end_idx) = cleaned[start_idx..].to_lowercase().find(&end_tag) {
+                cleaned.replace_range(start_idx..start_idx + end_idx + end_tag.len(), " ");
+            } else {
+                // Remove the opening tag and search for the next >
+                if let Some(tag_end) = cleaned[start_idx..].find(">") {
+                    cleaned.replace_range(start_idx..start_idx + tag_end + 1, " ");
+                } else {
+                    cleaned.replace_range(start_idx..start_idx + start_tag.len(), " ");
+                }
+            }
+        }
+    }
+
+    // 2. Remove other junk tags (images, metadata)
+    let junk_tags = ["img", "base", "svg"];
+    for tag_name in junk_tags {
+        let start_tag = format!("<{}", tag_name);
+        while let Some(start_idx) = cleaned.to_lowercase().find(&start_tag) {
+            if let Some(tag_end) = cleaned[start_idx..].find(">") {
+                cleaned.replace_range(start_idx..start_idx + tag_end + 1, " ");
+            } else {
+                break;
+            }
+        }
+    }
+
+    // 3. Remove comments
+    while let Some(start_idx) = cleaned.find("<!--") {
+        if let Some(end_idx) = cleaned[start_idx..].find("-->") {
+            cleaned.replace_range(start_idx..start_idx + end_idx + 3, " ");
+        } else {
+            break;
+        }
+    }
+
+    // 4. Down-level tables to divs to avoid MarkDown table artifacts (|)
+    cleaned = cleaned.replace("<table", "<div");
+    cleaned = cleaned.replace("</table", "</div");
+    cleaned = cleaned.replace("<tr", "<div");
+    cleaned = cleaned.replace("</tr", "</div");
+    cleaned = cleaned.replace("<td", "<div");
+    cleaned = cleaned.replace("</td", "</div");
+    cleaned = cleaned.replace("<th", "<div");
+    cleaned = cleaned.replace("</th", "</div");
+    cleaned = cleaned.replace("<tbody", "<div");
+    cleaned = cleaned.replace("</tbody", "</div");
+    cleaned = cleaned.replace("<thead", "<div");
+    cleaned = cleaned.replace("</thead", "</div");
+
+    cleaned
 }
