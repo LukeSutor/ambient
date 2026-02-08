@@ -26,6 +26,7 @@ const ERROR_MESSAGES: Record<AuthErrorResponse["code"], string> = {
   rate_limited: "Too many attempts.",
   o_auth_error: "Sign-in with Google failed. Please try again.",
   session_expired: "Your session has expired. Please sign in again.",
+  google_refresh_token_missing: "Authorization expired. Please re-authenticate with Google.",
   invalid_request: "Invalid request. Please check your input and try again.",
   server_error: "A server error occurred. Please try again later.",
   storage_error: "Failed to save your session. Please try again.",
@@ -111,9 +112,12 @@ export async function invokeSignUp(
 /**
  * Initiates Google OAuth sign-in by getting the authorization URL
  * The URL should be opened in the system browser
+ * @param prompt Optional Google OAuth prompt parameter (e.g., 'consent', 'select_account')
  */
-export async function invokeSignInWithGoogle(): Promise<OAuthUrlResponse> {
-  return invoke<OAuthUrlResponse>("sign_in_with_google");
+export async function invokeSignInWithGoogle(
+  prompt?: string,
+): Promise<OAuthUrlResponse> {
+  return invoke<OAuthUrlResponse>("sign_in_with_google", { prompt });
 }
 
 export async function invokeVerifyOtp(

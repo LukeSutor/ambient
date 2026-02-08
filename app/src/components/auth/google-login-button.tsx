@@ -46,6 +46,21 @@ export function GoogleLoginButton({
 
       const unlistenError = await listen("oauth2-error", (event) => {
         console.error("[GoogleLoginButton] OAuth2 error:", event.payload);
+        const errorData =
+          typeof event.payload === "string"
+            ? (JSON.parse(event.payload) as { code: string; message: string })
+            : (event.payload as { code: string; message: string });
+
+        // If recovery logic failed because we really don't have a refresh token,
+        // re-attempt with explicit prompt=consent to force Google to re-issue it.
+        if (errorData.code === "google_refresh_token_missing") {
+          console.log(
+            "[GoogleLoginButton] Refresh token missing, re-attempting with consent prompt...",
+          );
+          void signInWithGoogle("consent");
+          return;
+        }
+
         setIsLoading(false);
         setError(
           getAuthErrorMessage(

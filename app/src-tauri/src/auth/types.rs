@@ -337,6 +337,8 @@ pub enum AuthErrorCode {
     OAuthError,
     /// Session expired and refresh failed
     SessionExpired,
+    /// Google refresh token is missing or invalid
+    GoogleRefreshTokenMissing,
     /// Invalid request parameters
     InvalidRequest,
     /// Server error

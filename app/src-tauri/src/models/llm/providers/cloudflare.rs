@@ -2,7 +2,7 @@ use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
-use crate::constants::CLOUDFLARE_COMPLETIONS_WORKER_URL;
+use crate::constants::CLOUDFLARE_BACKEND_URL;
 use crate::models::llm::providers::translation::{tools_to_gemini_format, has_tool_calls_gemini, parse_gemini_tool_calls, extract_text_gemini, format_messages_for_gemini};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde_json::{json, Value};
@@ -84,8 +84,9 @@ impl LlmProvider for CloudflareProvider {
     let mut completion_tokens = 0u64;
     
     if should_stream {
+      let endpoint = format!("{}/v1/llm/generate", CLOUDFLARE_BACKEND_URL);
       let resp = client
-        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
+        .post(&endpoint)
         .headers(headers)
         .json(&body)
         .send()
@@ -222,8 +223,9 @@ impl LlmProvider for CloudflareProvider {
         Ok(LlmResponse::text(full))
       }
     } else {
+      let endpoint = format!("{}/v1/llm/generate", CLOUDFLARE_BACKEND_URL);
       let resp = client
-        .post(CLOUDFLARE_COMPLETIONS_WORKER_URL)
+        .post(&endpoint)
         .headers(headers)
         .json(&body)
         .send()
