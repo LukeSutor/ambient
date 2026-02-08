@@ -100,6 +100,7 @@ async fn execute_single_tool(
 
     match result {
         Ok(value) => {
+            //TODO: remove this log for prod to not leak info
             log::info!(
                 "[executor] Tool {} succeeded: {}",
                 call.qualified_name(),

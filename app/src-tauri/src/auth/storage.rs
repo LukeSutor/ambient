@@ -186,7 +186,32 @@ pub fn get_persistent_provider_token(user_id: &str) -> Result<Option<String>, Bo
 
 /// Store a session (creates a new StoredAuthState)
 pub fn store_session(session: &Session) -> Result<(), Box<dyn std::error::Error>> {
-    let state = StoredAuthState::new(session.clone());
+    let mut session = session.clone();
+    
+    // If the new session is missing provider tokens, try to preserve them from existing state
+    if session.provider_token.is_none() || session.provider_refresh_token.is_none() {
+        if let Ok(Some(existing_state)) = retrieve_auth_state() {
+            // Only preserve if it's the same user
+            if existing_state.session.user.id == session.user.id {
+                if session.provider_token.is_none() {
+                    session.provider_token = existing_state.session.provider_token;
+                }
+                if session.provider_refresh_token.is_none() {
+                    session.provider_refresh_token = existing_state.session.provider_refresh_token;
+                }
+            }
+        }
+    }
+
+    // Also check the persistent vault if refresh token is still missing
+    if session.provider_refresh_token.is_none() {
+        if let Ok(Some(vault_token)) = get_persistent_provider_token(&session.user.id) {
+            log::info!("[auth_storage] Recovered provider refresh token from vault for user {}", session.user.id);
+            session.provider_refresh_token = Some(vault_token);
+        }
+    }
+
+    let state = StoredAuthState::new(session);
     store_auth_state(&state)
 }
 

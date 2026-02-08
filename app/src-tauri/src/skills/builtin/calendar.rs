@@ -46,10 +46,19 @@ async fn create_event(call: &ToolCall) -> Result<Value, String> {
 
     let token = match get_provider_token().map_err(|e| e.to_string())? {
         Some(t) => t,
-        None => return Ok(serde_json::json!({
-            "status": "error",
-            "message": "Not authenticated with Google"
-        })),
+        None => {
+            log::info!("[calendar] No provider token in session, attempting to recover...");
+            match refresh_google_token().await {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("[calendar] Failed to recover provider token: {}", e);
+                    return Ok(serde_json::json!({
+                        "status": "error",
+                        "message": "Not authenticated with Google. Please sign in again."
+                    }));
+                }
+            }
+        }
     };
 
     let event_body = serde_json::json!({
@@ -105,10 +114,19 @@ async fn list_events(call: &ToolCall) -> Result<Value, String> {
 
     let token = match get_provider_token().map_err(|e| e.to_string())? {
         Some(t) => t,
-        None => return Ok(serde_json::json!({
-            "status": "error",
-            "message": "Not authenticated with Google"
-        })),
+        None => {
+            log::info!("[calendar] No provider token in session, attempting to recover...");
+            match refresh_google_token().await {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("[calendar] Failed to recover provider token: {}", e);
+                    return Ok(serde_json::json!({
+                        "status": "error",
+                        "message": "Not authenticated with Google. Please sign in again."
+                    }));
+                }
+            }
+        }
     };
 
     let query = format!("{}&singleEvents=true&orderBy=startTime{}", start_time, end_time);

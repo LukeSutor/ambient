@@ -39,10 +39,19 @@ async fn list_emails(call: &ToolCall) -> Result<Value, String> {
 
     let token = match get_provider_token().map_err(|e| e.to_string())? {
         Some(t) => t,
-        None => return Ok(serde_json::json!({
-            "status": "error",
-            "message": "Not authenticated with Google"
-        })),
+        None => {
+            log::info!("[email] No provider token in session, attempting to recover...");
+            match refresh_google_token().await {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("[email] Failed to recover provider token: {}", e);
+                    return Ok(serde_json::json!({
+                        "status": "error",
+                        "message": "Not authenticated with Google. Please sign in again."
+                    }));
+                }
+            }
+        }
     };
 
     let query_str = if query.is_empty() {
@@ -105,16 +114,23 @@ async fn get_email_details(call: &ToolCall) -> Result<Value, String> {
 
     let token = match get_provider_token().map_err(|e| e.to_string())? {
         Some(t) => t,
-        None => return Ok(serde_json::json!({
-            "status": "error",
-            "message": "Not authenticated with Google"
-        })),
+        None => {
+            log::info!("[email] No provider token in session, attempting to recover...");
+            match refresh_google_token().await {
+                Ok(t) => t,
+                Err(e) => {
+                    log::error!("[email] Failed to recover provider token: {}", e);
+                    return Ok(serde_json::json!({
+                        "status": "error",
+                        "message": "Not authenticated with Google. Please sign in again."
+                    }));
+                }
+            }
+        }
     };
 
     let mut response = call_gmail_api(&token, &format!("me/messages/{}", id), "format=full").await;
 
-    //Pretty print the response json
-    log::debug!("[email] Gmail API response for message {}: {}", id, serde_json::to_string_pretty(&response).unwrap_or_else(|_| "Could not serialize response".to_string()));
     // Retry once with refresh if unauthorized
     if let Err(ref e) = response {
         if e.contains("401") {
@@ -134,8 +150,9 @@ async fn get_email_details(call: &ToolCall) -> Result<Value, String> {
             
             // Convert to markdown if it's HTML/text
             let content = if !body_html.is_empty() {
-                let cleaned = clean_html_content(&body_html);
-                convert(&cleaned).unwrap_or(cleaned)
+                let cleaned_html = clean_html_content(&body_html);
+                let markdown = convert(&cleaned_html).unwrap_or(cleaned_html);
+                post_process_markdown(&markdown)
             } else {
                 details["snippet"].as_str().unwrap_or("No content").to_string()
             };
@@ -231,7 +248,6 @@ fn extract_body(part: &Value) -> String {
             Ok(decoded) => {
                 let text = String::from_utf8_lossy(&decoded).to_string();
                 if !text.is_empty() {
-                    log::info!("[email] Successfully decoded body part ({} bytes)", text.len());
                     return text;
                 }
             }
@@ -273,11 +289,12 @@ fn extract_body(part: &Value) -> String {
 
     "".to_string()
 }
+
 /// Clean HTML content by removing styles, scripts, and layout-specific tags.
 fn clean_html_content(html: &str) -> String {
     let mut cleaned = html.to_string();
 
-    // 1. Remove style and script tags with their content
+    // Remove style and script tags with their content
     let tags_to_remove = ["style", "script", "head", "title", "meta", "link", "xml"];
     for tag_name in tags_to_remove {
         let start_tag = format!("<{}", tag_name);
@@ -297,7 +314,7 @@ fn clean_html_content(html: &str) -> String {
         }
     }
 
-    // 2. Remove other junk tags (images, metadata)
+    // Remove other junk tags (images, metadata)
     let junk_tags = ["img", "base", "svg"];
     for tag_name in junk_tags {
         let start_tag = format!("<{}", tag_name);
@@ -310,7 +327,7 @@ fn clean_html_content(html: &str) -> String {
         }
     }
 
-    // 3. Remove comments
+    // Remove comments
     while let Some(start_idx) = cleaned.find("<!--") {
         if let Some(end_idx) = cleaned[start_idx..].find("-->") {
             cleaned.replace_range(start_idx..start_idx + end_idx + 3, " ");
@@ -319,7 +336,7 @@ fn clean_html_content(html: &str) -> String {
         }
     }
 
-    // 4. Down-level tables to divs to avoid MarkDown table artifacts (|)
+    // Down-level tables to divs to avoid MarkDown table artifacts (|)
     cleaned = cleaned.replace("<table", "<div");
     cleaned = cleaned.replace("</table", "</div");
     cleaned = cleaned.replace("<tr", "<div");
@@ -334,4 +351,52 @@ fn clean_html_content(html: &str) -> String {
     cleaned = cleaned.replace("</thead", "</div");
 
     cleaned
+}
+
+/// Post-process markdown to remove invisible characters and normalize whitespace.
+fn post_process_markdown(markdown: &str) -> String {
+    let mut cleaned = markdown.to_string();
+
+    // 1. Remove common invisible/zero-width junk characters used in email templates
+    let junk_chars = [
+        '\u{200C}', // Zero Width Non-Joiner
+        '\u{200B}', // Zero Width Space
+        '\u{200D}', // Zero Width Joiner
+        '\u{FEFF}', // Zero Width No-Break Space
+        '\u{AD}',   // Soft Hyphen
+    ];
+    for c in junk_chars {
+        cleaned = cleaned.replace(c, "");
+    }
+
+    // 2. Normalize non-breaking spaces to regular spaces
+    cleaned = cleaned.replace('\u{00A0}', " ");
+
+    // 3. Process line by line to collapse whitespace and remove empty lines
+    let mut result_lines = Vec::new();
+    let mut consecutive_empty = 0;
+
+    for line in cleaned.lines() {
+        let trimmed = line.trim();
+        
+        if trimmed.is_empty() {
+            consecutive_empty += 1;
+            // Only allow up to 1 consecutive empty line in the output (standard Markdown spacing)
+            if consecutive_empty <= 1 {
+                result_lines.push("".to_string());
+            }
+        } else {
+            consecutive_empty = 0;
+            
+            // Collapse multiple horizontal spaces into one
+            let collapsed = trimmed
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            
+            result_lines.push(collapsed);
+        }
+    }
+
+    result_lines.join("\n").trim().to_string()
 }
