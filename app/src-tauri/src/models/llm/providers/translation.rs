@@ -249,14 +249,13 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
     for msg in msgs {
         match msg.message_type {
             MessageType::ToolCalls => {
-                let mut content_blocks = Vec::new();
+                let mut tool_calls = Vec::new();
 
-                // Add tool calls from metadata array
                 // Add tool calls from metadata array
                 if let Some(metadata_vec) = &msg.metadata {
                     for meta in metadata_vec {
                         if let MessageMetadata::ToolCall { call_id, tool_name, arguments, thought_signature: _, skill_name: _ } = meta {
-                            content_blocks.push(json!({
+                            tool_calls.push(json!({
                                 "id": call_id,
                                 "type": "function",
                                 "function": {
@@ -268,17 +267,10 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                     }
                 }
 
-                // Add text content
-                if !msg.content.is_empty() {
-                    content_blocks.push(json!({
-                        "type": "text",
-                        "text": msg.content
-                    }));
-                }
-
                 formatted.push(json!({
                     "role": "assistant",
-                    "tool_calls": content_blocks
+                    "content": if msg.content.is_empty() { Value::Null } else { json!(msg.content) },
+                    "tool_calls": tool_calls
                 }));
             }
 
@@ -423,9 +415,15 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                     Role::Tool => "tool",
                 };
 
+                let content_value = if content_blocks.len() == 1 && content_blocks[0].get("type").and_then(|v| v.as_str()) == Some("text") {
+                    content_blocks[0].get("text").cloned().unwrap_or_else(|| json!(msg.content))
+                } else {
+                    json!(content_blocks)
+                };
+
                 formatted.push(json!({
                     "role": role,
-                    "content": content_blocks
+                    "content": content_value
                 }));
             }
         }
