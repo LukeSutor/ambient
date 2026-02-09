@@ -21,6 +21,8 @@ pub struct SkillSummary {
     /// A brief description of what this skill does.
     /// This is shown to the LLM to help it decide when to activate the skill.
     pub description: String,
+    /// Whether this skill requires Google authentication to use.
+    pub requires_google_auth: bool,
 }
 
 /// Full skill definition including all tools and instructions.
@@ -52,6 +54,7 @@ impl Skill {
         SkillSummary {
             name: self.name.clone(),
             description: self.description.clone(),
+            requires_google_auth: self.requires_google_auth,
         }
     }
 }

@@ -140,6 +140,63 @@ async fn check_online() -> bool {
     }
 }
 
+/// Lightweight check for Google authentication status.
+///
+/// Unlike `get_auth_state`, this function:
+/// - Does NOT check online status (no TCP ping)
+/// - Does NOT fetch user profile (no Supabase API call)
+/// - Only reads local storage and refreshes tokens if expired
+///
+/// This is suitable for internal use by the skills system where
+/// we only need to know if Google auth is active.
+pub async fn is_google_authenticated() -> bool {
+    let state = match retrieve_auth_state() {
+        Ok(Some(s)) => s,
+        _ => return false,
+    };
+
+    // If the Supabase token is expired, refresh it first
+    let state = if state.is_access_token_expired() {
+        match refresh_token().await {
+            Ok(_) => {
+                // Re-read state after refresh
+                match retrieve_auth_state() {
+                    Ok(Some(s)) => s,
+                    _ => return false,
+                }
+            }
+            Err(_) => return false,
+        }
+    } else {
+        state
+    };
+
+    // Check if user has Google provider
+    let has_google_provider = state.session.user.app_metadata.as_ref()
+        .and_then(|m| m.providers.as_ref())
+        .map(|p| p.contains(&"google".to_string()))
+        .unwrap_or(false);
+
+    if !has_google_provider {
+        return false;
+    }
+
+    // Check if we have a valid provider token
+    if state.session.provider_token.is_some() {
+        return true;
+    }
+
+    // Try to refresh Google token if we have a refresh token
+    if state.session.provider_refresh_token.is_some() {
+        match crate::auth::auth_flow::refresh_google_token().await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    } else {
+        false
+    }
+}
+
 #[tauri::command]
 pub async fn get_user(access_token: &str) -> Result<SupabaseUser, String> {
     let endpoint = format!("{}/auth/v1/user", SUPABASE_URL);

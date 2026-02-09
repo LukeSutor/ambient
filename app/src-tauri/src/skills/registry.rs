@@ -337,10 +337,7 @@ pub async fn get_filtered_summaries(app_handle: &AppHandle) -> Vec<SkillSummary>
     };
 
     // Check Google auth state
-    let is_google_authed = match crate::auth::commands::get_auth_state(app_handle.clone()).await {
-        Ok(state) => state.is_google_authenticated,
-        Err(_) => false,
-    };
+    let is_google_authed = crate::auth::commands::is_google_authenticated().await;
 
     match SKILL_REGISTRY.read() {
         Ok(registry) => registry.get_filtered_summaries(is_google_authed, &disabled_skills),

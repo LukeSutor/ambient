@@ -190,10 +190,7 @@ pub async fn execute_tools(
     };
 
     // Check Google auth state
-    let is_google_authed = match crate::auth::commands::get_auth_state(app_handle.clone()).await {
-        Ok(state) => state.is_google_authenticated,
-        Err(_) => false,
-    };
+    let is_google_authed = crate::auth::commands::is_google_authenticated().await;
 
     // Execute each tool call in parallel, checking access first
     let futures: Vec<_> = tool_calls

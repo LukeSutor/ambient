@@ -181,15 +181,10 @@ impl AgentRuntime {
         // get_filtered_summaries loads settings and auth state internally
         let skill_summaries = get_filtered_summaries(&self.app_handle).await;
 
-        // Filter active skills to remove any that are now disabled or unauthorized
-        {
-            let disabled_skills = match load_user_settings(self.app_handle.clone()).await {
-                Ok(s) => s.disabled_skills,
-                Err(_) => Vec::new(),
-            };
-            let available_skill_names: Vec<String> = skill_summaries.iter().map(|s| s.name.clone()).collect();
-            self.active_skills.retain(|s| available_skill_names.contains(s) || !disabled_skills.contains(s));
-        }
+        // Filter active skills to only keep those that are still available
+        // (removes skills that were disabled or lost auth since activation)
+        let available_skill_names: Vec<String> = skill_summaries.iter().map(|s| s.name.clone()).collect();
+        self.active_skills.retain(|s| available_skill_names.contains(s));
 
         // Build system prompt
         let system_prompt = self.build_system_prompt(&skill_summaries);

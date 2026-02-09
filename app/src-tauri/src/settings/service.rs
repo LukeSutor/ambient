@@ -12,7 +12,7 @@ async fn get_settings_store(
     .map_err(|e| format!("Failed to get settings store: {}", e))
 }
 
-/// Load settings from store with caching
+/// Load settings from store
 async fn load_settings_internal(app_handle: &AppHandle) -> Result<UserSettings, String> {
   // Load from store
   let store = get_settings_store(app_handle).await?;

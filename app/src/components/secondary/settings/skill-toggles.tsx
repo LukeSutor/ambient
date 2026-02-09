@@ -7,9 +7,6 @@ import type { SkillSummary } from "@/types/skills";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 
-/** Skills that require Google OAuth authentication */
-const GOOGLE_AUTH_SKILLS = ["calendar", "email"];
-
 /** User-friendly descriptions for each skill */
 const SKILL_DESCRIPTIONS: Record<string, string> = {
   "web-search":
@@ -106,8 +103,7 @@ export function SkillToggles() {
     <div className="flex flex-col">
       {skills.map((skill, index) => {
         const isEnabled = !disabledSkills.includes(skill.name);
-        const requiresGoogleAuth = GOOGLE_AUTH_SKILLS.includes(skill.name);
-        const isGoogleLocked = requiresGoogleAuth && !isGoogleAuthenticated;
+        const isGoogleLocked = skill.requires_google_auth && !isGoogleAuthenticated;
 
         return (
           <div key={`skill-toggle-${skill.name}`}>
