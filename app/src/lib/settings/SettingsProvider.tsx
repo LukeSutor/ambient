@@ -47,6 +47,7 @@ type SettingsAction =
   | { type: "UPDATE_SHOW_FULL_THOUGHT_TRACES"; payload: boolean }
   | { type: "UPDATE_MODEL_SELECTION"; payload: ModelSelection }
   | { type: "UPDATE_HUD_DIMENSIONS"; payload: HudDimensions }
+  | { type: "UPDATE_DISABLED_SKILLS"; payload: string[] }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "INVALIDATE_CACHE" };
 
@@ -92,6 +93,16 @@ function settingsReducer(
         settings: {
           ...state.settings,
           model_selection: action.payload,
+        },
+      };
+
+    case "UPDATE_DISABLED_SKILLS":
+      if (!state.settings) return state;
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          disabled_skills: action.payload,
         },
       };
 
@@ -175,6 +186,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
             max_iterations: 10,
             enable_thinking: false,
           },
+          disabled_skills: [],
         };
         dispatch({ type: "SET_SETTINGS", payload: defaults });
       }

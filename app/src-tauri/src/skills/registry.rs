@@ -252,12 +252,15 @@ impl SkillRegistry {
         self.skills.values().map(|s| s.to_summary()).collect()
     }
 
-    /// Gets skill summaries filtered by authentication state.
-    pub fn get_filtered_summaries(&self, is_google_authed: bool) -> Vec<SkillSummary> {
+    /// Gets skill summaries filtered by authentication state and disabled skills.
+    pub fn get_filtered_summaries(&self, is_google_authed: bool, disabled_skills: &[String]) -> Vec<SkillSummary> {
         self.skills
             .values()
             .filter(|s| {
                 if s.requires_google_auth && !is_google_authed {
+                    return false;
+                }
+                if disabled_skills.contains(&s.name) {
                     return false;
                 }
                 true
@@ -314,9 +317,9 @@ pub fn get_all_summaries() -> Vec<SkillSummary> {
 }
 
 /// Gets filtered skill summaries.
-pub fn get_filtered_summaries(is_google_authed: bool) -> Vec<SkillSummary> {
+pub fn get_filtered_summaries(is_google_authed: bool, disabled_skills: &[String]) -> Vec<SkillSummary> {
     match SKILL_REGISTRY.read() {
-        Ok(registry) => registry.get_filtered_summaries(is_google_authed),
+        Ok(registry) => registry.get_filtered_summaries(is_google_authed, disabled_skills),
         Err(_) => Vec::new(),
     }
 }

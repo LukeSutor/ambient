@@ -4,6 +4,7 @@ import {
   DangerZone,
   ModelSelector,
   SettingsSection,
+  SkillToggles,
 } from "@/components/secondary/settings";
 import {
   Select,
@@ -133,6 +134,11 @@ export default function Settings() {
             }}
           />
         </SettingRow>
+      </SettingsSection>
+
+      {/* Skills Settings */}
+      <SettingsSection title="Skills">
+        <SkillToggles />
       </SettingsSection>
 
       {/* Danger zone */}

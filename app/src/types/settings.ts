@@ -51,4 +51,4 @@ export type HudState = "Input" | "Chat" | "Login" | "Default";
 
 export type ModelSelection = "Local" | "Fast" | "Pro";
 
-export type UserSettings = { hud_size: HudSizeOption, show_full_thought_traces: boolean, model_selection: ModelSelection, agent_config: AgentRuntimeConfig, };
+export type UserSettings = { hud_size: HudSizeOption, show_full_thought_traces: boolean, model_selection: ModelSelection, agent_config: AgentRuntimeConfig, disabled_skills: Array<string>, };

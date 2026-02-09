@@ -103,6 +103,9 @@ pub struct AgentRuntime {
     /// Currently activated skills for this conversation.
     active_skills: Vec<String>,
 
+    /// Skills disabled by the user in settings.
+    disabled_skills: Vec<String>,
+
     /// Current iteration count (for safety).
     iteration: usize,
 
@@ -135,6 +138,9 @@ impl AgentRuntime {
         // Load runtime config (use defaults for now, could be from settings in future)
         let config = AgentRuntimeConfig::default();
 
+        // Load disabled skills from settings
+        let disabled_skills = settings.disabled_skills.clone();
+
         // Load previously activated skills for this conversation
         let active_skills = load_conversation_skills(&app_handle, &conv_id)
             .await
@@ -153,6 +159,7 @@ impl AgentRuntime {
             config,
             is_local,
             active_skills,
+            disabled_skills,
             iteration: 0,
             cancel_signal,
         })
@@ -183,8 +190,8 @@ impl AgentRuntime {
             .map(|s| s.is_google_authenticated)
             .unwrap_or(false);
 
-        // Get skill summaries for system prompt, filtered by auth requirements
-        let skill_summaries = get_filtered_summaries(is_google_authed);
+        // Get skill summaries for system prompt, filtered by auth requirements and disabled skills
+        let skill_summaries = get_filtered_summaries(is_google_authed, &self.disabled_skills);
 
         // Build system prompt
         let system_prompt = self.build_system_prompt(&skill_summaries);
