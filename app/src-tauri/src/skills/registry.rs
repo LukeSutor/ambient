@@ -87,7 +87,7 @@ impl SkillRegistry {
     /// Parses a SKILL.md file into a Skill struct.
     ///
     /// SKILL.md files use YAML frontmatter for metadata
-    /// followed by Markdown instructions.
+    /// followed by Markdown instructions
     fn load_skill_from_file(&self, path: &Path) -> Result<Skill, AgentError> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| AgentError::SkillParseError(format!("Failed to read file: {}", e)))?;
@@ -107,6 +107,7 @@ impl SkillRegistry {
         let yaml: YamlValue = serde_yaml::from_str(frontmatter)
             .map_err(|e| AgentError::SkillParseError(format!("Failed to parse YAML frontmatter: {}", e)))?;
 
+        // Required top-level fields
         let name = yaml["name"]
             .as_str()
             .ok_or_else(|| AgentError::SkillParseError("Missing 'name' field".to_string()))?
@@ -117,21 +118,28 @@ impl SkillRegistry {
             .ok_or_else(|| AgentError::SkillParseError("Missing 'description' field".to_string()))?
             .to_string();
 
-        let version = yaml["version"]
+        // Metadata section
+        let metadata = &yaml["metadata"];
+
+        let version = metadata["version"]
             .as_str()
             .unwrap_or("1.0")
             .to_string();
 
-        let requires_auth = yaml["requires_auth"]
+        let requires_auth = metadata["requires_auth"]
             .as_bool()
             .unwrap_or(false);
 
-        let requires_google_auth = yaml["requires_google_auth"]
+        let requires_google_auth = metadata["requires_google_auth"]
             .as_bool()
             .unwrap_or(false);
 
-        // Parse tools
-        let tools = self.parse_tools(&yaml["tools"])?;
+        let requires_online = metadata["requires_online"]
+            .as_bool()
+            .unwrap_or(true);
+
+        // Parse tools from metadata
+        let tools = self.parse_tools(&metadata["tools"])?;
 
         Ok(Skill {
             name,
@@ -139,6 +147,7 @@ impl SkillRegistry {
             version,
             requires_auth,
             requires_google_auth,
+            requires_online,
             tools,
             instructions,
         })

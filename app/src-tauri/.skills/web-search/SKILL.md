@@ -1,23 +1,26 @@
 ---
 name: web-search
 description: Search the web for current information, news, documentation, and answers. Use when the user asks about recent events, needs factual information you're uncertain about, or requests real-time data like weather, stocks, or sports scores.
-version: "1.0"
-requires_auth: false
-tools:
-  - name: search_web
-    description: Perform a web search and return relevant results
-    parameters:
-      query:
-        type: string
-        description: The search query
-        required: true
-  - name: fetch_webpage
-    description: Fetch and extract main content from a specific URL
-    parameters:
-      url:
-        type: string
-        description: The URL to fetch
-        required: true
+metadata:
+  version: "1.0"
+  requires_auth: false
+  requires_google_auth: false
+  requires_online: true
+  tools:
+    - name: search_web
+      description: Perform a web search and return relevant results
+      parameters:
+        query:
+          type: string
+          description: The search query
+          required: true
+    - name: fetch_webpage
+      description: Fetch and extract main content from a specific URL
+      parameters:
+        url:
+          type: string
+          description: The URL to fetch
+          required: true
 ---
 
 # Web Search Skill

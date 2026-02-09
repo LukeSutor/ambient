@@ -7,7 +7,7 @@ use tauri::AppHandle;
 /// Unified generate function that routes to the selected provider.
 pub async fn generate(
     app_handle: AppHandle,
-    request: LlmRequest,
+    mut request: LlmRequest,
     force_local: Option<bool>,
 ) -> Result<LlmResponse, String> {
     let policy = if force_local.unwrap_or(false) {
@@ -16,18 +16,24 @@ pub async fn generate(
         ProviderPolicy::Default
     };
 
-    // Decide provider
+    // Decide provider and resolve model type
     let provider_is_local = match policy {
         ProviderPolicy::ForceLocal => true,
         ProviderPolicy::Default => {
-            // Read settings to decide
             let settings = crate::settings::service::load_user_settings(app_handle.clone())
                 .await
                 .map_err(|e| format!("Failed to load user settings: {}", e))?;
-            matches!(
+
+            let is_local = matches!(
                 settings.model_selection,
                 crate::settings::types::ModelSelection::Local
-            )
+            );
+
+            if !is_local && request.model_type.is_none() {
+                request.model_type = Some(settings.model_selection.as_str().to_string());
+            }
+
+            is_local
         }
     };
 

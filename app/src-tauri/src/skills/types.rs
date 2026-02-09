@@ -21,8 +21,12 @@ pub struct SkillSummary {
     /// A brief description of what this skill does.
     /// This is shown to the LLM to help it decide when to activate the skill.
     pub description: String,
+    /// Whether this skill requires authentication/authorization to use.
+    pub requires_auth: bool,
     /// Whether this skill requires Google authentication to use.
     pub requires_google_auth: bool,
+    /// Whether this skill requires an internet connection to use.
+    pub requires_online: bool,
 }
 
 /// Full skill definition including all tools and instructions.
@@ -41,6 +45,8 @@ pub struct Skill {
     pub requires_auth: bool,
     /// Whether this skill specifically requires Google authentication.
     pub requires_google_auth: bool,
+    /// Whether this skill requires an internet connection to use.
+    pub requires_online: bool,
     /// The tools provided by this skill.
     pub tools: Vec<ToolDefinition>,
     /// Markdown-formatted instructions for using this skill,
@@ -54,7 +60,9 @@ impl Skill {
         SkillSummary {
             name: self.name.clone(),
             description: self.description.clone(),
+            requires_auth: self.requires_auth,
             requires_google_auth: self.requires_google_auth,
+            requires_online: self.requires_online,
         }
     }
 }

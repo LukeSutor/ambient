@@ -23,9 +23,17 @@ name: string,
  */
 description: string, 
 /**
+ * Whether this skill requires authentication/authorization to use.
+ */
+requires_auth: boolean, 
+/**
  * Whether this skill requires Google authentication to use.
  */
-requires_google_auth: boolean, };
+requires_google_auth: boolean, 
+/**
+ * Whether this skill requires an internet connection to use.
+ */
+requires_online: boolean, };
 
 /**
  * A tool call requested by the model.

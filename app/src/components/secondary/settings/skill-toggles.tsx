@@ -41,12 +41,36 @@ function getSkillDescription(skill: SkillSummary): string {
 }
 
 /**
+ * Determine why a skill is locked, following the hierarchy:
+ * requires_online > requires_auth > requires_google_auth
+ *
+ * Returns a reason string if locked, or null if the skill is available.
+ */
+function getLockedReason(
+  skill: SkillSummary,
+  isOnline: boolean,
+  isLoggedIn: boolean,
+  isGoogleAuthenticated: boolean,
+): string | null {
+  if (skill.requires_online && !isOnline) {
+    return "Requires internet connection";
+  }
+  if (skill.requires_auth && !isLoggedIn) {
+    return "Requires sign-in";
+  }
+  if (skill.requires_google_auth && !isGoogleAuthenticated) {
+    return "Requires Google sign-in";
+  }
+  return null;
+}
+
+/**
  * SkillToggles component displays a list of available tools
  * with toggle switches to enable/disable them for the agentic runtime.
  */
 export function SkillToggles() {
   const { settings, toggleSkill } = useSettings();
-  const { isGoogleAuthenticated, refresh: refreshAuth } = useRoleAccess();
+  const { isOnline, isLoggedIn, isGoogleAuthenticated, refresh: refreshAuth } = useRoleAccess();
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,7 +127,8 @@ export function SkillToggles() {
     <div className="flex flex-col">
       {skills.map((skill, index) => {
         const isEnabled = !disabledSkills.includes(skill.name);
-        const isGoogleLocked = skill.requires_google_auth && !isGoogleAuthenticated;
+        const lockedReason = getLockedReason(skill, isOnline, isLoggedIn, isGoogleAuthenticated);
+        const isLocked = lockedReason !== null;
 
         return (
           <div key={`skill-toggle-${skill.name}`}>
@@ -113,9 +138,9 @@ export function SkillToggles() {
                   <p className="font-semibold text-sm">
                     {formatSkillName(skill.name)}
                   </p>
-                  {isGoogleLocked && (
+                  {isLocked && (
                     <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                      Requires Google sign-in
+                      {lockedReason}
                     </span>
                   )}
                 </div>
@@ -124,8 +149,8 @@ export function SkillToggles() {
                 </p>
               </div>
               <Switch
-                checked={isEnabled && !isGoogleLocked}
-                disabled={isGoogleLocked}
+                checked={isEnabled && !isLocked}
+                disabled={isLocked}
                 onCheckedChange={() => void handleToggle(skill.name)}
               />
             </div>

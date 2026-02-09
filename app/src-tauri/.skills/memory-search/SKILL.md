@@ -1,34 +1,37 @@
 ---
 name: memory-search
 description: Search through stored memories and past conversations. Use when the user references previous discussions, asks you to remember something, or when context from past interactions would help answer their question.
-version: "1.1"
-requires_auth: false
-tools:
-  - name: search_memories
-    description: Search memories using semantic similarity or time range
-    parameters:
-      query:
-        type: string
-        description: The search query (optional if time range provided)
-        required: false
-      start_date:
-        type: string
-        description: Start date in ISO8601 format (e.g. 2026-02-05T00:00:00Z)
-        required: false
-      end_date:
-        type: string
-        description: End date in ISO8601 format (e.g. 2026-02-05T23:59:59Z)
-        required: false
-      limit:
-        type: integer
-        description: Maximum number of results
-        required: false
-        default: 10
-      min_similarity:
-        type: number
-        description: Minimum similarity threshold (0-1)
-        required: false
-        default: 0.5
+metadata:
+  version: "1.1"
+  requires_auth: false
+  requires_google_auth: false
+  requires_online: false
+  tools:
+    - name: search_memories
+      description: Search memories using semantic similarity or time range
+      parameters:
+        query:
+          type: string
+          description: The search query (optional if time range provided)
+          required: false
+        start_date:
+          type: string
+          description: Start date in RFC 3339 format (e.g. 2026-02-05T00:00:00Z)
+          required: false
+        end_date:
+          type: string
+          description: End date in RFC 3339 format (e.g. 2026-02-05T23:59:59Z)
+          required: false
+        limit:
+          type: integer
+          description: Maximum number of results
+          required: false
+          default: 10
+        min_similarity:
+          type: number
+          description: Minimum similarity threshold (0-1)
+          required: false
+          default: 0.5
 ---
 
 # Memory Search Skill
