@@ -14,9 +14,6 @@ use super::types::{ToolCall, ToolResult};
 use futures::future::join_all;
 use tauri::AppHandle;
 
-/// Skills that require Google OAuth authentication.
-const GOOGLE_AUTH_SKILLS: &[&str] = &["calendar", "email"];
-
 // ============================================================================
 // Internal Functions
 // ============================================================================
@@ -168,14 +165,13 @@ pub async fn execute_skill_tool(
 /// Executes multiple tool calls in parallel.
 ///
 /// Takes a vector of tool calls and executes them concurrently.
-/// Rejects tool calls to disabled skills or skills requiring auth the user doesn't have.
+/// Loads disabled skills from settings and Google auth state internally
+/// to ensure the most up-to-date access control is applied.
 ///
 /// # Arguments
 ///
 /// * `app_handle` - Tauri app handle for database and resource access
 /// * `tool_calls` - Tool calls to execute
-/// * `disabled_skills` - Skills the user has disabled in settings
-/// * `is_google_authed` - Whether the user is authenticated with Google
 ///
 /// # Returns
 ///
@@ -183,16 +179,29 @@ pub async fn execute_skill_tool(
 pub async fn execute_tools(
     app_handle: &AppHandle,
     tool_calls: Vec<ToolCall>,
-    disabled_skills: &[String],
-    is_google_authed: bool,
 ) -> Vec<ToolResult> {
+    // Load current settings to get disabled skills
+    let disabled_skills = match crate::settings::service::load_user_settings(app_handle.clone()).await {
+        Ok(settings) => settings.disabled_skills,
+        Err(e) => {
+            log::warn!("[executor] Failed to load settings for access control: {}", e);
+            Vec::new()
+        }
+    };
+
+    // Check Google auth state
+    let is_google_authed = match crate::auth::commands::get_auth_state(app_handle.clone()).await {
+        Ok(state) => state.is_google_authenticated,
+        Err(_) => false,
+    };
+
     // Execute each tool call in parallel, checking access first
     let futures: Vec<_> = tool_calls
         .iter()
         .map(|call| {
             let app = app_handle.clone();
             let c = call.clone();
-            let disabled = disabled_skills.to_vec();
+            let disabled = disabled_skills.clone();
             async move {
                 // Check if skill is disabled by user
                 if disabled.contains(&c.skill_name) {
@@ -205,8 +214,8 @@ pub async fn execute_tools(
                         ),
                     );
                 }
-                // Check if skill requires Google auth and user lacks it
-                if GOOGLE_AUTH_SKILLS.contains(&c.skill_name.as_str()) && !is_google_authed {
+                // Check if skill requires Google auth using skill metadata
+                if super::registry::skill_requires_google_auth(&c.skill_name) && !is_google_authed {
                     log::warn!("[executor] Blocked call to Google-auth skill without auth: {}", c.skill_name);
                     return ToolResult::error(
                         c.id,

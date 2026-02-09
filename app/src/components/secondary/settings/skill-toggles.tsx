@@ -15,7 +15,7 @@ const SKILL_DESCRIPTIONS: Record<string, string> = {
   "web-search":
     "Search the web for up-to-date information, news, and answers to your questions.",
   "memory-search":
-    "Recall information from your past conversations and saved notes.",
+    "Recall information from your past conversations.",
   "code-execution":
     "Run code snippets to perform calculations, data processing, and more.",
   calendar:
