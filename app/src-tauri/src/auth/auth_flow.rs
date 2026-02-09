@@ -266,7 +266,22 @@ pub async fn refresh_google_token() -> Result<String, String> {
         .ok_or_else(|| "No active session found".to_string())?;
 
     let user_id = state.session.user.id.clone();
-    let access_token = state.session.access_token.clone();
+    // Ensure we use a valid Supabase access token. If it's expired, refresh the Supabase
+    // session first (don't call `refresh_token()` here because it would deadlock on the
+    // same REFRESH_MUTEX). Use `refresh_session_with_token()` which does not acquire the mutex.
+    let mut access_token = state.session.access_token.clone();
+    if state.is_access_token_expired() {
+        log::info!("[supabase_auth] Supabase access token expired; refreshing session before calling worker proxy");
+
+        let sup_refresh_token = state.session.refresh_token.clone();
+        if sup_refresh_token.is_empty() {
+            return Err(AuthErrorResponse::session_expired().to_string());
+        }
+
+        // Refresh session using the stored refresh token (this stores the refreshed session)
+        let refreshed = refresh_session_with_token(&sup_refresh_token).await?;
+        access_token = refreshed.session.access_token.clone();
+    }
     
     // Get refresh token from session or vault
     let provider_refresh_token = state.session.provider_refresh_token.clone()
@@ -279,7 +294,20 @@ pub async fn refresh_google_token() -> Result<String, String> {
             AuthErrorResponse::new(AuthErrorCode::GoogleRefreshTokenMissing, "Google refresh token is missing").to_string()
         })?;
     
-    // Use worker proxy to refresh
+    // If the Supabase access token is expired, refresh the Supabase session first
+    if state.is_access_token_expired() {
+        log::info!("[supabase_auth] Supabase access token expired; refreshing session before calling worker");
+
+        let refresh_token = get_refresh_token()
+            .map_err(|e| AuthErrorResponse::storage_error(format!("Failed to get refresh token: {}", e)).to_string())?
+            .ok_or_else(|| AuthErrorResponse::session_expired().to_string())?;
+
+        // This call is safe while holding REFRESH_MUTEX because it does not acquire the module mutex.
+        let refreshed = refresh_session_with_token(&refresh_token).await?;
+        access_token = refreshed.session.access_token.clone();
+    }
+
+    // Use worker proxy to refresh Google provider token
     let new_tokens = refresh_google_token_via_worker(&access_token, &provider_refresh_token).await?;
     
     // Update local session with new access token
