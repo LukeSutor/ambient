@@ -14,6 +14,9 @@ use super::types::{ToolCall, ToolResult};
 use futures::future::join_all;
 use tauri::AppHandle;
 
+/// Skills that require Google OAuth authentication.
+const GOOGLE_AUTH_SKILLS: &[&str] = &["calendar", "email"];
+
 // ============================================================================
 // Internal Functions
 // ============================================================================
@@ -165,12 +168,14 @@ pub async fn execute_skill_tool(
 /// Executes multiple tool calls in parallel.
 ///
 /// Takes a vector of tool calls and executes them concurrently.
-/// Returns a vector of results in the same order as input calls.
+/// Rejects tool calls to disabled skills or skills requiring auth the user doesn't have.
 ///
 /// # Arguments
 ///
 /// * `app_handle` - Tauri app handle for database and resource access
 /// * `tool_calls` - Tool calls to execute
+/// * `disabled_skills` - Skills the user has disabled in settings
+/// * `is_google_authed` - Whether the user is authenticated with Google
 ///
 /// # Returns
 ///
@@ -178,11 +183,42 @@ pub async fn execute_skill_tool(
 pub async fn execute_tools(
     app_handle: &AppHandle,
     tool_calls: Vec<ToolCall>,
+    disabled_skills: &[String],
+    is_google_authed: bool,
 ) -> Vec<ToolResult> {
-    // Execute each tool call in parallel
+    // Execute each tool call in parallel, checking access first
     let futures: Vec<_> = tool_calls
         .iter()
-        .map(|call| execute_single_tool(app_handle.clone(), call.clone()))
+        .map(|call| {
+            let app = app_handle.clone();
+            let c = call.clone();
+            let disabled = disabled_skills.to_vec();
+            async move {
+                // Check if skill is disabled by user
+                if disabled.contains(&c.skill_name) {
+                    log::warn!("[executor] Blocked call to disabled skill: {}", c.skill_name);
+                    return ToolResult::error(
+                        c.id,
+                        format!(
+                            "{{\"error\": \"skill_disabled\", \"message\": \"The skill '{}' has been disabled by the user. Do not attempt to use this skill again.\"}}",
+                            c.skill_name
+                        ),
+                    );
+                }
+                // Check if skill requires Google auth and user lacks it
+                if GOOGLE_AUTH_SKILLS.contains(&c.skill_name.as_str()) && !is_google_authed {
+                    log::warn!("[executor] Blocked call to Google-auth skill without auth: {}", c.skill_name);
+                    return ToolResult::error(
+                        c.id,
+                        format!(
+                            "{{\"error\": \"auth_required\", \"message\": \"The skill '{}' requires Google authentication. The user has not signed in with Google.\"}}",
+                            c.skill_name
+                        ),
+                    );
+                }
+                execute_single_tool(app, c).await
+            }
+        })
         .collect();
 
     // Wait for all tool calls to complete

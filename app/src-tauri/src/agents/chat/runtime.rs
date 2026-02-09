@@ -106,6 +106,9 @@ pub struct AgentRuntime {
     /// Skills disabled by the user in settings.
     disabled_skills: Vec<String>,
 
+    /// Whether the user is Google authenticated.
+    is_google_authed: bool,
+
     /// Current iteration count (for safety).
     iteration: usize,
 
@@ -160,6 +163,7 @@ impl AgentRuntime {
             is_local,
             active_skills,
             disabled_skills,
+            is_google_authed: false, // Will be set in run()
             iteration: 0,
             cancel_signal,
         })
@@ -189,6 +193,20 @@ impl AgentRuntime {
         let is_google_authed = auth_state.as_ref()
             .map(|s| s.is_google_authenticated)
             .unwrap_or(false);
+        self.is_google_authed = is_google_authed;
+
+        // Reload settings to get fresh disabled_skills each run
+        if let Ok(settings) = load_user_settings(self.app_handle.clone()).await {
+            self.disabled_skills = settings.disabled_skills;
+        }
+
+        // Filter out disabled skills from active skills
+        self.active_skills.retain(|s| !self.disabled_skills.contains(s));
+
+        // Also filter out skills requiring Google auth if user isn't authed
+        if !is_google_authed {
+            self.active_skills.retain(|s| !matches!(s.as_str(), "calendar" | "email"));
+        }
 
         // Get skill summaries for system prompt, filtered by auth requirements and disabled skills
         let skill_summaries = get_filtered_summaries(is_google_authed, &self.disabled_skills);
@@ -507,7 +525,7 @@ impl AgentRuntime {
         }
 
         // Execute tools in parallel
-        let results = execute_tools(&self.app_handle, tool_calls.clone()).await;
+        let results = execute_tools(&self.app_handle, tool_calls.clone(), &self.disabled_skills, self.is_google_authed).await;
 
         // Check for skill activation calls and update state
         for call in &tool_calls {

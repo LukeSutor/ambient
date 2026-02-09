@@ -136,8 +136,8 @@ export default function Settings() {
         </SettingRow>
       </SettingsSection>
 
-      {/* Skills Settings */}
-      <SettingsSection title="Skills">
+      {/* Tools Settings */}
+      <SettingsSection title="Tools">
         <SkillToggles />
       </SettingsSection>
 
