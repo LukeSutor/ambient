@@ -54,7 +54,7 @@ SettingsProvider → RoleAccessProvider → SetupProvider → WindowsProvider �
 ### Backend Module Organization
 
 **Top-level modules** ([lib.rs](app/src-tauri/src/lib.rs)):
-- `auth/`: OAuth flow, token storage (keychain), session management
+- `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in store.json)
 - `db/`: SQLite with migrations, conversations, messages, memory, token usage
 - `agents/`: Chat runtime + computer-use runtime
 - `models/`: LLM client (local/cloud providers), llama.cpp server, embedding, OCR
@@ -284,11 +284,11 @@ Detailed instructions for the AI agent...
 ## Integration Points
 
 ### Cloudflare Worker
-**Location:** [cloudflare/workers/llm-completions/](cloudflare/workers/llm-completions/)
+**Location:** [cloudflare/workers/ambient-backend/](cloudflare/workers/ambient-backend/)
 
-**Purpose:** Proxy for Gemini API to avoid exposing API keys
+**Purpose:** Proxy for Gemini API (avoids exposing API keys) and backend for refreshing Google OAuth tokens (holds `GOOGLE_CLIENT_SECRET`).
 
-**Request Format:**
+**LLM Completion Request:**
 ```typescript
 POST /
 Authorization: Bearer <supabase_access_token>
@@ -303,9 +303,18 @@ Authorization: Bearer <supabase_access_token>
 }
 ```
 
+**Google Token Refresh:**
+```typescript
+POST /v1/auth/google/refresh
+Authorization: Bearer <supabase_access_token>
+
+{ "refresh_token": "<google_refresh_token>" }
+```
+The worker verifies the Supabase token via `supabase.auth.getUser()`, then POSTs to `https://oauth2.googleapis.com/token` with the app's `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (stored as Cloudflare Worker secrets). Returns the new Google access token (and optionally a rotated refresh token) directly to the client. The client never sees the client secret.
+
 **Model Mapping:**
 - `fast`: gemini-3-flash-preview
-- `pro`: gemini-3-pro-preview  
+- `pro`: gemini-3-pro-preview
 - `computer-use`: gemini-2.5-computer-use-preview-10-2025
 
 ### llama.cpp Server
@@ -318,16 +327,46 @@ Authorization: Bearer <supabase_access_token>
 
 ### Authentication
 **Flow:** OAuth via Supabase ([auth/](app/src-tauri/src/auth/))
-1. Open Supabase auth URL in browser
-2. Browser redirects to `ambient://oauth/callback?...` deep link
-3. Extract tokens, exchange for session
-4. Store in OS keychain (encrypted with AES-GCM)
-5. Auto-refresh on expiry
+1. Open Supabase auth URL with Google OAuth scopes in browser
+2. Browser redirects to `ambient://oauth/callback#access_token=...&refresh_token=...` deep link
+3. Extract tokens from URL fragment, validate by fetching user profile
+4. Store session using split-storage architecture (see below)
+5. Auto-refresh on expiry (Supabase tokens locally, Google tokens via Cloudflare Worker)
+
+**Token Storage Architecture** ([storage.rs](app/src-tauri/src/auth/storage.rs)):
+
+Tokens are split across two locations based on sensitivity and lifetime:
+
+| Token | Location | Protection | Rationale |
+|-------|----------|------------|----------|
+| Supabase refresh token | OS keyring (`keyring` crate) | OS-level encryption | Long-lived, high-value — most secure location |
+| Google refresh token | OS keyring (`keyring` crate) | OS-level encryption | Long-lived, high-value — never touches disk |
+| AES encryption key | OS keyring (`keyring` crate) | OS-level encryption | Protects session tokens in store.json |
+| Supabase access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
+| Google access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
+| Session metadata (user, expiry) | `store.json` (plaintext) | None (non-sensitive) | Quick reads for UI state |
+
+Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refresh_token`, `google_refresh_token`.
+
+**Key functions in `storage.rs`:**
+- `store_session()`: Splits a `Session` — refresh tokens → keyring, access tokens → AES-encrypt → store.json
+- `retrieve_auth_state()`: Reads store.json + keyring, decrypts, reconstructs full `StoredAuthState`
+- `get_refresh_token()` / `get_google_refresh_token()`: Read directly from keyring (no decryption needed)
+- `get_access_token()` / `get_provider_token()`: Read from encrypted store.json
+- `clear_auth_state()`: Clears both keyring entries and store.json
+
+**Google Token Refresh Flow:**
+1. `refresh_google_token()` acquires `REFRESH_MUTEX` to serialize refresh requests
+2. If Supabase access token is expired, refreshes it first via `refresh_session_with_token()`
+3. Reads Google refresh token from keyring (no decryption needed)
+4. Sends refresh token to Cloudflare Worker (`/v1/auth/google/refresh`) which holds `GOOGLE_CLIENT_SECRET`
+5. Worker calls Google's token endpoint and returns new access token
+6. Stores updated session with new Google access token
 
 ## Security
 
 ### Sensitive Operations
-- **Token storage:** OS keychain with AES-GCM encryption, never in localStorage
+- **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in store.json. If store.json is exfiltrated, refresh tokens remain safe in OS keyring.
 - **Code execution:** Isolated subprocess to prevent app crashes
 - **Computer use:** Safety confirmations for destructive actions (see [runtime.rs](app/src-tauri/src/agents/computer_use/runtime.rs))
 - **Web scraping:** Uses real browser engine to avoid exposing request patterns

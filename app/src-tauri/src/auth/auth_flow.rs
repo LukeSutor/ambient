@@ -260,12 +260,11 @@ pub async fn refresh_google_token() -> Result<String, String> {
     // Acquire lock to serialize refresh requests
     let _guard = REFRESH_MUTEX.lock().await;
 
-    // Get current session to find user_id and refresh token
+    // Get current session
     let state = retrieve_auth_state()
         .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
         .ok_or_else(|| "No active session found".to_string())?;
 
-    let user_id = state.session.user.id.clone();
     // Ensure we use a valid Supabase access token. If it's expired, refresh the Supabase
     // session first (don't call `refresh_token()` here because it would deadlock on the
     // same REFRESH_MUTEX). Use `refresh_session_with_token()` which does not acquire the mutex.
@@ -283,35 +282,27 @@ pub async fn refresh_google_token() -> Result<String, String> {
         access_token = refreshed.session.access_token.clone();
     }
     
-    // Get refresh token from session or vault
+    // Get Google refresh token from session or keyring vault
     let provider_refresh_token = state.session.provider_refresh_token.clone()
         .or_else(|| {
-            log::info!("[supabase_auth] Refresh token not in session, checking vault for user {}", user_id);
-            crate::auth::storage::get_persistent_provider_token(&user_id).ok().flatten()
+            log::info!("[supabase_auth] Refresh token not in session, checking keyring");
+            crate::auth::storage::get_google_refresh_token().ok().flatten()
         })
         .ok_or_else(|| {
             log::error!("[supabase_auth] No Google refresh token available");
             AuthErrorResponse::new(AuthErrorCode::GoogleRefreshTokenMissing, "Google refresh token is missing").to_string()
         })?;
-    
-    // If the Supabase access token is expired, refresh the Supabase session first
-    if state.is_access_token_expired() {
-        log::info!("[supabase_auth] Supabase access token expired; refreshing session before calling worker");
-
-        let refresh_token = get_refresh_token()
-            .map_err(|e| AuthErrorResponse::storage_error(format!("Failed to get refresh token: {}", e)).to_string())?
-            .ok_or_else(|| AuthErrorResponse::session_expired().to_string())?;
-
-        // This call is safe while holding REFRESH_MUTEX because it does not acquire the module mutex.
-        let refreshed = refresh_session_with_token(&refresh_token).await?;
-        access_token = refreshed.session.access_token.clone();
-    }
 
     // Use worker proxy to refresh Google provider token
     let new_tokens = refresh_google_token_via_worker(&access_token, &provider_refresh_token).await?;
     
-    // Update local session with new access token
-    let mut updated_session = state.session.clone();
+    // Re-read the current session to get fresh Supabase tokens (in case we refreshed above).
+    // Without this, we'd overwrite the freshly-stored Supabase tokens with expired ones.
+    let current_state = retrieve_auth_state()
+        .map_err(|e| format!("Failed to retrieve updated auth state: {}", e))?
+        .ok_or_else(|| "Session lost during Google token refresh".to_string())?;
+
+    let mut updated_session = current_state.session;
     updated_session.provider_token = Some(new_tokens.access_token.clone());
     
     // If we got a new refresh token (rare but possible), update that too
@@ -692,12 +683,12 @@ async fn handle_tokens_from_fragment(
     let mut provider_refresh_token = fragment_pairs.get("provider_refresh_token").cloned();
     
     if provider_refresh_token.is_none() || provider_refresh_token.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
-        log::info!("[supabase_auth] No provider refresh token in fragment, attempting vault recovery for user {}", user.id);
-        if let Ok(Some(vault_token)) = crate::auth::storage::get_persistent_provider_token(&user.id) {
-            log::info!("[supabase_auth] Successfully recovered provider refresh token from persistent vault");
+        log::info!("[supabase_auth] No provider refresh token in fragment, checking keyring");
+        if let Ok(Some(vault_token)) = crate::auth::storage::get_google_refresh_token() {
+            log::info!("[supabase_auth] Successfully recovered provider refresh token from keyring");
             provider_refresh_token = Some(vault_token);
         } else {
-            log::warn!("[supabase_auth] No refresh token in fragment or vault. Background access will fail after expiry.");
+            log::warn!("[supabase_auth] No refresh token in fragment or keyring. Background access will fail after expiry.");
             return Err(AuthErrorResponse::new(
                 AuthErrorCode::GoogleRefreshTokenMissing,
                 "Google refresh token missing. Please sign in again with consent to enable background access."

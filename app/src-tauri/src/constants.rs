@@ -36,9 +36,10 @@ pub const SETTINGS_KEY: &str = "settings";
 pub const AUTH_KEY: &str = "auth";
 
 // Keyring constants
-pub const KEYRING_ENCRYPTION_KEY: &str = "supabase_storage_key";
 pub const KEYRING_SERVICE: &str = "ambient";
-pub const KEYRING_AUTH_KEY: &str = "supabase_auth";
+pub const KEYRING_ENCRYPTION_KEY: &str = "encryption_key";
+pub const KEYRING_SUPABASE_REFRESH: &str = "supabase_refresh_token";
+pub const KEYRING_GOOGLE_REFRESH: &str = "google_refresh_token";
 
 // Supabase configuration
 pub const SUPABASE_URL: &str = "https://sipccjuzzgcjaulkvwkg.supabase.co";
