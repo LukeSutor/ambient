@@ -2,7 +2,7 @@ use crate::db::core::DbState;
 use crate::events::types::AttachmentData;
 use crate::memory::types::MemoryEntry;
 use crate::events::{emitter::emit, types::{ATTACHMENTS_CREATED, AttachmentsCreatedEvent}};
-use chrono::Utc;
+use chrono::{Utc, Local, DateTime};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
@@ -539,6 +539,87 @@ pub async fn get_conversation(
     .map_err(|e| format!("Failed to get conversation: {}", e))?;
 
   Ok(conversation)
+}
+
+/// Get or refresh the cached prompt time for a conversation.
+///
+/// Returns a formatted local time string suitable for the system prompt.
+/// The timestamp is "sticky" — it only changes when:
+/// - No cached time exists yet (first message in conversation)
+/// - More than 10 minutes have elapsed since the cached time
+/// - A new calendar day has started (local time)
+///
+/// This enables llama.cpp's KV cache to reuse the prompt prefix across
+/// messages within the same time window, since the system prompt stays identical.
+pub async fn get_or_refresh_prompt_time(
+  app_handle: &AppHandle,
+  conversation_id: &str,
+) -> Result<String, String> {
+  let state = app_handle.state::<DbState>();
+  let conn_guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  let conn = conn_guard
+    .as_ref()
+    .ok_or("Database connection not available.".to_string())?;
+
+  let now = Local::now();
+
+  // Read current cached time
+  let cached: Option<String> = conn
+    .query_row(
+      "SELECT prompt_cached_at FROM conversations WHERE id = ?1",
+      params![conversation_id],
+      |row| row.get(0),
+    )
+    .map_err(|e| format!("Failed to read prompt_cached_at: {}", e))?;
+
+  // Determine whether to refresh
+  let should_refresh = match &cached {
+    None => true,
+    Some(cached_str) => {
+      match DateTime::parse_from_rfc3339(cached_str) {
+        Ok(cached_dt) => {
+          let cached_local = cached_dt.with_timezone(&Local);
+          let elapsed = now.signed_duration_since(cached_local);
+          let different_day = now.date_naive() != cached_local.date_naive();
+          elapsed.num_minutes() >= 10 || different_day
+        }
+        Err(_) => true, // Corrupted timestamp, refresh
+      }
+    }
+  };
+
+  if should_refresh {
+    let now_rfc3339 = now.to_rfc3339();
+    conn.execute(
+      "UPDATE conversations SET prompt_cached_at = ?1 WHERE id = ?2",
+      params![now_rfc3339, conversation_id],
+    )
+    .map_err(|e| format!("Failed to update prompt_cached_at: {}", e))?;
+    Ok(format_prompt_time(&now))
+  } else {
+    // Use cached time — parse it to format consistently
+    let cached_str = cached.unwrap();
+    match DateTime::parse_from_rfc3339(&cached_str) {
+      Ok(dt) => Ok(format_prompt_time(&dt.with_timezone(&Local))),
+      Err(_) => Ok(format_prompt_time(&now)), // Fallback
+    }
+  }
+}
+
+/// Format a datetime for use in the system prompt.
+///
+/// Produces a human-readable string like "Tuesday, February 10, 2026 at 2:00 PM".
+/// Uses minute-level granularity (no seconds) for cache stability.
+fn format_prompt_time<Tz: chrono::TimeZone>(dt: &DateTime<Tz>) -> String
+where
+  Tz::Offset: std::fmt::Display,
+{
+  dt.format("%A, %B %e, %Y at %l:%M %p")
+    .to_string()
+    .replace("  ", " ") // Clean up space-padded day/hour (e.g., " 3" → "3")
 }
 
 /// List all conversations

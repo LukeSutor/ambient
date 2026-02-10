@@ -8,8 +8,9 @@
 //! 5. Persists all messages to database
 
 use crate::db::conversations::{
-    add_message, get_conversation_history, load_conversation_skills,
-    save_conversation_skill, MessageMetadata, MessageType, Role,
+    add_message, get_conversation_history, get_or_refresh_prompt_time,
+    load_conversation_skills, save_conversation_skill,
+    MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM}};
 use crate::models::llm::client::generate;
@@ -192,8 +193,8 @@ impl AgentRuntime {
         let available_skill_names: Vec<String> = skill_summaries.iter().map(|s| s.name.clone()).collect();
         self.active_skills.retain(|s| available_skill_names.contains(s));
 
-        // Build system prompt
-        let system_prompt = self.build_system_prompt(&skill_summaries);
+        // Build system prompt (includes cached date, user info, timezone, skills)
+        let system_prompt = self.build_system_prompt(&skill_summaries).await;
 
         // Main agentic loop
         loop {
@@ -239,7 +240,7 @@ impl AgentRuntime {
 
             let request = LlmRequest::new(String::new())
                 .with_system_prompt(Some(system_prompt.clone()))
-                .with_messages(Some(messages.clone()))
+                .with_messages(Some(messages))
                 .with_internal_tools(Some(available_tools))
                 .with_conv_id(Some(self.conv_id.clone()))
                 .with_stream(Some(true))
@@ -366,17 +367,65 @@ impl AgentRuntime {
         }
     }
 
-    /// Builds the system prompt with skill information.
+    /// Builds the system prompt with skill information and dynamic context.
     ///
-    /// Includes skill summaries. Active skill instructions are injected 
-    /// dynamically in the conversation history during tool result translation.
-    fn build_system_prompt(&self, skill_summaries: &[SkillSummary]) -> String {
+    /// Dynamic context (date, user name, timezone, OS) is included in the system
+    /// prompt itself. The date uses a "sticky" cache: `prompt_cached_at` in the DB
+    /// only refreshes when >10 minutes have passed or a new day starts. This keeps
+    /// the system prompt identical across messages within the window, enabling
+    /// llama.cpp's KV cache to reuse the prompt prefix.
+    async fn build_system_prompt(&self, skill_summaries: &[SkillSummary]) -> String {
         let skills_section = self.format_skill_summaries(skill_summaries);
+        let context = self.build_context().await;
         let agentic_prompt = get_prompt("agentic_chat").unwrap_or_default();
         
         agentic_prompt
-            .replace("{date}", &Local::now().format("%Y-%m-%d %H:%M:%S").to_string())
+            .replace("{context}", &context)
             .replace("{skills_section}", &skills_section)
+    }
+
+    /// Builds the dynamic context string for the system prompt.
+    ///
+    /// Contains: cached date/time, user's full name, IANA timezone, OS.
+    /// The date is read from `prompt_cached_at` in the conversations table
+    /// and only refreshes on 10-minute or day-boundary changes.
+    async fn build_context(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+
+        // Date/time — uses sticky cache from DB
+        match get_or_refresh_prompt_time(&self.app_handle, &self.conv_id).await {
+            Ok(time_str) => parts.push(format!("Today is {}.", time_str)),
+            Err(e) => {
+                log::warn!("[agent] Failed to get prompt time: {}", e);
+                // Fallback to current time
+                let fallback = Local::now()
+                    .format("%A, %B %e, %Y at %l:%M %p")
+                    .to_string()
+                    .replace("  ", " ");
+                parts.push(format!("Today is {}.", fallback));
+            }
+        }
+
+        // User's full name from auth state
+        if let Ok(Some(auth_state)) = crate::auth::storage::retrieve_auth_state() {
+            if let Some(ref meta) = auth_state.session.user.user_metadata {
+                if let Some(ref name) = meta.full_name {
+                    if !name.is_empty() {
+                        parts.push(format!("The user's name is {}.", name));
+                    }
+                }
+            }
+        }
+
+        // Timezone from IANA
+        if let Ok(tz) = iana_time_zone::get_timezone() {
+            parts.push(format!("Timezone: {}.", tz));
+        }
+
+        // Operating system
+        parts.push(format!("OS: {}.", std::env::consts::OS));
+
+        parts.join(" ")
     }
 
     /// Formats skill summaries for the system prompt.

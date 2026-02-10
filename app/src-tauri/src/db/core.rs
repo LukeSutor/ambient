@@ -155,6 +155,14 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         INSERT INTO memory_entries_fts(rowid, text) SELECT rowid, text FROM memory_entries;
       "#,
     ),
+    M::up(
+      r#"
+        -- Add prompt_cached_at for system prompt time caching.
+        -- Stores the timestamp used in the system prompt so it stays stable
+        -- across messages within a 10-minute window (enables KV cache reuse).
+        ALTER TABLE conversations ADD COLUMN prompt_cached_at TEXT;
+      "#,
+    ),
   ])
 });
 

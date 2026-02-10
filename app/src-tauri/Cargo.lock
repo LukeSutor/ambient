@@ -129,6 +129,7 @@ dependencies = [
  "enigo",
  "futures",
  "htmd",
+ "iana-time-zone",
  "image 0.25.9",
  "keyring",
  "log",

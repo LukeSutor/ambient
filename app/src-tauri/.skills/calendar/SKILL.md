@@ -13,11 +13,11 @@ metadata:
         start:
           type: string
           description: RFC 3339 start time (e.g., '2024-05-01T00:00:00Z')
-          required: false
+          required: true
         end:
           type: string
           description: RFC 3339 end time (e.g., '2024-05-02T00:00:00Z')
-          required: false
+          required: true
         query:
           type: string
           description: Optional search query to filter events by text fields (eg. summary, location, attendees, etc.)
@@ -36,7 +36,7 @@ metadata:
         end_time:
           type: string
           description: RFC 3339 end time
-          required: false
+          required: true
         description:
           type: string
           description: Event description

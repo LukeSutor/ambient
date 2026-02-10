@@ -46,7 +46,7 @@ Examples:
   );
   map.insert(
     "agentic_chat",
-    r#"You are Ambient, a helpful AI assistant. Today is {date}.
+    r#"You are Ambient, a helpful AI assistant. {context}
 
 {skills_section}
 
