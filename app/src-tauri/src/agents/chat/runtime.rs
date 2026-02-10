@@ -248,7 +248,8 @@ impl AgentRuntime {
                 .with_cancel_signal(Some(self.cancel_signal.clone()))
                 .with_cancel_notify(Some(self.cancel_notify.clone()))
                 .with_attempts(Some(3))
-                .with_timeout_duration(Some(timeout_duration));
+                .with_timeout_duration(Some(timeout_duration))
+                .with_slot_id(Some(0));
 
             // Generate response from LLM
             let response = match generate(

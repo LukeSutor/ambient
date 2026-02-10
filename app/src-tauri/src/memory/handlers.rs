@@ -41,7 +41,8 @@ pub async fn handle_extract_interactive_memory(
     .with_system_prompt(Some(system_prompt))
     .with_json_schema(schema)
     .with_use_thinking(Some(false))
-    .with_stream(Some(false));
+    .with_stream(Some(false))
+    .with_slot_id(Some(1));
 
   let extracted_memory = match generate(app_handle.clone(), request, Some(true)).await {
     Ok(LlmResponse::Text(generated)) => {

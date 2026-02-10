@@ -79,6 +79,15 @@ impl LlmProvider for LocalProvider {
       request_body["tools"] = json!(tools_to_openai_format(internal_tools));
     }
 
+    // Pin to a specific KV cache slot for cache isolation.
+    // Prevents background tasks (memory extraction, name gen) from evicting
+    // the agentic chat's cached prompt prefix.
+    if let Some(slot_id) = request.slot_id {
+      request_body["id_slot"] = json!(slot_id);
+    }
+    // Always ask llama.cpp to cache the prompt for prefix reuse.
+    request_body["cache_prompt"] = json!(true);
+
     let client = reqwest::Client::new();
     let completion_url = format!("{}/v1/chat/completions", config.base_url());
 

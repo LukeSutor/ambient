@@ -36,6 +36,9 @@ pub struct LlmRequest {
     /// Async cancel notification for instant I/O cancellation (not serialized)
     #[serde(skip)]
     pub cancel_notify: Option<Arc<Notify>>,
+    /// Pin this request to a specific llama.cpp server slot for KV cache isolation.
+    /// Slot 0 is reserved for agentic chat; slot 1+ for background tasks.
+    pub slot_id: Option<i32>,
 }
 
 impl LlmRequest {
@@ -108,6 +111,11 @@ impl LlmRequest {
 
     pub fn with_timeout_duration(mut self, duration: Option<u64>) -> Self {
         self.timeout_duration = duration;
+        self
+    }
+
+    pub fn with_slot_id(mut self, slot_id: Option<i32>) -> Self {
+        self.slot_id = slot_id;
         self
     }
 }

@@ -35,7 +35,8 @@ pub async fn handle_generate_conversation_name(
     .with_system_prompt(Some(system_prompt))
     .with_json_schema(schema)
     .with_use_thinking(Some(false))
-    .with_stream(Some(false));
+    .with_stream(Some(false))
+    .with_slot_id(Some(1));
 
   let generated_name = match generate(app_handle.clone(), request, Some(true)).await {
     Ok(LlmResponse::Text(generated)) => {
