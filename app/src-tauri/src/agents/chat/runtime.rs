@@ -71,7 +71,8 @@ pub async fn handle_agent_chat(
 
     // Create runtime and run
     let cancel_signal = state.get_stop_signal();
-    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal).await?;
+    let cancel_notify = state.get_cancel_notify();
+    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal, cancel_notify).await?;
     let result = runtime.run(user_message, attachments).await;
 
     // Mark generation as finished
@@ -108,6 +109,9 @@ pub struct AgentRuntime {
 
     /// Cancellation signal from the runtime state.
     cancel_signal: Arc<AtomicBool>,
+
+    /// Async cancel notification for instant I/O cancellation.
+    cancel_notify: Arc<tokio::sync::Notify>,
 }
 
 impl AgentRuntime {
@@ -121,6 +125,7 @@ impl AgentRuntime {
         assistant_message_id: String,
         message_id: String,
         cancel_signal: Arc<AtomicBool>,
+        cancel_notify: Arc<tokio::sync::Notify>,
     ) -> Result<Self, AgentError> {
         // Load settings to determine model type
         let settings = load_user_settings(app_handle.clone())
@@ -155,6 +160,7 @@ impl AgentRuntime {
             active_skills,
             iteration: 0,
             cancel_signal,
+            cancel_notify,
         })
     }
 
@@ -239,6 +245,7 @@ impl AgentRuntime {
                 .with_stream(Some(true))
                 .with_assistant_message_id(Some(self.assistant_message_id.clone()))
                 .with_cancel_signal(Some(self.cancel_signal.clone()))
+                .with_cancel_notify(Some(self.cancel_notify.clone()))
                 .with_attempts(Some(3))
                 .with_timeout_duration(Some(timeout_duration));
 

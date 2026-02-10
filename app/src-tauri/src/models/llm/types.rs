@@ -3,6 +3,7 @@ use crate::skills::types::ToolDefinition;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use tokio::sync::Notify;
 
 /// Policy for choosing which provider to use
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,9 @@ pub struct LlmRequest {
     /// Cancellation signal for aborting generation (not serialized)
     #[serde(skip)]
     pub cancel_signal: Option<Arc<AtomicBool>>,
+    /// Async cancel notification for instant I/O cancellation (not serialized)
+    #[serde(skip)]
+    pub cancel_notify: Option<Arc<Notify>>,
 }
 
 impl LlmRequest {
@@ -84,6 +88,11 @@ impl LlmRequest {
 
     pub fn with_cancel_signal(mut self, signal: Option<Arc<AtomicBool>>) -> Self {
         self.cancel_signal = signal;
+        self
+    }
+
+    pub fn with_cancel_notify(mut self, notify: Option<Arc<Notify>>) -> Self {
+        self.cancel_notify = notify;
         self
     }
 
