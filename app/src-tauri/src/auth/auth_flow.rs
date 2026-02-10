@@ -503,6 +503,11 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 /// Generate the Google OAuth authorization URL
 /// Returns the URL that should be opened in the system browser
 /// Note: Supabase handles PKCE internally for social OAuth providers
+///
+/// If no Google refresh token exists in the keyring (e.g. after logout),
+/// the prompt is automatically set to "consent" to force Google to
+/// reissue a refresh token. This avoids the 2-step dance of failing
+/// first and retrying with consent.
 #[tauri::command]
 pub async fn sign_in_with_google(prompt: Option<String>) -> Result<OAuthUrlResponse, String> {
     log::info!("[supabase_auth] Initiating Google OAuth sign in");
@@ -519,8 +524,22 @@ pub async fn sign_in_with_google(prompt: Option<String>) -> Result<OAuthUrlRespo
     let mut query_params = std::collections::HashMap::new();
     query_params.insert("access_type".to_string(), "offline".to_string());
     
-    // Use the provided prompt if available, otherwise default to select_account for smooth UX
-    let prompt_val = prompt.unwrap_or_else(|| "select_account".to_string());
+    // Determine the prompt value:
+    // - If caller explicitly requests a specific prompt, use it
+    // - If no Google refresh token exists in keyring, force "consent" so Google reissues one
+    // - Otherwise use "select_account" for smooth UX
+    let prompt_val = prompt.unwrap_or_else(|| {
+        let has_refresh = crate::auth::storage::get_google_refresh_token()
+            .ok()
+            .flatten()
+            .is_some();
+        if has_refresh {
+            "select_account".to_string()
+        } else {
+            log::info!("[supabase_auth] No Google refresh token in keyring, using prompt=consent");
+            "consent".to_string()
+        }
+    });
     query_params.insert("prompt".to_string(), prompt_val.clone());
     query_params.insert("include_granted_scopes".to_string(), "true".to_string());
     
@@ -540,7 +559,7 @@ pub async fn sign_in_with_google(prompt: Option<String>) -> Result<OAuthUrlRespo
         urlencoding::encode(&prompt_val)
     );
     
-    log::info!("[supabase_auth] Generated Google OAuth URL: {}", auth_url);
+    log::info!("[supabase_auth] Generated Google OAuth URL (prompt={})", prompt_val);
     
     Ok(OAuthUrlResponse { url: auth_url })
 }
@@ -679,20 +698,20 @@ async fn handle_tokens_from_fragment(
         .and_then(|s| s.parse().ok());
     
     // Recovery Logic: If we didn't get a refresh token in the fragment (Google "once only" rule),
-    // check if we have one stored in our persistent vault from a previous session.
+    // check if we have one stored in our keyring from a previous session.
     let mut provider_refresh_token = fragment_pairs.get("provider_refresh_token").cloned();
     
     if provider_refresh_token.is_none() || provider_refresh_token.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
         log::info!("[supabase_auth] No provider refresh token in fragment, checking keyring");
         if let Ok(Some(vault_token)) = crate::auth::storage::get_google_refresh_token() {
-            log::info!("[supabase_auth] Successfully recovered provider refresh token from keyring");
+            log::info!("[supabase_auth] Recovered provider refresh token from keyring");
             provider_refresh_token = Some(vault_token);
         } else {
-            log::warn!("[supabase_auth] No refresh token in fragment or keyring. Background access will fail after expiry.");
-            return Err(AuthErrorResponse::new(
-                AuthErrorCode::GoogleRefreshTokenMissing,
-                "Google refresh token missing. Please sign in again with consent to enable background access."
-            ).to_string());
+            // Don't block sign-in — the user is authenticated but Google background
+            // access (calendar, email) won't work after the access token expires.
+            // sign_in_with_google() should have already used prompt=consent if needed,
+            // so this is an unexpected edge case.
+            log::warn!("[supabase_auth] No Google refresh token available. Google skills will be limited.");
         }
     }
 
