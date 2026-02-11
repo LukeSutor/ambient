@@ -3,6 +3,7 @@ use crate::skills::types::ToolDefinition;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use tokio::sync::Notify;
 
 /// Policy for choosing which provider to use
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,12 @@ pub struct LlmRequest {
     /// Cancellation signal for aborting generation (not serialized)
     #[serde(skip)]
     pub cancel_signal: Option<Arc<AtomicBool>>,
+    /// Async cancel notification for instant I/O cancellation (not serialized)
+    #[serde(skip)]
+    pub cancel_notify: Option<Arc<Notify>>,
+    /// Pin this request to a specific llama.cpp server slot for KV cache isolation.
+    /// Slot 0 is reserved for agentic chat; slot 1+ for background tasks.
+    pub slot_id: Option<i32>,
 }
 
 impl LlmRequest {
@@ -87,6 +94,11 @@ impl LlmRequest {
         self
     }
 
+    pub fn with_cancel_notify(mut self, notify: Option<Arc<Notify>>) -> Self {
+        self.cancel_notify = notify;
+        self
+    }
+
     pub fn with_model_type(mut self, model_type: Option<String>) -> Self {
         self.model_type = model_type;
         self
@@ -99,6 +111,11 @@ impl LlmRequest {
 
     pub fn with_timeout_duration(mut self, duration: Option<u64>) -> Self {
         self.timeout_duration = duration;
+        self
+    }
+
+    pub fn with_slot_id(mut self, slot_id: Option<i32>) -> Self {
+        self.slot_id = slot_id;
         self
     }
 }

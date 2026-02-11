@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
 import { invokeEmitAuthChanged } from "@/lib/role-access/commands";
 import { AlertCircle, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const googleLogo = "/google-logo.png";
 
@@ -31,20 +31,37 @@ export function GoogleLoginButton({
   const [error, setError] = useState<string | null>(null);
   const { signInWithGoogle } = useRoleAccess();
 
+  // Use refs to avoid re-registering listeners when callbacks change
+  const onSignInSuccessRef = useRef(onSignInSuccess);
+  onSignInSuccessRef.current = onSignInSuccess;
+
   useEffect(() => {
-    const listenToOAuth2Events = async () => {
+    let cancelled = false;
+    let unlistenSuccess: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+
+    const setup = async () => {
       const { listen } = await import("@tauri-apps/api/event");
 
-      const unlistenSuccess = await listen("oauth2-success", () => {
+      if (cancelled) return;
+
+      unlistenSuccess = await listen("oauth2-success", () => {
+        if (cancelled) return;
         void (async () => {
           setIsLoading(false);
           setError(null);
           await invokeEmitAuthChanged();
-          onSignInSuccess();
+          onSignInSuccessRef.current();
         })();
       });
 
-      const unlistenError = await listen("oauth2-error", (event) => {
+      if (cancelled) {
+        unlistenSuccess();
+        return;
+      }
+
+      unlistenError = await listen("oauth2-error", (event) => {
+        if (cancelled) return;
         console.error("[GoogleLoginButton] OAuth2 error:", event.payload);
         setIsLoading(false);
         setError(
@@ -55,23 +72,24 @@ export function GoogleLoginButton({
         );
       });
 
-      return () => {
-        unlistenSuccess();
+      if (cancelled) {
+        unlistenSuccess?.();
         unlistenError();
-      };
+        return;
+      }
     };
 
-    let cleanup: (() => void) | undefined;
-    void listenToOAuth2Events().then((cleanupFn) => {
-      cleanup = cleanupFn;
-    });
+    void setup();
 
     return () => {
-      if (cleanup) cleanup();
+      cancelled = true;
+      unlistenSuccess?.();
+      unlistenError?.();
     };
-  }, [onSignInSuccess]);
+    // Empty dependency array — listeners are stable, refs handle callback updates
+  }, []);
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = useCallback(async () => {
     setError(null);
     setIsLoading(true);
 
@@ -87,7 +105,7 @@ export function GoogleLoginButton({
       );
       setIsLoading(false);
     }
-  };
+  }, [signInWithGoogle]);
 
   return (
     <div className="w-full">

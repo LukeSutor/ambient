@@ -52,7 +52,7 @@ delivery_medium: string | null, };
 /**
  * Combined auth state for single-request hydration
  */
-export type AuthState = { is_online: boolean, is_authenticated: boolean, is_setup_complete: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
+export type AuthState = { is_online: boolean, is_authenticated: boolean, is_google_authenticated: boolean, is_setup_complete: boolean, user: UserInfo | null, needs_refresh: boolean, expires_at: bigint | null, };
 
 /**
  * OAuth URL Response
@@ -72,7 +72,7 @@ export type ResendConfirmationResponse = { message_id: string | null, };
 /**
  * Complete session object from Supabase
  */
-export type Session = { access_token: string, token_type: string, expires_in: bigint, expires_at: bigint | null, refresh_token: string, user: SupabaseUser, };
+export type Session = { access_token: string, token_type: string, expires_in: bigint, expires_at: bigint | null, refresh_token: string, user: SupabaseUser, provider_token: string | null, provider_refresh_token: string | null, };
 
 /**
  * Sign Up Response - returned after user registration

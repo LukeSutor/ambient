@@ -1,16 +1,18 @@
 ---
 name: computer-use
 description: Control the computer to perform actions on behalf of the user. Use when the user asks you to do something on their computer that requires mouse/keyboard interaction, like browsing websites, filling forms, or operating applications.
-version: "1.0"
-requires_auth: false
-tools:
-  - name: start_computer_use
-    description: Start a computer use session with a specific goal
-    parameters:
-      goal:
-        type: string
-        description: The goal to accomplish
-        required: true
+metadata:
+  version: "1.0"
+  requires_auth: false
+  requires_online: true
+  tools:
+    - name: start_computer_use
+      description: Start a computer use session with a specific goal
+      parameters:
+        goal:
+          type: string
+          description: The goal to accomplish
+          required: true
 ---
 
 # Computer Use Skill

@@ -87,7 +87,7 @@ impl SkillRegistry {
     /// Parses a SKILL.md file into a Skill struct.
     ///
     /// SKILL.md files use YAML frontmatter for metadata
-    /// followed by Markdown instructions.
+    /// followed by Markdown instructions
     fn load_skill_from_file(&self, path: &Path) -> Result<Skill, AgentError> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| AgentError::SkillParseError(format!("Failed to read file: {}", e)))?;
@@ -107,6 +107,7 @@ impl SkillRegistry {
         let yaml: YamlValue = serde_yaml::from_str(frontmatter)
             .map_err(|e| AgentError::SkillParseError(format!("Failed to parse YAML frontmatter: {}", e)))?;
 
+        // Required top-level fields
         let name = yaml["name"]
             .as_str()
             .ok_or_else(|| AgentError::SkillParseError("Missing 'name' field".to_string()))?
@@ -117,23 +118,36 @@ impl SkillRegistry {
             .ok_or_else(|| AgentError::SkillParseError("Missing 'description' field".to_string()))?
             .to_string();
 
-        let version = yaml["version"]
+        // Metadata section
+        let metadata = &yaml["metadata"];
+
+        let version = metadata["version"]
             .as_str()
             .unwrap_or("1.0")
             .to_string();
 
-        let requires_auth = yaml["requires_auth"]
+        let requires_auth = metadata["requires_auth"]
             .as_bool()
             .unwrap_or(false);
 
-        // Parse tools
-        let tools = self.parse_tools(&yaml["tools"])?;
+        let requires_google_auth = metadata["requires_google_auth"]
+            .as_bool()
+            .unwrap_or(false);
+
+        let requires_online = metadata["requires_online"]
+            .as_bool()
+            .unwrap_or(true);
+
+        // Parse tools from metadata
+        let tools = self.parse_tools(&metadata["tools"])?;
 
         Ok(Skill {
             name,
             description,
             version,
             requires_auth,
+            requires_google_auth,
+            requires_online,
             tools,
             instructions,
         })
@@ -244,12 +258,35 @@ impl SkillRegistry {
 
     /// Gets all skill summaries for progressive disclosure.
     pub fn get_all_summaries(&self) -> Vec<SkillSummary> {
-        self.skills.values().map(|s| s.to_summary()).collect()
+        let mut summaries: Vec<SkillSummary> = self.skills.values().map(|s| s.to_summary()).collect();
+        summaries.sort_by(|a, b| a.name.cmp(&b.name));
+        summaries
+    }
+
+    /// Gets skill summaries filtered by authentication state and disabled skills.
+    pub fn get_filtered_summaries(&self, is_google_authed: bool, disabled_skills: &[String]) -> Vec<SkillSummary> {
+        let mut summaries: Vec<SkillSummary> = self.skills
+            .values()
+            .filter(|s| {
+                if s.requires_google_auth && !is_google_authed {
+                    return false;
+                }
+                if disabled_skills.contains(&s.name) {
+                    return false;
+                }
+                true
+            })
+            .map(|s| s.to_summary())
+            .collect();
+        summaries.sort_by(|a, b| a.name.cmp(&b.name));
+        summaries
     }
 
     /// Gets all available skill names.
     pub fn get_all_skill_names(&self) -> Vec<String> {
-        self.skills.keys().cloned().collect()
+        let mut names: Vec<String> = self.skills.keys().cloned().collect();
+        names.sort();
+        names
     }
 
     /// Gets tools for a specific skill.
@@ -285,11 +322,34 @@ pub fn get_skill(name: &str) -> Option<Skill> {
 
 /// Gets all skill summaries.
 ///
-/// Returns summary of all available skills, suitable for
-/// progressive disclosure to the LLM.
+/// Returns summary of all available skills in alphabetical order,
+/// suitable for progressive disclosure to the LLM.
 pub fn get_all_summaries() -> Vec<SkillSummary> {
     match SKILL_REGISTRY.read() {
         Ok(registry) => registry.get_all_summaries(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Gets filtered skill summaries based on current user settings and auth state.
+///
+/// Loads disabled skills from settings and Google auth state internally,
+/// so callers don't need to pass these values.
+pub async fn get_filtered_summaries(app_handle: &AppHandle) -> Vec<SkillSummary> {
+    // Load current settings to get disabled skills
+    let disabled_skills = match crate::settings::service::load_user_settings(app_handle.clone()).await {
+        Ok(settings) => settings.disabled_skills,
+        Err(e) => {
+            log::warn!("[skills] Failed to load settings for filtering: {}", e);
+            Vec::new()
+        }
+    };
+
+    // Check Google auth state
+    let is_google_authed = crate::auth::commands::is_google_authenticated().await;
+
+    match SKILL_REGISTRY.read() {
+        Ok(registry) => registry.get_filtered_summaries(is_google_authed, &disabled_skills),
         Err(_) => Vec::new(),
     }
 }
@@ -306,7 +366,7 @@ pub fn get_skill_tools(name: &str) -> Vec<ToolDefinition> {
 
 /// Gets all available skill names.
 ///
-/// Returns list of all skill identifiers.
+/// Returns list of all skill identifiers in alphabetical order.
 pub fn get_all_skill_names() -> Vec<String> {
     match SKILL_REGISTRY.read() {
         Ok(registry) => registry.get_all_skill_names(),
@@ -316,7 +376,7 @@ pub fn get_all_skill_names() -> Vec<String> {
 
 /// Tauri command to get available skills.
 ///
-/// Returns all skill summaries for the frontend to display.
+/// Returns all skill summaries in alphabetical order for the frontend to display.
 #[tauri::command]
 pub fn get_available_skills() -> Vec<SkillSummary> {
     get_all_summaries()
@@ -336,6 +396,18 @@ pub fn get_skill_tools_command(name: String) -> Vec<ToolDefinition> {
 pub fn skill_exists(name: &str) -> bool {
     match SKILL_REGISTRY.read() {
         Ok(registry) => registry.get_skill(name).is_some(),
+        Err(_) => false,
+    }
+}
+
+/// Checks if a skill requires Google authentication.
+///
+/// Returns true if the skill exists and requires Google auth.
+pub fn skill_requires_google_auth(name: &str) -> bool {
+    match SKILL_REGISTRY.read() {
+        Ok(registry) => registry.get_skill(name)
+            .map(|s| s.requires_google_auth)
+            .unwrap_or(false),
         Err(_) => false,
     }
 }

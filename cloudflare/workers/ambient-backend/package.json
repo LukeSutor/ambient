@@ -1,5 +1,5 @@
 {
-	"name": "llm-completions",
+	"name": "ambient-backend",
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {

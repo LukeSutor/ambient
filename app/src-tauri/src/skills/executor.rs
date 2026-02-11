@@ -100,6 +100,7 @@ async fn execute_single_tool(
 
     match result {
         Ok(value) => {
+            //TODO: remove this log for prod to not leak info
             log::info!(
                 "[executor] Tool {} succeeded: {}",
                 call.qualified_name(),
@@ -164,7 +165,8 @@ pub async fn execute_skill_tool(
 /// Executes multiple tool calls in parallel.
 ///
 /// Takes a vector of tool calls and executes them concurrently.
-/// Returns a vector of results in the same order as input calls.
+/// Loads disabled skills from settings and Google auth state internally
+/// to ensure the most up-to-date access control is applied.
 ///
 /// # Arguments
 ///
@@ -178,10 +180,51 @@ pub async fn execute_tools(
     app_handle: &AppHandle,
     tool_calls: Vec<ToolCall>,
 ) -> Vec<ToolResult> {
-    // Execute each tool call in parallel
+    // Load current settings to get disabled skills
+    let disabled_skills = match crate::settings::service::load_user_settings(app_handle.clone()).await {
+        Ok(settings) => settings.disabled_skills,
+        Err(e) => {
+            log::warn!("[executor] Failed to load settings for access control: {}", e);
+            Vec::new()
+        }
+    };
+
+    // Check Google auth state
+    let is_google_authed = crate::auth::commands::is_google_authenticated().await;
+
+    // Execute each tool call in parallel, checking access first
     let futures: Vec<_> = tool_calls
         .iter()
-        .map(|call| execute_single_tool(app_handle.clone(), call.clone()))
+        .map(|call| {
+            let app = app_handle.clone();
+            let c = call.clone();
+            let disabled = disabled_skills.clone();
+            async move {
+                // Check if skill is disabled by user
+                if disabled.contains(&c.skill_name) {
+                    log::warn!("[executor] Blocked call to disabled skill: {}", c.skill_name);
+                    return ToolResult::error(
+                        c.id,
+                        format!(
+                            "{{\"error\": \"skill_disabled\", \"message\": \"The skill '{}' has been disabled by the user. Do not attempt to use this skill again.\"}}",
+                            c.skill_name
+                        ),
+                    );
+                }
+                // Check if skill requires Google auth using skill metadata
+                if super::registry::skill_requires_google_auth(&c.skill_name) && !is_google_authed {
+                    log::warn!("[executor] Blocked call to Google-auth skill without auth: {}", c.skill_name);
+                    return ToolResult::error(
+                        c.id,
+                        format!(
+                            "{{\"error\": \"auth_required\", \"message\": \"The skill '{}' requires Google authentication. The user has not signed in with Google.\"}}",
+                            c.skill_name
+                        ),
+                    );
+                }
+                execute_single_tool(app, c).await
+            }
+        })
         .collect();
 
     // Wait for all tool calls to complete

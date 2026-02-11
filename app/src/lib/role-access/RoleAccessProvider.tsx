@@ -18,6 +18,7 @@ const initialState: RoleAccessState = {
   isHydrated: false,
   isOnline: false,
   isLoggedIn: false,
+  isGoogleAuthenticated: false,
   isSetupComplete: false,
   isPremiumUser: false,
   userInfo: null,
@@ -26,6 +27,7 @@ const initialState: RoleAccessState = {
 type RoleAccessAction =
   | { type: "SET_IS_ONLINE"; payload: boolean }
   | { type: "SET_LOGGED_IN"; payload: boolean }
+  | { type: "SET_GOOGLE_AUTHENTICATED"; payload: boolean }
   | { type: "SET_SETUP_COMPLETE"; payload: boolean }
   | { type: "SET_PREMIUM_USER"; payload: boolean }
   | { type: "SET_USER_INFO"; payload: UserInfo | null }
@@ -35,6 +37,7 @@ type RoleAccessAction =
       payload: {
         isOnline: boolean;
         isLoggedIn: boolean;
+        isGoogleAuthenticated: boolean;
         isSetupComplete: boolean;
         userInfo: UserInfo | null;
       };
@@ -54,6 +57,11 @@ function roleAccessReducer(
       return {
         ...state,
         isLoggedIn: action.payload,
+      };
+    case "SET_GOOGLE_AUTHENTICATED":
+      return {
+        ...state,
+        isGoogleAuthenticated: action.payload,
       };
     case "SET_SETUP_COMPLETE":
       return {
@@ -80,6 +88,7 @@ function roleAccessReducer(
         ...state,
         isOnline: action.payload.isOnline,
         isLoggedIn: action.payload.isLoggedIn,
+        isGoogleAuthenticated: action.payload.isGoogleAuthenticated,
         isSetupComplete: action.payload.isSetupComplete,
         userInfo: action.payload.userInfo,
       };
@@ -113,12 +122,13 @@ export function RoleAccessProvider({ children }: RoleAccessProviderProps) {
     isRefreshing.current = true;
     try {
       const fullState = await invokeGetAuthState();
-
+      console.log("Fetched role access state:", fullState);
       dispatch({
         type: "SET_FULL_STATE",
         payload: {
           isOnline: fullState.is_online,
           isLoggedIn: fullState.is_authenticated,
+          isGoogleAuthenticated: fullState.is_google_authenticated,
           isSetupComplete: fullState.is_setup_complete,
           userInfo: fullState.user,
         },

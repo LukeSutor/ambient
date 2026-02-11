@@ -90,6 +90,8 @@ pub struct Session {
     pub expires_at: Option<i64>,
     pub refresh_token: String,
     pub user: SupabaseUser,
+    pub provider_token: Option<String>,
+    pub provider_refresh_token: Option<String>,
 }
 
 /// Weak password indicator from Supabase
@@ -335,6 +337,8 @@ pub enum AuthErrorCode {
     OAuthError,
     /// Session expired and refresh failed
     SessionExpired,
+    /// Google refresh token is missing or invalid
+    GoogleRefreshTokenMissing,
     /// Invalid request parameters
     InvalidRequest,
     /// Server error
@@ -413,6 +417,7 @@ impl std::error::Error for AuthErrorResponse {}
 pub struct AuthState {
     pub is_online: bool,
     pub is_authenticated: bool,
+    pub is_google_authenticated: bool,
     pub is_setup_complete: bool,
     pub user: Option<UserInfo>,
     pub needs_refresh: bool,

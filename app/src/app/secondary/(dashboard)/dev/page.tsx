@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { SupabaseUser } from "@/types/auth";
 import type { OcrResponseEvent } from "@/types/events";
 import type { SkillSummary, ToolDefinition, ToolResult } from "@/types/skills";
+import { useRoleAccessContext } from "@/lib/role-access/RoleAccessProvider";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
@@ -21,6 +22,7 @@ interface ScreenSelectionResult {
 }
 
 export default function Dev() {
+  const { state: authState } = useRoleAccessContext();
   // State for SQL execution
   const [sqlQuery, setSqlQuery] = useState<string>(
     "SELECT * FROM documents LIMIT 5;",
@@ -445,6 +447,19 @@ export default function Dev() {
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4 space-y-6 max-w-[30rem]">
+      {/* Google Auth Debug Info */}
+      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-yellow-50">
+        <h2 className="text-lg font-semibold">Google Auth Status</h2>
+        <div className="space-y-2 text-sm">
+          <div>
+            <strong>Is Logged In (Supabase):</strong> {authState.isLoggedIn ? "✅ Yes" : "❌ No"}
+          </div>
+          <div>
+            <strong>Is Google Authenticated:</strong> {authState.isGoogleAuthenticated ? "✅ Yes" : "❌ No"}
+          </div>
+        </div>
+      </div>
+
       {/* Open and close computer use window */}
       <div className="flex gap-4 justify-center">
         <Button

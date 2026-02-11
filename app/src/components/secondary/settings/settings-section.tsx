@@ -25,14 +25,19 @@ export function SettingsSection({
     <>
       <p className="text-xl font-semibold w-full pb-2">{title}</p>
       <div className={`outline ${borderClass} w-full rounded-md mb-6`}>
-        {childrenArray.map((child, index) => (
-          <React.Fragment key={child as string}>
-            {child}
-            {index < childrenArray.length - 1 && (
-              <div className={`border-t ${separatorClass}`} />
-            )}
-          </React.Fragment>
-        ))}
+        {childrenArray.map((child, index) => {
+          const key = React.isValidElement(child) && child.key != null
+            ? child.key
+            : `section-${title}-child-${String(index)}`;
+          return (
+            <React.Fragment key={key}>
+              {child}
+              {index < childrenArray.length - 1 && (
+                <div className={`border-t ${separatorClass}`} />
+              )}
+            </React.Fragment>
+          );
+        })}
       </div>
     </>
   );

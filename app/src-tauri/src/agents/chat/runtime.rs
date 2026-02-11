@@ -8,8 +8,9 @@
 //! 5. Persists all messages to database
 
 use crate::db::conversations::{
-    add_message, get_conversation_history, load_conversation_skills,
-    save_conversation_skill, MessageMetadata, MessageType, Role,
+    add_message, get_conversation_history, get_or_refresh_prompt_time,
+    load_conversation_skills, save_conversation_skill,
+    MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM}};
 use crate::models::llm::client::generate;
@@ -17,7 +18,7 @@ use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
 use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools};
-use crate::skills::registry::{get_all_summaries, get_skill_tools, skill_exists};
+use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
     SkillSummary, ToolCall, ToolDefinition, ToolResult,
@@ -71,7 +72,8 @@ pub async fn handle_agent_chat(
 
     // Create runtime and run
     let cancel_signal = state.get_stop_signal();
-    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal).await?;
+    let cancel_notify = state.get_cancel_notify();
+    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal, cancel_notify).await?;
     let result = runtime.run(user_message, attachments).await;
 
     // Mark generation as finished
@@ -108,6 +110,9 @@ pub struct AgentRuntime {
 
     /// Cancellation signal from the runtime state.
     cancel_signal: Arc<AtomicBool>,
+
+    /// Async cancel notification for instant I/O cancellation.
+    cancel_notify: Arc<tokio::sync::Notify>,
 }
 
 impl AgentRuntime {
@@ -121,6 +126,7 @@ impl AgentRuntime {
         assistant_message_id: String,
         message_id: String,
         cancel_signal: Arc<AtomicBool>,
+        cancel_notify: Arc<tokio::sync::Notify>,
     ) -> Result<Self, AgentError> {
         // Load settings to determine model type
         let settings = load_user_settings(app_handle.clone())
@@ -155,6 +161,7 @@ impl AgentRuntime {
             active_skills,
             iteration: 0,
             cancel_signal,
+            cancel_notify,
         })
     }
 
@@ -177,11 +184,17 @@ impl AgentRuntime {
         // Emit memory save event
         self.emit_memory_save_event(&user_message).await?;
 
-        // Get skill summaries for system prompt
-        let skill_summaries = get_all_summaries();
+        // Get skill summaries for system prompt, filtered by auth requirements and disabled skills
+        // get_filtered_summaries loads settings and auth state internally
+        let skill_summaries = get_filtered_summaries(&self.app_handle).await;
 
-        // Build system prompt
-        let system_prompt = self.build_system_prompt(&skill_summaries);
+        // Filter active skills to only keep those that are still available
+        // (removes skills that were disabled or lost auth since activation)
+        let available_skill_names: Vec<String> = skill_summaries.iter().map(|s| s.name.clone()).collect();
+        self.active_skills.retain(|s| available_skill_names.contains(s));
+
+        // Build system prompt (includes cached date, user info, timezone, skills)
+        let system_prompt = self.build_system_prompt(&skill_summaries).await;
 
         // Main agentic loop
         loop {
@@ -227,14 +240,16 @@ impl AgentRuntime {
 
             let request = LlmRequest::new(String::new())
                 .with_system_prompt(Some(system_prompt.clone()))
-                .with_messages(Some(messages.clone()))
+                .with_messages(Some(messages))
                 .with_internal_tools(Some(available_tools))
                 .with_conv_id(Some(self.conv_id.clone()))
                 .with_stream(Some(true))
                 .with_assistant_message_id(Some(self.assistant_message_id.clone()))
                 .with_cancel_signal(Some(self.cancel_signal.clone()))
+                .with_cancel_notify(Some(self.cancel_notify.clone()))
                 .with_attempts(Some(3))
-                .with_timeout_duration(Some(timeout_duration));
+                .with_timeout_duration(Some(timeout_duration))
+                .with_slot_id(Some(0));
 
             // Generate response from LLM
             let response = match generate(
@@ -353,17 +368,65 @@ impl AgentRuntime {
         }
     }
 
-    /// Builds the system prompt with skill information.
+    /// Builds the system prompt with skill information and dynamic context.
     ///
-    /// Includes skill summaries. Active skill instructions are injected 
-    /// dynamically in the conversation history during tool result translation.
-    fn build_system_prompt(&self, skill_summaries: &[SkillSummary]) -> String {
+    /// Dynamic context (date, user name, timezone, OS) is included in the system
+    /// prompt itself. The date uses a "sticky" cache: `prompt_cached_at` in the DB
+    /// only refreshes when >10 minutes have passed or a new day starts. This keeps
+    /// the system prompt identical across messages within the window, enabling
+    /// llama.cpp's KV cache to reuse the prompt prefix.
+    async fn build_system_prompt(&self, skill_summaries: &[SkillSummary]) -> String {
         let skills_section = self.format_skill_summaries(skill_summaries);
+        let context = self.build_context().await;
         let agentic_prompt = get_prompt("agentic_chat").unwrap_or_default();
         
         agentic_prompt
-            .replace("{date}", &Local::now().format("%Y-%m-%d %H:%M:%S").to_string())
+            .replace("{context}", &context)
             .replace("{skills_section}", &skills_section)
+    }
+
+    /// Builds the dynamic context string for the system prompt.
+    ///
+    /// Contains: cached date/time, user's full name, IANA timezone, OS.
+    /// The date is read from `prompt_cached_at` in the conversations table
+    /// and only refreshes on 10-minute or day-boundary changes.
+    async fn build_context(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+
+        // Date/time — uses sticky cache from DB
+        match get_or_refresh_prompt_time(&self.app_handle, &self.conv_id).await {
+            Ok(time_str) => parts.push(format!("Today is {}.", time_str)),
+            Err(e) => {
+                log::warn!("[agent] Failed to get prompt time: {}", e);
+                // Fallback to current time
+                let fallback = Local::now()
+                    .format("%A, %B %e, %Y at %l:%M %p")
+                    .to_string()
+                    .replace("  ", " ");
+                parts.push(format!("Today is {}.", fallback));
+            }
+        }
+
+        // User's full name from auth state
+        if let Ok(Some(auth_state)) = crate::auth::storage::retrieve_auth_state() {
+            if let Some(ref meta) = auth_state.session.user.user_metadata {
+                if let Some(ref name) = meta.full_name {
+                    if !name.is_empty() {
+                        parts.push(format!("The user's name is {}.", name));
+                    }
+                }
+            }
+        }
+
+        // Timezone from IANA
+        if let Ok(tz) = iana_time_zone::get_timezone() {
+            parts.push(format!("Timezone: {}.", tz));
+        }
+
+        // Operating system
+        parts.push(format!("OS: {}.", std::env::consts::OS));
+
+        parts.join(" ")
     }
 
     /// Formats skill summaries for the system prompt.

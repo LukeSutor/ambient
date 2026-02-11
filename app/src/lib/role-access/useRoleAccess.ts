@@ -135,21 +135,24 @@ export function useRoleAccess(location?: string) {
    * Opens the authorization URL in the system browser
    * The actual session creation happens via deep link callback
    */
-  const signInWithGoogle = useCallback(async (): Promise<void> => {
-    try {
-      const { url } = await invokeSignInWithGoogle();
+  const signInWithGoogle = useCallback(
+    async (prompt?: string): Promise<void> => {
+      try {
+        const { url } = await invokeSignInWithGoogle(prompt);
 
-      // Open the OAuth URL in the system browser
-      const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
+        // Open the OAuth URL in the system browser
+        const { open } = await import("@tauri-apps/plugin-shell");
+        await open(url);
 
-      // Note: The actual session creation happens when the deep link callback
-      // is received in deep_link.rs, which emits 'oauth2-success' or 'oauth2-error'
-    } catch (error) {
-      console.error("Error during signInWithGoogle:", error);
-      throw error;
-    }
-  }, []);
+        // Note: The actual session creation happens when the deep link callback
+        // is received in deep_link.rs, which emits 'oauth2-success' or 'oauth2-error'
+      } catch (error) {
+        console.error("Error during signInWithGoogle:", error);
+        throw error;
+      }
+    },
+    [],
+  );
 
   const signUp = useCallback(
     async (request: SignUpRequest): Promise<SignUpResponse> => {

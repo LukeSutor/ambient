@@ -11,7 +11,7 @@ use crate::auth::security::{
 use serde_json::json;
 use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
-use crate::constants::{SUPABASE_URL, SUPABASE_ANON_KEY};
+use crate::constants::{SUPABASE_URL, SUPABASE_ANON_KEY, CLOUDFLARE_BACKEND_URL};
 
 #[tauri::command]
 pub async fn sign_up(
@@ -253,6 +253,102 @@ pub async fn refresh_session_with_token(refresh_token: &str) -> Result<RefreshTo
     })
 }
 
+/// Refresh the Google provider token via our Cloudflare proxy
+pub async fn refresh_google_token() -> Result<String, String> {
+    log::info!("[supabase_auth] Attempting to refresh Google provider token");
+    
+    // Acquire lock to serialize refresh requests
+    let _guard = REFRESH_MUTEX.lock().await;
+
+    // Get current session
+    let state = retrieve_auth_state()
+        .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
+        .ok_or_else(|| "No active session found".to_string())?;
+
+    // Ensure we use a valid Supabase access token. If it's expired, refresh the Supabase
+    // session first (don't call `refresh_token()` here because it would deadlock on the
+    // same REFRESH_MUTEX). Use `refresh_session_with_token()` which does not acquire the mutex.
+    let mut access_token = state.session.access_token.clone();
+    if state.is_access_token_expired() {
+        log::info!("[supabase_auth] Supabase access token expired; refreshing session before calling worker proxy");
+
+        let sup_refresh_token = state.session.refresh_token.clone();
+        if sup_refresh_token.is_empty() {
+            return Err(AuthErrorResponse::session_expired().to_string());
+        }
+
+        // Refresh session using the stored refresh token (this stores the refreshed session)
+        let refreshed = refresh_session_with_token(&sup_refresh_token).await?;
+        access_token = refreshed.session.access_token.clone();
+    }
+    
+    // Get Google refresh token from session or keyring vault
+    let provider_refresh_token = state.session.provider_refresh_token.clone()
+        .or_else(|| {
+            log::info!("[supabase_auth] Refresh token not in session, checking keyring");
+            crate::auth::storage::get_google_refresh_token().ok().flatten()
+        })
+        .ok_or_else(|| {
+            log::error!("[supabase_auth] No Google refresh token available");
+            AuthErrorResponse::new(AuthErrorCode::GoogleRefreshTokenMissing, "Google refresh token is missing").to_string()
+        })?;
+
+    // Use worker proxy to refresh Google provider token
+    let new_tokens = refresh_google_token_via_worker(&access_token, &provider_refresh_token).await?;
+    
+    // Re-read the current session to get fresh Supabase tokens (in case we refreshed above).
+    // Without this, we'd overwrite the freshly-stored Supabase tokens with expired ones.
+    let current_state = retrieve_auth_state()
+        .map_err(|e| format!("Failed to retrieve updated auth state: {}", e))?
+        .ok_or_else(|| "Session lost during Google token refresh".to_string())?;
+
+    let mut updated_session = current_state.session;
+    updated_session.provider_token = Some(new_tokens.access_token.clone());
+    
+    // If we got a new refresh token (rare but possible), update that too
+    if let Some(new_refresh) = new_tokens.refresh_token {
+        updated_session.provider_refresh_token = Some(new_refresh);
+    }
+    
+    // Store updated session
+    if let Err(e) = store_session(&updated_session) {
+        log::warn!("[supabase_auth] Failed to store updated session: {}", e);
+    }
+    
+    log::info!("[supabase_auth] Successfully refreshed Google provider token via worker proxy");
+    Ok(new_tokens.access_token)
+}
+
+#[derive(serde::Deserialize)]
+struct GoogleRefreshResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+}
+
+async fn refresh_google_token_via_worker(access_token: &str, refresh_token: &str) -> Result<GoogleRefreshResponse, String> {
+    let endpoint = format!("{}/v1/auth/google/refresh", CLOUDFLARE_BACKEND_URL);
+    
+    let response = HTTP_CLIENT
+        .post(&endpoint)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .json(&json!({ "refresh_token": refresh_token }))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to backend: {}", e))?;
+    
+    let status = response.status();
+    if !status.is_success() {
+        let text = response.text().await.unwrap_or_default();
+        log::error!("[supabase_auth] Google refresh via worker failed: {} - {}", status, text);
+        return Err(format!("Refresh proxy failed: {}", text));
+    }
+    
+    let data: GoogleRefreshResponse = response.json().await
+        .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
+    
+    Ok(data)
+}
+
 #[tauri::command]
 pub async fn verify_otp(email: String, token: String, otp_type: Option<String>) -> Result<VerifyOtpResponse, String> {
     let otp_type = otp_type.unwrap_or_else(|| "signup".to_string());
@@ -407,22 +503,63 @@ pub async fn sign_out(access_token: Option<String>) -> Result<(), String> {
 /// Generate the Google OAuth authorization URL
 /// Returns the URL that should be opened in the system browser
 /// Note: Supabase handles PKCE internally for social OAuth providers
+///
+/// If no Google refresh token exists in the keyring (e.g. after logout),
+/// the prompt is automatically set to "consent" to force Google to
+/// reissue a refresh token. This avoids the 2-step dance of failing
+/// first and retrying with consent.
 #[tauri::command]
-pub async fn sign_in_with_google() -> Result<OAuthUrlResponse, String> {
+pub async fn sign_in_with_google(prompt: Option<String>) -> Result<OAuthUrlResponse, String> {
     log::info!("[supabase_auth] Initiating Google OAuth sign in");
     
     // Build the OAuth authorization URL
     let redirect_uri = "ambient://auth/callback";
     let provider = "google";
     
+    // We must include openid, email and profile to ensure Google treats this as a full OIDC flow 
+    // and returns a refresh token when access_type=offline is requested.
+    let scopes = "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly";
+    
+    // Create query params as an object (HashMap) as per Supabase docs
+    let mut query_params = std::collections::HashMap::new();
+    query_params.insert("access_type".to_string(), "offline".to_string());
+    
+    // Determine the prompt value:
+    // - If caller explicitly requests a specific prompt, use it
+    // - If no Google refresh token exists in keyring, force "consent" so Google reissues one
+    // - Otherwise use "select_account" for smooth UX
+    let prompt_val = prompt.unwrap_or_else(|| {
+        let has_refresh = crate::auth::storage::get_google_refresh_token()
+            .ok()
+            .flatten()
+            .is_some();
+        if has_refresh {
+            "select_account".to_string()
+        } else {
+            log::info!("[supabase_auth] No Google refresh token in keyring, using prompt=consent");
+            "consent".to_string()
+        }
+    });
+    query_params.insert("prompt".to_string(), prompt_val.clone());
+    query_params.insert("include_granted_scopes".to_string(), "true".to_string());
+    
+    // Serialize to JSON string and URL-encode
+    let query_params_json = serde_json::to_string(&query_params)
+        .map_err(|e| format!("Failed to serialize query params: {}", e))?;
+    let encoded_query_params = urlencoding::encode(&query_params_json);
+    
+    // We also include access_type and prompt as top-level parameters for maximum compatibility.
     let auth_url = format!(
-        "{}/auth/v1/authorize?provider={}&redirect_to={}",
+        "{}/auth/v1/authorize?provider={}&redirect_to={}&queryParams={}&scopes={}&access_type=offline&prompt={}",
         SUPABASE_URL,
         provider,
-        urlencoding::encode(redirect_uri)
+        urlencoding::encode(redirect_uri),
+        encoded_query_params,
+        urlencoding::encode(scopes),
+        urlencoding::encode(&prompt_val)
     );
     
-    log::info!("[supabase_auth] Generated Google OAuth URL");
+    log::info!("[supabase_auth] Generated Google OAuth URL (prompt={})", prompt_val);
     
     Ok(OAuthUrlResponse { url: auth_url })
 }
@@ -560,6 +697,24 @@ async fn handle_tokens_from_fragment(
     let expires_at: Option<i64> = fragment_pairs.get("expires_at")
         .and_then(|s| s.parse().ok());
     
+    // Recovery Logic: If we didn't get a refresh token in the fragment (Google "once only" rule),
+    // check if we have one stored in our keyring from a previous session.
+    let mut provider_refresh_token = fragment_pairs.get("provider_refresh_token").cloned();
+    
+    if provider_refresh_token.is_none() || provider_refresh_token.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
+        log::info!("[supabase_auth] No provider refresh token in fragment, checking keyring");
+        if let Ok(Some(vault_token)) = crate::auth::storage::get_google_refresh_token() {
+            log::info!("[supabase_auth] Recovered provider refresh token from keyring");
+            provider_refresh_token = Some(vault_token);
+        } else {
+            // Don't block sign-in — the user is authenticated but Google background
+            // access (calendar, email) won't work after the access token expires.
+            // sign_in_with_google() should have already used prompt=consent if needed,
+            // so this is an unexpected edge case.
+            log::warn!("[supabase_auth] No Google refresh token available. Google skills will be limited.");
+        }
+    }
+
     // Create session object
     let session = Session {
         access_token: access_token.to_string(),
@@ -570,6 +725,8 @@ async fn handle_tokens_from_fragment(
         expires_at,
         refresh_token: refresh_token.to_string(),
         user: user.clone(),
+        provider_token: fragment_pairs.get("provider_token").cloned(),
+        provider_refresh_token,
     };
     
     // Store the session

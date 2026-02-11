@@ -24,6 +24,7 @@ export interface RoleAccessState {
   isHydrated: boolean;
   isOnline: boolean;
   isLoggedIn: boolean;
+  isGoogleAuthenticated: boolean;
   isSetupComplete: boolean;
   isPremiumUser: boolean;
   userInfo: UserInfo | null;

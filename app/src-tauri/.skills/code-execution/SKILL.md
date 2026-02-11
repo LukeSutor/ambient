@@ -1,16 +1,19 @@
 ---
 name: code-execution
 description: Execute Python code in a secure, sandboxed environment. Use this for calculations, data processing, logic problems, and text manipulation.
-version: "1.0"
-requires_auth: false
-tools:
-  - name: execute_code
-    description: Execute Python code and return the output
-    parameters:
-      code:
-        type: string
-        description: The Python code to execute
-        required: true
+metadata:
+  version: "1.0"
+  requires_auth: false
+  requires_google_auth: false
+  requires_online: false
+  tools:
+    - name: execute_code
+      description: Execute Python code and return the output
+      parameters:
+        code:
+          type: string
+          description: The Python code to execute
+          required: true
 ---
 
 # Code Execution Skill

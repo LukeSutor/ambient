@@ -21,7 +21,19 @@ name: string,
  * A brief description of what this skill does.
  * This is shown to the LLM to help it decide when to activate the skill.
  */
-description: string, };
+description: string, 
+/**
+ * Whether this skill requires authentication/authorization to use.
+ */
+requires_auth: boolean, 
+/**
+ * Whether this skill requires Google authentication to use.
+ */
+requires_google_auth: boolean, 
+/**
+ * Whether this skill requires an internet connection to use.
+ */
+requires_online: boolean, };
 
 /**
  * A tool call requested by the model.

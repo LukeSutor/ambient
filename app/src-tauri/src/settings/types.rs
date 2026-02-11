@@ -120,6 +120,10 @@ pub struct UserSettings {
   pub show_full_thought_traces: bool,
   pub model_selection: ModelSelection,
   pub agent_config: crate::skills::types::AgentRuntimeConfig,
+  /// List of skill names that the user has disabled.
+  /// Skills in this list will not be available to the agentic runtime.
+  #[serde(default)]
+  pub disabled_skills: Vec<String>,
 }
 
 impl Default for UserSettings {
@@ -129,6 +133,7 @@ impl Default for UserSettings {
       show_full_thought_traces: false,
       model_selection: ModelSelection::default(),
       agent_config: crate::skills::types::AgentRuntimeConfig::default(),
+      disabled_skills: Vec::new(),
     }
   }
 }

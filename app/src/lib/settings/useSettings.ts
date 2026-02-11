@@ -225,6 +225,54 @@ export function useSettings() {
     await loadSettings();
   }, [dispatch, loadSettings]);
 
+  /**
+   * Sets the list of disabled skills
+   */
+  const setDisabledSkills = useCallback(
+    async (disabledSkills: string[]): Promise<void> => {
+      try {
+        if (!state.settings) {
+          throw new Error("Settings not loaded");
+        }
+
+        // Optimistically update
+        dispatch({ type: "UPDATE_DISABLED_SKILLS", payload: disabledSkills });
+
+        // Save to backend
+        const updatedSettings = {
+          ...state.settings,
+          disabled_skills: disabledSkills,
+        };
+        await invoke("save_user_settings", { settings: updatedSettings });
+
+        // Emit settings changed event
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error("[useSettings] Failed to set disabled skills:", error);
+
+        // Reload settings on error
+        await loadSettings();
+        throw error;
+      }
+    },
+    [state.settings, dispatch, loadSettings],
+  );
+
+  /**
+   * Toggles a single skill's enabled/disabled state
+   */
+  const toggleSkill = useCallback(
+    async (skillName: string): Promise<void> => {
+      const currentDisabled = state.settings?.disabled_skills ?? [];
+      const isCurrentlyDisabled = currentDisabled.includes(skillName);
+      const newDisabled = isCurrentlyDisabled
+        ? currentDisabled.filter((s) => s !== skillName)
+        : [...currentDisabled, skillName];
+      await setDisabledSkills(newDisabled);
+    },
+    [state.settings, setDisabledSkills],
+  );
+
   // ============================================================
   // Return API
   // ============================================================
@@ -241,6 +289,8 @@ export function useSettings() {
     setHudSize,
     setShowFullThoughtTraces,
     setModelSelection,
+    setDisabledSkills,
+    toggleSkill,
     refreshCache,
   };
 }
