@@ -51,4 +51,9 @@ export type HudState = "Input" | "Chat" | "Login" | "Default";
 
 export type ModelSelection = "Local" | "Fast" | "Pro";
 
-export type UserSettings = { hud_size: HudSizeOption, show_full_thought_traces: boolean, model_selection: ModelSelection, agent_config: AgentRuntimeConfig, disabled_skills: Array<string>, };
+export type UserSettings = { hud_size: HudSizeOption, show_full_thought_traces: boolean, model_selection: ModelSelection, agent_config: AgentRuntimeConfig, 
+/**
+ * List of skill names that the user has disabled.
+ * Skills in this list will not be available to the agentic runtime.
+ */
+disabled_skills: Array<string>, };

@@ -23,16 +23,6 @@ pub fn save_screenshot(app_handle: &AppHandle, filename: String) -> String {
   screenshot_path.to_str().unwrap().to_string()
 }
 
-// Returns png data for screenshot
-pub fn take_screenshot() -> Vec<u8> {
-  let screens = Screen::all().unwrap();
-  let screen = &screens[0]; // Assuming single screen for simplicity
-  let image = screen.capture().unwrap();
-  let mut buffer = std::io::Cursor::new(Vec::new());
-  image.write_to(&mut buffer, screenshots::image::ImageFormat::Png).unwrap();
-  buffer.into_inner()
-}
-
 pub fn crop_image_selection(path: PathBuf, selection: SelectionBounds) {
   let mut img = image::open(&path).expect("Failed to open image");
   let cropped_img = crop(

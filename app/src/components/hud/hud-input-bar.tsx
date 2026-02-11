@@ -13,7 +13,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUpIcon, Globe, MousePointerClick, Move, Square, X } from "lucide-react";
+import { ArrowUpIcon, Globe, Move, Square, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -53,7 +53,6 @@ export function HUDInputBar({
     conversationType,
     conversationId,
     addAttachmentData,
-    toggleComputerUse,
     toggleBrowserUse,
     sendMessage,
     stopGeneration,
@@ -64,7 +63,6 @@ export function HUDInputBar({
   // Computed values
   const isLoading = ocrLoading || isStreaming;
   const showWindowControls = isDraggingWindow || isHoveringGroup;
-  const isComputerUseActive = conversationType === "computer_use";
   const isBrowserUseActive = conversationType === "browser_use";
 
   // Memoized styles
@@ -128,10 +126,6 @@ export function HUDInputBar({
     },
     [handleSubmit],
   );
-
-  const handleToggleComputerUse = useCallback(() => {
-    toggleComputerUse();
-  }, [toggleComputerUse]);
 
   const handleToggleBrowserUse = useCallback(() => {
     toggleBrowserUse();
@@ -219,23 +213,6 @@ export function HUDInputBar({
             onOpenChange={setIsToolsDropdownOpen}
             disabled={isLoading}
           />
-
-          {isComputerUseActive && (
-            <div className="flex items-center justify-center bg-yellow-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
-              <MousePointerClick className="!h-4 !w-4 text-black" />
-              <p className="mx-1 text-black text-xs font-medium">
-                Computer Use
-              </p>
-              <Button
-                variant="ghost"
-                className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
-                size="icon"
-                onClick={handleToggleComputerUse}
-              >
-                <X className="!h-3 !w-3 text-black shrink-0" />
-              </Button>
-            </div>
-          )}
 
           {isBrowserUseActive && (
             <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">

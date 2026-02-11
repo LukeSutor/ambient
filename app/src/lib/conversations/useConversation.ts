@@ -14,10 +14,8 @@ import {
   ensureLlamaServerRunning,
   sendAgentMessage,
   startBrowserUseSession,
-  startComputerUseSession,
   stopAgentChat,
   stopBrowserUseSession,
-  stopComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
 
@@ -335,14 +333,7 @@ export function useConversation(
         });
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
-        if (state.conversationType === "computer_use") {
-          void startComputerUseSession(
-            activeConversationId,
-            assistantMessageId,
-            content,
-            userMessage.message.id,
-          );
-        } else if (state.conversationType === "browser_use") {
+        if (state.conversationType === "browser_use") {
           void startBrowserUseSession(
             activeConversationId,
             assistantMessageId,
@@ -518,13 +509,7 @@ export function useConversation(
         dispatch({ type: "SET_STREAMING", payload: true });
 
         // Restart agentic runtime
-        if (state.conversationType === "computer_use") {
-          void startComputerUseSession(
-            conversationId,
-            userMessage.message.content,
-            userMessage.message.id,
-          );
-        } else if (state.conversationType === "browser_use") {
+        if (state.conversationType === "browser_use") {
           void startBrowserUseSession(
             conversationId,
             assistantMessageId,
@@ -608,14 +593,7 @@ export function useConversation(
         dispatch({ type: "SET_STREAMING", payload: true });
 
         // Restart agentic runtime
-        if (state.conversationType === "computer_use") {
-          void startComputerUseSession(
-            conversationId,
-            assistantMessageId,
-            content,
-            messageId,
-          );
-        } else if (state.conversationType === "browser_use") {
+        if (state.conversationType === "browser_use") {
           void startBrowserUseSession(
             conversationId,
             assistantMessageId,
@@ -669,17 +647,6 @@ export function useConversation(
   }, [dispatch]);
 
   /**
-   * Toggle Computer Use mode
-   */
-  const toggleComputerUse = useCallback((): void => {
-    if (state.conversationType === "chat") {
-      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "computer_use" });
-    } else {
-      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "chat" });
-    }
-  }, [dispatch, state.conversationType]);
-
-  /**
    * Toggle Browser Use mode
    */
   const toggleBrowserUse = useCallback((): void => {
@@ -691,25 +658,12 @@ export function useConversation(
   }, [dispatch, state.conversationType]);
 
   /**
-   * Stops the current computer use session
-   */
-  const stopComputerUse = useCallback(async (): Promise<void> => {
-    try {
-      await stopComputerUseSession();
-    } catch (error) {
-      console.error("[useConversation] Failed to stop computer use:", error);
-    }
-  }, []);
-
-  /**
    * Stops the current agent generation
    */
   const stopGeneration = useCallback(async (): Promise<void> => {
     try {
-      // Stop the agent chat if it's a regular chat, or computer use / browser use if it's that mode
-      if (state.conversationType === "computer_use") {
-        await stopComputerUseSession();
-      } else if (state.conversationType === "browser_use") {
+      // Stop the agent chat if it's a regular chat, or browser use if it's that mode
+      if (state.conversationType === "browser_use") {
         await stopBrowserUseSession();
       } else {
         await stopAgentChat();
@@ -769,9 +723,7 @@ export function useConversation(
     retryMessage,
     resubmitMessage,
     dispatchOCRCapture,
-    toggleComputerUse,
     toggleBrowserUse,
-    stopComputerUse,
     stopGeneration,
     addAttachmentData,
     removeAttachmentData,

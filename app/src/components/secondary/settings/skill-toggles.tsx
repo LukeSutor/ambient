@@ -19,8 +19,6 @@ const SKILL_DESCRIPTIONS: Record<string, string> = {
     "View, create, and manage events on your Google Calendar.",
   email:
     "Read, search, and compose emails using your Gmail account.",
-  "computer-use":
-    "Control your computer by clicking, typing, and navigating on screen.",
 };
 
 /**

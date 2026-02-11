@@ -24,7 +24,7 @@ pub struct LlmRequest {
     pub messages: Option<Vec<crate::db::conversations::Message>>,
     /// ID for the assistant message being generated (for streaming)
     pub assistant_message_id: Option<String>,
-    /// Override model type (e.g., "computer-use" for computer use sessions)
+    /// Override model type for provider routing
     pub model_type: Option<String>,
     /// Maximum number of attempts for generation
     pub max_attempts: Option<usize>,

@@ -1,4 +1,4 @@
-import { Environment, GenerateContentConfig, GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GenerateContentConfig, GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createClient } from '@supabase/supabase-js'
 
 interface Env {
@@ -23,8 +23,6 @@ const extractModelName = (modelType: string): string | null => {
 		return "gemini-3-flash-preview";
 	if (modelType === "pro")
 		return "gemini-3-pro-preview";
-	if (modelType === "computer-use")
-		return "gemini-2.5-computer-use-preview-10-2025";
 	return null;
 };
 
@@ -155,28 +153,16 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		chatConfig.responseJsonSchema = schema as object;
 		chatConfig.responseMimeType = "application/json";
 	}
-	if (body.modelType === "computer-use") {
-		chatConfig.tools = [{
-			computerUse: {
-						environment: Environment.ENVIRONMENT_BROWSER
-				}
-		}]
-		chatConfig.temperature = 1;
-		chatConfig.topP = 0.95;
-		chatConfig.topK = 40;
-		chatConfig.maxOutputTokens = 8192;
-	} else {
-		chatConfig.systemInstruction = body.systemPrompt || "You are a helpful assistant.";
-		
-		if (body.tools) {
-			chatConfig.tools = [body.tools];
-		}
+	chatConfig.systemInstruction = body.systemPrompt || "You are a helpful assistant.";
+	
+	if (body.tools) {
+		chatConfig.tools = [body.tools];
+	}
 
-		// Thinking level minimal is not supported on pro, only on fast
-		chatConfig.thinkingConfig = {
-			thinkingLevel: body.modelType === "fast" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
-		};
-	}		
+	// Thinking level minimal is not supported on pro, only on fast
+	chatConfig.thinkingConfig = {
+		thinkingLevel: body.modelType === "fast" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
+	};		
 
 	const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 	if (body.stream) {

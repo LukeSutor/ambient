@@ -11,14 +11,12 @@
 //! - **code_execution**: Execute code in a sandboxed environment
 //! - **calendar**: Manage calendar events
 //! - **email**: Send and manage emails
-//! - **computer_use**: Control computer via mouse/keyboard
 
 pub mod web_search;
 pub mod memory_search;
 pub mod code_execution;
 pub mod calendar;
 pub mod email;
-pub mod computer_use;
 
 // Re-export common types for convenience
 pub use crate::skills::types::{ToolCall, ToolResult, AgentError, AgentResult};

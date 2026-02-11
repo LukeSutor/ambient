@@ -129,7 +129,7 @@ pub enum MessageMetadata {
     error: Option<String>,
     #[ts(type = "any")]
     result: Option<serde_json::Value>,
-    /// Optional screenshot attachment ID for computer-use function responses
+    /// Optional screenshot attachment ID for function responses
     screenshot_attachment_id: Option<String>,
   },
 }

@@ -60,50 +60,6 @@ export async function sendAgentMessage(
 }
 
 /**
- * Starts a computer use session
- * @param conversationId - ID of the conversation
- * @param assistantMessageId - ID for the assistant's message
- * @param prompt - The prompt to initiate computer use
- * @param messageId - Optional ID of the user message
- */
-export async function startComputerUseSession(
-  conversationId: string,
-  assistantMessageId: string,
-  prompt: string,
-  messageId?: string,
-): Promise<void> {
-  try {
-    await invoke("start_computer_use", {
-      conversationId,
-      assistantMessageId,
-      prompt,
-      messageId: messageId || null,
-    });
-  } catch (error) {
-    console.error(
-      "[ConversationAPI] Failed to start computer use session:",
-      error,
-    );
-    throw new Error("Failed to start computer use session");
-  }
-}
-
-/**
- * Stops the current computer use session
- */
-export async function stopComputerUseSession(): Promise<void> {
-  try {
-    await invoke("stop_computer_use");
-  } catch (error) {
-    console.error(
-      "[ConversationAPI] Failed to stop computer use session:",
-      error,
-    );
-    throw new Error("Failed to stop computer use session");
-  }
-}
-
-/**
  * Starts a browser-use session
  * @param conversationId - ID of the conversation
  * @param assistantMessageId - ID for the assistant's message

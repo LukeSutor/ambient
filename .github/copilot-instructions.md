@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + Next.js 15). It features an agentic runtime with tool-calling capabilities, local inference via llama.cpp, optional cloud fallback to Gemini, and computer-use capabilities. The architecture prioritizes privacy, extensibility, and reliability.
+Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + Next.js 15). It features an agentic runtime with tool-calling capabilities, local inference via llama.cpp, optional cloud fallback to Gemini, and browser-use capabilities. The architecture prioritizes privacy, extensibility, and reliability.
 
 **Tech Stack:**
 - Backend: Rust with Tauri 2.x
@@ -56,7 +56,7 @@ SettingsProvider → RoleAccessProvider → SetupProvider → WindowsProvider �
 **Top-level modules** ([lib.rs](app/src-tauri/src/lib.rs)):
 - `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in store.json)
 - `db/`: SQLite with migrations, conversations, messages, memory, token usage
-- `agents/`: Chat runtime + computer-use runtime
+- `agents/`: Chat runtime + browser-use runtime
 - `models/`: LLM client (local/cloud providers), llama.cpp server, embedding, OCR
 - `skills/`: Registry, executor, builtin skills (web-search, code-execution, memory)
 - `events/`: Global emitter, typed event payloads
@@ -93,21 +93,6 @@ module/
 - See [skills/registry.rs](app/src-tauri/src/skills/registry.rs)
 
 **Configuration:** [AgentRuntimeConfig](app/src/types/settings.ts) controls context limits (local: 5 messages, cloud: 15), max iterations, tool calls per turn, thinking mode
-
-### Computer Use Runtime
-
-**Location:** [agents/computer_use/runtime.rs](app/src-tauri/src/agents/computer_use/runtime.rs)
-
-**Flow:**
-1. Take screenshot on every iteration
-2. Send screenshot + conversation history to model
-3. Model returns action (mouse_move, click, key_press, type_text, scroll, etc.)
-4. Execute action via [actions.rs](app/src-tauri/src/agents/computer_use/actions.rs)
-5. For destructive actions, emit `get_safety_confirmation` event and wait for user response
-6. Loop until task complete or user cancels
-
-**Coordinate Systems:**
-- Gemini and local models use 0-1000 normalized coordinates
 
 ## Build and Test
 
@@ -277,7 +262,6 @@ Detailed instructions for the AI agent...
 - [web_search.rs](app/src-tauri/src/skills/builtin/web_search.rs): Uses Tauri WebView to bypass bot detection
 - [code_execution.rs](app/src-tauri/src/skills/builtin/code_execution.rs): RustPython in isolated subprocess (crash-safe)
 - `memory_search`: Vector similarity search on past conversations
-- `computer_use`: Delegates to computer-use runtime
 
 **Tool Execution:** Always parallel with `futures::join_all`, handles errors per tool
 
@@ -294,7 +278,7 @@ POST /
 Authorization: Bearer <supabase_access_token>
 
 {
-  modelType: "fast" | "pro" | "computer-use",
+  modelType: "fast" | "pro",
   content: [{ role, parts }],  // Gemini format
   stream: boolean,
   systemPrompt?: string,
@@ -315,7 +299,6 @@ The worker verifies the Supabase token via `supabase.auth.getUser()`, then POSTs
 **Model Mapping:**
 - `fast`: gemini-3-flash-preview
 - `pro`: gemini-3-pro-preview
-- `computer-use`: gemini-2.5-computer-use-preview-10-2025
 
 ### llama.cpp Server
 **Management:** [models/llm/server.rs](app/src-tauri/src/models/llm/server.rs)
@@ -368,7 +351,6 @@ Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refr
 ### Sensitive Operations
 - **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in store.json. If store.json is exfiltrated, refresh tokens remain safe in OS keyring.
 - **Code execution:** Isolated subprocess to prevent app crashes
-- **Computer use:** Safety confirmations for destructive actions (see [runtime.rs](app/src-tauri/src/agents/computer_use/runtime.rs))
 - **Web scraping:** Uses real browser engine to avoid exposing request patterns
 
 ### API Keys

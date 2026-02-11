@@ -126,7 +126,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
- "enigo",
  "futures",
  "htmd",
  "iana-time-zone",
@@ -1012,19 +1011,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "core-graphics"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "064badf302c3194842cf2c5d61f56cc88e54a759313879cdf03abdd27d0c3b97"
-dependencies = [
- "bitflags 2.10.0",
- "core-foundation 0.10.1",
- "core-graphics-types 0.2.0",
- "foreign-types 0.5.0",
- "libc",
-]
-
-[[package]]
 name = "core-graphics-types"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1510,27 +1496,6 @@ name = "endian-type"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
-
-[[package]]
-name = "enigo"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c6c56e50f7acae2906a0dcbb34529ca647e40421119ad5d12e7f8ba6e50010"
-dependencies = [
- "core-foundation 0.10.1",
- "core-graphics 0.25.0",
- "foreign-types-shared 0.3.1",
- "libc",
- "log",
- "nom",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "windows 0.61.3",
- "x11rb",
- "xkbcommon",
- "xkeysym",
-]
 
 [[package]]
 name = "enumflags2"
@@ -3200,7 +3165,7 @@ checksum = "896d0e594158b7f5188034836a6c4886492078352c39760786e54f1b796caaea"
 dependencies = [
  "image 0.24.9",
  "log",
- "memmap2 0.7.1",
+ "memmap2",
  "nix 0.26.4",
  "thiserror 1.0.69",
  "wayland-client",
@@ -3462,15 +3427,6 @@ name = "memmap2"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f49388d20533534cd19360ad3d6a7dadc885944aa802ba3995040c5ec11288c6"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "memmap2"
-version = "0.9.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "744133e4a0e0a658e1374cf3bf8e415c4052a15a111acd372764c55b4177d490"
 dependencies = [
  "libc",
 ]
@@ -8763,23 +8719,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "x11rb"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9993aa5be5a26815fe2c3eacfc1fde061fc1a1f094bf1ad2a18bf9c495dd7414"
-dependencies = [
- "gethostname",
- "rustix 1.1.3",
- "x11rb-protocol",
-]
-
-[[package]]
-name = "x11rb-protocol"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
-
-[[package]]
 name = "xcb"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8789,23 +8728,6 @@ dependencies = [
  "libc",
  "quick-xml 0.30.0",
 ]
-
-[[package]]
-name = "xkbcommon"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a974f48060a14e95705c01f24ad9c3345022f4d97441b8a36beb7ed5c4a02d"
-dependencies = [
- "libc",
- "memmap2 0.9.9",
- "xkeysym",
-]
-
-[[package]]
-name = "xkeysym"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xml5ever"

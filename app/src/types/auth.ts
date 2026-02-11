@@ -13,7 +13,7 @@ export type AuthError = { code: any, error_code: string | null, error: string | 
 /**
  * Error codes for auth operations
  */
-export type AuthErrorCode = "network_error" | "invalid_credentials" | "email_not_confirmed" | "user_already_exists" | "invalid_otp" | "rate_limited" | "o_auth_error" | "session_expired" | "invalid_request" | "server_error" | "storage_error" | "unknown";
+export type AuthErrorCode = "network_error" | "invalid_credentials" | "email_not_confirmed" | "user_already_exists" | "invalid_otp" | "rate_limited" | "o_auth_error" | "session_expired" | "google_refresh_token_missing" | "invalid_request" | "server_error" | "storage_error" | "unknown";
 
 /**
  * Structured error response for auth operations

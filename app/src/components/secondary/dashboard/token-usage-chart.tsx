@@ -39,10 +39,6 @@ const chartConfig = {
     label: "Pro",
     color: "#2563eb",
   },
-  "computer-use": {
-    label: "Computer Use",
-    color: "#f59e0b",
-  },
 } satisfies ChartConfig;
 
 export function TokenUsageChart() {
