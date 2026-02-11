@@ -13,8 +13,10 @@ import {
   emitGenerateConversationName,
   ensureLlamaServerRunning,
   sendAgentMessage,
+  startBrowserUseSession,
   startComputerUseSession,
   stopAgentChat,
+  stopBrowserUseSession,
   stopComputerUseSession,
 } from "./api";
 import type { ChatMessage } from "./types";
@@ -340,6 +342,13 @@ export function useConversation(
             content,
             userMessage.message.id,
           );
+        } else if (state.conversationType === "browser_use") {
+          void startBrowserUseSession(
+            activeConversationId,
+            assistantMessageId,
+            content,
+            userMessage.message.id,
+          );
         } else {
           await sendAgentMessage(
             activeConversationId,
@@ -515,6 +524,13 @@ export function useConversation(
             userMessage.message.content,
             userMessage.message.id,
           );
+        } else if (state.conversationType === "browser_use") {
+          void startBrowserUseSession(
+            conversationId,
+            assistantMessageId,
+            userMessage.message.content,
+            userMessage.message.id,
+          );
         } else {
           await sendAgentMessage(
             conversationId,
@@ -599,6 +615,13 @@ export function useConversation(
             content,
             messageId,
           );
+        } else if (state.conversationType === "browser_use") {
+          void startBrowserUseSession(
+            conversationId,
+            assistantMessageId,
+            content,
+            messageId,
+          );
         } else {
           await sendAgentMessage(
             conversationId,
@@ -657,6 +680,17 @@ export function useConversation(
   }, [dispatch, state.conversationType]);
 
   /**
+   * Toggle Browser Use mode
+   */
+  const toggleBrowserUse = useCallback((): void => {
+    if (state.conversationType === "chat") {
+      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "browser_use" });
+    } else {
+      dispatch({ type: "SET_CONVERSATION_TYPE", payload: "chat" });
+    }
+  }, [dispatch, state.conversationType]);
+
+  /**
    * Stops the current computer use session
    */
   const stopComputerUse = useCallback(async (): Promise<void> => {
@@ -672,9 +706,11 @@ export function useConversation(
    */
   const stopGeneration = useCallback(async (): Promise<void> => {
     try {
-      // Stop the agent chat if it's a regular chat, or computer use if it's that mode
+      // Stop the agent chat if it's a regular chat, or computer use / browser use if it's that mode
       if (state.conversationType === "computer_use") {
         await stopComputerUseSession();
+      } else if (state.conversationType === "browser_use") {
+        await stopBrowserUseSession();
       } else {
         await stopAgentChat();
       }
@@ -734,6 +770,7 @@ export function useConversation(
     resubmitMessage,
     dispatchOCRCapture,
     toggleComputerUse,
+    toggleBrowserUse,
     stopComputerUse,
     stopGeneration,
     addAttachmentData,

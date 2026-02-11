@@ -51,6 +51,7 @@ pub fn run() {
     .manage(DbState(Mutex::new(None)))
     .manage(crate::agents::computer_use::ComputerUseState::default())
     .manage(crate::agents::chat::state::AgentRuntimeState::default())
+    .manage(crate::agents::browser_use::BrowserUseState::default())
     .setup(|app| {
       // Initialize the skill registry
       if let Err(e) = crate::skills::registry::initialize_registry(&app.handle()) {
@@ -186,6 +187,8 @@ pub fn run() {
       agents::computer_use::commands::start_computer_use,
       agents::computer_use::commands::stop_computer_use,
       agents::computer_use::commands::execute_computer_action,
+      agents::browser_use::commands::start_browser_use,
+      agents::browser_use::state::stop_browser_use,
       auth::auth_flow::sign_up,
       auth::auth_flow::sign_in_with_password,
       auth::auth_flow::sign_in_with_google,

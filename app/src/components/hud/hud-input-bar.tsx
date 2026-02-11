@@ -13,7 +13,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUpIcon, MousePointerClick, Move, Square, X } from "lucide-react";
+import { ArrowUpIcon, Globe, MousePointerClick, Move, Square, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -54,6 +54,7 @@ export function HUDInputBar({
     conversationId,
     addAttachmentData,
     toggleComputerUse,
+    toggleBrowserUse,
     sendMessage,
     stopGeneration,
   } = useConversation();
@@ -64,6 +65,7 @@ export function HUDInputBar({
   const isLoading = ocrLoading || isStreaming;
   const showWindowControls = isDraggingWindow || isHoveringGroup;
   const isComputerUseActive = conversationType === "computer_use";
+  const isBrowserUseActive = conversationType === "browser_use";
 
   // Memoized styles
   const containerStyle = useMemo(
@@ -130,6 +132,10 @@ export function HUDInputBar({
   const handleToggleComputerUse = useCallback(() => {
     toggleComputerUse();
   }, [toggleComputerUse]);
+
+  const handleToggleBrowserUse = useCallback(() => {
+    toggleBrowserUse();
+  }, [toggleBrowserUse]);
 
   const handleCloseWindow = useCallback(() => {
     void closeHUD();
@@ -225,6 +231,23 @@ export function HUDInputBar({
                 className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
                 size="icon"
                 onClick={handleToggleComputerUse}
+              >
+                <X className="!h-3 !w-3 text-black shrink-0" />
+              </Button>
+            </div>
+          )}
+
+          {isBrowserUseActive && (
+            <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
+              <Globe className="!h-4 !w-4 text-black" />
+              <p className="mx-1 text-black text-xs font-medium">
+                Browser Use
+              </p>
+              <Button
+                variant="ghost"
+                className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
+                size="icon"
+                onClick={handleToggleBrowserUse}
               >
                 <X className="!h-3 !w-3 text-black shrink-0" />
               </Button>

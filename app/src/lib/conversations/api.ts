@@ -104,6 +104,50 @@ export async function stopComputerUseSession(): Promise<void> {
 }
 
 /**
+ * Starts a browser-use session
+ * @param conversationId - ID of the conversation
+ * @param assistantMessageId - ID for the assistant's message
+ * @param prompt - The prompt to initiate browser use
+ * @param messageId - Optional ID of the user message
+ */
+export async function startBrowserUseSession(
+  conversationId: string,
+  assistantMessageId: string,
+  prompt: string,
+  messageId?: string,
+): Promise<void> {
+  try {
+    await invoke("start_browser_use", {
+      conversationId,
+      assistantMessageId,
+      prompt,
+      messageId: messageId || null,
+    });
+  } catch (error) {
+    console.error(
+      "[ConversationAPI] Failed to start browser use session:",
+      error,
+    );
+    throw new Error("Failed to start browser use session");
+  }
+}
+
+/**
+ * Stops the current browser-use session
+ */
+export async function stopBrowserUseSession(): Promise<void> {
+  try {
+    await invoke("stop_browser_use");
+  } catch (error) {
+    console.error(
+      "[ConversationAPI] Failed to stop browser use session:",
+      error,
+    );
+    throw new Error("Failed to stop browser use session");
+  }
+}
+
+/**
  * Stops the current agent chat generation
  */
 export async function stopAgentChat(): Promise<void> {
