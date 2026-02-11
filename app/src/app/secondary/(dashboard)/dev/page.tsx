@@ -222,6 +222,115 @@ export default function Dev() {
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // --- Browser Use Testing ---
+  const [browserUrl, setBrowserUrl] = useState<string>("https://www.google.com");
+  const [browserCreated, setBrowserCreated] = useState<boolean>(false);
+  const [browserSnapshot, setBrowserSnapshot] = useState<string | null>(null);
+  const [browserActionName, setBrowserActionName] = useState<string>("navigate");
+  const [browserActionArgs, setBrowserActionArgs] = useState<string>('{"url": "https://www.google.com"}');
+  const [browserActionResult, setBrowserActionResult] = useState<string | null>(null);
+  const [browserLoading, setBrowserLoading] = useState<boolean>(false);
+  const [browserError, setBrowserError] = useState<string | null>(null);
+
+  const browserActions = ["navigate", "click", "type_text", "select_option", "scroll", "go_back", "wait"];
+
+  const browserActionTemplates: Record<string, string> = {
+    navigate: '{"url": "https://www.google.com"}',
+    click: '{"element_id": 1}',
+    type_text: '{"element_id": 1, "text": "hello", "press_enter": true}',
+    select_option: '{"element_id": 1, "value": "option1"}',
+    scroll: '{"direction": "down"}',
+    go_back: '{}',
+    wait: '{"seconds": 2}',
+  };
+
+  const handleBrowserCreate = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    try {
+      await invoke<string>("browser_test_create", { url: browserUrl });
+      setBrowserCreated(true);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserSnapshot = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    setBrowserSnapshot(null);
+    try {
+      const result = await invoke<string>("browser_test_snapshot");
+      setBrowserSnapshot(result);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserAction = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    setBrowserActionResult(null);
+    try {
+      const args = JSON.parse(browserActionArgs) as Record<string, unknown>;
+      const result = await invoke<string>("browser_test_action", {
+        action: browserActionName,
+        arguments: args,
+      });
+      setBrowserActionResult(result);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserActionThenSnapshot = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    setBrowserActionResult(null);
+    setBrowserSnapshot(null);
+    try {
+      const args = JSON.parse(browserActionArgs) as Record<string, unknown>;
+      const actionResult = await invoke<string>("browser_test_action", {
+        action: browserActionName,
+        arguments: args,
+      });
+      setBrowserActionResult(actionResult);
+
+      // Wait for page to settle
+      const delay = browserActionName === "navigate" ? 2500 : 1500;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
+      // Take snapshot
+      const snapshot = await invoke<string>("browser_test_snapshot");
+      setBrowserSnapshot(snapshot);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserDestroy = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    try {
+      await invoke("browser_test_destroy");
+      setBrowserCreated(false);
+      setBrowserSnapshot(null);
+      setBrowserActionResult(null);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
   const handleGenerateEmbedding = async () => {
     if (!embeddingInput.trim()) return;
     setEmbeddingLoading(true);
@@ -1021,6 +1130,141 @@ export default function Dev() {
             <pre className="text-[10px] leading-tight">
               {JSON.stringify(actionOutput, null, 2)}
             </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Browser Use Testing */}
+      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-blue-50 space-y-4">
+        <h2 className="text-lg font-semibold">Browser Use Testing</h2>
+
+        {/* Create/Destroy WebView */}
+        <div className="space-y-2">
+          <Label>Start URL</Label>
+          <div className="flex gap-2">
+            <Input
+              value={browserUrl}
+              onChange={(e) => setBrowserUrl(e.target.value)}
+              placeholder="https://www.google.com"
+              className="bg-white"
+            />
+            {!browserCreated ? (
+              <Button
+                onClick={() => { void handleBrowserCreate(); }}
+                disabled={browserLoading}
+                className="shrink-0"
+              >
+                {browserLoading ? "Creating..." : "Create WebView"}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => { void handleBrowserDestroy(); }}
+                disabled={browserLoading}
+                variant="destructive"
+                className="shrink-0"
+              >
+                Destroy
+              </Button>
+            )}
+          </div>
+          {browserCreated && (
+            <p className="text-xs text-green-700">WebView active</p>
+          )}
+        </div>
+
+        {/* Snapshot */}
+        {browserCreated && (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Button
+                onClick={() => { void handleBrowserSnapshot(); }}
+                disabled={browserLoading}
+                variant="outline"
+                className="w-full"
+              >
+                {browserLoading ? "Extracting..." : "Get Snapshot"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        {browserCreated && (
+          <div className="space-y-2">
+            <Label>Action</Label>
+            <select
+              className="w-full border rounded px-2 py-1.5 text-sm bg-white"
+              value={browserActionName}
+              onChange={(e) => {
+                setBrowserActionName(e.target.value);
+                setBrowserActionArgs(browserActionTemplates[e.target.value] || "{}");
+              }}
+            >
+              {browserActions.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+
+            <Label>Arguments (JSON)</Label>
+            <Textarea
+              value={browserActionArgs}
+              onChange={(e) => setBrowserActionArgs(e.target.value)}
+              className="bg-white font-mono text-xs"
+              rows={3}
+            />
+
+            <div className="flex gap-2">
+              <Button
+                onClick={() => { void handleBrowserAction(); }}
+                disabled={browserLoading}
+                variant="outline"
+                className="flex-1"
+              >
+                Execute Action
+              </Button>
+              <Button
+                onClick={() => { void handleBrowserActionThenSnapshot(); }}
+                disabled={browserLoading}
+                className="flex-1"
+              >
+                Action + Snapshot
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Action Result */}
+        {browserActionResult && (
+          <div className="p-2 bg-green-100 border border-green-300 rounded text-sm">
+            <h3 className="font-semibold mb-1 text-xs">Action Result:</h3>
+            <pre className="text-xs whitespace-pre-wrap">{browserActionResult}</pre>
+          </div>
+        )}
+
+        {/* Snapshot Result */}
+        {browserSnapshot && (
+          <div className="p-2 bg-white border rounded text-sm overflow-auto max-h-96">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-xs">
+                Snapshot ({browserSnapshot.length} chars, ~{Math.ceil(browserSnapshot.length / 4)} tokens)
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs"
+                onClick={() => { void navigator.clipboard.writeText(browserSnapshot); }}
+              >
+                Copy
+              </Button>
+            </div>
+            <pre className="text-[10px] leading-tight whitespace-pre-wrap font-mono">{browserSnapshot}</pre>
+          </div>
+        )}
+
+        {/* Error */}
+        {browserError && (
+          <div className="p-2 bg-red-100 border border-red-300 rounded text-sm whitespace-pre-wrap">
+            Error: {browserError}
           </div>
         )}
       </div>

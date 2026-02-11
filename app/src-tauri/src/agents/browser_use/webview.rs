@@ -223,39 +223,43 @@ pub fn create_browser_webview(app_handle: &AppHandle, start_url: &str) -> Result
     .focused(false)
     .skip_taskbar(true)
     .on_navigation(move |url| {
-        let url_str = url.as_str();
+        // Only intercept our custom browsersnapshot:// scheme
+        if url.scheme() == SNAPSHOT_SCHEME {
+            let host = url.host_str();
+            let path = url.path();
 
-        if url_str.starts_with(SNAPSHOT_SCHEME) {
-            // Parse the URL to extract data
-            let path = &url_str[SNAPSHOT_SCHEME.len() + 3..]; // Skip "browsersnapshot://"
+            if host == Some("data") {
+                // Format: /request_id/exec_token/index/total/chunk
+                let mut parts = path.trim_start_matches('/').splitn(5, '/');
+                let Some(req_id) = parts.next() else { return false; };
+                let Some(exec_token) = parts.next() else { return false; };
+                let Some(index_str) = parts.next() else { return false; };
+                let Some(total_str) = parts.next() else { return false; };
+                let Some(chunk_data) = parts.next() else { return false; };
 
-            if path.starts_with("data/") {
-                // Format: data/{request_id}/{exec_token}/{index}/{total}/{chunk}
-                let parts: Vec<&str> = path[5..].splitn(5, '/').collect();
-                if parts.len() == 5 {
-                    let request_id = urlencoding::decode(parts[0]).unwrap_or_default().to_string();
-                    let exec_token = urlencoding::decode(parts[1]).unwrap_or_default().to_string();
-                    let chunk_index: usize = parts[2].parse().unwrap_or(0);
-                    let total_chunks: usize = parts[3].parse().unwrap_or(1);
-                    let chunk_data = parts[4];
+                let request_id = urlencoding::decode(req_id).unwrap_or_default().to_string();
+                let exec_token = urlencoding::decode(exec_token).unwrap_or_default().to_string();
+                let chunk_index: usize = index_str.parse().unwrap_or(0);
+                let total_chunks: usize = total_str.parse().unwrap_or(1);
 
-                    if let Err(e) = add_snapshot_chunk(
-                        &request_id,
-                        &exec_token,
-                        chunk_index,
-                        total_chunks,
-                        chunk_data,
-                    ) {
-                        log::warn!("[browser_use] Failed to add snapshot chunk: {}", e);
-                    }
+                if let Err(e) = add_snapshot_chunk(
+                    &request_id,
+                    &exec_token,
+                    chunk_index,
+                    total_chunks,
+                    chunk_data,
+                ) {
+                    log::warn!("[browser_use] Failed to add snapshot chunk: {}", e);
                 }
-            } else if path.starts_with("error/") {
-                let parts: Vec<&str> = path[6..].splitn(3, '/').collect();
-                if parts.len() == 3 {
-                    let request_id = urlencoding::decode(parts[0]).unwrap_or_default().to_string();
-                    let exec_token = urlencoding::decode(parts[1]).unwrap_or_default().to_string();
-                    handle_snapshot_error(&request_id, &exec_token, parts[2]);
-                }
+            } else if host == Some("error") {
+                let mut parts = path.trim_start_matches('/').splitn(3, '/');
+                let Some(req_id) = parts.next() else { return false; };
+                let Some(exec_token) = parts.next() else { return false; };
+                let Some(encoded_error) = parts.next() else { return false; };
+
+                let request_id = urlencoding::decode(req_id).unwrap_or_default().to_string();
+                let exec_token = urlencoding::decode(exec_token).unwrap_or_default().to_string();
+                handle_snapshot_error(&request_id, &exec_token, encoded_error);
             }
 
             return false; // Block navigation to custom scheme
