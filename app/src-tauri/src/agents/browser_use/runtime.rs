@@ -2,14 +2,22 @@
 //!
 //! Implements the main loop for browser agent sessions:
 //! 1. Creates a persistent WebView
-//! 2. Takes a DOM snapshot
-//! 3. Sends snapshot + history to the LLM
-//! 4. Executes the returned action
+//! 2. LLM decides on an action (navigate, click, type, etc.)
+//! 3. Executes the action and takes a DOM snapshot
+//! 4. Returns the snapshot as the tool result
 //! 5. Loops until `done` is called or max iterations reached
+//!
+//! Browser state is attached to tool results (not sent as separate messages).
+//! Only the most recent tool result includes the full browser state — older
+//! states are stripped before each LLM call to keep context lean.
 
+use crate::agents::types::{
+    ToolExecutionCompletedEvent, ToolExecutionStartedEvent,
+    TOOL_EXECUTION_COMPLETED, TOOL_EXECUTION_STARTED,
+};
 use crate::db::conversations::{
     add_message, get_conversation_history, get_or_refresh_prompt_time,
-    MessageMetadata, MessageType, Role,
+    Message, MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::{ChatStreamEvent, CHAT_STREAM}};
 use crate::models::llm::client::generate;
@@ -128,38 +136,16 @@ impl BrowserUseRuntime {
                 self.config.max_iterations
             );
 
-            // Extract DOM snapshot
-            let snapshot = match extract_snapshot(
-                &self.app_handle,
-                self.config.snapshot_timeout_secs,
-            )
-            .await
-            {
-                Ok(s) => s,
-                Err(e) => {
-                    log::warn!("[browser_use] Snapshot failed: {}", e);
-                    // Save snapshot error as tool result and continue
-                    let error_msg = format!("Failed to extract page snapshot: {}", e);
-                    self.save_snapshot_message(&error_msg).await?;
-                    continue;
-                }
-            };
-
-            log::info!(
-                "[browser_use] Snapshot extracted ({} chars)",
-                snapshot.len()
-            );
-
-            // Save snapshot as a tool result message
-            self.save_snapshot_message(&snapshot).await?;
-
             // Get conversation history (context-limited)
-            let messages = get_conversation_history(
+            let mut messages = get_conversation_history(
                 &self.app_handle,
                 &self.conv_id,
                 self.config.context_limit_for(self.is_local),
             )
             .await?;
+
+            // Strip browser state from all tool results except the most recent
+            strip_old_browser_states(&mut messages);
 
             // Build LLM request
             let timeout_duration = if self.is_local { 30 } else { 10 };
@@ -206,7 +192,7 @@ impl BrowserUseRuntime {
                 LlmResponse::Text(text) => {
                     // Model responded with text (task complete or message to user)
                     log::info!("[browser_use] Final text response received");
-                    self.save_assistant_message(&text).await?;
+                    self.emit_final_response(&text).await?;
                     return Ok(text);
                 }
                 LlmResponse::ToolCalls { text, calls } => {
@@ -223,7 +209,7 @@ impl BrowserUseRuntime {
                         .take(self.config.max_tool_calls_per_turn)
                         .collect();
 
-                    // Save tool calls message
+                    // Save tool calls message to DB
                     let tool_call_metadatas: Vec<MessageMetadata> = calls_to_execute
                         .iter()
                         .map(|call| MessageMetadata::ToolCall {
@@ -236,6 +222,7 @@ impl BrowserUseRuntime {
                         .collect();
 
                     let content = text.unwrap_or_default();
+                    let tool_call_msg_id = uuid::Uuid::new_v4().to_string();
                     add_message(
                         &self.app_handle,
                         self.conv_id.clone(),
@@ -243,9 +230,26 @@ impl BrowserUseRuntime {
                         content.clone(),
                         Some(MessageType::ToolCalls),
                         Some(tool_call_metadatas),
-                        Some(uuid::Uuid::new_v4().to_string()),
+                        Some(tool_call_msg_id.clone()),
                     )
                     .await?;
+
+                    // Emit tool_execution_started for each call
+                    let timestamp = chrono::Utc::now().to_rfc3339();
+                    for call in &calls_to_execute {
+                        let _ = emit(
+                            TOOL_EXECUTION_STARTED,
+                            ToolExecutionStartedEvent {
+                                tool_call_id: call.id.clone(),
+                                message_id: tool_call_msg_id.clone(),
+                                skill_name: call.skill_name.clone(),
+                                tool_name: call.tool_name.clone(),
+                                content: content.clone(),
+                                arguments: call.arguments.clone(),
+                                timestamp: timestamp.clone(),
+                            },
+                        );
+                    }
 
                     // Check if model called "done"
                     let done_call = calls_to_execute
@@ -262,7 +266,6 @@ impl BrowserUseRuntime {
 
                         log::info!("[browser_use] Task done: {}", summary);
 
-                        // Save done result
                         let result_metadata = vec![MessageMetadata::ToolResult {
                             call_id: done.id.clone(),
                             success: true,
@@ -271,6 +274,7 @@ impl BrowserUseRuntime {
                             screenshot_attachment_id: None,
                         }];
 
+                        let tool_result_msg_id = uuid::Uuid::new_v4().to_string();
                         add_message(
                             &self.app_handle,
                             self.conv_id.clone(),
@@ -278,17 +282,32 @@ impl BrowserUseRuntime {
                             String::new(),
                             Some(MessageType::ToolResults),
                             Some(result_metadata),
-                            None,
+                            Some(tool_result_msg_id.clone()),
                         )
                         .await?;
 
-                        // Save final assistant message
+                        // Emit completion event
+                        let _ = emit(
+                            TOOL_EXECUTION_COMPLETED,
+                            ToolExecutionCompletedEvent {
+                                tool_call_id: done.id.clone(),
+                                message_id: tool_result_msg_id,
+                                skill_name: done.skill_name.clone(),
+                                tool_name: done.tool_name.clone(),
+                                success: true,
+                                result: Some(serde_json::json!({ "status": "completed", "summary": summary })),
+                                error: None,
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                            },
+                        );
+
                         self.emit_final_response(&summary).await?;
                         return Ok(summary);
                     }
 
-                    // Execute non-done actions sequentially
-                    let mut result_metadatas = Vec::new();
+                    // Execute actions sequentially, then take a snapshot to include in results
+                    let mut action_results: Vec<(String, String, bool, Option<String>)> = Vec::new(); // (call_id, tool_name, success, result/error)
+
                     for call in &calls_to_execute {
                         if call.tool_name == "done" {
                             continue;
@@ -301,30 +320,71 @@ impl BrowserUseRuntime {
                         )
                         .await;
 
-                        let metadata = match &action_result {
-                            Ok(msg) => MessageMetadata::ToolResult {
-                                call_id: call.id.clone(),
-                                success: true,
-                                error: None,
-                                result: Some(serde_json::json!({ "result": msg })),
-                                screenshot_attachment_id: None,
-                            },
-                            Err(e) => MessageMetadata::ToolResult {
-                                call_id: call.id.clone(),
-                                success: false,
-                                error: Some(e.clone()),
-                                result: None,
-                                screenshot_attachment_id: None,
-                            },
-                        };
-                        result_metadatas.push(metadata);
-
-                        if let Err(e) = &action_result {
-                            log::warn!("[browser_use] Action '{}' failed: {}", call.tool_name, e);
+                        match &action_result {
+                            Ok(msg) => {
+                                action_results.push((call.id.clone(), call.tool_name.clone(), true, Some(msg.clone())));
+                            }
+                            Err(e) => {
+                                log::warn!("[browser_use] Action '{}' failed: {}", call.tool_name, e);
+                                action_results.push((call.id.clone(), call.tool_name.clone(), false, Some(e.clone())));
+                            }
                         }
                     }
 
-                    // Save tool results
+                    // Wait for action effects to settle before snapshot
+                    let delay = if calls_to_execute.iter().any(|c| c.tool_name == "navigate") {
+                        self.config.navigation_delay_ms
+                    } else {
+                        self.config.action_delay_ms
+                    };
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+
+                    // Take DOM snapshot after actions
+                    let snapshot = match extract_snapshot(
+                        &self.app_handle,
+                        self.config.snapshot_timeout_secs,
+                    )
+                    .await
+                    {
+                        Ok(s) => {
+                            log::info!("[browser_use] Post-action snapshot ({} chars)", s.len());
+                            Some(s)
+                        }
+                        Err(e) => {
+                            log::warn!("[browser_use] Post-action snapshot failed: {}", e);
+                            None
+                        }
+                    };
+
+                    // Build tool result metadata with browser state attached to each result
+                    let result_metadatas: Vec<MessageMetadata> = action_results
+                        .iter()
+                        .map(|(call_id, _tool_name, success, msg)| {
+                            let result_value = if *success {
+                                let mut result = serde_json::json!({
+                                    "action": msg.as_deref().unwrap_or("OK"),
+                                });
+                                // Attach browser state to each tool result
+                                if let Some(ref snap) = snapshot {
+                                    result["browser_state"] = serde_json::json!(snap);
+                                }
+                                Some(result)
+                            } else {
+                                None
+                            };
+
+                            MessageMetadata::ToolResult {
+                                call_id: call_id.clone(),
+                                success: *success,
+                                error: if *success { None } else { msg.clone() },
+                                result: result_value,
+                                screenshot_attachment_id: None,
+                            }
+                        })
+                        .collect();
+
+                    // Save tool results to DB
+                    let tool_result_msg_id = uuid::Uuid::new_v4().to_string();
                     if !result_metadatas.is_empty() {
                         add_message(
                             &self.app_handle,
@@ -332,19 +392,42 @@ impl BrowserUseRuntime {
                             Role::Tool,
                             String::new(),
                             Some(MessageType::ToolResults),
-                            Some(result_metadatas),
-                            None,
+                            Some(result_metadatas.clone()),
+                            Some(tool_result_msg_id.clone()),
                         )
                         .await?;
                     }
 
-                    // Wait for action effects to settle before next snapshot
-                    let delay = if calls_to_execute.iter().any(|c| c.tool_name == "navigate") {
-                        self.config.navigation_delay_ms
-                    } else {
-                        self.config.action_delay_ms
-                    };
-                    tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+                    // Emit tool_execution_completed for each result
+                    let completed_timestamp = chrono::Utc::now().to_rfc3339();
+                    for (call_id, tool_name, success, msg) in &action_results {
+                        let skill_name = calls_to_execute
+                            .iter()
+                            .find(|c| c.id == *call_id)
+                            .map(|c| c.skill_name.clone())
+                            .unwrap_or_default();
+
+                        // Don't include snapshot in the event payload (too large for events)
+                        let event_result = if *success {
+                            Some(serde_json::json!({ "action": msg.as_deref().unwrap_or("OK") }))
+                        } else {
+                            None
+                        };
+
+                        let _ = emit(
+                            TOOL_EXECUTION_COMPLETED,
+                            ToolExecutionCompletedEvent {
+                                tool_call_id: call_id.clone(),
+                                message_id: tool_result_msg_id.clone(),
+                                skill_name,
+                                tool_name: tool_name.clone(),
+                                success: *success,
+                                result: event_result,
+                                error: if *success { None } else { msg.clone() },
+                                timestamp: completed_timestamp.clone(),
+                            },
+                        );
+                    }
                 }
             }
         }
@@ -388,30 +471,6 @@ impl BrowserUseRuntime {
 
         parts.push(format!("OS: {}.", std::env::consts::OS));
         parts.join(" ")
-    }
-
-    /// Save a DOM snapshot as a tool result message.
-    async fn save_snapshot_message(&self, snapshot: &str) -> Result<(), AgentError> {
-        let metadata = vec![MessageMetadata::ToolResult {
-            call_id: format!("snapshot_{}", self.iteration),
-            success: true,
-            error: None,
-            result: Some(serde_json::json!({ "snapshot": snapshot })),
-            screenshot_attachment_id: None,
-        }];
-
-        add_message(
-            &self.app_handle,
-            self.conv_id.clone(),
-            Role::Tool,
-            snapshot.to_string(),
-            Some(MessageType::ToolResults),
-            Some(metadata),
-            None,
-        )
-        .await?;
-
-        Ok(())
     }
 
     /// Save an assistant text message.
@@ -574,5 +633,47 @@ impl BrowserUseRuntime {
                 returns: None,
             },
         ]
+    }
+}
+
+/// Strip `browser_state` from all tool result messages except the most recent one.
+///
+/// This keeps the LLM context lean by only providing the current page state.
+/// Historical actions are preserved (success/error), but their browser states
+/// are removed since they're no longer relevant.
+fn strip_old_browser_states(messages: &mut [Message]) {
+    // Find the index of the last ToolResults message
+    let last_tool_result_idx = messages
+        .iter()
+        .rposition(|m| m.message_type == MessageType::ToolResults);
+
+    let Some(last_idx) = last_tool_result_idx else {
+        return; // No tool results, nothing to strip
+    };
+
+    for (i, msg) in messages.iter_mut().enumerate() {
+        if i == last_idx || msg.message_type != MessageType::ToolResults {
+            continue;
+        }
+
+        // Strip browser_state from each ToolResult metadata entry
+        if let Some(ref mut metadata) = msg.metadata {
+            for entry in metadata.iter_mut() {
+                if let MessageMetadata::ToolResult { result, .. } = entry {
+                    if let Some(ref mut val) = result {
+                        if val.is_object() {
+                            if let Some(obj) = val.as_object_mut() {
+                                obj.remove("browser_state");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also clear content if it contained snapshot data
+        if !msg.content.is_empty() && msg.role == Role::Tool {
+            msg.content.clear();
+        }
     }
 }
