@@ -15,8 +15,8 @@ Built with Tauri (Rust + Next.js).
 - Agentic runtime built on top of the [skills](https://agentskills.io/home) specification
   - Web search using Tauri's webview window as a scraper
   - Sandboxed code execution using [rustpython](https://github.com/RustPython/RustPython)
-  - Agentic memory for remembering past conversations (WIP)
-  - Google mail and calendar integration for work automation (WIP)
+  - Agentic memory for remembering past conversations
+  - Google mail and calendar integration for work automation
 - Gemini-powered computer use
   - Let Gemini take control of your computer to complete tasks on your behalf
 - Screen region context with OCR
@@ -67,5 +67,5 @@ Steps
 
 - `app/` – Tauri app with Next.js frontend and Rust backend
 - `app/src-tauri/` – Tauri config, Rust commands, binaries, and environment
-- `cloudflare/` – Cloudflare worker for Gemini completions
+- `cloudflare/` – Cloudflare worker backend
 - `ml/` – experiments and training scripts
