@@ -1,26 +1,30 @@
 //! DOM snapshot extraction JavaScript generation.
 //!
 //! Generates JavaScript code that extracts a compact, structured text
-//! representation of all visible interactive elements on a page.
+//! representation of the visible page content and interactive elements.
 //! Uses the `browsersnapshot://` custom URL scheme for data transmission
 //! back to the Rust process via navigation interception.
 //!
 //! The snapshot format is optimized for small LLMs:
-//! - Only includes visible, interactive elements
-//! - Assigns sequential numeric IDs for action targeting
-//! - Compact text format (~1000-1500 tokens for a typical page)
+//! - Visible text content (viewport-bounded, ~3000 char cap)
+//! - Interactive elements with sequential numeric IDs
+//! - Compact text format (~1500-3000 tokens for a typical page)
 //! - Stores element references in `window.__elements` for action execution
 
 /// Custom URL scheme for receiving snapshot data from the WebView.
 pub const SNAPSHOT_SCHEME: &str = "browsersnapshot";
 
+/// Maximum characters of visible text content to include.
+const MAX_TEXT_CONTENT_CHARS: usize = 3000;
+
 /// Generate the JavaScript for DOM snapshot extraction.
 ///
 /// This script:
-/// 1. Finds all visible interactive elements
-/// 2. Assigns sequential IDs and stores refs in `window.__elements`
-/// 3. Builds a compact text representation
-/// 4. Transmits via `browsersnapshot://` navigation chunks
+/// 1. Extracts visible text content from the viewport
+/// 2. Finds all visible interactive elements
+/// 3. Assigns sequential IDs and stores refs in `window.__elements`
+/// 4. Builds a compact text representation with both content and elements
+/// 5. Transmits via `browsersnapshot://` navigation chunks
 ///
 /// # Arguments
 /// * `request_id` - Unique identifier for matching responses
@@ -34,6 +38,7 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
     const REQUEST_ID = "{request_id}";
     const EXECUTION_TOKEN = "{execution_token}";
     const CHUNK_SIZE = 1800;
+    const MAX_TEXT = {max_text};
     const BASE_URL = "browsersnapshot://data";
     const ERROR_URL = "browsersnapshot://error";
 
@@ -43,8 +48,16 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
     window[STATE_KEY] = 'running';
 
     try {{
-        const elements = [];
-        const interactiveSelectors = [
+        // ====================================================================
+        // Phase 1: Extract visible text content from the viewport
+        // ====================================================================
+        var skipTags = new Set(['SCRIPT','STYLE','NOSCRIPT','SVG','HEAD','META','LINK','BR','HR','IMG']);
+        var interactiveTags = new Set(['A','BUTTON','INPUT','SELECT','TEXTAREA','SUMMARY']);
+        var interactiveRoles = new Set(['button','link','tab','menuitem','checkbox','radio','switch','combobox','option','searchbox']);
+
+        // Collect interactive elements first so we can skip their text
+        var interactiveEls = new Set();
+        var interactiveSelectors = [
             'a[href]', 'button', 'input:not([type="hidden"])',
             'select', 'textarea',
             '[role="button"]', '[role="link"]', '[role="tab"]',
@@ -54,11 +67,98 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
             '[onclick]', '[contenteditable="true"]',
             'summary'
         ];
+        document.querySelectorAll(interactiveSelectors.join(',')).forEach(function(el) {{
+            interactiveEls.add(el);
+        }});
 
-        const seen = new Set();
-        const allEls = document.querySelectorAll(interactiveSelectors.join(','));
+        // Walk the DOM for visible text nodes
+        var textParts = [];
+        var textLen = 0;
+        var lastWasBlock = true;
 
-        allEls.forEach(function(el) {{
+        var walker = document.createTreeWalker(
+            document.body || document.documentElement,
+            NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+            {{
+                acceptNode: function(node) {{
+                    if (node.nodeType === 1) {{
+                        // Element node
+                        if (skipTags.has(node.tagName)) return NodeFilter.FILTER_REJECT;
+                        var style = window.getComputedStyle(node);
+                        if (style.display === 'none' || style.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+                        if (parseFloat(style.opacity) === 0) return NodeFilter.FILTER_REJECT;
+                        return NodeFilter.FILTER_SKIP;
+                    }}
+                    // Text node
+                    var text = node.textContent.trim();
+                    if (!text) return NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
+                }}
+            }}
+        );
+
+        var node;
+        while ((node = walker.nextNode()) && textLen < MAX_TEXT) {{
+            var text = node.textContent.trim();
+            if (!text) continue;
+
+            // Skip text from interactive elements (will be shown in elements section)
+            var parent = node.parentElement;
+            var isInteractive = false;
+            while (parent && parent !== document.body) {{
+                if (interactiveEls.has(parent)) {{
+                    isInteractive = true;
+                    break;
+                }}
+                parent = parent.parentElement;
+            }}
+            if (isInteractive) continue;
+
+            // Check if the text node's parent is within the viewport
+            var parentEl = node.parentElement;
+            if (!parentEl) continue;
+            var rect = parentEl.getBoundingClientRect();
+            if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+            if (rect.width === 0 && rect.height === 0) continue;
+
+            // Collapse whitespace and add
+            text = text.replace(/\s+/g, ' ');
+            if (text.length > 200) text = text.substring(0, 200) + '...';
+
+            // Detect block vs inline context for line break decisions
+            var display = parentEl ? window.getComputedStyle(parentEl).display : 'inline';
+            var isBlock = display === 'block' || display === 'flex' || display === 'grid' ||
+                          display === 'list-item' || display === 'table-cell' ||
+                          parentEl.tagName === 'P' || parentEl.tagName === 'DIV' ||
+                          parentEl.tagName === 'LI' || parentEl.tagName === 'TD' ||
+                          parentEl.tagName === 'H1' || parentEl.tagName === 'H2' ||
+                          parentEl.tagName === 'H3' || parentEl.tagName === 'H4' ||
+                          parentEl.tagName === 'H5' || parentEl.tagName === 'H6';
+
+            if (isBlock && !lastWasBlock && textParts.length > 0) {{
+                textParts.push('\n');
+            }}
+
+            textParts.push(text);
+            textLen += text.length;
+            lastWasBlock = isBlock;
+
+            if (isBlock) textParts.push('\n');
+        }}
+
+        var visibleText = textParts.join(' ')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n /g, '\n')
+            .replace(/\n{{3,}}/g, '\n\n')
+            .trim();
+
+        // ====================================================================
+        // Phase 2: Extract interactive elements
+        // ====================================================================
+        var elements = [];
+        var seen = new Set();
+
+        interactiveEls.forEach(function(el) {{
             if (seen.has(el)) return;
             seen.add(el);
 
@@ -70,7 +170,7 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
             if (style.display === 'none' || style.visibility === 'hidden') return;
             if (parseFloat(style.opacity) === 0) return;
 
-            // Skip elements outside viewport (with generous margin)
+            // Skip elements far outside viewport
             if (rect.bottom < -100 || rect.top > window.innerHeight + 100) return;
 
             var tag = el.tagName.toLowerCase();
@@ -130,7 +230,9 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
         // Store element references for action execution
         window.__elements = elements.map(function(e) {{ return e.el; }});
 
-        // Build output
+        // ====================================================================
+        // Phase 3: Build output
+        // ====================================================================
         var url = window.location.href;
         var title = document.title || '(untitled)';
         var scrollY = Math.round(window.scrollY);
@@ -139,8 +241,16 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
 
         var output = 'URL: ' + url + '\n';
         output += 'Title: ' + title + '\n';
-        output += 'Scroll: ' + scrollY + '/' + totalHeight + 'px (viewport: ' + viewportHeight + 'px)\n\n';
+        output += 'Scroll: ' + scrollY + '/' + totalHeight + 'px (viewport: ' + viewportHeight + 'px)\n';
 
+        // Visible text content section
+        if (visibleText) {{
+            output += '\n--- Page Content ---\n';
+            output += visibleText + '\n';
+        }}
+
+        // Interactive elements section
+        output += '\n--- Interactive Elements ---\n';
         if (elements.length === 0) {{
             output += '(No interactive elements found on this page)\n';
         }} else {{
@@ -149,7 +259,9 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
             }}
         }}
 
-        // Encode and send via chunked navigation
+        // ====================================================================
+        // Phase 4: Transmit via chunked navigation
+        // ====================================================================
         var encoded = encodeURIComponent(output);
         var totalChunks = Math.ceil(encoded.length / CHUNK_SIZE);
         if (totalChunks === 0) totalChunks = 1;
@@ -184,6 +296,7 @@ pub fn get_snapshot_script(request_id: &str, execution_token: &str) -> String {
             encodeURIComponent(EXECUTION_TOKEN) + '/' + errorMsg;
     }}
 }})();
-"#
+"#,
+        max_text = MAX_TEXT_CONTENT_CHARS
     )
 }
