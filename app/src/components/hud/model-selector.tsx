@@ -75,7 +75,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
         align="start"
         avoidCollisions={false}
         sideOffset={10}
-        alignOffset={-115}
+        alignOffset={-117}
         className="w-full bg-white/60"
       >
         <DropdownMenuGroup>

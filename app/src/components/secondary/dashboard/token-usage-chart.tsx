@@ -124,7 +124,7 @@ export function TokenUsageChart() {
                 key={model}
                 dataKey={model}
                 fill={
-                  chartConfig[model as keyof typeof chartConfig].color || "gray"
+                  chartConfig[model as keyof typeof chartConfig]?.color || "gray"
                 }
                 radius={4}
               />

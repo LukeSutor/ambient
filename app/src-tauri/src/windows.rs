@@ -12,7 +12,7 @@ async fn get_current_main_window_dimensions(app_handle: &AppHandle) -> HudDimens
       // Default fallback dimensions
       HudDimensions {
         chat_width: 600.0,
-        input_bar_height: 130.0,
+        input_bar_height: 106.0,
         chat_max_height: 450.0,
         login_width: 450.0,
         login_height: 600.0,

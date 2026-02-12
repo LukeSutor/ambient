@@ -18,7 +18,7 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
     case "Small":
       return {
         chat_width: 400,
-        input_bar_height: 130,
+        input_bar_height: 106,
         chat_max_height: 250,
         login_width: 450,
         login_height: 600,
@@ -26,7 +26,7 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
     case "Large":
       return {
         chat_width: 700,
-        input_bar_height: 130,
+        input_bar_height: 106,
         chat_max_height: 600,
         login_width: 450,
         login_height: 600,
@@ -34,7 +34,7 @@ function hudSizeOptionToDimensions(option: HudSizeOption): HudDimensions {
     default: // Normal
       return {
         chat_width: 600,
-        input_bar_height: 130,
+        input_bar_height: 106,
         chat_max_height: 450,
         login_width: 450,
         login_height: 600,
