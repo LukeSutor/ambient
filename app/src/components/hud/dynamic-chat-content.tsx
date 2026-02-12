@@ -39,7 +39,7 @@ export function DynamicChatContent() {
     <div
       className={cn(
         "flex flex-col transition-[max-height,opacity] duration-300 ease-in-out overflow-hidden",
-        isVisible ? "opacity-100" : "opacity-0 pointer-events-none",
+        isVisible ? "opacity-100 pb-2" : "opacity-0 pointer-events-none",
       )}
       style={containerStyle}
     >

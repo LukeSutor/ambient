@@ -10,7 +10,7 @@ export default function HudPage() {
     <AutoResizeContainer widthType="chat">
       <Toaster richColors position="top-center" />
 
-      <div className="flex flex-col bg-black">
+      <div className="flex flex-col">
         {/* Dynamic Chat Content Area */}
         <DynamicChatContent />
 

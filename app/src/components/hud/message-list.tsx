@@ -25,7 +25,7 @@ const SCROLL_MASK_STYLE = {
 export function MessageList() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const { conversationName, messages, resetConversation } =
+  const { conversationName, messages, isStreaming, resetConversation } =
     useConversation(messagesEndRef);
 
   const [showReasoning, setShowReasoning] = useState(new Set<string>());
@@ -104,7 +104,7 @@ export function MessageList() {
   }, [messages]);
 
   return (
-    <ContentContainer>
+    <ContentContainer isStreaming={isStreaming}>
       <div className="relative w-full h-full overflow-hidden">
         {/* Header */}
         <div className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 pointer-events-none">

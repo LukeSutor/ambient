@@ -155,10 +155,10 @@ export function HUDInputBar() {
       <InputGroup
         data-tauri-drag-region
         className={cn(
-          "bg-white/60 border border-black/20 transition-all rounded-md flex-col items-stretch relative cursor-grab active:cursor-grabbing",
+          "bg-white/60 border border-black/20 transition-all rounded-md flex-col items-stretch relative cursor-grab active:cursor-grabbing streaming-ring",
           "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
           isStreaming &&
-            "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent",
+            "streaming-active border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent",
         )}
       >
         {/* Close button — subtle, top-right corner */}
