@@ -5,11 +5,14 @@ use crate::constants::{
 use crate::setup;
 use rand::Rng;
 use reqwest;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Mutex;
 use tauri::AppHandle;
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::CommandChild;
 use tokio::time::sleep;
+use ts_rs::TS;
 use uuid::Uuid;
 
 /// Global state to track the running server process and port
@@ -216,52 +219,70 @@ pub async fn spawn_llama_server(app_handle: AppHandle) -> Result<String, String>
   // Create server configuration with the found port
   let config = ServerConfig::new(&app_handle, port).map_err(|e| e.to_string())?;
 
+  // Load user settings to check GPU acceleration preference
+  let settings = crate::settings::service::load_user_settings(app_handle.clone())
+    .await
+    .map_err(|e| format!("Failed to load user settings: {}", e))?;
+
+  // Build base args
+  let mut args: Vec<String> = vec![
+    "-m".into(),
+    config.text_model_path.clone(),
+    "-mm".into(),
+    config.mmproj_model_path.clone(),
+    "--port".into(),
+    config.port.to_string(),
+    "--api-key".into(),
+    config.api_key.clone(),
+    "--reasoning-format".into(),
+    "none".into(),
+    "-np".into(), // Decode up to 3 sequences in parallel
+    "3".into(),
+    "--ctx-size".into(),
+    "32768".into(),
+    "--n-predict".into(),
+    "32768".into(),
+    "--temp".into(),
+    "0.7".into(),
+    "--top-p".into(),
+    "0.8".into(),
+    "--top-k".into(),
+    "20".into(),
+    "--repeat-penalty".into(),
+    "1.0".into(),
+    "--presence-penalty".into(),
+    "1.5".into(),
+    "--seed".into(),
+    "3407".into(),
+    "-ctk".into(), // Use q8 quant for kv cache
+    "q8_0".into(),
+    "-ctv".into(),
+    "q8_0".into(),
+    "--mlock".into(), // Keep model in RAM
+    "-fa".into(),     // Use fast attention
+    "on".into(),
+    "--no-webui".into(),
+    "--log-disable".into(),
+    "--offline".into(),
+    "--jinja".into(),
+  ];
+
+  // Offload all layers to GPU when GPU acceleration is enabled
+  if settings.gpu_acceleration {
+    log::info!("[llama_server] GPU acceleration enabled, offloading all layers to GPU");
+    args.extend(["-ngl".into(), "99".into()]);
+  } else {
+    log::info!("[llama_server] GPU acceleration disabled, using CPU only");
+    args.extend(["-ngl".into(), "0".into()]);
+  }
+
   // Prepare sidecar command
   let shell = app_handle.shell();
+  let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
   let sidecar_command = shell
     .sidecar("server")
     .map_err(|e| format!("Failed to get sidecar command: {}", e))?
-    .args([
-      "-m",
-      &config.text_model_path,
-      "-mm",
-      &config.mmproj_model_path,
-      "--port",
-      &config.port.to_string(),
-      "--api-key",
-      &config.api_key,
-      "--reasoning-format",
-      "none",
-      "-np", // Decode up to 3 sequences in parallel
-      "3",
-      "--ctx-size",
-      "32768",
-      "--n-predict",
-      "32768",
-      "--temp",
-      "0.7",
-      "--top-p",
-      "0.8",
-      "--top-k",
-      "20",
-      "--repeat-penalty",
-      "1.0",
-      "--presence-penalty",
-      "1.5",
-      "--seed",
-      "3407",
-      "-ctk", // Use q8 quant for kv cache
-      "q8_0",
-      "-ctv",
-      "q8_0",
-      "--mlock", // Keep model in RAM
-      "-fa",     // Use fast attention
-      "on",
-      "--no-webui",
-      "--log-disable",
-      "--offline",
-      "--jinja",
-    ]);
+    .args(&arg_refs);
 
   // Spawn the server process
   let (mut _rx, child) = sidecar_command
@@ -374,4 +395,60 @@ async fn wait_for_server_ready(config: &ServerConfig) -> Result<(), ServerError>
   Err(ServerError::ProcessError(
     "Server failed to become healthy within timeout".to_string(),
   ))
+}
+
+/// A GPU device detected by the llama.cpp server.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "llm.ts")]
+pub struct GpuDevice {
+  /// Device name as reported by llama.cpp (e.g. "Vulkan0: NVIDIA GeForce RTX 3080")
+  pub name: String,
+}
+
+/// Detect available GPU devices by running the llama.cpp sidecar with `--list-devices`.
+///
+/// Parses the output for Vulkan device entries. Returns an empty vec if no
+/// compatible GPU is found or if detection fails (graceful fallback to CPU).
+#[tauri::command]
+pub async fn detect_gpu_devices(app_handle: AppHandle) -> Result<Vec<GpuDevice>, String> {
+  log::info!("[llama_server] Detecting GPU devices...");
+
+  let shell = app_handle.shell();
+  let output = shell
+    .sidecar("server")
+    .map_err(|e| format!("Failed to get sidecar command: {}", e))?
+    .args(["--list-devices"])
+    .output()
+    .await
+    .map_err(|e| format!("Failed to run GPU detection: {}", e))?;
+
+  let stdout = String::from_utf8_lossy(&output.stdout);
+  let stderr = String::from_utf8_lossy(&output.stderr);
+
+  log::info!("[llama_server] GPU detection stdout: {}", stdout.trim());
+  if !stderr.is_empty() {
+    log::debug!("[llama_server] GPU detection stderr: {}", stderr.trim());
+  }
+
+  // Parse lines after "Available devices:" looking for device entries
+  // Format: "  Vulkan0: NVIDIA GeForce RTX 3080 (12288 MiB, 10240 MiB free)"
+  let mut devices = Vec::new();
+  let mut in_devices_section = false;
+
+  for line in stdout.lines() {
+    let trimmed = line.trim();
+    if trimmed.starts_with("Available devices:") {
+      in_devices_section = true;
+      continue;
+    }
+    if in_devices_section && !trimmed.is_empty() {
+      // Each device line starts with a backend name (e.g. "Vulkan0:", "CUDA0:")
+      devices.push(GpuDevice {
+        name: trimmed.to_string(),
+      });
+    }
+  }
+
+  log::info!("[llama_server] Detected {} GPU device(s)", devices.len());
+  Ok(devices)
 }

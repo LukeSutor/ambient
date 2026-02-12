@@ -124,6 +124,10 @@ pub struct UserSettings {
   /// Skills in this list will not be available to the agentic runtime.
   #[serde(default)]
   pub disabled_skills: Vec<String>,
+  /// Whether to offload model layers to GPU via Vulkan.
+  /// Only effective when a compatible GPU is detected.
+  #[serde(default)]
+  pub gpu_acceleration: bool,
 }
 
 impl Default for UserSettings {
@@ -134,6 +138,7 @@ impl Default for UserSettings {
       model_selection: ModelSelection::default(),
       agent_config: crate::skills::types::AgentRuntimeConfig::default(),
       disabled_skills: Vec::new(),
+      gpu_acceleration: false,
     }
   }
 }

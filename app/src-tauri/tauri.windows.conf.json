@@ -17,8 +17,8 @@
       "binaries/windows/ggml-cpu-x64.dll": "ggml-cpu-x64.dll",
       "binaries/windows/ggml-cpu-zen4.dll": "ggml-cpu-zen4.dll",
       "binaries/windows/ggml-rpc.dll": "ggml-rpc.dll",
+      "binaries/windows/ggml-vulkan.dll": "ggml-vulkan.dll",
       "binaries/windows/ggml.dll": "ggml.dll",
-      "binaries/windows/libcurl-x64.dll": "libcurl-x64.dll",
       "binaries/windows/llama.dll": "llama.dll",
       "binaries/windows/libomp140.x86_64.dll": "libomp140.x86_64.dll",
       "binaries/windows/mtmd.dll": "mtmd.dll"

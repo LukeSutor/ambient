@@ -15,8 +15,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/lib/settings";
+import type { GpuDevice } from "@/types/llm";
 import type { HudSizeOption, ModelSelection } from "@/types/settings";
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const HUD_SIZE_OPTIONS: HudSizeOption[] = ["Small", "Normal", "Large"];
@@ -46,7 +48,26 @@ export default function Settings() {
     setHudSize,
     setShowFullThoughtTraces,
     setModelSelection,
+    setGpuAcceleration,
   } = useSettings();
+
+  const [gpuDevices, setGpuDevices] = useState<GpuDevice[]>([]);
+  const [gpuDetectionDone, setGpuDetectionDone] = useState(false);
+
+  // Detect GPU devices on mount
+  useEffect(() => {
+    invoke<GpuDevice[]>("detect_gpu_devices")
+      .then((devices) => {
+        setGpuDevices(devices);
+        setGpuDetectionDone(true);
+      })
+      .catch((error) => {
+        console.warn("[Settings] GPU detection failed:", error);
+        setGpuDetectionDone(true);
+      });
+  }, []);
+
+  const hasGpu = gpuDevices.length > 0;
 
   const hudSize = settings?.hud_size ?? "Normal";
   const modelSelection = settings?.model_selection ?? "Local";
@@ -74,6 +95,20 @@ export default function Settings() {
     }
   };
 
+  const handleGpuAccelerationChange = async (enabled: boolean) => {
+    try {
+      await setGpuAcceleration(enabled);
+      toast.success(
+        enabled
+          ? "GPU acceleration enabled. Restart the app to apply."
+          : "GPU acceleration disabled. Restart the app to apply.",
+      );
+    } catch (error) {
+      console.error("Failed to save GPU acceleration setting:", error);
+      toast.error("Failed to save setting");
+    }
+  };
+
   const handleReset = async () => {
     try {
       await invoke("reset_database");
@@ -96,6 +131,24 @@ export default function Settings() {
             value={modelSelection}
             onChange={(v) => void handleModelSelectionChange(v)}
             disabled={isLoading}
+          />
+        </SettingRow>
+        <SettingRow
+          title="GPU Acceleration"
+          description={
+            !gpuDetectionDone
+              ? "Detecting GPU..."
+              : hasGpu
+                ? `Offload model to GPU via Vulkan (${gpuDevices[0].name})`
+                : "No compatible GPU detected"
+          }
+        >
+          <Switch
+            checked={hasGpu && (settings?.gpu_acceleration ?? false)}
+            onCheckedChange={(checked) => {
+              void handleGpuAccelerationChange(checked);
+            }}
+            disabled={isLoading || !gpuDetectionDone || !hasGpu}
           />
         </SettingRow>
       </SettingsSection>
