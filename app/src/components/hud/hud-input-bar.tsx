@@ -13,7 +13,7 @@ import { useWindows } from "@/lib/windows/useWindows";
 import type { HudDimensions } from "@/types/settings";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
-import { ArrowUpIcon, MousePointerClick, Move, Square, X } from "lucide-react";
+import { ArrowUpIcon, Globe, Square, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -22,21 +22,7 @@ import { ModelSelector } from "./model-selector";
 import { PlusMenu } from "./plus-menu";
 import { ToolMenu } from "./tool-menu";
 
-interface HUDInputBarProps {
-  onDragStart: () => void;
-  onMouseLeave: (e: React.MouseEvent) => void;
-  isDraggingWindow: boolean;
-  isHoveringGroup: boolean;
-  setIsHoveringGroup: (b: boolean) => void;
-}
-
-export function HUDInputBar({
-  onDragStart,
-  onMouseLeave,
-  isDraggingWindow,
-  isHoveringGroup,
-  setIsHoveringGroup,
-}: HUDInputBarProps) {
+export function HUDInputBar() {
   const [input, setInput] = useState("");
 
   const inputRef = useRef<HTMLDivElement | null>(null);
@@ -53,7 +39,7 @@ export function HUDInputBar({
     conversationType,
     conversationId,
     addAttachmentData,
-    toggleComputerUse,
+    toggleBrowserUse,
     sendMessage,
     stopGeneration,
   } = useConversation();
@@ -62,8 +48,7 @@ export function HUDInputBar({
 
   // Computed values
   const isLoading = ocrLoading || isStreaming;
-  const showWindowControls = isDraggingWindow || isHoveringGroup;
-  const isComputerUseActive = conversationType === "computer_use";
+  const isBrowserUseActive = conversationType === "browser_use";
 
   // Memoized styles
   const containerStyle = useMemo(
@@ -75,11 +60,6 @@ export function HUDInputBar({
     }),
     [hudDimensions],
   );
-
-  // Memoized handlers
-  const handleMouseEnter = useCallback(() => {
-    setIsHoveringGroup(true);
-  }, [setIsHoveringGroup]);
 
   const handleUploadFiles = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,9 +107,9 @@ export function HUDInputBar({
     [handleSubmit],
   );
 
-  const handleToggleComputerUse = useCallback(() => {
-    toggleComputerUse();
-  }, [toggleComputerUse]);
+  const handleToggleBrowserUse = useCallback(() => {
+    toggleBrowserUse();
+  }, [toggleBrowserUse]);
 
   const handleCloseWindow = useCallback(() => {
     void closeHUD();
@@ -154,12 +134,12 @@ export function HUDInputBar({
     if (hudDimensions && inputRef.current) {
       gsap.fromTo(
         inputRef.current,
-        { scale: 0, opacity: 0, transformOrigin: "center center" },
+        { scale: 0.9, opacity: 0, transformOrigin: "center center" },
         {
           scale: 1,
           opacity: 1,
-          duration: 0.25,
-          ease: "back.out(0.8)",
+          duration: 0.2,
+          ease: "power2.out",
           delay: 0.1,
         },
       );
@@ -168,40 +148,56 @@ export function HUDInputBar({
 
   return (
     <div
-      className="flex flex-col justify-start items-center relative p-2"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={onMouseLeave}
+      className="flex flex-col justify-start items-center relative"
       ref={inputRef}
       style={containerStyle}
     >
       <InputGroup
+        data-tauri-drag-region
         className={cn(
-          "bg-white/60 border border-black/20 transition-all rounded-md flex-col items-stretch",
+          "bg-white/60 border border-black/20 transition-all rounded-md flex-col items-stretch relative cursor-grab active:cursor-grabbing streaming-ring",
           "has-[[data-slot=input-group-control]:focus-visible]:ring-0 has-[[data-slot=input-group-control]:focus-visible]:border-black/20",
           isStreaming &&
-            "streaming-ring border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent",
+            "streaming-active border-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent",
         )}
       >
+        {/* Close button — subtle, top-right corner */}
+        <button
+          type="button"
+          className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded-sm text-black/40 hover:text-black/60 hover:bg-black/5 transition-colors"
+          onClick={handleCloseWindow}
+          title="Close Window"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
         <AttachmentList />
 
-        <TextareaAutosize
-          data-slot="input-group-control"
-          maxRows={4}
-          minRows={2}
-          value={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-          }}
-          onKeyDown={handleKeyDown}
-          className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-base transition-[color,box-shadow] outline-none md:text-sm"
-          placeholder="Ask anything"
-          autoComplete="off"
-          autoFocus
-        />
+        {/* Textarea wrapper — side padding is drag region, top padding is drag region */}
+        <div
+          data-tauri-drag-region
+          className="px-3 pt-2 select-none"
+        >
+          <TextareaAutosize
+            data-slot="input-group-control"
+            maxRows={4}
+            minRows={2}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+            }}
+            onKeyDown={handleKeyDown}
+            className="flex field-sizing-content hud-scroll min-h-16 w-full resize-none rounded-md bg-transparent px-0 pt-0 pb-2 text-base transition-[color,box-shadow] outline-none cursor-text md:text-sm"
+            placeholder="Ask anything"
+            autoComplete="off"
+            autoFocus
+          />
+        </div>
 
         <InputGroupAddon
+          data-tauri-drag-region
           align="block-end"
-          className="flex items-center gap-1.5 px-3 pb-2.5 pt-0"
+          className="flex items-center gap-1.5 px-3 pb-2 pt-0 cursor-grab active:cursor-grabbing select-none"
         >
           <PlusMenu
             onOpenChange={setIsPlusDropdownOpen}
@@ -214,17 +210,17 @@ export function HUDInputBar({
             disabled={isLoading}
           />
 
-          {isComputerUseActive && (
-            <div className="flex items-center justify-center bg-yellow-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
-              <MousePointerClick className="!h-4 !w-4 text-black" />
+          {isBrowserUseActive && (
+            <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
+              <Globe className="!h-4 !w-4 text-black" />
               <p className="mx-1 text-black text-xs font-medium">
-                Computer Use
+                Browser Use
               </p>
               <Button
                 variant="ghost"
                 className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
                 size="icon"
-                onClick={handleToggleComputerUse}
+                onClick={handleToggleBrowserUse}
               >
                 <X className="!h-3 !w-3 text-black shrink-0" />
               </Button>
@@ -265,41 +261,15 @@ export function HUDInputBar({
           )}
         </InputGroupAddon>
 
-        {/* Window Controls */}
-        <button
-          type="button"
-          className={cn(
-            "absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white/60 hover:bg-white/80 border border-black/20 transition-all duration-100 select-none",
-            showWindowControls ? "scale-100 opacity-100" : "scale-0 opacity-0",
-          )}
-          onClick={handleCloseWindow}
-          title="Close Window"
-        >
-          <X className="w-full h-full p-1 text-black pointer-events-none" />
-        </button>
-
-        <div
-          data-tauri-drag-region
-          id="drag-area"
-          className={cn(
-            "hover:cursor-grab select-none absolute -bottom-1.5 -right-1.5 w-6 h-6 bg-white/60 hover:bg-white/80 border border-black/20 rounded-full transition-all duration-100",
-            showWindowControls ? "scale-100 opacity-100" : "scale-0 opacity-0",
-          )}
-          onPointerDown={onDragStart}
-          draggable={false}
-          title="Drag Window"
-        >
-          <Move className="w-full h-full p-1 text-black pointer-events-none" />
-        </div>
       </InputGroup>
 
       {/* Hidden spacer to expand window when dropdowns are open */}
       <div
         className={cn(
           "pointer-events-none overflow-hidden transition-all duration-0",
-          isPlusDropdownOpen && "h-[112px]",
-          isToolsDropdownOpen && "h-[102px]",
-          isModelDropdownOpen && "h-[155px]",
+          isPlusDropdownOpen && "h-[120px]",
+          isToolsDropdownOpen && "h-[80px]",
+          isModelDropdownOpen && "h-[165px]",
           !isPlusDropdownOpen &&
             !isToolsDropdownOpen &&
             !isModelDropdownOpen &&

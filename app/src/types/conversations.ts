@@ -29,7 +29,7 @@ export type Message = { id: string, conversation_id: string, role: Role, content
  */
 export type MessageMetadata = { "type": "ToolCall", call_id: string, skill_name: string, tool_name: string, arguments: any, thought_signature: string | null, } | { "type": "ToolResult", call_id: string, success: boolean, error: string | null, result: any, 
 /**
- * Optional screenshot attachment ID for computer-use function responses
+ * Optional screenshot attachment ID for function responses
  */
 screenshot_attachment_id: string | null, };
 

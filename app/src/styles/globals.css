@@ -184,34 +184,47 @@ body.screen-selector-transparent {
   }
 }
 
+/* Streaming ring — always present but invisible, fades in when active */
 .streaming-ring {
   position: relative;
   background-clip: padding-box;
+  transition: border-color 0.5s ease-in-out;
 }
 
 .streaming-ring::before {
   content: "";
   position: absolute;
-  inset: -3px;
+  inset: 0;
   border-radius: inherit;
-  padding: 3px;
+  padding: 2px;
   background: conic-gradient(
     from var(--gradient-angle),
-    #3b82f6,
-    #60a5fa,
-    #2dd4bf,
-    #3b82f6,
-    #60a5fa,
-    #2dd4bf,
-    #3b82f6
+    transparent 0%,
+    #1d4ed8 8%,
+    #3b82f6 16%,
+    #22d3ee 24%,
+    transparent 36%,
+    transparent 50%,
+    #6366f1 58%,
+    #3b82f6 66%,
+    #06b6d4 74%,
+    transparent 86%,
+    transparent 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: rotation 4s linear infinite;
+  animation: rotation 2.5s linear infinite paused;
   pointer-events: none;
   z-index: 0;
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.streaming-ring.streaming-active::before {
+  opacity: 1;
+  animation-play-state: running;
 }
 
 /* Highlight animation for scrolling to a specific message */

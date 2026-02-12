@@ -586,6 +586,48 @@ function getFriendlyToolMessage(call: MessageMetadata): FriendlyToolMessage {
         finishedPrefix: "Loaded",
         suffix: `${args.skill_name.replace("-", " ")} tools`,
       };
+    case "browser.navigate":
+      return {
+        loadingPrefix: "Navigating",
+        finishedPrefix: "Navigated",
+        suffix: `to ${args.url}`,
+      }
+    case "browser.click":
+      return {
+        loadingPrefix: "Clicking",
+        finishedPrefix: "Clicked",
+        suffix: `on element`,
+      }
+    case "browser.type_text":
+      return {
+        loadingPrefix: "Typing",
+        finishedPrefix: "Typed",
+        suffix: `text "${args.text}"`,
+      }
+    case "browser.select_option":
+      return {
+        loadingPrefix: "Selecting",
+        finishedPrefix: "Selected",
+        suffix: `dropdown option`,
+    }
+    case "browser.scroll":
+      return {
+        loadingPrefix: "Scrolling",
+        finishedPrefix: "Scrolled",
+        suffix: `the page ${args.direction}`,
+      };
+    case "browser.go_back":
+      return {
+        loadingPrefix: "Going back",
+        finishedPrefix: "Went back",
+        suffix: "",
+      };
+    case "browser.wait":
+      return {
+        loadingPrefix: "Waiting",
+        finishedPrefix: "Waited",
+        suffix: `for ${args.duration} seconds`,
+      };
     default:
       return {
         loadingPrefix: "Using",

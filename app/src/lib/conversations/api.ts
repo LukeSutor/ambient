@@ -60,20 +60,20 @@ export async function sendAgentMessage(
 }
 
 /**
- * Starts a computer use session
+ * Starts a browser-use session
  * @param conversationId - ID of the conversation
  * @param assistantMessageId - ID for the assistant's message
- * @param prompt - The prompt to initiate computer use
+ * @param prompt - The prompt to initiate browser use
  * @param messageId - Optional ID of the user message
  */
-export async function startComputerUseSession(
+export async function startBrowserUseSession(
   conversationId: string,
   assistantMessageId: string,
   prompt: string,
   messageId?: string,
 ): Promise<void> {
   try {
-    await invoke("start_computer_use", {
+    await invoke("start_browser_use", {
       conversationId,
       assistantMessageId,
       prompt,
@@ -81,25 +81,25 @@ export async function startComputerUseSession(
     });
   } catch (error) {
     console.error(
-      "[ConversationAPI] Failed to start computer use session:",
+      "[ConversationAPI] Failed to start browser use session:",
       error,
     );
-    throw new Error("Failed to start computer use session");
+    throw new Error("Failed to start browser use session");
   }
 }
 
 /**
- * Stops the current computer use session
+ * Stops the current browser-use session
  */
-export async function stopComputerUseSession(): Promise<void> {
+export async function stopBrowserUseSession(): Promise<void> {
   try {
-    await invoke("stop_computer_use");
+    await invoke("stop_browser_use");
   } catch (error) {
     console.error(
-      "[ConversationAPI] Failed to stop computer use session:",
+      "[ConversationAPI] Failed to stop browser use session:",
       error,
     );
-    throw new Error("Failed to stop computer use session");
+    throw new Error("Failed to stop browser use session");
   }
 }
 

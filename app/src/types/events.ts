@@ -8,8 +8,6 @@ export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<A
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, message_id: string | null, };
 
-export type ComputerUseToastEvent = { message: string, timestamp: string, };
-
 export type DownloadFinishedEvent = { id: bigint, };
 
 export type DownloadInformationEvent = { n_items: bigint, content_length: bigint, };
@@ -31,10 +29,6 @@ export type NavigateToConversationEvent = { conversation_id: string, message_id:
 export type OcrResponseEvent = { text: string, success: boolean, timestamp: string, };
 
 export type RenameConversationEvent = { conv_id: string, new_name: string, timestamp: string, };
-
-export type SafetyConfirmationEvent = { reason: string, timestamp: string, };
-
-export type SafetyConfirmationResponseEvent = { user_confirmed: boolean, timestamp: string, };
 
 export type TokenUsageChangedEvent = { timestamp: string, };
 

@@ -302,7 +302,7 @@ pub fn format_messages_for_openai(app_handle: &AppHandle, msgs: &[Message]) -> V
                                 }
                             }
         
-                            // Build content - can be array with image for computer-use
+                            // Build content - can be array with image
                             let mut content_parts = vec![json!({
                                 "type": "text",
                                 "text": serde_json::to_string(&response_obj).unwrap_or_else(|_| "{}".to_string())
@@ -573,7 +573,7 @@ pub fn format_messages_for_gemini(app_handle: &AppHandle, msgs: &[Message]) -> V
                                                     if full_path.exists() {
                                                         if let Ok(bytes) = fs::read(&full_path) {
                                                             let base64_data = general_purpose::STANDARD.encode(bytes);
-                                                            // Add parts array with inlineData for Gemini computer-use
+                                                            // Add parts array with inlineData for Gemini function response
                                                             func_response["functionResponse"]["parts"] = json!([{
                                                                 "inlineData": {
                                                                     "mimeType": attachment.file_type,

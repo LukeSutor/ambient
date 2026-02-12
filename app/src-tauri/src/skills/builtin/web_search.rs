@@ -50,6 +50,9 @@ const FETCH_TIMEOUT_SECS: u64 = 10;
 /// Custom URL scheme for receiving scraped data
 const SCRAPE_RESULT_SCHEME: &str = "scraperesult";
 
+/// Label for the web search window
+const WEB_SEARCH_WINDOW_LABEL: &str = "web-search-scraper";
+
 /// Counter for unique window IDs
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -835,7 +838,7 @@ async fn scrape_url_with_webview(
     // Create the WebView window with navigation interception
     let window = WebviewWindowBuilder::new(
         app_handle,
-        "web-search-scraper",
+        WEB_SEARCH_WINDOW_LABEL,
         WebviewUrl::External(
             url_string
                 .parse()

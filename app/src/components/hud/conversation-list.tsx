@@ -63,6 +63,7 @@ export function ConversationList() {
   const {
     conversations,
     hasMoreConversations,
+    isStreaming,
     loadConversation,
     deleteConversation,
     loadMoreConversations,
@@ -149,12 +150,15 @@ export function ConversationList() {
   }, [toggleChatHistory]);
 
   return (
-    <ContentContainer>
+    <ContentContainer isStreaming={isStreaming}>
       <div className="relative w-full h-full overflow-hidden">
-        {/* Header */}
-        <div className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 pointer-events-none">
-          <div className="w-9 h-9" /> {/* Spacer for centered title */}
-          <p className="font-bold text-center">Chat History</p>
+        {/* Header — drag region */}
+        <div 
+          data-tauri-drag-region
+          className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 select-none cursor-grab active:cursor-grabbing"
+        >
+          <div className="w-9 h-0" /> {/* Spacer for centered title */}
+          <p className="font-bold text-center pointer-events-none">Chat History</p>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

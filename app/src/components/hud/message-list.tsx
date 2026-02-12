@@ -25,7 +25,7 @@ const SCROLL_MASK_STYLE = {
 export function MessageList() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const { conversationName, messages, resetConversation } =
+  const { conversationName, messages, isStreaming, resetConversation } =
     useConversation(messagesEndRef);
 
   const [showReasoning, setShowReasoning] = useState(new Set<string>());
@@ -104,16 +104,18 @@ export function MessageList() {
   }, [messages]);
 
   return (
-    <ContentContainer>
+    <ContentContainer isStreaming={isStreaming}>
       <div className="relative w-full h-full overflow-hidden">
-        {/* Header */}
-        <div className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 pointer-events-none">
+        {/* Header — drag region */}
+        <div
+          data-tauri-drag-region
+          className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 select-none cursor-grab active:cursor-grabbing"
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 size="icon"
                 variant="ghost"
-                className="pointer-events-auto"
                 onClick={handleToggleChatHistory}
               >
                 <Menu className="w-5 h-5" />
@@ -130,7 +132,7 @@ export function MessageList() {
           {isLoading ? (
             <div className="h-6 w-40 rounded-lg bg-white/20 animate-pulse" />
           ) : (
-            <p className="font-bold text-center">{conversationName}</p>
+            <p className="font-bold text-center pointer-events-none">{conversationName}</p>
           )}
 
           <Tooltip>
@@ -138,7 +140,6 @@ export function MessageList() {
               <Button
                 size="icon"
                 variant="ghost"
-                className="pointer-events-auto"
                 onClick={() => {
                   void resetConversation();
                 }}

@@ -24,8 +24,6 @@ pub struct LlmRequest {
     pub messages: Option<Vec<crate::db::conversations::Message>>,
     /// ID for the assistant message being generated (for streaming)
     pub assistant_message_id: Option<String>,
-    /// Override model type (e.g., "computer-use" for computer use sessions)
-    pub model_type: Option<String>,
     /// Maximum number of attempts for generation
     pub max_attempts: Option<usize>,
     /// Timeout duration in seconds for each attempt
@@ -96,11 +94,6 @@ impl LlmRequest {
 
     pub fn with_cancel_notify(mut self, notify: Option<Arc<Notify>>) -> Self {
         self.cancel_notify = notify;
-        self
-    }
-
-    pub fn with_model_type(mut self, model_type: Option<String>) -> Self {
-        self.model_type = model_type;
         self
     }
 

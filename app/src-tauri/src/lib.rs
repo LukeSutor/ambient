@@ -36,7 +36,6 @@ pub fn run() {
           let t = metadata.target();
           !(t.starts_with("hyper")
             || t.starts_with("reqwest")
-            || t.starts_with("enigo")
             || t.starts_with("keyring")
             || t.starts_with("html5ever")
             || t.starts_with("selectors")
@@ -49,8 +48,8 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_deep_link::init())
     .manage(DbState(Mutex::new(None)))
-    .manage(crate::agents::computer_use::ComputerUseState::default())
     .manage(crate::agents::chat::state::AgentRuntimeState::default())
+    .manage(crate::agents::browser_use::BrowserUseState::default())
     .setup(|app| {
       // Initialize the skill registry
       if let Err(e) = crate::skills::registry::initialize_registry(&app.handle()) {
@@ -143,11 +142,8 @@ pub fn run() {
       windows::open_secondary_window,
       windows::minimize_secondary_window,
       windows::close_secondary_window,
-      windows::open_computer_use_window,
-      windows::close_computer_use_window,
       windows::resize_main_window,
       windows::refresh_main_window_size,
-      windows::resize_computer_use_window,
       settings::load_user_settings,
       settings::save_user_settings,
       settings::emit_settings_changed,
@@ -183,9 +179,12 @@ pub fn run() {
       agents::chat::state::stop_agent_chat,
       models::embedding::embedding::generate_embedding,
       models::ocr::ocr::process_image,
-      agents::computer_use::commands::start_computer_use,
-      agents::computer_use::commands::stop_computer_use,
-      agents::computer_use::commands::execute_computer_action,
+      agents::browser_use::commands::start_browser_use,
+      agents::browser_use::commands::browser_test_create,
+      agents::browser_use::commands::browser_test_snapshot,
+      agents::browser_use::commands::browser_test_action,
+      agents::browser_use::commands::browser_test_destroy,
+      agents::browser_use::state::stop_browser_use,
       auth::auth_flow::sign_up,
       auth::auth_flow::sign_in_with_password,
       auth::auth_flow::sign_in_with_google,

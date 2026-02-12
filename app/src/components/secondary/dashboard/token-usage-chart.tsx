@@ -39,10 +39,6 @@ const chartConfig = {
     label: "Pro",
     color: "#2563eb",
   },
-  "computer-use": {
-    label: "Computer Use",
-    color: "#f59e0b",
-  },
 } satisfies ChartConfig;
 
 export function TokenUsageChart() {
@@ -128,7 +124,7 @@ export function TokenUsageChart() {
                 key={model}
                 dataKey={model}
                 fill={
-                  chartConfig[model as keyof typeof chartConfig].color || "gray"
+                  chartConfig[model as keyof typeof chartConfig]?.color || "gray"
                 }
                 radius={4}
               />

@@ -11,7 +11,7 @@ import { InputGroupButton } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
 import {
   Bot,
-  MousePointerClick,
+  Globe,
   SquareDashedMousePointer,
   Wrench,
 } from "lucide-react";
@@ -23,7 +23,7 @@ interface ToolMenuProps {
 }
 
 export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
-  const { conversationType, dispatchOCRCapture, toggleComputerUse } =
+  const { conversationType, dispatchOCRCapture, toggleBrowserUse } =
     useConversation();
   const showToolsLabel = conversationType === "chat";
 
@@ -59,11 +59,11 @@ export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="hover:bg-white/60"
-            onClick={toggleComputerUse}
+            onClick={toggleBrowserUse}
           >
-            <MousePointerClick className="!w-4 !h-4 text-black shrink-0 mr-2" />
+            <Globe className="!w-4 !h-4 text-black shrink-0 mr-2" />
             <span className="text-black text-sm whitespace-nowrap">
-              Computer Use
+              Browser Use
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>

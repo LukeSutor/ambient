@@ -180,47 +180,114 @@ export default function Dev() {
   const [embeddingLoading, setEmbeddingLoading] = useState<boolean>(false);
   const [embeddingError, setEmbeddingError] = useState<string | null>(null);
 
-  // --- Computer Use Test ---
-  const [computerUsePrompt, setComputerUsePrompt] = useState<string>(
-    "What is the capital of France?",
-  );
-  const [computerUseResult, setComputerUseResult] = useState<string | null>(
-    null,
-  );
-  const [computerUseLoading, setComputerUseLoading] = useState<boolean>(false);
-  const [computerUseError, setComputerUseError] = useState<string | null>(null);
+  // --- Browser Use Testing ---
+  const [browserUrl, setBrowserUrl] = useState<string>("https://www.google.com");
+  const [browserCreated, setBrowserCreated] = useState<boolean>(false);
+  const [browserSnapshot, setBrowserSnapshot] = useState<string | null>(null);
+  const [browserActionName, setBrowserActionName] = useState<string>("navigate");
+  const [browserActionArgs, setBrowserActionArgs] = useState<string>('{"url": "https://www.google.com"}');
+  const [browserActionResult, setBrowserActionResult] = useState<string | null>(null);
+  const [browserLoading, setBrowserLoading] = useState<boolean>(false);
+  const [browserError, setBrowserError] = useState<string | null>(null);
 
-  // --- Computer Use Action Testing ---
-  const [selectedAction, setSelectedAction] =
-    useState<string>("OpenWebBrowser");
-  const [actionInputs, setActionInputs] = useState<{
-    url: string;
-    x: string | number;
-    y: string | number;
-    text: string;
-    press_enter: boolean;
-    clear_before_typing: boolean;
-    keys: string;
-    direction: string;
-    magnitude: string | number;
-    destination_x: string | number;
-    destination_y: string | number;
-  }>({
-    url: "https://www.google.com",
-    x: 500,
-    y: 500,
-    text: "Hello World",
-    press_enter: true,
-    clear_before_typing: true,
-    keys: "control+a",
-    direction: "down",
-    magnitude: 800,
-    destination_x: 600,
-    destination_y: 600,
-  });
-  const [actionOutput, setActionOutput] = useState<unknown>(null);
-  const [actionLoading, setActionLoading] = useState<boolean>(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const browserActions = ["navigate", "click", "type_text", "select_option", "scroll", "go_back", "wait"];
+
+  const browserActionTemplates: Record<string, string> = {
+    navigate: '{"url": "https://www.google.com"}',
+    click: '{"element_id": 1}',
+    type_text: '{"element_id": 1, "text": "hello", "press_enter": true}',
+    select_option: '{"element_id": 1, "value": "option1"}',
+    scroll: '{"direction": "down"}',
+    go_back: '{}',
+    wait: '{"seconds": 2}',
+  };
+
+  const handleBrowserCreate = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    try {
+      await invoke<string>("browser_test_create", { url: browserUrl });
+      setBrowserCreated(true);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserSnapshot = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    setBrowserSnapshot(null);
+    try {
+      const result = await invoke<string>("browser_test_snapshot");
+      setBrowserSnapshot(result);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserAction = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    setBrowserActionResult(null);
+    try {
+      const args = JSON.parse(browserActionArgs) as Record<string, unknown>;
+      const result = await invoke<string>("browser_test_action", {
+        action: browserActionName,
+        arguments: args,
+      });
+      setBrowserActionResult(result);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserActionThenSnapshot = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    setBrowserActionResult(null);
+    setBrowserSnapshot(null);
+    try {
+      const args = JSON.parse(browserActionArgs) as Record<string, unknown>;
+      const actionResult = await invoke<string>("browser_test_action", {
+        action: browserActionName,
+        arguments: args,
+      });
+      setBrowserActionResult(actionResult);
+
+      // Wait for page to settle
+      const delay = browserActionName === "navigate" ? 2500 : 1500;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
+      // Take snapshot
+      const snapshot = await invoke<string>("browser_test_snapshot");
+      setBrowserSnapshot(snapshot);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
+
+  const handleBrowserDestroy = async () => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    try {
+      await invoke("browser_test_destroy");
+      setBrowserCreated(false);
+      setBrowserSnapshot(null);
+      setBrowserActionResult(null);
+    } catch (err) {
+      setBrowserError(typeof err === "string" ? err : JSON.stringify(err));
+    } finally {
+      setBrowserLoading(false);
+    }
+  };
 
   const handleGenerateEmbedding = async () => {
     if (!embeddingInput.trim()) return;
@@ -236,98 +303,6 @@ export default function Dev() {
       setEmbeddingError(typeof err === "string" ? err : JSON.stringify(err));
     } finally {
       setEmbeddingLoading(false);
-    }
-  };
-
-  const handleTestComputerUse = async () => {
-    if (!computerUsePrompt.trim()) return;
-    setComputerUseLoading(true);
-    setComputerUseError(null);
-    setComputerUseResult(null);
-    try {
-      const result = await invoke<string>("start_computer_use", {
-        prompt: computerUsePrompt,
-      });
-      setComputerUseResult(result);
-      console.log("Computer Use Result:", result);
-    } catch (err) {
-      setComputerUseError(typeof err === "string" ? err : JSON.stringify(err));
-      console.error("Error testing computer use:", err);
-    } finally {
-      setComputerUseLoading(false);
-    }
-  };
-
-  const handleExecuteAction = async () => {
-    setActionLoading(true);
-    setActionOutput(null);
-    setActionError(null);
-
-    let data: Record<string, unknown> | null = null;
-    switch (selectedAction) {
-      case "Navigate":
-        data = { url: actionInputs.url };
-        break;
-      case "ClickAt":
-        data = {
-          x: Number.parseInt(String(actionInputs.x)),
-          y: Number.parseInt(String(actionInputs.y)),
-        };
-        break;
-      case "HoverAt":
-        data = {
-          x: Number.parseInt(String(actionInputs.x)),
-          y: Number.parseInt(String(actionInputs.y)),
-        };
-        break;
-      case "TypeTextAt":
-        data = {
-          x: Number.parseInt(String(actionInputs.x)),
-          y: Number.parseInt(String(actionInputs.y)),
-          text: actionInputs.text,
-          press_enter: actionInputs.press_enter,
-          clear_before_typing: actionInputs.clear_before_typing,
-        };
-        break;
-      case "KeyCombination":
-        data = { keys: actionInputs.keys };
-        break;
-      case "ScrollDocument":
-        data = { direction: actionInputs.direction };
-        break;
-      case "ScrollAt":
-        data = {
-          x: Number.parseInt(String(actionInputs.x)),
-          y: Number.parseInt(String(actionInputs.y)),
-          direction: actionInputs.direction,
-          magnitude: Number.parseInt(String(actionInputs.magnitude)),
-        };
-        break;
-      case "DragAndDrop":
-        data = {
-          x: Number.parseInt(String(actionInputs.x)),
-          y: Number.parseInt(String(actionInputs.y)),
-          destination_x: Number.parseInt(String(actionInputs.destination_x)),
-          destination_y: Number.parseInt(String(actionInputs.destination_y)),
-        };
-        break;
-    }
-
-    try {
-      console.log(
-        `Executing direct action: ${selectedAction} with data:`,
-        data,
-      );
-      const result = await invoke("execute_computer_action", {
-        action: data
-          ? { action: selectedAction, data }
-          : { action: selectedAction },
-      });
-      setActionOutput(result);
-    } catch (err) {
-      setActionError(typeof err === "string" ? err : JSON.stringify(err));
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -458,30 +433,6 @@ export default function Dev() {
             <strong>Is Google Authenticated:</strong> {authState.isGoogleAuthenticated ? "✅ Yes" : "❌ No"}
           </div>
         </div>
-      </div>
-
-      {/* Open and close computer use window */}
-      <div className="flex gap-4 justify-center">
-        <Button
-          onClick={() => {
-            void (async () => {
-              await invoke("open_computer_use_window");
-            })();
-          }}
-          variant="default"
-        >
-          Open Computer Use Window
-        </Button>
-        <Button
-          onClick={() => {
-            void (async () => {
-              await invoke("close_computer_use_window");
-            })();
-          }}
-          variant="destructive"
-        >
-          Close Computer Use Window
-        </Button>
       </div>
 
       {/* Screen Selection Section */}
@@ -619,44 +570,6 @@ export default function Dev() {
               .join(", ")}
             {embeddingArray.length > 64 ? " ..." : ""}
           </pre>
-        )}
-      </div>
-
-      {/* Computer Use Test Section */}
-      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-green-50">
-        <h2 className="text-lg font-semibold">Computer Use Engine Test</h2>
-        <p className="text-sm text-gray-600">
-          Test the Gemini Computer Use API with a custom prompt.
-        </p>
-        <Textarea
-          value={computerUsePrompt}
-          onChange={(e) => {
-            setComputerUsePrompt(e.target.value);
-          }}
-          rows={3}
-          placeholder="Enter a prompt for the computer use engine..."
-        />
-        <Button
-          onClick={() => {
-            void handleTestComputerUse();
-          }}
-          disabled={computerUseLoading || !computerUsePrompt.trim()}
-          variant="default"
-        >
-          {computerUseLoading ? "Testing..." : "Test Computer Use"}
-        </Button>
-        {computerUseError && (
-          <div className="p-2 bg-red-100 border border-red-300 rounded text-xs font-mono overflow-x-auto">
-            Error: {computerUseError}
-          </div>
-        )}
-        {computerUseResult && !computerUseError && (
-          <div className="space-y-2">
-            <Label>API Response:</Label>
-            <pre className="p-3 bg-white border rounded text-xs leading-relaxed max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
-              {computerUseResult}
-            </pre>
-          </div>
         )}
       </div>
 
@@ -800,227 +713,137 @@ export default function Dev() {
         )}
       </div>
 
-      {/* Direct Computer Action Test Section */}
-      <div className="w-full max-w-2xl p-4 border rounded-md space-y-4 bg-red-50">
-        <h2 className="text-lg font-semibold">Direct Computer Action Test</h2>
-        <p className="text-sm text-gray-600">
-          Test individual computer use actions directly.
-        </p>
+      {/* Browser Use Testing */}
+      <div className="w-full max-w-4xl mt-4 p-4 border rounded-md bg-blue-50 space-y-4">
+        <h2 className="text-lg font-semibold">Browser Use Testing</h2>
 
+        {/* Create/Destroy WebView */}
         <div className="space-y-2">
-          <Label htmlFor="action-select">Select Action</Label>
-          <select
-            id="action-select"
-            className="w-full p-2 border rounded-md bg-white text-sm"
-            value={selectedAction}
-            onChange={(e) => {
-              setSelectedAction(e.target.value);
-            }}
-          >
-            <option value="OpenWebBrowser">Open Web Browser</option>
-            <option value="Wait5Seconds">Wait 5 Seconds</option>
-            <option value="GoBack">Go Back</option>
-            <option value="GoForward">Go Forward</option>
-            <option value="Search">Search</option>
-            <option value="Navigate">Navigate</option>
-            <option value="ClickAt">Click At</option>
-            <option value="HoverAt">Hover At</option>
-            <option value="TypeTextAt">Type Text At</option>
-            <option value="KeyCombination">Key Combination</option>
-            <option value="ScrollDocument">Scroll Document</option>
-            <option value="ScrollAt">Scroll At</option>
-            <option value="DragAndDrop">Drag and Drop</option>
-          </select>
-        </div>
-
-        {/* Dynamic Inputs based on selected action */}
-        <div className="grid grid-cols-2 gap-4">
-          {selectedAction === "Navigate" && (
-            <div className="col-span-2 space-y-2">
-              <Label>URL</Label>
-              <Input
-                value={actionInputs.url}
-                onChange={(e) => {
-                  setActionInputs({ ...actionInputs, url: e.target.value });
-                }}
-              />
-            </div>
-          )}
-
-          {(selectedAction === "ClickAt" ||
-            selectedAction === "HoverAt" ||
-            selectedAction === "TypeTextAt" ||
-            selectedAction === "ScrollAt" ||
-            selectedAction === "DragAndDrop") && (
-            <>
-              <div className="space-y-2">
-                <Label>X Coordinate</Label>
-                <Input
-                  type="number"
-                  value={actionInputs.x}
-                  onChange={(e) => {
-                    setActionInputs({ ...actionInputs, x: e.target.value });
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Y Coordinate</Label>
-                <Input
-                  type="number"
-                  value={actionInputs.y}
-                  onChange={(e) => {
-                    setActionInputs({ ...actionInputs, y: e.target.value });
-                  }}
-                />
-              </div>
-            </>
-          )}
-
-          {selectedAction === "TypeTextAt" && (
-            <>
-              <div className="col-span-2 space-y-2">
-                <Label>Text to Type</Label>
-                <Input
-                  value={actionInputs.text}
-                  onChange={(e) => {
-                    setActionInputs({ ...actionInputs, text: e.target.value });
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={actionInputs.press_enter}
-                  onChange={(e) => {
-                    setActionInputs({
-                      ...actionInputs,
-                      press_enter: e.target.checked,
-                    });
-                  }}
-                />
-                <Label>Press Enter</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={actionInputs.clear_before_typing}
-                  onChange={(e) => {
-                    setActionInputs({
-                      ...actionInputs,
-                      clear_before_typing: e.target.checked,
-                    });
-                  }}
-                />
-                <Label>Clear Before Typing</Label>
-              </div>
-            </>
-          )}
-
-          {selectedAction === "KeyCombination" && (
-            <div className="col-span-2 space-y-2">
-              <Label>Keys (e.g. control+c)</Label>
-              <Input
-                value={actionInputs.keys}
-                onChange={(e) => {
-                  setActionInputs({ ...actionInputs, keys: e.target.value });
-                }}
-              />
-            </div>
-          )}
-
-          {(selectedAction === "ScrollDocument" ||
-            selectedAction === "ScrollAt") && (
-            <div className="space-y-2">
-              <Label>Direction</Label>
-              <select
-                className="w-full p-2 border rounded-md text-sm"
-                value={actionInputs.direction}
-                onChange={(e) => {
-                  setActionInputs({
-                    ...actionInputs,
-                    direction: e.target.value,
-                  });
-                }}
+          <Label>Start URL</Label>
+          <div className="flex gap-2">
+            <Input
+              value={browserUrl}
+              onChange={(e) => setBrowserUrl(e.target.value)}
+              placeholder="https://www.google.com"
+              className="bg-white"
+            />
+            {!browserCreated ? (
+              <Button
+                onClick={() => { void handleBrowserCreate(); }}
+                disabled={browserLoading}
+                className="shrink-0"
               >
-                <option value="up">Up</option>
-                <option value="down">Down</option>
-                <option value="left">Left</option>
-                <option value="right">Right</option>
-              </select>
-            </div>
-          )}
-
-          {selectedAction === "ScrollAt" && (
-            <div className="space-y-2">
-              <Label>Magnitude</Label>
-              <Input
-                type="number"
-                value={actionInputs.magnitude}
-                onChange={(e) => {
-                  setActionInputs({
-                    ...actionInputs,
-                    magnitude: e.target.value,
-                  });
-                }}
-              />
-            </div>
-          )}
-
-          {selectedAction === "DragAndDrop" && (
-            <>
-              <div className="space-y-2">
-                <Label>Dest X</Label>
-                <Input
-                  type="number"
-                  value={actionInputs.destination_x}
-                  onChange={(e) => {
-                    setActionInputs({
-                      ...actionInputs,
-                      destination_x: e.target.value,
-                    });
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Dest Y</Label>
-                <Input
-                  type="number"
-                  value={actionInputs.destination_y}
-                  onChange={(e) => {
-                    setActionInputs({
-                      ...actionInputs,
-                      destination_y: e.target.value,
-                    });
-                  }}
-                />
-              </div>
-            </>
+                {browserLoading ? "Creating..." : "Create WebView"}
+              </Button>
+            ) : (
+              <Button
+                onClick={() => { void handleBrowserDestroy(); }}
+                disabled={browserLoading}
+                variant="destructive"
+                className="shrink-0"
+              >
+                Destroy
+              </Button>
+            )}
+          </div>
+          {browserCreated && (
+            <p className="text-xs text-green-700">WebView active</p>
           )}
         </div>
 
-        <Button
-          onClick={() => {
-            void handleExecuteAction();
-          }}
-          disabled={actionLoading}
-          variant="destructive"
-          className="w-full"
-        >
-          {actionLoading ? "Executing..." : `Execute ${selectedAction}`}
-        </Button>
-
-        {!!actionError && (
-          <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded text-sm whitespace-pre-wrap">
-            Error: {String(actionError)}
+        {/* Snapshot */}
+        {browserCreated && (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Button
+                onClick={() => { void handleBrowserSnapshot(); }}
+                disabled={browserLoading}
+                variant="outline"
+                className="w-full"
+              >
+                {browserLoading ? "Extracting..." : "Get Snapshot"}
+              </Button>
+            </div>
           </div>
         )}
 
-        {!!actionOutput && (
-          <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm overflow-auto max-h-60">
-            <h3 className="font-semibold mb-1 text-xs">Result:</h3>
-            <pre className="text-[10px] leading-tight">
-              {JSON.stringify(actionOutput, null, 2)}
-            </pre>
+        {/* Actions */}
+        {browserCreated && (
+          <div className="space-y-2">
+            <Label>Action</Label>
+            <select
+              className="w-full border rounded px-2 py-1.5 text-sm bg-white"
+              value={browserActionName}
+              onChange={(e) => {
+                setBrowserActionName(e.target.value);
+                setBrowserActionArgs(browserActionTemplates[e.target.value] || "{}");
+              }}
+            >
+              {browserActions.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+
+            <Label>Arguments (JSON)</Label>
+            <Textarea
+              value={browserActionArgs}
+              onChange={(e) => setBrowserActionArgs(e.target.value)}
+              className="bg-white font-mono text-xs"
+              rows={3}
+            />
+
+            <div className="flex gap-2">
+              <Button
+                onClick={() => { void handleBrowserAction(); }}
+                disabled={browserLoading}
+                variant="outline"
+                className="flex-1"
+              >
+                Execute Action
+              </Button>
+              <Button
+                onClick={() => { void handleBrowserActionThenSnapshot(); }}
+                disabled={browserLoading}
+                className="flex-1"
+              >
+                Action + Snapshot
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Action Result */}
+        {browserActionResult && (
+          <div className="p-2 bg-green-100 border border-green-300 rounded text-sm">
+            <h3 className="font-semibold mb-1 text-xs">Action Result:</h3>
+            <pre className="text-xs whitespace-pre-wrap">{browserActionResult}</pre>
+          </div>
+        )}
+
+        {/* Snapshot Result */}
+        {browserSnapshot && (
+          <div className="p-2 bg-white border rounded text-sm overflow-auto max-h-96">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-xs">
+                Snapshot ({browserSnapshot.length} chars, ~{Math.ceil(browserSnapshot.length / 4)} tokens)
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs"
+                onClick={() => { void navigator.clipboard.writeText(browserSnapshot); }}
+              >
+                Copy
+              </Button>
+            </div>
+            <pre className="text-[10px] leading-tight whitespace-pre-wrap font-mono">{browserSnapshot}</pre>
+          </div>
+        )}
+
+        {/* Error */}
+        {browserError && (
+          <div className="p-2 bg-red-100 border border-red-300 rounded text-sm whitespace-pre-wrap">
+            Error: {browserError}
           </div>
         )}
       </div>

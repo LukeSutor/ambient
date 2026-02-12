@@ -17,8 +17,6 @@ Built with Tauri (Rust + Next.js).
   - Sandboxed code execution using [rustpython](https://github.com/RustPython/RustPython)
   - Agentic memory for remembering past conversations
   - Google mail and calendar integration for work automation
-- Gemini-powered computer use
-  - Let Gemini take control of your computer to complete tasks on your behalf
 - Screen region context with OCR
   - Snipping‑tool‑style region capture
   - Extracts text with [ocrs](https://github.com/robertknight/ocrs) and injects it into the conversation
