@@ -13,7 +13,7 @@ use tauri::AppHandle;
 /// the HTTP connection and stopping server-side generation.
 pub async fn generate(
     app_handle: AppHandle,
-    mut request: LlmRequest,
+    request: LlmRequest,
     force_local: Option<bool>,
 ) -> Result<LlmResponse, String> {
     let policy = if force_local.unwrap_or(false) {
@@ -30,16 +30,10 @@ pub async fn generate(
                 .await
                 .map_err(|e| format!("Failed to load user settings: {}", e))?;
 
-            let is_local = matches!(
+            matches!(
                 settings.model_selection,
                 crate::settings::types::ModelSelection::Local
-            );
-
-            if !is_local && request.model_type.is_none() {
-                request.model_type = Some(settings.model_selection.as_str().to_string());
-            }
-
-            is_local
+            )
         }
     };
 
