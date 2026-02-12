@@ -298,7 +298,7 @@ export function HUDInputBar({
         className={cn(
           "pointer-events-none overflow-hidden transition-all duration-0",
           isPlusDropdownOpen && "h-[112px]",
-          isToolsDropdownOpen && "h-[102px]",
+          isToolsDropdownOpen && "h-[70px]",
           isModelDropdownOpen && "h-[155px]",
           !isPlusDropdownOpen &&
             !isToolsDropdownOpen &&
