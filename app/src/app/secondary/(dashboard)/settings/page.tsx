@@ -98,11 +98,19 @@ export default function Settings() {
   const handleGpuAccelerationChange = async (enabled: boolean) => {
     try {
       await setGpuAcceleration(enabled);
-      toast.success(
-        enabled
-          ? "GPU acceleration enabled. Restart the app to apply."
-          : "GPU acceleration disabled. Restart the app to apply.",
-      );
+      toast.info("Restarting local model server...");
+
+      try {
+        await invoke("restart_llama_server");
+        toast.success(
+          enabled
+            ? "GPU acceleration enabled. Server restarted."
+            : "GPU acceleration disabled. Server restarted.",
+        );
+      } catch (restartError) {
+        console.error("Failed to restart server:", restartError);
+        toast.error("Setting saved but server restart failed. Please restart the app.");
+      }
     } catch (error) {
       console.error("Failed to save GPU acceleration setting:", error);
       toast.error("Failed to save setting");
@@ -139,7 +147,7 @@ export default function Settings() {
             !gpuDetectionDone
               ? "Detecting GPU..."
               : hasGpu
-                ? `Offload model to GPU via Vulkan (${gpuDevices[0].name})`
+                ? `Offload model to ${gpuDevices[0].name}`
                 : "No compatible GPU detected"
           }
         >
@@ -178,7 +186,7 @@ export default function Settings() {
         </SettingRow>
         <SettingRow
           title="Show Full Thought Traces"
-          description="Toggle whether to show the full thought traces in the HUD"
+          description="Toggle whether to show the full thought traces in conversations"
         >
           <Switch
             checked={settings?.show_full_thought_traces ?? false}

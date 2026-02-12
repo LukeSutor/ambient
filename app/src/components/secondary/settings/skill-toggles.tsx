@@ -10,15 +10,15 @@ import { useCallback, useEffect, useState } from "react";
 /** User-friendly descriptions for each skill */
 const SKILL_DESCRIPTIONS: Record<string, string> = {
   "web-search":
-    "Search the web for up-to-date information, news, and answers to your questions.",
+    "Search the web for up-to-date information, news, and answers to your questions",
   "memory-search":
-    "Recall information from your past conversations.",
+    "Recall information from your past conversations",
   "code-execution":
-    "Run code snippets to perform calculations, data processing, and more.",
+    "Run code snippets to perform calculations, data processing, and more",
   calendar:
-    "View, create, and manage events on your Google Calendar.",
+    "View, create, and manage events on your Google Calendar",
   email:
-    "Read, search, and compose emails using your Gmail account.",
+    "Read and search emails using your Gmail account",
 };
 
 /**
@@ -79,6 +79,7 @@ export function SkillToggles() {
         await refreshAuth();
         const availableSkills =
           await invoke<SkillSummary[]>("get_available_skills");
+          console.log("Available skills:", availableSkills);
         setSkills(availableSkills);
       } catch (error) {
         console.error("[SkillToggles] Failed to load skills:", error);

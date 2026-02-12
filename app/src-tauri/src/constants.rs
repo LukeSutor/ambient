@@ -53,8 +53,8 @@ pub const MAX_PORT: u16 = 9999;
 pub const MIN_PORT: u16 = 8000;
 pub const MAX_PORT_ATTEMPTS: u8 = 20;
 pub const HEALTH_CHECK_ENDPOINT: &str = "/health";
-pub const MAX_HEALTH_CHECK_RETRIES: u8 = 30;
-pub const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(10);
+pub const MAX_HEALTH_CHECK_RETRIES: u8 = 60;
+pub const HEALTH_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
 // HUD information
 pub const HUD_WINDOW_LABEL: &str = "main";

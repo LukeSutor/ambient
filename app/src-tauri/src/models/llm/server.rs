@@ -330,6 +330,22 @@ pub async fn stop_llama_server() -> Result<String, String> {
   }
 }
 
+/// Restart the llama.cpp server (stop then start).
+/// Used when settings change that require a server restart (e.g. GPU acceleration).
+#[tauri::command]
+pub async fn restart_llama_server(app_handle: AppHandle) -> Result<String, String> {
+  log::info!("[llama_server] Restarting llama.cpp server...");
+
+  // Stop if running (ignore "not running" error)
+  let _ = stop_llama_server().await;
+
+  // Brief pause to ensure port is released
+  sleep(std::time::Duration::from_millis(500)).await;
+
+  // Start with current settings
+  spawn_llama_server(app_handle).await
+}
+
 /// Internal function to perform health check
 pub async fn perform_health_check(config: &ServerConfig) -> Result<Value, ServerError> {
   let client = reqwest::Client::new();
@@ -411,8 +427,6 @@ pub struct GpuDevice {
 /// compatible GPU is found or if detection fails (graceful fallback to CPU).
 #[tauri::command]
 pub async fn detect_gpu_devices(app_handle: AppHandle) -> Result<Vec<GpuDevice>, String> {
-  log::info!("[llama_server] Detecting GPU devices...");
-
   let shell = app_handle.shell();
   let output = shell
     .sidecar("server")
@@ -423,15 +437,10 @@ pub async fn detect_gpu_devices(app_handle: AppHandle) -> Result<Vec<GpuDevice>,
     .map_err(|e| format!("Failed to run GPU detection: {}", e))?;
 
   let stdout = String::from_utf8_lossy(&output.stdout);
-  let stderr = String::from_utf8_lossy(&output.stderr);
-
-  log::info!("[llama_server] GPU detection stdout: {}", stdout.trim());
-  if !stderr.is_empty() {
-    log::debug!("[llama_server] GPU detection stderr: {}", stderr.trim());
-  }
 
   // Parse lines after "Available devices:" looking for device entries
-  // Format: "  Vulkan0: NVIDIA GeForce RTX 3080 (12288 MiB, 10240 MiB free)"
+  // Raw format: "  Vulkan0: NVIDIA GeForce RTX 3060 Laptop GPU (6010 MiB, 5242 MiB free)"
+  // Cleaned:    "NVIDIA GeForce RTX 3060 Laptop GPU"
   let mut devices = Vec::new();
   let mut in_devices_section = false;
 
@@ -442,13 +451,30 @@ pub async fn detect_gpu_devices(app_handle: AppHandle) -> Result<Vec<GpuDevice>,
       continue;
     }
     if in_devices_section && !trimmed.is_empty() {
-      // Each device line starts with a backend name (e.g. "Vulkan0:", "CUDA0:")
-      devices.push(GpuDevice {
-        name: trimmed.to_string(),
-      });
+      let clean_name = parse_device_name(trimmed);
+      devices.push(GpuDevice { name: clean_name });
     }
   }
 
-  log::info!("[llama_server] Detected {} GPU device(s)", devices.len());
+  log::info!("[llama_server] Detected {} GPU device(s): {:?}", devices.len(), devices.iter().map(|d| &d.name).collect::<Vec<_>>());
   Ok(devices)
+}
+
+/// Extract a clean GPU name from the raw llama.cpp device line.
+///
+/// Input:  "Vulkan0: NVIDIA GeForce RTX 3060 Laptop GPU (6010 MiB, 5242 MiB free)"
+/// Output: "NVIDIA GeForce RTX 3060 Laptop GPU"
+fn parse_device_name(raw: &str) -> String {
+  // Strip "Vulkan0: " prefix (everything up to and including the first ": ")
+  let after_prefix = raw
+    .find(": ")
+    .map(|i| &raw[i + 2..])
+    .unwrap_or(raw);
+
+  // Strip trailing " (XXXX MiB, ...)" VRAM info
+  after_prefix
+    .rfind(" (")
+    .map(|i| &after_prefix[..i])
+    .unwrap_or(after_prefix)
+    .to_string()
 }
