@@ -219,7 +219,7 @@ pub fn create_browser_webview(app_handle: &AppHandle, start_url: &str) -> Result
     )
     .title("Ambient Browser")
     .inner_size(1280.0, 900.0)
-    .visible(true)
+    .visible(false)
     .focused(false)
     .skip_taskbar(true)
     .on_navigation(move |url| {
