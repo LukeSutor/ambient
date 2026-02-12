@@ -334,12 +334,21 @@ export function useConversation(
         dispatch({ type: "SET_LOADING", payload: true });
         dispatch({ type: "SET_STREAMING", payload: true });
         if (state.conversationType === "browser_use") {
-          void startBrowserUseSession(
+          startBrowserUseSession(
             activeConversationId,
             assistantMessageId,
             content,
             userMessage.message.id,
-          );
+          ).catch((error) => {
+            toast.error("Failed to start browser use session. Please try again.");
+            console.error("[useConversation] Browser use session error:", error);
+            dispatch({
+              type: "FINALIZE_STREAM",
+              payload: { content: "*Error starting browser use session*" },
+            });
+            dispatch({ type: "SET_LOADING", payload: false });
+            dispatch({ type: "SET_STREAMING", payload: false });
+          });
         } else {
           await sendAgentMessage(
             activeConversationId,
@@ -510,12 +519,21 @@ export function useConversation(
 
         // Restart agentic runtime
         if (state.conversationType === "browser_use") {
-          void startBrowserUseSession(
+          startBrowserUseSession(
             conversationId,
             assistantMessageId,
             userMessage.message.content,
             userMessage.message.id,
-          );
+          ).catch((error) => {
+            toast.error("Failed to retry browser use session. Please try again.");
+            console.error("[useConversation] Browser use retry error:", error);
+            dispatch({
+              type: "FINALIZE_STREAM",
+              payload: { content: "*Error retrying browser use session*" },
+            });
+            dispatch({ type: "SET_LOADING", payload: false });
+            dispatch({ type: "SET_STREAMING", payload: false });
+          });
         } else {
           await sendAgentMessage(
             conversationId,
@@ -594,12 +612,21 @@ export function useConversation(
 
         // Restart agentic runtime
         if (state.conversationType === "browser_use") {
-          void startBrowserUseSession(
+          startBrowserUseSession(
             conversationId,
             assistantMessageId,
             content,
             messageId,
-          );
+          ).catch((error) => {
+            toast.error("Failed to resubmit browser use session. Please try again.");
+            console.error("[useConversation] Browser use resubmit error:", error);
+            dispatch({
+              type: "FINALIZE_STREAM",
+              payload: { content: "*Error resubmitting browser use session*" },
+            });
+            dispatch({ type: "SET_LOADING", payload: false });
+            dispatch({ type: "SET_STREAMING", payload: false });
+          });
         } else {
           await sendAgentMessage(
             conversationId,

@@ -16,7 +16,7 @@ use crate::agents::types::{
     TOOL_EXECUTION_COMPLETED, TOOL_EXECUTION_STARTED,
 };
 use crate::db::conversations::{
-    add_message, get_conversation_history, get_or_refresh_prompt_time,
+    add_message, get_conversation_history, get_message, get_or_refresh_prompt_time,
     Message, MessageMetadata, MessageType, Role,
 };
 use crate::events::{emitter::emit, types::{ChatStreamEvent, CHAT_STREAM}};
@@ -81,18 +81,20 @@ impl BrowserUseRuntime {
         user_message: String,
         message_id: Option<String>,
     ) -> Result<String, AgentError> {
-        // Save user message
+        // Save user message (skip if already exists — retry/resubmit scenario)
         let msg_id = message_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        add_message(
-            &self.app_handle,
-            self.conv_id.clone(),
-            Role::User,
-            user_message.clone(),
-            Some(MessageType::Text),
-            None,
-            Some(msg_id),
-        )
-        .await?;
+        if get_message(self.app_handle.clone(), msg_id.clone()).await.is_err() {
+            add_message(
+                &self.app_handle,
+                self.conv_id.clone(),
+                Role::User,
+                user_message.clone(),
+                Some(MessageType::Text),
+                None,
+                Some(msg_id),
+            )
+            .await?;
+        }
 
         // Create browser WebView
         create_browser_webview(&self.app_handle, &self.config.start_url)
