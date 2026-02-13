@@ -47,9 +47,9 @@ export function TokenUsageChart() {
     // Fallback if models haven't loaded yet
     if (Object.keys(config).length === 0) {
       return {
-        local: { label: "Local", color: "#10b981" },
-        fast: { label: "Fast", color: "#60a5fa" },
-        pro: { label: "Pro", color: "#2563eb" },
+        "qwen3vl-2b": { label: "Local", color: "#10b981" },
+        "gemini-3-flash": { label: "Gemini 3 Flash", color: "#60a5fa" },
+        "gemini-3-pro": { label: "Gemini 3 Pro", color: "#2563eb" },
       } satisfies ChartConfig;
     }
     return config;

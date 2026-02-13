@@ -16,7 +16,6 @@ use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_M
 use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
-use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools};
 use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{
@@ -133,10 +132,15 @@ impl AgentRuntime {
             .await
             .map_err(|e| AgentError::DatabaseError(format!("Failed to load settings: {}", e)))?;
 
-        let is_local = matches!(
-            settings.model_selection,
-            ModelSelection::Local
-        );
+        let model_key = settings.model_selection.normalized();
+        let is_local = match crate::db::models::get_model_by_key(&app_handle, &model_key) {
+            Ok(entry) => !entry.is_cloud,
+            Err(_) => {
+                // Fallback: if we can't look up the model, use the legacy check
+                log::warn!("[agent] Could not look up model '{}', using legacy local check", model_key);
+                settings.model_selection.is_local_legacy()
+            }
+        };
 
         // Load runtime config (use defaults for now, could be from settings in future)
         let config = AgentRuntimeConfig::default();

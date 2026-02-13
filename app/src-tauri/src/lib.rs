@@ -83,13 +83,14 @@ pub fn run() {
       match db::core::initialize_database(&app_handle) {
         Ok(conn) => {
           log::info!("[setup] Database initialized successfully.");
-          // Store the connection in the managed state using the app_handle
           let state = app_handle.state::<DbState>();
           *state.0.lock().unwrap() = Some(conn);
         }
         Err(e) => {
-          log::error!("[setup] Failed to initialize database: {}", e);
-          panic!("Database initialization failed: {}", e);
+          // Log the error but do NOT panic — the app will start without a DB.
+          // Features that require the database will fail gracefully at call sites
+          // because they check `conn.as_ref().ok_or(...)`.
+          log::error!("[setup] Failed to initialize database: {}. The app will start with limited functionality.", e);
         }
       }
 

@@ -79,37 +79,41 @@ pub enum HudState {
   Default,
 }
 
-// Model selection
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+// Model selection — stores the model key (e.g. "qwen3vl-2b", "gemini-3-flash").
+// Serialized as a plain string in settings. Legacy enum values ("Local", "Fast", "Pro")
+// are transparently normalized via the `normalized()` method.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(transparent)]
 #[ts(export, export_to = "settings.ts")]
-pub enum ModelSelection {
-  Local,
-  Fast,
-  Pro,
-}
+pub struct ModelSelection(pub String);
 
 impl Default for ModelSelection {
   fn default() -> Self {
-    Self::Local
+    Self("qwen3vl-2b".to_string())
   }
 }
 
 impl ModelSelection {
-  pub fn as_str(&self) -> &'static str {
-    match self {
-      Self::Local => "local",
-      Self::Fast => "fast",
-      Self::Pro => "pro",
+  /// Returns the raw stored key.
+  pub fn as_str(&self) -> &str {
+    &self.0
+  }
+
+  /// Returns the normalized model key, mapping legacy enum values to new keys.
+  pub fn normalized(&self) -> String {
+    match self.0.as_str() {
+      // Legacy enum values from before the model registry migration
+      "Local" | "local" => "qwen3vl-2b".to_string(),
+      "Fast" | "fast" => "gemini-3-flash".to_string(),
+      "Pro" | "pro" => "gemini-3-pro".to_string(),
+      other => other.to_string(),
     }
   }
 
-  pub fn from_str(s: &str) -> Self {
-    match s {
-      "local" => Self::Local,
-      "fast" => Self::Fast,
-      "pro" => Self::Pro,
-      _ => Self::Local, // Default fallback
-    }
+  /// Returns true if this model key refers to a local provider.
+  /// This is a fast check that avoids a DB lookup for common routing decisions.
+  pub fn is_local_legacy(&self) -> bool {
+    matches!(self.normalized().as_str(), "qwen3vl-2b")
   }
 }
 

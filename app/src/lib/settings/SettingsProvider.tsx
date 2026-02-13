@@ -189,7 +189,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         const defaults: UserSettings = {
           hud_size: "Normal",
           show_full_thought_traces: false,
-          model_selection: "Local",
+          model_selection: "qwen3vl-2b",
           agent_config: {
             local_context_limit: 10,
             cloud_context_limit: 20,
@@ -198,6 +198,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
             enable_thinking: false,
           },
           disabled_skills: [],
+          gpu_acceleration: false,
         };
         dispatch({ type: "SET_SETTINGS", payload: defaults });
       }

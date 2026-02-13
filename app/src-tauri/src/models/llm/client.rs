@@ -6,6 +6,19 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use tauri::AppHandle;
 
+/// Resolved model information used for routing and API calls.
+#[derive(Clone)]
+pub struct ResolvedModel {
+    /// The model key from the registry (e.g. "qwen3vl-2b").
+    pub model_key: String,
+    /// Provider routing key: "local" | "cloudflare".
+    pub provider: String,
+    /// Name sent to the provider API (e.g. "fast" for Cloudflare worker).
+    pub api_model_name: String,
+    /// Whether this model uses a cloud provider.
+    pub is_cloud: bool,
+}
+
 /// Unified generate function that routes to the selected provider.
 ///
 /// Supports instant cancellation via `cancel_notify` on the request:
@@ -22,20 +35,8 @@ pub async fn generate(
         ProviderPolicy::Default
     };
 
-    // Decide provider and resolve model type
-    let provider_is_local = match policy {
-        ProviderPolicy::ForceLocal => true,
-        ProviderPolicy::Default => {
-            let settings = crate::settings::service::load_user_settings(app_handle.clone())
-                .await
-                .map_err(|e| format!("Failed to load user settings: {}", e))?;
-
-            matches!(
-                settings.model_selection,
-                crate::settings::types::ModelSelection::Local
-            )
-        }
-    };
+    // Resolve the model to use
+    let resolved = resolve_model(&app_handle, &policy).await?;
 
     // Extract cancel_notify before the retry loop (it's not cloneable via LlmRequest::clone
     // since Notify doesn't impl Clone via the default derive — we handle it explicitly)
@@ -52,14 +53,15 @@ pub async fn generate(
 
         let attempt_request = request.clone();
         let app_handle_clone = app_handle.clone();
+        let resolved_clone = resolved.clone();
 
         let gen_future = async move {
-            if provider_is_local {
+            if !resolved_clone.is_cloud {
                 let provider = LocalProvider;
-                provider.generate(app_handle_clone, attempt_request).await
+                provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
             } else {
                 let provider = CloudflareProvider;
-                provider.generate(app_handle_clone, attempt_request).await
+                provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
             }
         };
 
@@ -139,5 +141,61 @@ where
         }
         // No timeout, no cancel
         (None, None) => gen_future.await,
+    }
+}
+
+/// Resolve which model to use based on the provider policy and user settings.
+/// Looks up model metadata from the database for routing.
+async fn resolve_model(
+    app_handle: &AppHandle,
+    policy: &ProviderPolicy,
+) -> Result<ResolvedModel, String> {
+    match policy {
+        ProviderPolicy::ForceLocal => {
+            // When forced local, always use the default local model.
+            // Try to look it up from the DB; fall back to hardcoded defaults.
+            match crate::db::models::get_model_by_key(app_handle, "qwen3vl-2b") {
+                Ok(entry) => Ok(ResolvedModel {
+                    model_key: entry.model,
+                    provider: entry.provider,
+                    api_model_name: entry.api_model_name,
+                    is_cloud: entry.is_cloud,
+                }),
+                Err(_) => Ok(ResolvedModel {
+                    model_key: "qwen3vl-2b".to_string(),
+                    provider: "local".to_string(),
+                    api_model_name: "qwen3vl-2b".to_string(),
+                    is_cloud: false,
+                }),
+            }
+        }
+        ProviderPolicy::Default => {
+            let settings = crate::settings::service::load_user_settings(app_handle.clone())
+                .await
+                .map_err(|e| format!("Failed to load user settings: {}", e))?;
+
+            let model_key = settings.model_selection.normalized();
+
+            match crate::db::models::get_model_by_key(app_handle, &model_key) {
+                Ok(entry) => Ok(ResolvedModel {
+                    model_key: entry.model,
+                    provider: entry.provider,
+                    api_model_name: entry.api_model_name,
+                    is_cloud: entry.is_cloud,
+                }),
+                Err(e) => {
+                    log::warn!(
+                        "[llm_client] Model '{}' not found in registry, falling back to local: {}",
+                        model_key, e
+                    );
+                    Ok(ResolvedModel {
+                        model_key: "qwen3vl-2b".to_string(),
+                        provider: "local".to_string(),
+                        api_model_name: "qwen3vl-2b".to_string(),
+                        is_cloud: false,
+                    })
+                }
+            }
+        }
     }
 }

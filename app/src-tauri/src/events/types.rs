@@ -130,3 +130,14 @@ pub struct NavigateToConversationEvent {
   pub message_id: Option<String>,
   pub timestamp: String,
 }
+
+pub const DATABASE_RECOVERED: &str = "database_recovered";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct DatabaseRecoveredEvent {
+  /// Path to the backup file containing the user's previous data.
+  pub backup_path: String,
+  /// Description of the migration error that triggered recovery.
+  pub reason: String,
+  pub timestamp: String,
+}

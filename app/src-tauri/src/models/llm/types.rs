@@ -120,6 +120,7 @@ pub trait LlmProvider: Send + Sync {
         &self,
         app_handle: AppHandle,
         request: LlmRequest,
+        resolved_model: &crate::models::llm::client::ResolvedModel,
     ) -> Result<LlmResponse, String>;
 }
 

@@ -8,4 +8,4 @@ export type CloudModelUsage = { daily_limit: number, requests_used: number, rema
 /**
  * A model entry from the database
  */
-export type ModelEntry = { id: bigint, model: string, display_name: string, description: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, color: string, badge_label: string, badge_variant: string, badge_class: string, icon: string, icon_color: string, icon_bg: string, };
+export type ModelEntry = { id: bigint, model: string, display_name: string, description: string, provider: string, api_model_name: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, color: string, badge_label: string, badge_variant: string, badge_class: string, icon: string, icon_color: string, icon_bg: string, };

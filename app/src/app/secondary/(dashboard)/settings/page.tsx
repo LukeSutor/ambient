@@ -70,7 +70,7 @@ export default function Settings() {
   const hasGpu = gpuDevices.length > 0;
 
   const hudSize = settings?.hud_size ?? "Normal";
-  const modelSelection = settings?.model_selection ?? "Local";
+  const modelSelection = settings?.model_selection ?? "qwen3vl-2b";
 
   const handleHudSizeChange = async (value: string) => {
     const newSize = value as HudSizeOption;
@@ -87,8 +87,7 @@ export default function Settings() {
   const handleModelSelectionChange = async (value: ModelSelection) => {
     try {
       await setModelSelection(value);
-      const displayName = value.charAt(0).toUpperCase() + value.slice(1);
-      toast.success(`Model selection changed to ${displayName}`);
+      toast.success("Model selection updated");
     } catch (error) {
       console.error("Failed to save model selection setting:", error);
       toast.error("Failed to save setting");

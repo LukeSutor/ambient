@@ -44,7 +44,6 @@ export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
         align="start"
         avoidCollisions={false}
         sideOffset={10}
-        alignOffset={-12}
         className="bg-white/60"
       >
         <DropdownMenuGroup>

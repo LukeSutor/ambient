@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ModelSelection } from "@/types/settings";
 import type { ModelEntry, CloudModelUsage } from "@/types/models";
 import { Crown, Shield, Zap } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
@@ -24,19 +23,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
   crown: Crown,
 };
 
-/** Map model key (e.g. "local") to ModelSelection enum ("Local") */
-function modelKeyToSelection(key: string): ModelSelection {
-  return (key.charAt(0).toUpperCase() + key.slice(1)) as ModelSelection;
-}
-
-/** Map ModelSelection enum ("Local") to model key ("local") */
-function selectionToModelKey(sel: ModelSelection): string {
-  return sel.toLowerCase();
-}
-
 interface ModelSelectorProps {
-  value: ModelSelection;
-  onChange: (value: ModelSelection) => void;
+  /** The currently selected model key (e.g. "qwen3vl-2b"). */
+  value: string;
+  onChange: (value: string) => void;
   disabled?: boolean;
 }
 
@@ -63,9 +53,8 @@ function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
   );
 }
 
-function SelectedModelDisplay({ value, models }: { value: ModelSelection; models: ModelEntry[] }) {
-  const key = selectionToModelKey(value);
-  const model = models.find((m) => m.model === key);
+function SelectedModelDisplay({ value, models }: { value: string; models: ModelEntry[] }) {
+  const model = models.find((m) => m.model === value);
   if (!model) {
     // Fallback while loading
     return <span className="font-medium">{value}</span>;
@@ -119,20 +108,19 @@ export function ModelSelector({
   }, [fetchModels, fetchCloudUsage]);
 
   const handleChange = (v: string) => {
-    const selection = v as ModelSelection;
-    const key = selectionToModelKey(selection);
-    const model = models.find((m) => m.model === key);
+    const model = models.find((m) => m.model === v);
 
     // Prevent selecting premium models without upgrade
     if (model?.is_premium) return;
 
     // Prevent selecting cloud models with 0 remaining uses
+    // Cloud usage is keyed by api_model_name (e.g. "fast", "pro")
     if (model?.is_cloud && !model.is_premium) {
-      const usage = cloudUsage[key];
+      const usage = cloudUsage[model.api_model_name];
       if (usage && usage.remaining <= 0) return;
     }
 
-    onChange(selection);
+    onChange(v);
   };
 
   return (
@@ -146,7 +134,7 @@ export function ModelSelector({
           <SelectedModelDisplay value={value} models={models} />
         </SelectValue>
       </SelectTrigger>
-      <SelectContent className="w-96">
+      <SelectContent className="w-96" align="end">
         <SelectGroup>
           <SelectLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5 flex items-center gap-2">
             <Zap className="h-3 w-3" />
@@ -154,8 +142,8 @@ export function ModelSelector({
           </SelectLabel>
 
           {models.map((model, index) => {
-            const selectionValue = modelKeyToSelection(model.model);
-            const usage = cloudUsage[model.model];
+            // Cloud usage is keyed by api_model_name (e.g. "fast", "pro")
+            const usage = cloudUsage[model.api_model_name];
             const isAtLimit = model.is_cloud && !model.is_premium && usage && usage.remaining <= 0;
             const isDisabled = model.is_premium || !!isAtLimit;
 
@@ -163,7 +151,7 @@ export function ModelSelector({
               <div key={model.model}>
                 {index > 0 && <SelectSeparator />}
                 <SelectItem
-                  value={selectionValue}
+                  value={model.model}
                   className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isDisabled ? 'opacity-50' : ''}`}
                   disabled={isDisabled}
                 >

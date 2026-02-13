@@ -100,6 +100,8 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           model TEXT NOT NULL UNIQUE,
           display_name TEXT NOT NULL,
           description TEXT NOT NULL DEFAULT '',
+          provider TEXT NOT NULL DEFAULT 'local',
+          api_model_name TEXT NOT NULL DEFAULT '',
           is_cloud INTEGER NOT NULL DEFAULT 0,
           is_premium INTEGER NOT NULL DEFAULT 0,
           daily_limit INTEGER,
@@ -112,10 +114,10 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           icon_bg TEXT NOT NULL DEFAULT 'bg-gray-100'
         );
 
-        INSERT OR IGNORE INTO models (model, display_name, description, is_cloud, is_premium, daily_limit, color, badge_label, badge_variant, icon, icon_color, icon_bg) VALUES
-          ('local', 'Local', 'Ultimate privacy. Runs on your device. No internet required.', 0, 0, NULL, '#10b981', 'Private', 'outline', 'shield', 'text-green-600', 'bg-green-100'),
-          ('fast', 'Gemini 3 Flash', 'More powerful. Google''s fast model with advanced capabilities.', 1, 0, 3, '#60a5fa', 'Enhanced', 'outline', 'zap', 'text-blue-600', 'bg-blue-100'),
-          ('pro', 'Gemini 3 Pro', 'The latest and most advanced model from Google.', 1, 1, 0, '#2563eb', 'Premium', 'default', 'crown', 'text-white', 'bg-gradient-to-r from-purple-500 to-pink-500');
+        INSERT OR IGNORE INTO models (model, display_name, description, provider, api_model_name, is_cloud, is_premium, daily_limit, color, badge_label, badge_variant, icon, icon_color, icon_bg) VALUES
+          ('qwen3vl-2b', 'Local', 'Ultimate privacy. Runs on your device.', 'local', 'qwen3vl-2b', 0, 0, NULL, '#10b981', 'Private', 'outline', 'shield', 'text-green-600', 'bg-green-100'),
+          ('gemini-3-flash', 'Gemini 3 Flash', 'Google''s fast model with advanced capabilities.', 'cloudflare', 'fast', 1, 0, 3, '#60a5fa', 'Enhanced', 'outline', 'zap', 'text-blue-600', 'bg-blue-100'),
+          ('gemini-3-pro', 'Gemini 3 Pro', 'The latest and most advanced model from Google.', 'cloudflare', 'pro', 1, 1, 0, '#2563eb', 'Premium', 'default', 'crown', 'text-white', 'bg-gradient-to-r from-purple-500 to-pink-500');
 
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (
@@ -159,10 +161,8 @@ fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
   Ok(app_data_path.join("database.sqlite"))
 }
 
-/// Initializes the SQLite database connection, registers extensions, and runs migrations.
-pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
-  let db_path = get_db_path(app_handle)?;
-
+/// Register the sqlite_vec extension globally (idempotent).
+fn register_sqlite_vec_extension() -> Result<(), String> {
   unsafe {
     let rc = sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
     if rc != 0 {
@@ -173,12 +173,14 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
     }
   }
   log::info!("[db] Registered sqlite_vec extension");
+  Ok(())
+}
 
-  let mut conn =
-    Connection::open(&db_path).map_err(|e| format!("Failed to open database connection: {}", e))?;
-
+/// Try to apply migrations to an open connection.
+/// Returns `Ok(())` on success, or an error string on failure.
+fn apply_migrations(conn: &mut Connection) -> Result<(), String> {
   log::info!("[db] Applying database migrations...");
-  MIGRATIONS.to_latest(&mut conn).map_err(|e| match e {
+  MIGRATIONS.to_latest(conn).map_err(|e| match e {
     rusqlite_migration::Error::RusqliteError { query: _, err } => {
       format!("SQLite error during migration: {}", err)
     }
@@ -188,8 +190,110 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
     other => format!("Unknown migration error: {}", other),
   })?;
   log::info!("[db] Migrations applied successfully.");
+  Ok(())
+}
 
-  Ok(conn)
+/// Back up the existing database file by copying it to a timestamped path.
+/// Returns the backup path on success.
+fn backup_database(db_path: &PathBuf) -> Result<PathBuf, String> {
+  let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+  let backup_name = format!("database_backup_{}.sqlite", timestamp);
+  let backup_path = db_path
+    .parent()
+    .ok_or("Cannot determine database parent directory")?
+    .join(&backup_name);
+
+  fs::copy(db_path, &backup_path)
+    .map_err(|e| format!("Failed to back up database: {}", e))?;
+
+  log::info!("[db] Database backed up to {:?}", backup_path);
+  Ok(backup_path)
+}
+
+/// Initializes the SQLite database connection, registers extensions, and runs migrations.
+///
+/// If migrations fail (e.g. schema version mismatch after an update), the existing
+/// database is **backed up** to a timestamped file and a fresh database is created.
+/// A `database_recovered` event is emitted so the frontend can inform the user.
+pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
+  let db_path = get_db_path(app_handle)?;
+
+  register_sqlite_vec_extension()?;
+
+  let mut conn =
+    Connection::open(&db_path).map_err(|e| format!("Failed to open database connection: {}", e))?;
+
+  match apply_migrations(&mut conn) {
+    Ok(()) => Ok(conn),
+    Err(migration_err) => {
+      log::warn!(
+        "[db] Migration failed: {}. Attempting recovery with backup...",
+        migration_err
+      );
+
+      // Close the broken connection
+      if let Err((_, e)) = conn.close() {
+        log::warn!("[db] Error closing connection during recovery: {}", e);
+      }
+
+      // Back up the existing database so the user never loses data
+      let backup_path = match backup_database(&db_path) {
+        Ok(path) => path,
+        Err(backup_err) => {
+          return Err(format!(
+            "Migration failed ({}) and backup also failed ({}). \
+             Please manually copy {:?} before restarting.",
+            migration_err, backup_err, db_path
+          ));
+        }
+      };
+
+      // Delete the old database and create a fresh one
+      if let Err(e) = fs::remove_file(&db_path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+          return Err(format!(
+            "Migration failed and could not remove old database: {}",
+            e
+          ));
+        }
+      }
+
+      let mut fresh_conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open fresh database: {}", e))?;
+
+      apply_migrations(&mut fresh_conn).map_err(|e| {
+        format!(
+          "Failed to apply migrations to fresh database: {}. Backup at {:?}",
+          e, backup_path
+        )
+      })?;
+
+      // Emit recovery event so the frontend can notify the user
+      let backup_path_str = backup_path.to_string_lossy().to_string();
+      log::info!(
+        "[db] Database recovered successfully. Backup at: {}",
+        backup_path_str
+      );
+
+      // Emit event on a best-effort basis (emitter may not be ready yet during setup)
+      if let Ok(emitter) = std::panic::catch_unwind(|| {
+        crate::events::emitter::emit(
+          crate::events::types::DATABASE_RECOVERED,
+          crate::events::types::DatabaseRecoveredEvent {
+            backup_path: backup_path_str.clone(),
+            reason: migration_err.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+          },
+        )
+      }) {
+        if let Err(e) = emitter {
+          log::debug!("[db] Could not emit recovery event (emitter not ready): {}", e);
+        }
+      }
+
+      Ok(fresh_conn)
+    }
+  }
 }
 
 // Helper to convert rusqlite ValueRef to serde_json Value

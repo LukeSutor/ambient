@@ -24,7 +24,6 @@ use crate::models::llm::client::generate;
 use crate::models::llm::prompts::get_prompt;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::settings::service::load_user_settings;
-use crate::settings::types::ModelSelection;
 use crate::skills::types::{AgentError, ToolCall, ToolDefinition, ToolParameter, ParameterType};
 use chrono::Local;
 use std::sync::Arc;
@@ -60,7 +59,11 @@ impl BrowserUseRuntime {
             .await
             .map_err(|e| AgentError::RuntimeError(format!("Failed to load settings: {}", e)))?;
 
-        let is_local = matches!(settings.model_selection, ModelSelection::Local);
+        let model_key = settings.model_selection.normalized();
+        let is_local = match crate::db::models::get_model_by_key(&app_handle, &model_key) {
+            Ok(entry) => !entry.is_cloud,
+            Err(_) => settings.model_selection.is_local_legacy(),
+        };
         let config = BrowserUseConfig::default();
 
         Ok(Self {

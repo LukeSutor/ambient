@@ -1,4 +1,5 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
+use crate::models::llm::client::ResolvedModel;
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
@@ -19,12 +20,11 @@ impl LlmProvider for CloudflareProvider {
     &self,
     app_handle: AppHandle,
     request: LlmRequest,
+    resolved_model: &ResolvedModel,
   ) -> Result<LlmResponse, String> {
-    // Get model type from user settings
-    let settings = crate::settings::service::load_user_settings(app_handle.clone())
-      .await
-      .map_err(|e| format!("Failed to load user settings: {}", e))?;
-    let model = settings.model_selection.as_str().to_string();
+    // Use the API model name from the resolved model (e.g. "fast", "pro")
+    let model = resolved_model.api_model_name.clone();
+    let model_key = resolved_model.model_key.clone();
 
     let should_stream = request.stream.unwrap_or(false);
     let mut content = Vec::new();
@@ -198,7 +198,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
         app_handle.clone(),
-        &model,
+        &model_key,
         prompt_tokens,
         completion_tokens,
       ).await?;
@@ -276,7 +276,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          &model,
+          &model_key,
           prompt_tokens,
           completion_tokens,
       ).await?;
