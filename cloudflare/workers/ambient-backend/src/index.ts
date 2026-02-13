@@ -167,60 +167,35 @@ async function getAllUsageToday(admin: SupabaseClient, userId: string): Promise<
 /**
  * Increment the request count for a user/model/today.
  *
- * Uses a select-then-upsert pattern because the Supabase JS client
- * doesn't support SQL-level `SET x = x + 1` in upserts.
+ * Uses Supabase's `.upsert()` with `onConflict` for a single-query operation.
+ * The caller passes in `currentUsed` (already fetched during the rate-limit
+ * check), so we don't need a separate SELECT — just upsert the new count.
  *
- * TODO: For atomic increment, create a Supabase Postgres function:
- *
- *   CREATE OR REPLACE FUNCTION increment_model_usage(p_user_id uuid, p_model_type text)
- *   RETURNS void AS $$
- *   BEGIN
- *     INSERT INTO model_usage (user_id, model_type, usage_date, requests_used)
- *     VALUES (p_user_id, p_model_type, CURRENT_DATE, 1)
- *     ON CONFLICT (user_id, model_type, usage_date)
- *     DO UPDATE SET requests_used = model_usage.requests_used + 1;
- *   END;
- *   $$ LANGUAGE plpgsql;
- *
- * Then replace this function body with:
- *   await admin.rpc('increment_model_usage', { p_user_id: userId, p_model_type: modelType });
- *
- * This requires a UNIQUE constraint on (user_id, model_type, usage_date).
+ * Requires a UNIQUE constraint on (user_id, model_type, usage_date).
  */
-async function incrementUsage(admin: SupabaseClient, userId: string, modelType: string): Promise<void> {
+async function incrementUsage(
+	admin: SupabaseClient,
+	userId: string,
+	modelType: string,
+	currentUsed: number,
+): Promise<void> {
 	const today = getTodayUTC();
 
-	// Try to increment existing row first
-	const { data: existing } = await admin
+	const { error } = await admin
 		.from('model_usage')
-		.select('id, requests_used')
-		.eq('user_id', userId)
-		.eq('model_type', modelType)
-		.eq('usage_date', today)
-		.maybeSingle();
-
-	if (existing) {
-		const { error } = await admin
-			.from('model_usage')
-			.update({ requests_used: existing.requests_used + 1 })
-			.eq('id', existing.id);
-		if (error) {
-			console.error('Failed to increment usage:', error);
-			throw new Error('Failed to increment usage');
-		}
-	} else {
-		const { error } = await admin
-			.from('model_usage')
-			.insert({
+		.upsert(
+			{
 				user_id: userId,
 				model_type: modelType,
 				usage_date: today,
-				requests_used: 1,
-			});
-		if (error) {
-			console.error('Failed to insert usage:', error);
-			throw new Error('Failed to insert usage');
-		}
+				requests_used: currentUsed + 1,
+			},
+			{ onConflict: 'user_id,model_type,usage_date' },
+		);
+
+	if (error) {
+		console.error('Failed to increment usage:', error);
+		throw new Error('Failed to increment usage');
 	}
 }
 
@@ -479,7 +454,8 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		const encoder = new TextEncoder();
 
 		// Increment usage immediately — stream has started successfully
-		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType).catch(e =>
+		const currentUsed = usageToday[body.modelType] ?? 0;
+		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
 			console.error('Failed to increment usage:', e)
 		));
 
@@ -514,7 +490,8 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		});
 
 		// Increment usage — generation succeeded
-		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType).catch(e =>
+		const currentUsed = usageToday[body.modelType] ?? 0;
+		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
 			console.error('Failed to increment usage:', e)
 		));
 
