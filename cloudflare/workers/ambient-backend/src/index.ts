@@ -19,13 +19,8 @@ type requestData = {
 	tools?: any;
 }
 
-// Daily request limits per model key
-const MODEL_LIMITS: Record<string, number> = {
-	"gemini-3-flash": 3,
-	"gemini-3-pro": 0, // Pro is behind paywall — no free uses
-};
-
-// Map model keys to Gemini API model names and thinking config
+// Map model keys to Gemini API model names and thinking config.
+// This is the only hardcoded model info — limits come from the `model_limits` table.
 const MODEL_REGISTRY: Record<string, { apiModel: string; thinkingLevel: ThinkingLevel }> = {
 	"gemini-3-flash": { apiModel: "gemini-3-flash-preview", thinkingLevel: ThinkingLevel.MINIMAL },
 	"gemini-3-pro": { apiModel: "gemini-3-pro-preview", thinkingLevel: ThinkingLevel.LOW },
@@ -34,6 +29,106 @@ const MODEL_REGISTRY: Record<string, { apiModel: string; thinkingLevel: Thinking
 const extractModelName = (modelType: string): string | null => {
 	return MODEL_REGISTRY[modelType]?.apiModel ?? null;
 };
+
+// ---------------------------------------------------------------------------
+// User tier resolution
+// ---------------------------------------------------------------------------
+
+type UserTier = "free" | "premium" | "admin";
+
+/**
+ * Resolve a user's effective tier by checking their profile role
+ * and (for premium) verifying an active subscription exists.
+ *
+ * - admin: unlimited access, set manually in Supabase
+ * - premium: requires an active/trialing/past_due subscription
+ * - free: default for everyone else
+ *
+ * Profile + subscription are fetched in parallel to avoid a
+ * sequential round-trip for premium users.
+ */
+async function getUserTier(admin: SupabaseClient, userId: string): Promise<UserTier> {
+	// Fetch profile and subscription check in parallel
+	const [profileResult, subResult] = await Promise.all([
+		admin.from('profiles').select('role').eq('id', userId).maybeSingle(),
+		admin.from('subscriptions').select('status').eq('user_id', userId)
+			.in('status', ['active', 'trialing', 'past_due']).maybeSingle(),
+	]);
+
+	if (profileResult.error || !profileResult.data) {
+		console.error('Failed to fetch user profile:', profileResult.error);
+		return 'free';
+	}
+
+	const role = profileResult.data.role;
+	if (role === 'admin') return 'admin';
+	if (role === 'premium' && subResult.data) return 'premium';
+	return 'free';
+}
+
+// ---------------------------------------------------------------------------
+// Model limits (database-driven)
+// ---------------------------------------------------------------------------
+
+interface ModelLimit {
+	model_type: string;
+	daily_limit: number;
+	is_available: boolean;
+}
+
+/**
+ * Fetch model limits for a given tier from the `model_limits` table.
+ * Returns a map of model_type → { daily_limit, is_available }.
+ */
+async function getModelLimitsForTier(
+	admin: SupabaseClient,
+	tier: UserTier,
+): Promise<Record<string, ModelLimit>> {
+	const { data, error } = await admin
+		.from('model_limits')
+		.select('model_type, daily_limit, is_available')
+		.eq('tier', tier);
+
+	if (error || !data) {
+		console.error('Failed to fetch model limits:', error);
+		return {};
+	}
+
+	const limits: Record<string, ModelLimit> = {};
+	for (const row of data) {
+		limits[row.model_type] = {
+			model_type: row.model_type,
+			daily_limit: row.daily_limit,
+			is_available: row.is_available,
+		};
+	}
+	return limits;
+}
+
+/**
+ * Fetch the limit for a single model on a given tier.
+ * More efficient than getModelLimitsForTier when only one model is needed
+ * (e.g. in the generate path).
+ */
+async function getModelLimitForTier(
+	admin: SupabaseClient,
+	tier: UserTier,
+	modelType: string,
+): Promise<ModelLimit | null> {
+	const { data, error } = await admin
+		.from('model_limits')
+		.select('model_type, daily_limit, is_available')
+		.eq('tier', tier)
+		.eq('model_type', modelType)
+		.maybeSingle();
+
+	if (error || !data) return null;
+	return {
+		model_type: data.model_type,
+		daily_limit: data.daily_limit,
+		is_available: data.is_available,
+	};
+}
 
 /** Get today's date in YYYY-MM-DD format (UTC) */
 function getTodayUTC(): string {
@@ -46,30 +141,51 @@ function createAdminClient(env: Env): SupabaseClient {
 }
 
 /**
- * Check how many requests a user has used today for a given model.
- * Returns the number of requests used, or 0 if no row exists yet.
+ * Fetch today's usage for ALL models for a given user in a single query.
+ * Returns a map of model_type → requests_used.
  */
-async function getRequestsUsedToday(admin: SupabaseClient, userId: string, modelType: string): Promise<number> {
+async function getAllUsageToday(admin: SupabaseClient, userId: string): Promise<Record<string, number>> {
 	const today = getTodayUTC();
 	const { data, error } = await admin
 		.from('model_usage')
-		.select('requests_used')
+		.select('model_type, requests_used')
 		.eq('user_id', userId)
-		.eq('model_type', modelType)
-		.eq('usage_date', today)
-		.maybeSingle();
+		.eq('usage_date', today);
 
 	if (error) {
-		console.error('Failed to check usage:', error);
-		throw new Error('Failed to check usage');
+		console.error('Failed to fetch usage:', error);
+		return {};
 	}
 
-	return data?.requests_used ?? 0;
+	const usage: Record<string, number> = {};
+	for (const row of data ?? []) {
+		usage[row.model_type] = row.requests_used;
+	}
+	return usage;
 }
 
 /**
  * Increment the request count for a user/model/today.
- * Uses upsert with ON CONFLICT to atomically create or increment.
+ *
+ * Uses a select-then-upsert pattern because the Supabase JS client
+ * doesn't support SQL-level `SET x = x + 1` in upserts.
+ *
+ * TODO: For atomic increment, create a Supabase Postgres function:
+ *
+ *   CREATE OR REPLACE FUNCTION increment_model_usage(p_user_id uuid, p_model_type text)
+ *   RETURNS void AS $$
+ *   BEGIN
+ *     INSERT INTO model_usage (user_id, model_type, usage_date, requests_used)
+ *     VALUES (p_user_id, p_model_type, CURRENT_DATE, 1)
+ *     ON CONFLICT (user_id, model_type, usage_date)
+ *     DO UPDATE SET requests_used = model_usage.requests_used + 1;
+ *   END;
+ *   $$ LANGUAGE plpgsql;
+ *
+ * Then replace this function body with:
+ *   await admin.rpc('increment_model_usage', { p_user_id: userId, p_model_type: modelType });
+ *
+ * This requires a UNIQUE constraint on (user_id, model_type, usage_date).
  */
 async function incrementUsage(admin: SupabaseClient, userId: string, modelType: string): Promise<void> {
 	const today = getTodayUTC();
@@ -199,7 +315,11 @@ async function handleGoogleRefresh(request: Request, env: Env): Promise<Response
 }
 
 /**
- * Handle remaining uses query
+ * Handle remaining uses query.
+ *
+ * Returns the user's effective tier and per-model usage info,
+ * all driven by the `profiles`, `subscriptions`, `model_limits`,
+ * and `model_usage` tables.
  */
 async function handleGetRemainingUses(request: Request, env: Env): Promise<Response> {
 	const user = await verifySupabaseUser(request, env);
@@ -208,18 +328,45 @@ async function handleGetRemainingUses(request: Request, env: Env): Promise<Respo
 	}
 
 	const admin = createAdminClient(env);
-	const remaining: Record<string, { daily_limit: number; requests_used: number; remaining: number }> = {};
 
-	for (const [modelType, limit] of Object.entries(MODEL_LIMITS)) {
-		const used = await getRequestsUsedToday(admin, user.id, modelType);
-		remaining[modelType] = {
-			daily_limit: limit,
-			requests_used: used,
-			remaining: Math.max(0, limit - used),
-		};
+	// Resolve tier and fetch all usage in parallel — these are independent.
+	// Saves a full round-trip vs sequential tier → usage.
+	const [tier, usageToday] = await Promise.all([
+		getUserTier(admin, user.id),
+		getAllUsageToday(admin, user.id),
+	]);
+
+	// Get limits (depends on resolved tier)
+	const limits = await getModelLimitsForTier(admin, tier);
+
+	// Build response by combining limits + batch usage (all in-memory, no queries)
+	const models: Record<string, {
+		daily_limit: number;
+		requests_used: number;
+		remaining: number;
+		is_available: boolean;
+	}> = {};
+
+	for (const [modelType, limit] of Object.entries(limits)) {
+		if (limit.daily_limit === -1) {
+			models[modelType] = {
+				daily_limit: -1,
+				requests_used: 0,
+				remaining: -1,
+				is_available: limit.is_available,
+			};
+		} else {
+			const used = usageToday[modelType] ?? 0;
+			models[modelType] = {
+				daily_limit: limit.daily_limit,
+				requests_used: used,
+				remaining: Math.max(0, limit.daily_limit - used),
+				is_available: limit.is_available,
+			};
+		}
 	}
 
-	return new Response(JSON.stringify(remaining), {
+	return new Response(JSON.stringify({ user_tier: tier, models }), {
 		headers: {
 			'Content-Type': 'application/json',
 			'Access-Control-Allow-Origin': '*',
@@ -255,29 +402,41 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		return new Response('Bad Request: Invalid model type', { status: 400 });
 	}
 
-	// --- Rate limit check ---
-	const dailyLimit = MODEL_LIMITS[body.modelType];
-	if (dailyLimit !== undefined) {
-		try {
-			const admin = createAdminClient(env);
-			const used = await getRequestsUsedToday(admin, user.id, body.modelType);
-			if (used >= dailyLimit) {
-				return new Response(JSON.stringify({
-					error: 'rate_limit_exceeded',
-					message: `Daily limit of ${dailyLimit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
-					daily_limit: dailyLimit,
-					requests_used: used,
-				}), {
-					status: 429,
-					headers: {
-						'Content-Type': 'application/json',
-						'Access-Control-Allow-Origin': '*',
-					},
-				});
-			}
-		} catch (e) {
-			console.error('Rate limit check failed, allowing request:', e);
-			// Fail open — if rate limit check fails, allow the request
+	// --- Tier-aware rate limit check ---
+	// Fetch tier and today's usage for this model in parallel.
+	const admin = createAdminClient(env);
+	const [tier, usageToday] = await Promise.all([
+		getUserTier(admin, user.id),
+		getAllUsageToday(admin, user.id),
+	]);
+
+	// Only fetch the single model's limit (not all models)
+	const modelLimit = await getModelLimitForTier(admin, tier, body.modelType);
+
+	// Block if model is not available for this tier
+	if (!modelLimit || !modelLimit.is_available) {
+		return new Response(JSON.stringify({
+			error: 'model_not_available',
+			message: `${body.modelType} is not available on the ${tier} plan.`,
+		}), {
+			status: 403,
+			headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+		});
+	}
+
+	// Check daily limit (skip for unlimited tiers where daily_limit = -1)
+	if (modelLimit.daily_limit >= 0) {
+		const used = usageToday[body.modelType] ?? 0;
+		if (used >= modelLimit.daily_limit) {
+			return new Response(JSON.stringify({
+				error: 'rate_limit_exceeded',
+				message: `Daily limit of ${modelLimit.daily_limit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
+				daily_limit: modelLimit.daily_limit,
+				requests_used: used,
+			}), {
+				status: 429,
+				headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+			});
 		}
 	}
 
@@ -320,7 +479,6 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		const encoder = new TextEncoder();
 
 		// Increment usage immediately — stream has started successfully
-		const admin = createAdminClient(env);
 		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType).catch(e =>
 			console.error('Failed to increment usage:', e)
 		));
@@ -356,7 +514,6 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		});
 
 		// Increment usage — generation succeeded
-		const admin = createAdminClient(env);
 		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType).catch(e =>
 			console.error('Failed to increment usage:', e)
 		));

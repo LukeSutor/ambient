@@ -1,6 +1,6 @@
 "use client";
 
-import type { CloudModelUsage } from "@/types/models";
+import type { CloudModelUsage, ModelAccessResponse } from "@/types/models";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
@@ -20,12 +20,13 @@ import type { ModelAccessState } from "./types";
 // ---------------------------------------------------------------------------
 
 const initialState: ModelAccessState = {
+  userTier: "free",
   cloudUsage: {},
   isHydrated: false,
 };
 
 type ModelAccessAction =
-  | { type: "SET_CLOUD_USAGE"; payload: Record<string, CloudModelUsage> }
+  | { type: "SET_ACCESS_DATA"; payload: { userTier: "free" | "premium" | "admin"; cloudUsage: Record<string, CloudModelUsage> } }
   | { type: "DECREMENT_REMAINING"; payload: { modelKey: string } }
   | { type: "SET_HYDRATED" };
 
@@ -34,13 +35,18 @@ function modelAccessReducer(
   action: ModelAccessAction,
 ): ModelAccessState {
   switch (action.type) {
-    case "SET_CLOUD_USAGE":
-      return { ...state, cloudUsage: action.payload, isHydrated: true };
+    case "SET_ACCESS_DATA":
+      return {
+        ...state,
+        userTier: action.payload.userTier,
+        cloudUsage: action.payload.cloudUsage,
+        isHydrated: true,
+      };
 
     case "DECREMENT_REMAINING": {
       const { modelKey } = action.payload;
       const current = state.cloudUsage[modelKey];
-      if (!current) return state;
+      if (!current || current.remaining === -1) return state; // unlimited
       return {
         ...state,
         cloudUsage: {
@@ -93,10 +99,17 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
     isFetching.current = true;
 
     try {
-      const result = await invoke<Record<string, CloudModelUsage>>(
+      const result = await invoke<ModelAccessResponse>(
         "get_remaining_cloud_uses",
       );
-      dispatch({ type: "SET_CLOUD_USAGE", payload: result });
+      console.log("Fetched model access data:", result);
+      dispatch({
+        type: "SET_ACCESS_DATA",
+        payload: {
+          userTier: result.user_tier as "free" | "premium" | "admin",
+          cloudUsage: result.models as Record<string, CloudModelUsage>,
+        },
+      });
     } catch {
       // User may not be signed in — silently hydrate with empty data
       dispatch({ type: "SET_HYDRATED" });
@@ -124,7 +137,7 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
         },
       );
 
-      // Re-fetch when auth state changes (login/logout)
+      // Re-fetch when auth state changes (login/logout/role change)
       unlistenAuth = await listen("auth_changed", () => {
         void refreshUsage();
       });

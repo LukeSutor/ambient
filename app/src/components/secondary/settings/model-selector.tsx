@@ -43,9 +43,10 @@ function ModelIcon({ model }: { model: ModelEntry }) {
 }
 
 function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
-  if (!usage) return null;
+  if (!usage || !usage.is_available) return null;
   const { remaining, daily_limit } = usage;
-  if (daily_limit <= 0) return null;
+  // Unlimited access (-1) or no daily limit — nothing to show
+  if (remaining === -1 || daily_limit <= 0) return null;
 
   return (
     <span className={`text-xs ${remaining > 0 ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
@@ -100,13 +101,12 @@ export function ModelSelector({
   const handleChange = (v: string) => {
     const model = models.find((m) => m.model === v);
 
-    // Prevent selecting premium models without upgrade
-    if (model?.is_premium) return;
-
-    // Prevent selecting cloud models with 0 remaining uses
-    if (model?.is_cloud && !model.is_premium) {
+    if (model?.is_cloud) {
       const usage = cloudUsage[model.model];
-      if (usage && usage.remaining <= 0) return;
+      // Block if model is not available for this tier
+      if (usage && !usage.is_available) return;
+      // Block if at daily limit (remaining === -1 means unlimited)
+      if (usage && usage.is_available && usage.remaining !== -1 && usage.remaining <= 0) return;
     }
 
     onChange(v);
@@ -132,12 +132,14 @@ export function ModelSelector({
 
           {models.map((model, index) => {
             const usage = cloudUsage[model.model];
-            const isAtLimit = model.is_cloud && !model.is_premium && usage && usage.remaining <= 0;
+            const isUnlimited = usage?.remaining === -1;
+            const isUnavailable = model.is_cloud && usage?.is_available === false;
+            const isAtLimit = model.is_cloud && !isUnavailable && !isUnlimited && usage?.is_available && usage.remaining <= 0;
             // Only use Radix disabled for at-limit models (blocks all interaction).
-            // Premium models stay interactive so the Upgrade button is clickable —
+            // Unavailable premium models stay interactive so the Upgrade button is clickable —
             // handleChange() prevents the actual selection.
             const isRadixDisabled = !!isAtLimit;
-            const isVisuallyDisabled = model.is_premium || !!isAtLimit;
+            const isVisuallyDisabled = isUnavailable || !!isAtLimit;
 
             return (
               <div key={model.model}>
@@ -163,12 +165,12 @@ export function ModelSelector({
                         <span className="text-xs text-muted-foreground text-left">
                           {model.description}
                         </span>
-                        {model.is_cloud && !model.is_premium && (
+                        {model.is_cloud && usage?.is_available && (
                           <RemainingBadge usage={usage} />
                         )}
                       </div>
                     </div>
-                    {model.is_premium && (
+                    {model.is_premium && isUnavailable && (
                       <Button
                         variant="outline"
                         size="sm"

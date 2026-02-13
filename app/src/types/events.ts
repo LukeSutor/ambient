@@ -8,6 +8,12 @@ export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<A
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, message_id: string | null, };
 
+export type CloudUsageDecrementedEvent = { 
+/**
+ * The model key whose usage was consumed (e.g. "gemini-3-flash").
+ */
+model_key: string, timestamp: string, };
+
 export type DatabaseRecoveredEvent = { 
 /**
  * Path to the backup file containing the user's previous data.

@@ -4,19 +4,34 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ts_rs::TS;
 
-/// Remaining cloud model uses for a single model
+/// Usage info for a single cloud model.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
 pub struct CloudModelUsage {
+    /// Daily request limit. -1 means unlimited.
     pub daily_limit: i32,
     pub requests_used: i32,
+    /// Remaining uses today. -1 means unlimited.
     pub remaining: i32,
+    /// Whether this model is accessible on the user's current tier.
+    pub is_available: bool,
 }
 
-/// Get remaining cloud model uses for the authenticated user.
-/// Calls the Cloudflare worker `/v1/usage/remaining` endpoint.
+/// Full model access response from the backend.
+/// Includes the user's effective tier and per-model usage data.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "models.ts")]
+pub struct ModelAccessResponse {
+    /// The user's effective tier: "free", "premium", or "admin".
+    pub user_tier: String,
+    /// Per-model usage keyed by model key (e.g. "gemini-3-flash").
+    pub models: HashMap<String, CloudModelUsage>,
+}
+
+/// Get model access info for the authenticated user.
+/// Returns the user's tier and per-model usage from the Cloudflare backend.
 #[tauri::command]
-pub async fn get_remaining_cloud_uses() -> Result<HashMap<String, CloudModelUsage>, String> {
+pub async fn get_remaining_cloud_uses() -> Result<ModelAccessResponse, String> {
     let access_token = get_access_token_command()
         .await?
         .ok_or_else(|| "No access token found. Please sign in.".to_string())?;
@@ -37,10 +52,10 @@ pub async fn get_remaining_cloud_uses() -> Result<HashMap<String, CloudModelUsag
         return Err(format!("Failed to fetch remaining uses ({}): {}", status, text));
     }
 
-    let usage: HashMap<String, CloudModelUsage> = resp
+    let response: ModelAccessResponse = resp
         .json()
         .await
         .map_err(|e| format!("Failed to parse remaining uses: {}", e))?;
 
-    Ok(usage)
+    Ok(response)
 }

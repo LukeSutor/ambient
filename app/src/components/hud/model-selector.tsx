@@ -77,14 +77,18 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
         <DropdownMenuGroup>
           {models.map((model) => {
             const usage = model.is_cloud ? cloudUsage[model.model] : undefined;
-            const isAtLimit = model.is_cloud && !model.is_premium && usage && usage.remaining <= 0;
-            const isDisabled = model.is_premium || !!isAtLimit;
+            const isUnlimited = usage?.remaining === -1;
+            const isUnavailable = usage?.is_available === false;
+            const isAtLimit = !isUnavailable && !isUnlimited && usage?.is_available && usage.remaining <= 0;
+            const isDisabled = isUnavailable || !!isAtLimit;
 
             // Build the subtitle line
             let subtitle: { text: string; className: string };
-            if (isAtLimit) {
+            if (isUnavailable) {
+              subtitle = { text: "Upgrade to unlock", className: "text-xs text-muted-foreground" };
+            } else if (isAtLimit) {
               subtitle = { text: "No usage left today", className: "text-xs text-destructive" };
-            } else if (model.is_cloud && !model.is_premium && usage) {
+            } else if (model.is_cloud && usage && !isUnlimited) {
               subtitle = {
                 text: `${model.short_description} ${usage.remaining}/${usage.daily_limit} left today`,
                 className: "text-xs text-muted-foreground",
