@@ -48,7 +48,7 @@ function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
 
   return (
     <span className={`text-xs ${remaining > 0 ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
-      {remaining}/{daily_limit} left today
+      {remaining > 0 ? `${remaining}/${daily_limit} uses left today` : '0 uses left today'}
     </span>
   );
 }

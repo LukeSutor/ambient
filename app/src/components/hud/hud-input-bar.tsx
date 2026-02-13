@@ -15,7 +15,7 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ArrowUpIcon, Globe, Square, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { AttachmentList } from "./attachment-list";
 import { ModelSelector } from "./model-selector";
@@ -32,6 +32,43 @@ export function HUDInputBar() {
   const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
   const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+
+  // Dynamic spacer height — measured from dropdown content
+  const [spacerHeight, setSpacerHeight] = useState(0);
+  const spacerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Clear any pending retraction timeout
+    if (spacerTimeoutRef.current) {
+      clearTimeout(spacerTimeoutRef.current);
+      spacerTimeoutRef.current = null;
+    }
+
+    const isOpen = isPlusDropdownOpen || isToolsDropdownOpen || isModelDropdownOpen;
+    if (!isOpen) {
+      // Delay retraction so the dropdown close animation can play
+      spacerTimeoutRef.current = setTimeout(() => setSpacerHeight(0), 150);
+      return () => {
+        if (spacerTimeoutRef.current) {
+          clearTimeout(spacerTimeoutRef.current);
+          spacerTimeoutRef.current = null;
+        }
+      };
+    }
+
+    // Measure dropdown content after Radix renders it
+    const rAF = requestAnimationFrame(() => {
+      const popperWrapper = document.querySelector<HTMLElement>(
+        "[data-radix-popper-content-wrapper]",
+      );
+      if (popperWrapper) {
+        // Use the wrapper's full height + sideOffset buffer
+        setSpacerHeight(popperWrapper.offsetHeight + 5);
+      }
+    });
+
+    return () => cancelAnimationFrame(rAF);
+  }, [isPlusDropdownOpen, isToolsDropdownOpen, isModelDropdownOpen]);
 
   const {
     ocrLoading,
@@ -263,18 +300,10 @@ export function HUDInputBar() {
 
       </InputGroup>
 
-      {/* Hidden spacer to expand window when dropdowns are open */}
+      {/* Spacer to expand window when dropdowns are open */}
       <div
-        className={cn(
-          "pointer-events-none overflow-hidden transition-all duration-0",
-          isPlusDropdownOpen && "h-[120px]",
-          isToolsDropdownOpen && "h-[80px]",
-          isModelDropdownOpen && "h-[165px]",
-          !isPlusDropdownOpen &&
-            !isToolsDropdownOpen &&
-            !isModelDropdownOpen &&
-            "h-0 delay-[50ms]",
-        )}
+        className="pointer-events-none overflow-hidden"
+        style={{ height: spacerHeight }}
       />
     </div>
   );
