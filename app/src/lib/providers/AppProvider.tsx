@@ -2,6 +2,7 @@
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConversationProvider } from "@/lib/conversations";
+import { ModelAccessProvider } from "@/lib/model-access";
 import { SettingsProvider } from "@/lib/settings";
 import type { ReactNode } from "react";
 import { RoleAccessProvider } from "../role-access/RoleAccessProvider";
@@ -19,13 +20,15 @@ export function AppProvider({ children }: AppProviderProps) {
   return (
     <SettingsProvider>
       <RoleAccessProvider>
-        <SetupProvider>
-          <WindowsProvider>
-            <ConversationProvider>
-              <TooltipProvider>{children}</TooltipProvider>
-            </ConversationProvider>
-          </WindowsProvider>
-        </SetupProvider>
+        <ModelAccessProvider>
+          <SetupProvider>
+            <WindowsProvider>
+              <ConversationProvider>
+                <TooltipProvider>{children}</TooltipProvider>
+              </ConversationProvider>
+            </WindowsProvider>
+          </SetupProvider>
+        </ModelAccessProvider>
       </RoleAccessProvider>
     </SettingsProvider>
   );

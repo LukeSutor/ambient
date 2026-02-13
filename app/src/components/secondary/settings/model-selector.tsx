@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useModelAccess } from "@/lib/model-access";
 import type { ModelEntry, CloudModelUsage } from "@/types/models";
 import { Crown, Shield, Zap } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
@@ -81,7 +82,7 @@ export function ModelSelector({
   disabled,
 }: ModelSelectorProps) {
   const [models, setModels] = useState<ModelEntry[]>([]);
-  const [cloudUsage, setCloudUsage] = useState<Record<string, CloudModelUsage>>({});
+  const { cloudUsage } = useModelAccess();
 
   const fetchModels = useCallback(async () => {
     try {
@@ -92,20 +93,9 @@ export function ModelSelector({
     }
   }, []);
 
-  const fetchCloudUsage = useCallback(async () => {
-    try {
-      const result = await invoke<Record<string, CloudModelUsage>>("get_remaining_cloud_uses");
-      setCloudUsage(result);
-    } catch (e) {
-      // Silently fail — user may not be signed in
-      console.debug("Failed to fetch cloud usage:", e);
-    }
-  }, []);
-
   useEffect(() => {
     fetchModels();
-    fetchCloudUsage();
-  }, [fetchModels, fetchCloudUsage]);
+  }, [fetchModels]);
 
   const handleChange = (v: string) => {
     const model = models.find((m) => m.model === v);
@@ -143,15 +133,19 @@ export function ModelSelector({
           {models.map((model, index) => {
             const usage = cloudUsage[model.model];
             const isAtLimit = model.is_cloud && !model.is_premium && usage && usage.remaining <= 0;
-            const isDisabled = model.is_premium || !!isAtLimit;
+            // Only use Radix disabled for at-limit models (blocks all interaction).
+            // Premium models stay interactive so the Upgrade button is clickable —
+            // handleChange() prevents the actual selection.
+            const isRadixDisabled = !!isAtLimit;
+            const isVisuallyDisabled = model.is_premium || !!isAtLimit;
 
             return (
               <div key={model.model}>
                 {index > 0 && <SelectSeparator />}
                 <SelectItem
                   value={model.model}
-                  className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isDisabled ? 'opacity-50' : ''}`}
-                  disabled={isDisabled}
+                  className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isVisuallyDisabled ? 'opacity-50' : ''}`}
+                  disabled={isRadixDisabled}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
@@ -179,6 +173,7 @@ export function ModelSelector({
                         variant="outline"
                         size="sm"
                         className="h-6 mr-4 text-xs px-2 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:from-purple-100 hover:to-pink-100"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           window.location.href = "/secondary/upgrade";

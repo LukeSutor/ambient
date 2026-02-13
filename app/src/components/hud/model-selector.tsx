@@ -8,8 +8,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
+import { useModelAccess } from "@/lib/model-access";
 import { useSettings } from "@/lib/settings";
-import type { CloudModelUsage, ModelEntry } from "@/types/models";
+import type { ModelEntry } from "@/types/models";
 import { ChevronDown } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -23,7 +24,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   const { settings, setModelSelection } = useSettings();
   const modelSelection = settings?.model_selection ?? "qwen3vl-2b";
   const [models, setModels] = useState<ModelEntry[]>([]);
-  const [cloudUsage, setCloudUsage] = useState<Record<string, CloudModelUsage>>({});
+  const { cloudUsage } = useModelAccess();
 
   const fetchModels = useCallback(async () => {
     try {
@@ -34,20 +35,9 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
     }
   }, []);
 
-  const fetchCloudUsage = useCallback(async () => {
-    try {
-      const result = await invoke<Record<string, CloudModelUsage>>("get_remaining_cloud_uses");
-      setCloudUsage(result);
-    } catch (e) {
-      // Silently fail — user may not be signed in
-      console.debug("Failed to fetch cloud usage:", e);
-    }
-  }, []);
-
   useEffect(() => {
     fetchModels();
-    fetchCloudUsage();
-  }, [fetchModels, fetchCloudUsage]);
+  }, [fetchModels]);
 
   const handleModelSelectionChange = useCallback(
     async (modelKey: string) => {

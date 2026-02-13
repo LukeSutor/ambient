@@ -141,3 +141,12 @@ pub struct DatabaseRecoveredEvent {
   pub reason: String,
   pub timestamp: String,
 }
+
+pub const CLOUD_USAGE_DECREMENTED: &str = "cloud_usage_decremented";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct CloudUsageDecrementedEvent {
+  /// The model key whose usage was consumed (e.g. "gemini-3-flash").
+  pub model_key: String,
+  pub timestamp: String,
+}
