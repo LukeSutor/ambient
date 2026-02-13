@@ -107,7 +107,7 @@ export function AppSidebar({
       <SidebarHeader>
         <NavHeader />
       </SidebarHeader>
-      <Separator className={state === "collapsed" ? "hidden" : "block"} />
+      <Separator />
       <SidebarContent>
         <NavMain items={navItems} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />

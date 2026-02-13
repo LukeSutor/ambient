@@ -8,3 +8,12 @@ export type LlmRequest = { prompt: string, system_prompt: string | null, json_sc
  * Response variants from generation
  */
 export type LlmResponse = { "Text": string } | { "ToolCalls": Array<ToolCall> };
+
+/**
+ * A GPU device detected by the llama.cpp server.
+ */
+export type GpuDevice = { 
+/**
+ * Device name as reported by llama.cpp (e.g. "Vulkan0: NVIDIA GeForce RTX 3080")
+ */
+name: string, };

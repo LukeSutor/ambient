@@ -175,6 +175,8 @@ pub fn run() {
       setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
+      models::llm::server::restart_llama_server,
+      models::llm::server::detect_gpu_devices,
       agents::chat::runtime::handle_agent_chat,
       agents::chat::state::stop_agent_chat,
       models::embedding::embedding::generate_embedding,

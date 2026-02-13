@@ -218,6 +218,39 @@ export function useSettings() {
   );
 
   /**
+   * Sets GPU acceleration setting
+   */
+  const setGpuAcceleration = useCallback(
+    async (enabled: boolean): Promise<void> => {
+      try {
+        if (!state.settings) {
+          throw new Error("Settings not loaded");
+        }
+
+        // Optimistically update
+        dispatch({ type: "UPDATE_GPU_ACCELERATION", payload: enabled });
+
+        // Save to backend
+        const updatedSettings = {
+          ...state.settings,
+          gpu_acceleration: enabled,
+        };
+        await invoke("save_user_settings", { settings: updatedSettings });
+
+        // Emit settings changed event
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error("[useSettings] Failed to set GPU acceleration:", error);
+
+        // Reload settings on error
+        await loadSettings();
+        throw error;
+      }
+    },
+    [state.settings, dispatch, loadSettings],
+  );
+
+  /**
    * Invalidates the cache and reloads from backend
    */
   const refreshCache = useCallback(async (): Promise<void> => {
@@ -289,6 +322,7 @@ export function useSettings() {
     setHudSize,
     setShowFullThoughtTraces,
     setModelSelection,
+    setGpuAcceleration,
     setDisabledSkills,
     toggleSkill,
     refreshCache,

@@ -56,4 +56,9 @@ export type UserSettings = { hud_size: HudSizeOption, show_full_thought_traces: 
  * List of skill names that the user has disabled.
  * Skills in this list will not be available to the agentic runtime.
  */
-disabled_skills: Array<string>, };
+disabled_skills: Array<string>, 
+/**
+ * Whether to offload model layers to GPU via Vulkan.
+ * Only effective when a compatible GPU is detected.
+ */
+gpu_acceleration: boolean, };

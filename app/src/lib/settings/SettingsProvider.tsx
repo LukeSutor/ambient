@@ -48,6 +48,7 @@ type SettingsAction =
   | { type: "UPDATE_MODEL_SELECTION"; payload: ModelSelection }
   | { type: "UPDATE_HUD_DIMENSIONS"; payload: HudDimensions }
   | { type: "UPDATE_DISABLED_SKILLS"; payload: string[] }
+  | { type: "UPDATE_GPU_ACCELERATION"; payload: boolean }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "INVALIDATE_CACHE" };
 
@@ -110,6 +111,16 @@ function settingsReducer(
       return {
         ...state,
         hudDimensions: action.payload,
+      };
+
+    case "UPDATE_GPU_ACCELERATION":
+      if (!state.settings) return state;
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          gpu_acceleration: action.payload,
+        },
       };
 
     case "SET_LOADING":
