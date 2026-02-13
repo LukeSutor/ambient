@@ -1,9 +1,10 @@
 import { GenerateContentConfig, GoogleGenAI, ThinkingLevel } from "@google/genai";
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
 interface Env {
 	SUPABASE_URL: string;
 	SUPABASE_ANON_KEY: string;
+	SUPABASE_SERVICE_ROLE_KEY: string;
 	GEMINI_API_KEY: string;
 	GOOGLE_CLIENT_ID: string;
 	GOOGLE_CLIENT_SECRET: string;
@@ -18,6 +19,12 @@ type requestData = {
 	tools?: any;
 }
 
+// Daily request limits per model type
+const MODEL_LIMITS: Record<string, number> = {
+	fast: 3,
+	pro: 0, // Pro is behind paywall — no free uses
+};
+
 const extractModelName = (modelType: string): string | null => {
 	if (modelType === "fast")
 		return "gemini-3-flash-preview";
@@ -25,6 +32,79 @@ const extractModelName = (modelType: string): string | null => {
 		return "gemini-3-pro-preview";
 	return null;
 };
+
+/** Get today's date in YYYY-MM-DD format (UTC) */
+function getTodayUTC(): string {
+	return new Date().toISOString().split('T')[0];
+}
+
+/** Create a Supabase admin client (service role — bypasses RLS) */
+function createAdminClient(env: Env): SupabaseClient {
+	return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+/**
+ * Check how many requests a user has used today for a given model.
+ * Returns the number of requests used, or 0 if no row exists yet.
+ */
+async function getRequestsUsedToday(admin: SupabaseClient, userId: string, modelType: string): Promise<number> {
+	const today = getTodayUTC();
+	const { data, error } = await admin
+		.from('model_usage')
+		.select('requests_used')
+		.eq('user_id', userId)
+		.eq('model_type', modelType)
+		.eq('usage_date', today)
+		.maybeSingle();
+
+	if (error) {
+		console.error('Failed to check usage:', error);
+		throw new Error('Failed to check usage');
+	}
+
+	return data?.requests_used ?? 0;
+}
+
+/**
+ * Increment the request count for a user/model/today.
+ * Uses upsert with ON CONFLICT to atomically create or increment.
+ */
+async function incrementUsage(admin: SupabaseClient, userId: string, modelType: string): Promise<void> {
+	const today = getTodayUTC();
+
+	// Try to increment existing row first
+	const { data: existing } = await admin
+		.from('model_usage')
+		.select('id, requests_used')
+		.eq('user_id', userId)
+		.eq('model_type', modelType)
+		.eq('usage_date', today)
+		.maybeSingle();
+
+	if (existing) {
+		const { error } = await admin
+			.from('model_usage')
+			.update({ requests_used: existing.requests_used + 1 })
+			.eq('id', existing.id);
+		if (error) {
+			console.error('Failed to increment usage:', error);
+			throw new Error('Failed to increment usage');
+		}
+	} else {
+		const { error } = await admin
+			.from('model_usage')
+			.insert({
+				user_id: userId,
+				model_type: modelType,
+				usage_date: today,
+				requests_used: 1,
+			});
+		if (error) {
+			console.error('Failed to insert usage:', error);
+			throw new Error('Failed to insert usage');
+		}
+	}
+}
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
@@ -41,12 +121,17 @@ export default {
 			});
 		}
 
-		// 1. LLM Generation Proxy
+		// LLM Generation Proxy
 		if (url.pathname === '/v1/llm/generate' || (url.pathname === '/' && request.method === 'POST')) {
 			return handleLlmGenerate(request, env, ctx);
 		}
 
-		// 2. Google OAuth Refresh Proxy
+		// Usage/remaining endpoint — returns remaining daily uses per model
+		if (url.pathname === '/v1/usage/remaining' && request.method === 'GET') {
+			return handleGetRemainingUses(request, env);
+		}
+
+		// Google OAuth Refresh Proxy
 		if (url.pathname === '/v1/auth/google/refresh' && request.method === 'POST') {
 			return handleGoogleRefresh(request, env);
 		}
@@ -112,6 +197,35 @@ async function handleGoogleRefresh(request: Request, env: Env): Promise<Response
 }
 
 /**
+ * Handle remaining uses query
+ */
+async function handleGetRemainingUses(request: Request, env: Env): Promise<Response> {
+	const user = await verifySupabaseUser(request, env);
+	if (!user) {
+		return new Response('Unauthorized: Invalid token', { status: 401 });
+	}
+
+	const admin = createAdminClient(env);
+	const remaining: Record<string, { daily_limit: number; requests_used: number; remaining: number }> = {};
+
+	for (const [modelType, limit] of Object.entries(MODEL_LIMITS)) {
+		const used = await getRequestsUsedToday(admin, user.id, modelType);
+		remaining[modelType] = {
+			daily_limit: limit,
+			requests_used: used,
+			remaining: Math.max(0, limit - used),
+		};
+	}
+
+	return new Response(JSON.stringify(remaining), {
+		headers: {
+			'Content-Type': 'application/json',
+			'Access-Control-Allow-Origin': '*',
+		},
+	});
+}
+
+/**
  * Handle LLM Generation (Gemini)
  */
 async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -137,6 +251,32 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 	const modelName = extractModelName(body.modelType);
 	if (!modelName) {
 		return new Response('Bad Request: Invalid model type', { status: 400 });
+	}
+
+	// --- Rate limit check ---
+	const dailyLimit = MODEL_LIMITS[body.modelType];
+	if (dailyLimit !== undefined) {
+		try {
+			const admin = createAdminClient(env);
+			const used = await getRequestsUsedToday(admin, user.id, body.modelType);
+			if (used >= dailyLimit) {
+				return new Response(JSON.stringify({
+					error: 'rate_limit_exceeded',
+					message: `Daily limit of ${dailyLimit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
+					daily_limit: dailyLimit,
+					requests_used: used,
+				}), {
+					status: 429,
+					headers: {
+						'Content-Type': 'application/json',
+						'Access-Control-Allow-Origin': '*',
+					},
+				});
+			}
+		} catch (e) {
+			console.error('Rate limit check failed, allowing request:', e);
+			// Fail open — if rate limit check fails, allow the request
+		}
 	}
 
 	// Build chat config
@@ -176,6 +316,12 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		const writer = writable.getWriter();
 		const encoder = new TextEncoder();
 
+		// Increment usage immediately — stream has started successfully
+		const admin = createAdminClient(env);
+		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType).catch(e =>
+			console.error('Failed to increment usage:', e)
+		));
+
 		ctx.waitUntil((async () => {
 			try {
 				for await (const chunk of result) {
@@ -205,6 +351,13 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 			contents: body.content,
 			config: chatConfig
 		});
+
+		// Increment usage — generation succeeded
+		const admin = createAdminClient(env);
+		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType).catch(e =>
+			console.error('Failed to increment usage:', e)
+		));
+
 		return new Response(JSON.stringify(response), {
 			headers: { 
 				'Content-Type': 'application/json',

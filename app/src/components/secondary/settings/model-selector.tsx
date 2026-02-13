@@ -13,54 +13,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ModelSelection } from "@/types/settings";
+import type { ModelEntry, CloudModelUsage } from "@/types/models";
 import { Crown, Shield, Zap } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
-interface ModelConfig {
-  value: ModelSelection;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  iconBgClass: string;
-  badge: {
-    label: string;
-    variant: "outline" | "default";
-    className?: string;
-  };
-  upgradeButton?: boolean;
+const ICON_MAP: Record<string, React.ElementType> = {
+  shield: Shield,
+  zap: Zap,
+  crown: Crown,
+};
+
+/** Map model key (e.g. "local") to ModelSelection enum ("Local") */
+function modelKeyToSelection(key: string): ModelSelection {
+  return (key.charAt(0).toUpperCase() + key.slice(1)) as ModelSelection;
 }
 
-const MODEL_CONFIGS: ModelConfig[] = [
-  {
-    value: "Local",
-    name: "Local",
-    description: "Ultimate privacy. Runs on your device. No internet required.",
-    icon: <Shield className="h-4 w-4 m-1.5 text-green-600" />,
-    iconBgClass: "bg-green-100",
-    badge: { label: "Private", variant: "outline" },
-  },
-  {
-    value: "Fast",
-    name: "Gemini 3 Flash",
-    description:
-      "More powerful. Google's fast model with advanced capabilities.",
-    icon: <Zap className="h-4 w-4 m-1.5 text-blue-600" />,
-    iconBgClass: "bg-blue-100",
-    badge: { label: "Enhanced", variant: "outline" },
-  },
-  {
-    value: "Pro",
-    name: "Gemini 3 Pro",
-    description: "The latest and most advanced model from Google.",
-    icon: <Crown className="h-4 w-4 m-1.5 text-white" />,
-    iconBgClass: "bg-gradient-to-r from-purple-500 to-pink-500",
-    badge: {
-      label: "Premium",
-      variant: "default",
-      className: "bg-gradient-to-r from-purple-500 to-pink-500 border-none",
-    },
-    upgradeButton: true,
-  },
-];
+/** Map ModelSelection enum ("Local") to model key ("local") */
+function selectionToModelKey(sel: ModelSelection): string {
+  return sel.toLowerCase();
+}
 
 interface ModelSelectorProps {
   value: ModelSelection;
@@ -68,28 +40,48 @@ interface ModelSelectorProps {
   disabled?: boolean;
 }
 
-function ModelIcon({ config }: { config: ModelConfig }) {
+function ModelIcon({ model }: { model: ModelEntry }) {
+  const IconComponent = ICON_MAP[model.icon] || Shield;
   return (
     <div
-      className={`flex items-center justify-center rounded-full ${config.iconBgClass}`}
+      className={`flex items-center justify-center rounded-full ${model.icon_bg}`}
     >
-      {config.icon}
+      <IconComponent className={`h-4 w-4 m-1.5 ${model.icon_color}`} />
     </div>
   );
 }
 
-function SelectedModelDisplay({ value }: { value: ModelSelection }) {
-  const config = MODEL_CONFIGS.find((m) => m.value === value);
-  if (!config) return null;
+function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
+  if (!usage) return null;
+  const { remaining, daily_limit } = usage;
+  if (daily_limit <= 0) return null;
+
+  return (
+    <span className={`text-xs ${remaining > 0 ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
+      {remaining}/{daily_limit} left today
+    </span>
+  );
+}
+
+function SelectedModelDisplay({ value, models }: { value: ModelSelection; models: ModelEntry[] }) {
+  const key = selectionToModelKey(value);
+  const model = models.find((m) => m.model === key);
+  if (!model) {
+    // Fallback while loading
+    return <span className="font-medium">{value}</span>;
+  }
 
   return (
     <div className="flex items-center gap-3">
       <div
-        className={`flex h-6 w-6 items-center justify-center rounded-full ${config.iconBgClass}`}
+        className={`flex h-6 w-6 items-center justify-center rounded-full ${model.icon_bg}`}
       >
-        {config.icon}
+        {(() => {
+          const IconComponent = ICON_MAP[model.icon] || Shield;
+          return <IconComponent className={`h-4 w-4 ${model.icon_color}`} />;
+        })()}
       </div>
-      <span className="font-medium">{config.name}</span>
+      <span className="font-medium">{model.display_name}</span>
     </div>
   );
 }
@@ -99,17 +91,59 @@ export function ModelSelector({
   onChange,
   disabled,
 }: ModelSelectorProps) {
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [cloudUsage, setCloudUsage] = useState<Record<string, CloudModelUsage>>({});
+
+  const fetchModels = useCallback(async () => {
+    try {
+      const result = await invoke<ModelEntry[]>("get_models");
+      setModels(result);
+    } catch (e) {
+      console.error("Failed to fetch models:", e);
+    }
+  }, []);
+
+  const fetchCloudUsage = useCallback(async () => {
+    try {
+      const result = await invoke<Record<string, CloudModelUsage>>("get_remaining_cloud_uses");
+      setCloudUsage(result);
+    } catch (e) {
+      // Silently fail — user may not be signed in
+      console.debug("Failed to fetch cloud usage:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchModels();
+    fetchCloudUsage();
+  }, [fetchModels, fetchCloudUsage]);
+
+  const handleChange = (v: string) => {
+    const selection = v as ModelSelection;
+    const key = selectionToModelKey(selection);
+    const model = models.find((m) => m.model === key);
+
+    // Prevent selecting premium models without upgrade
+    if (model?.is_premium) return;
+
+    // Prevent selecting cloud models with 0 remaining uses
+    if (model?.is_cloud && !model.is_premium) {
+      const usage = cloudUsage[key];
+      if (usage && usage.remaining <= 0) return;
+    }
+
+    onChange(selection);
+  };
+
   return (
     <Select
       value={value}
-      onValueChange={(v) => {
-        onChange(v as ModelSelection);
-      }}
+      onValueChange={handleChange}
       disabled={disabled}
     >
       <SelectTrigger>
         <SelectValue placeholder="Select model">
-          <SelectedModelDisplay value={value} />
+          <SelectedModelDisplay value={value} models={models} />
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="w-96">
@@ -119,44 +153,59 @@ export function ModelSelector({
             Available Models
           </SelectLabel>
 
-          {MODEL_CONFIGS.map((config, index) => (
-            <div key={config.value}>
-              {index > 0 && <SelectSeparator />}
-              <SelectItem
-                value={config.value}
-                className="py-4 px-4 cursor-pointer h-auto min-h-[4rem]"
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-3">
-                    <ModelIcon config={config} />
-                    <div className="flex flex-col items-start">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{config.name}</span>
-                        <Badge
-                          variant={config.badge.variant}
-                          className={`text-xs ${config.badge.className || ""}`}
-                        >
-                          {config.badge.label}
-                        </Badge>
+          {models.map((model, index) => {
+            const selectionValue = modelKeyToSelection(model.model);
+            const usage = cloudUsage[model.model];
+            const isAtLimit = model.is_cloud && !model.is_premium && usage && usage.remaining <= 0;
+            const isDisabled = model.is_premium || !!isAtLimit;
+
+            return (
+              <div key={model.model}>
+                {index > 0 && <SelectSeparator />}
+                <SelectItem
+                  value={selectionValue}
+                  className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isDisabled ? 'opacity-50' : ''}`}
+                  disabled={isDisabled}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-3">
+                      <ModelIcon model={model} />
+                      <div className="flex flex-col items-start">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{model.display_name}</span>
+                          <Badge
+                            variant={model.badge_variant as "outline" | "default"}
+                            className={`text-xs ${model.badge_class}`}
+                          >
+                            {model.badge_label}
+                          </Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground text-left">
+                          {model.description}
+                        </span>
+                        {model.is_cloud && !model.is_premium && (
+                          <RemainingBadge usage={usage} />
+                        )}
                       </div>
-                      <span className="text-xs text-muted-foreground text-left">
-                        {config.description}
-                      </span>
                     </div>
+                    {model.is_premium && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 mr-4 text-xs px-2 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:from-purple-100 hover:to-pink-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.location.href = "/secondary/upgrade";
+                        }}
+                      >
+                        Upgrade
+                      </Button>
+                    )}
                   </div>
-                  {config.upgradeButton && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 mr-4 text-xs px-2 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:from-purple-100 hover:to-pink-100"
-                    >
-                      Upgrade
-                    </Button>
-                  )}
-                </div>
-              </SelectItem>
-            </div>
-          ))}
+                </SelectItem>
+              </div>
+            );
+          })}
         </SelectGroup>
       </SelectContent>
     </Select>

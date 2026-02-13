@@ -25,7 +25,8 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           conv_type TEXT NOT NULL DEFAULT 'chat',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
-          message_count INTEGER NOT NULL DEFAULT 0
+          message_count INTEGER NOT NULL DEFAULT 0,
+          prompt_cached_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -34,11 +35,26 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           role TEXT NOT NULL,
           content TEXT NOT NULL,
           timestamp TEXT NOT NULL,
+          message_type TEXT NOT NULL DEFAULT 'text',
+          metadata TEXT,
           FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_messages_type ON conversation_messages(message_type);
+
+        -- Active skills per conversation
+        CREATE TABLE IF NOT EXISTS conversation_skills (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          skill_name TEXT NOT NULL,
+          activated_at TEXT NOT NULL,
+          FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+          UNIQUE(conversation_id, skill_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conv_skills ON conversation_skills(conversation_id);
 
         -- Memory tables
         CREATE TABLE IF NOT EXISTS memory_entries (
@@ -61,18 +77,47 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_message_id ON memory_entries(message_id);
 
-        -- Token usage tracking
-        CREATE TABLE IF NOT EXISTS models (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          model TEXT NOT NULL UNIQUE
+        -- Memory FTS (full-text search)
+        CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
+          text,
+          content='memory_entries'
         );
 
-        -- Insert default models
-        INSERT OR IGNORE INTO models (model) VALUES
-          ('local'),
-          ('fast'),
-          ('pro');
+        CREATE TRIGGER IF NOT EXISTS memory_entries_ai AFTER INSERT ON memory_entries BEGIN
+          INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS memory_entries_ad AFTER DELETE ON memory_entries BEGIN
+          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS memory_entries_au AFTER UPDATE ON memory_entries BEGIN
+          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+          INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
+        END;
 
+        -- Models registry (drives model selector, chart colors, rate limits)
+        CREATE TABLE IF NOT EXISTS models (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          model TEXT NOT NULL UNIQUE,
+          display_name TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          is_cloud INTEGER NOT NULL DEFAULT 0,
+          is_premium INTEGER NOT NULL DEFAULT 0,
+          daily_limit INTEGER,
+          color TEXT NOT NULL DEFAULT '#888888',
+          badge_label TEXT NOT NULL DEFAULT '',
+          badge_variant TEXT NOT NULL DEFAULT 'outline',
+          badge_class TEXT NOT NULL DEFAULT '',
+          icon TEXT NOT NULL DEFAULT 'shield',
+          icon_color TEXT NOT NULL DEFAULT 'text-gray-600',
+          icon_bg TEXT NOT NULL DEFAULT 'bg-gray-100'
+        );
+
+        INSERT OR IGNORE INTO models (model, display_name, description, is_cloud, is_premium, daily_limit, color, badge_label, badge_variant, icon, icon_color, icon_bg) VALUES
+          ('local', 'Local', 'Ultimate privacy. Runs on your device. No internet required.', 0, 0, NULL, '#10b981', 'Private', 'outline', 'shield', 'text-green-600', 'bg-green-100'),
+          ('fast', 'Gemini 3 Flash', 'More powerful. Google''s fast model with advanced capabilities.', 1, 0, 3, '#60a5fa', 'Enhanced', 'outline', 'zap', 'text-blue-600', 'bg-blue-100'),
+          ('pro', 'Gemini 3 Pro', 'The latest and most advanced model from Google.', 1, 1, 0, '#2563eb', 'Premium', 'default', 'crown', 'text-white', 'bg-gradient-to-r from-purple-500 to-pink-500');
+
+        -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           model INTEGER,
@@ -98,68 +143,6 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         );
 
         CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
-      "#,
-    ),
-    M::up(
-      r#"
-        -- Agentic runtime migration: Enhanced message storage
-        -- Add new columns to conversation_messages
-        ALTER TABLE conversation_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'text';
-        ALTER TABLE conversation_messages ADD COLUMN metadata TEXT;
-
-        -- message_type values:
-        -- 'text'           - Regular text message (user or assistant)
-        -- 'tool_call'      - Assistant requesting tool execution
-        -- 'tool_result'    - Result from tool execution
-        -- 'thinking'       - Internal reasoning/planning step
-        -- 'skill_activation' - Skill activation request
-
-        -- Create index for efficient filtering by message type
-        CREATE INDEX IF NOT EXISTS idx_messages_type ON conversation_messages(message_type);
-
-        -- Active skills per conversation
-        CREATE TABLE IF NOT EXISTS conversation_skills (
-            id TEXT PRIMARY KEY,
-            conversation_id TEXT NOT NULL,
-            skill_name TEXT NOT NULL,
-            activated_at TEXT NOT NULL,
-            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-            UNIQUE(conversation_id, skill_name)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_conv_skills ON conversation_skills(conversation_id);
-      "#,
-    ),
-    M::up(
-      r#"
-        -- Memory FTS migration
-        CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
-            text,
-            content='memory_entries'
-        );
-
-        -- Triggers to keep memory_entries_fts in sync
-        CREATE TRIGGER IF NOT EXISTS memory_entries_ai AFTER INSERT ON memory_entries BEGIN
-            INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
-        END;
-        CREATE TRIGGER IF NOT EXISTS memory_entries_ad AFTER DELETE ON memory_entries BEGIN
-            INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
-        END;
-        CREATE TRIGGER IF NOT EXISTS memory_entries_au AFTER UPDATE ON memory_entries BEGIN
-            INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
-            INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
-        END;
-
-        -- Initial sync
-        INSERT INTO memory_entries_fts(rowid, text) SELECT rowid, text FROM memory_entries;
-      "#,
-    ),
-    M::up(
-      r#"
-        -- Add prompt_cached_at for system prompt time caching.
-        -- Stores the timestamp used in the system prompt so it stays stable
-        -- across messages within a 10-minute window (enables KV cache reuse).
-        ALTER TABLE conversations ADD COLUMN prompt_cached_at TEXT;
       "#,
     ),
   ])

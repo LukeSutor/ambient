@@ -93,6 +93,9 @@ impl LlmProvider for CloudflareProvider {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
         log::error!("Cloudflare streaming error status: {}. Body: {}", status, text);
+        if status.as_u16() == 429 {
+          return Err("rate_limit_exceeded".to_string());
+        }
         return Err(format!("Cloudflare error {}: {}", status, text));
       }
 
@@ -232,6 +235,9 @@ impl LlmProvider for CloudflareProvider {
       if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
         log::error!("Cloudflare error status: {}. Body: {}", status, text);
+        if status.as_u16() == 429 {
+          return Err("rate_limit_exceeded".to_string());
+        }
         return Err(format!("Cloudflare error {}: {}", status, text));
       }
 
