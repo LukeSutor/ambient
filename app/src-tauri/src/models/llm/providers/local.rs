@@ -47,7 +47,7 @@ impl LlmProvider for LocalProvider {
 
     // Build request body
     let mut request_body = json!({
-        "model": resolved_model.api_model_name,
+        "model": resolved_model.model_key,
         "messages": messages,
         "stream": should_stream,
         "temperature": 0.7,

@@ -99,9 +99,9 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           model TEXT NOT NULL UNIQUE,
           display_name TEXT NOT NULL,
+          short_description TEXT NOT NULL DEFAULT '',
           description TEXT NOT NULL DEFAULT '',
           provider TEXT NOT NULL DEFAULT 'local',
-          api_model_name TEXT NOT NULL DEFAULT '',
           is_cloud INTEGER NOT NULL DEFAULT 0,
           is_premium INTEGER NOT NULL DEFAULT 0,
           daily_limit INTEGER,
@@ -114,10 +114,10 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           icon_bg TEXT NOT NULL DEFAULT 'bg-gray-100'
         );
 
-        INSERT OR IGNORE INTO models (model, display_name, description, provider, api_model_name, is_cloud, is_premium, daily_limit, color, badge_label, badge_variant, icon, icon_color, icon_bg) VALUES
-          ('qwen3vl-2b', 'Local', 'Ultimate privacy. Runs on your device.', 'local', 'qwen3vl-2b', 0, 0, NULL, '#10b981', 'Private', 'outline', 'shield', 'text-green-600', 'bg-green-100'),
-          ('gemini-3-flash', 'Gemini 3 Flash', 'Google''s fast model with advanced capabilities.', 'cloudflare', 'fast', 1, 0, 3, '#60a5fa', 'Enhanced', 'outline', 'zap', 'text-blue-600', 'bg-blue-100'),
-          ('gemini-3-pro', 'Gemini 3 Pro', 'The latest and most advanced model from Google.', 'cloudflare', 'pro', 1, 1, 0, '#2563eb', 'Premium', 'default', 'crown', 'text-white', 'bg-gradient-to-r from-purple-500 to-pink-500');
+        INSERT OR IGNORE INTO models (model, display_name, short_description, description, provider, is_cloud, is_premium, daily_limit, color, badge_label, badge_variant, icon, icon_color, icon_bg) VALUES
+          ('qwen3vl-2b', 'Local', 'Runs on your device.', 'Ultimate privacy. Runs entirely on your device with no internet required. Your data never leaves your machine.', 'local', 0, 0, NULL, '#10b981', 'Private', 'outline', 'shield', 'text-green-600', 'bg-green-100'),
+          ('gemini-3-flash', 'Gemini 3 Flash', 'Fast cloud model.', 'Google''s fast model with advanced reasoning, tool use, and multimodal capabilities.', 'google', 1, 0, 3, '#60a5fa', 'Enhanced', 'outline', 'zap', 'text-blue-600', 'bg-blue-100'),
+          ('gemini-3-pro', 'Gemini 3 Pro', 'Most advanced model.', 'Google''s most advanced model with state-of-the-art reasoning and generation capabilities.', 'google', 1, 1, 0, '#2563eb', 'Premium', 'default', 'crown', 'text-white', 'bg-gradient-to-r from-purple-500 to-pink-500');
 
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (

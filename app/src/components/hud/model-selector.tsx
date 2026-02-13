@@ -67,11 +67,10 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="bottom"
-        align="start"
+        align="end"
         avoidCollisions={false}
         sideOffset={10}
-        alignOffset={-185}
-        className="w-full bg-white/60"
+        className="min-w-48 bg-white/60"
       >
         <DropdownMenuGroup>
           {models.map((model) => (
@@ -82,7 +81,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
             >
               <span className="font-medium text-sm">{model.display_name}</span>
               <span className="text-xs text-muted-foreground">
-                {model.description}
+                {model.short_description}
               </span>
             </DropdownMenuItem>
           ))}

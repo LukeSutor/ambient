@@ -132,13 +132,12 @@ impl AgentRuntime {
             .await
             .map_err(|e| AgentError::DatabaseError(format!("Failed to load settings: {}", e)))?;
 
-        let model_key = settings.model_selection.normalized();
-        let is_local = match crate::db::models::get_model_by_key(&app_handle, &model_key) {
+        let model_key = settings.model_selection.as_str();
+        let is_local = match crate::db::models::get_model_by_key(&app_handle, model_key) {
             Ok(entry) => !entry.is_cloud,
-            Err(_) => {
-                // Fallback: if we can't look up the model, use the legacy check
-                log::warn!("[agent] Could not look up model '{}', using legacy local check", model_key);
-                settings.model_selection.is_local_legacy()
+            Err(e) => {
+                log::warn!("[agent] Could not look up model '{}': {}. Defaulting to local.", model_key, e);
+                true
             }
         };
 

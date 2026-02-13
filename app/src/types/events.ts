@@ -8,6 +8,16 @@ export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<A
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, message_id: string | null, };
 
+export type DatabaseRecoveredEvent = { 
+/**
+ * Path to the backup file containing the user's previous data.
+ */
+backup_path: string, 
+/**
+ * Description of the migration error that triggered recovery.
+ */
+reason: string, timestamp: string, };
+
 export type DownloadFinishedEvent = { id: bigint, };
 
 export type DownloadInformationEvent = { n_items: bigint, content_length: bigint, };

@@ -19,18 +19,20 @@ type requestData = {
 	tools?: any;
 }
 
-// Daily request limits per model type
+// Daily request limits per model key
 const MODEL_LIMITS: Record<string, number> = {
-	fast: 3,
-	pro: 0, // Pro is behind paywall — no free uses
+	"gemini-3-flash": 3,
+	"gemini-3-pro": 0, // Pro is behind paywall — no free uses
+};
+
+// Map model keys to Gemini API model names and thinking config
+const MODEL_REGISTRY: Record<string, { apiModel: string; thinkingLevel: ThinkingLevel }> = {
+	"gemini-3-flash": { apiModel: "gemini-3-flash-preview", thinkingLevel: ThinkingLevel.MINIMAL },
+	"gemini-3-pro": { apiModel: "gemini-3-pro-preview", thinkingLevel: ThinkingLevel.LOW },
 };
 
 const extractModelName = (modelType: string): string | null => {
-	if (modelType === "fast")
-		return "gemini-3-flash-preview";
-	if (modelType === "pro")
-		return "gemini-3-pro-preview";
-	return null;
+	return MODEL_REGISTRY[modelType]?.apiModel ?? null;
 };
 
 /** Get today's date in YYYY-MM-DD format (UTC) */
@@ -299,10 +301,11 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		chatConfig.tools = [body.tools];
 	}
 
-	// Thinking level minimal is not supported on pro, only on fast
-	chatConfig.thinkingConfig = {
-		thinkingLevel: body.modelType === "fast" ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW
-	};		
+	// Configure thinking level from the model registry
+	const modelInfo = MODEL_REGISTRY[body.modelType];
+	if (modelInfo) {
+		chatConfig.thinkingConfig = { thinkingLevel: modelInfo.thinkingLevel };
+	}		
 
 	const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 	if (body.stream) {

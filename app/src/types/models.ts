@@ -6,6 +6,26 @@
 export type CloudModelUsage = { daily_limit: number, requests_used: number, remaining: number, };
 
 /**
- * A model entry from the database
+ * A model entry from the database.
  */
-export type ModelEntry = { id: bigint, model: string, display_name: string, description: string, provider: string, api_model_name: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, color: string, badge_label: string, badge_variant: string, badge_class: string, icon: string, icon_color: string, icon_bg: string, };
+export type ModelEntry = { id: bigint, 
+/**
+ * Unique model key (e.g. "qwen3vl-2b", "gemini-3-flash").
+ */
+model: string, 
+/**
+ * User-friendly name shown in the UI (e.g. "Local", "Gemini 3 Flash").
+ */
+display_name: string, 
+/**
+ * Short one-liner for compact contexts like the HUD dropdown.
+ */
+short_description: string, 
+/**
+ * Longer description for the full settings page model selector.
+ */
+description: string, 
+/**
+ * The model provider (e.g. "local", "google", "openai").
+ */
+provider: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, color: string, badge_label: string, badge_variant: string, badge_class: string, icon: string, icon_color: string, icon_bg: string, };

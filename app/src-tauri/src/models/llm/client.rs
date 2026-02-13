@@ -9,12 +9,10 @@ use tauri::AppHandle;
 /// Resolved model information used for routing and API calls.
 #[derive(Clone)]
 pub struct ResolvedModel {
-    /// The model key from the registry (e.g. "qwen3vl-2b").
+    /// The model key from the registry (e.g. "qwen3vl-2b", "gemini-3-flash").
     pub model_key: String,
-    /// Provider routing key: "local" | "cloudflare".
+    /// The model provider (e.g. "local", "google").
     pub provider: String,
-    /// Name sent to the provider API (e.g. "fast" for Cloudflare worker).
-    pub api_model_name: String,
     /// Whether this model uses a cloud provider.
     pub is_cloud: bool,
 }
@@ -158,13 +156,11 @@ async fn resolve_model(
                 Ok(entry) => Ok(ResolvedModel {
                     model_key: entry.model,
                     provider: entry.provider,
-                    api_model_name: entry.api_model_name,
                     is_cloud: entry.is_cloud,
                 }),
                 Err(_) => Ok(ResolvedModel {
                     model_key: "qwen3vl-2b".to_string(),
                     provider: "local".to_string(),
-                    api_model_name: "qwen3vl-2b".to_string(),
                     is_cloud: false,
                 }),
             }
@@ -174,13 +170,12 @@ async fn resolve_model(
                 .await
                 .map_err(|e| format!("Failed to load user settings: {}", e))?;
 
-            let model_key = settings.model_selection.normalized();
+            let model_key = settings.model_selection.as_str().to_string();
 
             match crate::db::models::get_model_by_key(app_handle, &model_key) {
                 Ok(entry) => Ok(ResolvedModel {
                     model_key: entry.model,
                     provider: entry.provider,
-                    api_model_name: entry.api_model_name,
                     is_cloud: entry.is_cloud,
                 }),
                 Err(e) => {
@@ -191,7 +186,6 @@ async fn resolve_model(
                     Ok(ResolvedModel {
                         model_key: "qwen3vl-2b".to_string(),
                         provider: "local".to_string(),
-                        api_model_name: "qwen3vl-2b".to_string(),
                         is_cloud: false,
                     })
                 }

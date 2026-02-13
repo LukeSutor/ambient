@@ -59,10 +59,13 @@ impl BrowserUseRuntime {
             .await
             .map_err(|e| AgentError::RuntimeError(format!("Failed to load settings: {}", e)))?;
 
-        let model_key = settings.model_selection.normalized();
-        let is_local = match crate::db::models::get_model_by_key(&app_handle, &model_key) {
+        let model_key = settings.model_selection.as_str();
+        let is_local = match crate::db::models::get_model_by_key(&app_handle, model_key) {
             Ok(entry) => !entry.is_cloud,
-            Err(_) => settings.model_selection.is_local_legacy(),
+            Err(e) => {
+                log::warn!("[browser_use] Could not look up model '{}': {}. Defaulting to local.", model_key, e);
+                true
+            }
         };
         let config = BrowserUseConfig::default();
 

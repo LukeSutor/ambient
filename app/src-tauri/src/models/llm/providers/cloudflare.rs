@@ -22,8 +22,8 @@ impl LlmProvider for CloudflareProvider {
     request: LlmRequest,
     resolved_model: &ResolvedModel,
   ) -> Result<LlmResponse, String> {
-    // Use the API model name from the resolved model (e.g. "fast", "pro")
-    let model = resolved_model.api_model_name.clone();
+    // Send the model key directly (e.g. "gemini-3-flash", "gemini-3-pro").
+    // The Cloudflare worker maps this to the actual API model name.
     let model_key = resolved_model.model_key.clone();
 
     let should_stream = request.stream.unwrap_or(false);
@@ -46,7 +46,7 @@ impl LlmProvider for CloudflareProvider {
 
     // Build request body
     let mut body = json!({
-        "modelType": model,
+        "modelType": model_key,
         "content": content,
         "stream": should_stream,
         "systemPrompt": request.system_prompt.unwrap_or_else(|| "You are a helpful assistant.".to_string()),

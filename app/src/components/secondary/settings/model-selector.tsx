@@ -56,8 +56,8 @@ function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
 function SelectedModelDisplay({ value, models }: { value: string; models: ModelEntry[] }) {
   const model = models.find((m) => m.model === value);
   if (!model) {
-    // Fallback while loading
-    return <span className="font-medium">{value}</span>;
+    // Show a neutral placeholder while models are loading
+    return <span className="font-medium text-muted-foreground">Loading...</span>;
   }
 
   return (
@@ -114,9 +114,8 @@ export function ModelSelector({
     if (model?.is_premium) return;
 
     // Prevent selecting cloud models with 0 remaining uses
-    // Cloud usage is keyed by api_model_name (e.g. "fast", "pro")
     if (model?.is_cloud && !model.is_premium) {
-      const usage = cloudUsage[model.api_model_name];
+      const usage = cloudUsage[model.model];
       if (usage && usage.remaining <= 0) return;
     }
 
@@ -142,8 +141,7 @@ export function ModelSelector({
           </SelectLabel>
 
           {models.map((model, index) => {
-            // Cloud usage is keyed by api_model_name (e.g. "fast", "pro")
-            const usage = cloudUsage[model.api_model_name];
+            const usage = cloudUsage[model.model];
             const isAtLimit = model.is_cloud && !model.is_premium && usage && usage.remaining <= 0;
             const isDisabled = model.is_premium || !!isAtLimit;
 
