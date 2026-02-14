@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 const PRO_FEATURES = [
   {
     icon: Zap,
-    title: "Unlimited Cloud Requests",
-    description: "No daily limits on Gemini Flash and Pro models.",
+    title: "Increased Cloud Requests",
+    description: "Increased daily limits on Gemini Flash and Pro models.",
   },
   {
     icon: Brain,

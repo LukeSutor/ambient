@@ -1,5 +1,6 @@
 "use client";
 
+import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
 import { invokeEmitAuthChanged } from "@/lib/role-access/commands";
@@ -50,6 +51,8 @@ export function GoogleLoginButton({
         void (async () => {
           setIsLoading(false);
           setError(null);
+          // Open the user's encrypted database after OAuth login
+          await invoke("open_user_database");
           await invokeEmitAuthChanged();
           onSignInSuccessRef.current();
         })();

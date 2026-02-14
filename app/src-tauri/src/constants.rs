@@ -40,6 +40,7 @@ pub const KEYRING_SERVICE: &str = "ambient";
 pub const KEYRING_ENCRYPTION_KEY: &str = "encryption_key";
 pub const KEYRING_SUPABASE_REFRESH: &str = "supabase_refresh_token";
 pub const KEYRING_GOOGLE_REFRESH: &str = "google_refresh_token";
+pub const KEYRING_DB_KEY_PREFIX: &str = "db_key_";
 
 // Supabase configuration
 pub const SUPABASE_URL: &str = "https://sipccjuzzgcjaulkvwkg.supabase.co";

@@ -1,4 +1,7 @@
+use crate::constants::{KEYRING_DB_KEY_PREFIX, KEYRING_SERVICE};
+use keyring::Entry;
 use once_cell::sync::Lazy;
+use rand::RngCore;
 use rusqlite::types::{Value as RusqliteValue, ValueRef};
 use rusqlite::{
   ffi::sqlite3_auto_extension, params_from_iter, Connection, Result as RusqliteResult,
@@ -151,15 +154,104 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
   ])
 });
 
-fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+/// Per-user database path: {app_data}/databases/database_{user_id}.sqlite
+///
+/// Each user gets their own encrypted database file, identified by their
+/// Supabase user ID (UUID). Files are stored under a `databases/` subdirectory.
+fn get_user_db_path(app_handle: &tauri::AppHandle, user_id: &str) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
     .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
-  if let Err(e) = std::fs::create_dir_all(&app_data_path) {
-    return Err(format!("Failed to create app data directory: {}", e));
+  let db_dir = app_data_path.join("databases");
+  if let Err(e) = std::fs::create_dir_all(&db_dir) {
+    return Err(format!("Failed to create databases directory: {}", e));
   }
-  Ok(app_data_path.join("database.sqlite"))
+  Ok(db_dir.join(format!("database_{}.sqlite", user_id)))
+}
+
+/// Generate or retrieve the per-user database encryption key from the OS keyring.
+///
+/// Each user gets a unique 32-byte AES-256 key stored in the OS credential store
+/// (Windows Credential Manager / macOS Keychain / Linux Secret Service).
+/// The key is used as a raw SQLCipher key via `PRAGMA key`.
+///
+/// If no key exists for this user, a cryptographically random key is generated
+/// and stored. If the stored key is invalid (wrong length), it is replaced.
+fn get_or_create_user_db_key(user_id: &str) -> Result<Vec<u8>, String> {
+  let keyring_name = format!("{}{}", KEYRING_DB_KEY_PREFIX, user_id);
+  let entry = Entry::new(KEYRING_SERVICE, &keyring_name)
+    .map_err(|e| format!("Keyring entry error for DB key: {}", e))?;
+
+  // Try to read existing key
+  match entry.get_password() {
+    Ok(key_hex) => {
+      // Decode hex to bytes
+      let key_bytes = hex_decode(&key_hex)?;
+      if key_bytes.len() == 32 {
+        return Ok(key_bytes);
+      }
+      log::warn!("[db] Invalid DB key length in keyring ({}), generating new key", key_bytes.len());
+    }
+    Err(keyring::Error::NoEntry) => {
+      log::info!("[db] No existing DB key for user, generating new key");
+    }
+    Err(e) => {
+      return Err(format!("Keyring read error for DB key: {}", e));
+    }
+  }
+
+  // Generate a new 32-byte random key
+  let mut key = [0u8; 32];
+  rand::rngs::OsRng.fill_bytes(&mut key);
+  let key_hex = hex_encode(&key);
+
+  entry
+    .set_password(&key_hex)
+    .map_err(|e| format!("Failed to store DB key in keyring: {}", e))?;
+
+  log::info!("[db] Generated and stored new DB encryption key for user");
+  Ok(key.to_vec())
+}
+
+/// Set the SQLCipher encryption key on a connection.
+///
+/// Must be called immediately after opening a connection, before any other
+/// operations. Uses raw hex key format to avoid PBKDF2 key derivation overhead.
+/// Verifies the key works by querying `sqlite_master`.
+fn set_encryption_key(conn: &Connection, key_bytes: &[u8]) -> Result<(), String> {
+  let hex_key = hex_encode(key_bytes);
+  // SQLCipher raw key format: PRAGMA key = "x'<hex>'";
+  conn
+    .execute_batch(&format!("PRAGMA key = \"x'{}'\"", hex_key))
+    .map_err(|e| format!("Failed to set database encryption key: {}", e))?;
+
+  // Verify the key by reading the schema — if wrong, SQLCipher returns
+  // "file is not a database" on the first real query.
+  conn
+    .execute_batch("SELECT count(*) FROM sqlite_master;")
+    .map_err(|e| format!("Database key verification failed (wrong key?): {}", e))?;
+
+  Ok(())
+}
+
+/// Encode bytes to hex string.
+fn hex_encode(bytes: &[u8]) -> String {
+  bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Decode hex string to bytes.
+fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
+  if hex.len() % 2 != 0 {
+    return Err("Invalid hex string length".to_string());
+  }
+  (0..hex.len())
+    .step_by(2)
+    .map(|i| {
+      u8::from_str_radix(&hex[i..i + 2], 16)
+        .map_err(|e| format!("Invalid hex character: {}", e))
+    })
+    .collect()
 }
 
 /// Register the sqlite_vec extension globally (idempotent).
@@ -198,7 +290,11 @@ fn apply_migrations(conn: &mut Connection) -> Result<(), String> {
 /// Returns the backup path on success.
 fn backup_database(db_path: &PathBuf) -> Result<PathBuf, String> {
   let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-  let backup_name = format!("database_backup_{}.sqlite", timestamp);
+  let stem = db_path
+    .file_stem()
+    .and_then(|s| s.to_str())
+    .unwrap_or("database");
+  let backup_name = format!("{}_backup_{}.sqlite", stem, timestamp);
   let backup_path = db_path
     .parent()
     .ok_or("Cannot determine database parent directory")?
@@ -211,21 +307,40 @@ fn backup_database(db_path: &PathBuf) -> Result<PathBuf, String> {
   Ok(backup_path)
 }
 
-/// Initializes the SQLite database connection, registers extensions, and runs migrations.
+/// Open (or create) an encrypted per-user SQLite database.
 ///
-/// If migrations fail (e.g. schema version mismatch after an update), the existing
-/// database is **backed up** to a timestamped file and a fresh database is created.
-/// A `database_recovered` event is emitted so the frontend can inform the user.
-pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
-  let db_path = get_db_path(app_handle)?;
+/// Each user's database is identified by their Supabase user ID and encrypted
+/// with a per-user key stored in the OS keyring. The flow:
+///
+/// 1. Resolve path: `{app_data}/databases/database_{user_id}.sqlite`
+/// 2. Register sqlite-vec extension (idempotent)
+/// 3. Open SQLite connection
+/// 4. Set SQLCipher encryption key via `PRAGMA key` (raw hex)
+/// 5. Apply schema migrations (with backup + recovery on failure)
+///
+/// If migrations fail, the existing database is backed up and a fresh
+/// encrypted database is created. A `database_recovered` event is emitted.
+pub fn initialize_user_database(
+  app_handle: &tauri::AppHandle,
+  user_id: &str,
+) -> Result<Connection, String> {
+  let db_path = get_user_db_path(app_handle, user_id)?;
+  log::info!("[db] Opening database for user at {:?}", db_path);
 
   register_sqlite_vec_extension()?;
 
-  let mut conn =
-    Connection::open(&db_path).map_err(|e| format!("Failed to open database connection: {}", e))?;
+  let key_bytes = get_or_create_user_db_key(user_id)?;
+
+  let mut conn = Connection::open(&db_path)
+    .map_err(|e| format!("Failed to open database connection: {}", e))?;
+
+  set_encryption_key(&conn, &key_bytes)?;
 
   match apply_migrations(&mut conn) {
-    Ok(()) => Ok(conn),
+    Ok(()) => {
+      log::info!("[db] User database initialized successfully");
+      Ok(conn)
+    }
     Err(migration_err) => {
       log::warn!(
         "[db] Migration failed: {}. Attempting recovery with backup...",
@@ -262,6 +377,8 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
       let mut fresh_conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open fresh database: {}", e))?;
 
+      set_encryption_key(&fresh_conn, &key_bytes)?;
+
       apply_migrations(&mut fresh_conn).map_err(|e| {
         format!(
           "Failed to apply migrations to fresh database: {}. Backup at {:?}",
@@ -276,7 +393,6 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
         backup_path_str
       );
 
-      // Emit event on a best-effort basis (emitter may not be ready yet during setup)
       if let Ok(emitter) = std::panic::catch_unwind(|| {
         crate::events::emitter::emit(
           crate::events::types::DATABASE_RECOVERED,
@@ -295,6 +411,75 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
       Ok(fresh_conn)
     }
   }
+}
+
+/// Open the database for the currently authenticated user.
+///
+/// Reads the stored auth state to determine the user ID, then opens (or creates)
+/// their encrypted database. Any previously open connection is closed first.
+///
+/// Called by the frontend after successful login, and by `lib.rs` on app startup
+/// when a stored session exists.
+#[tauri::command]
+pub fn open_user_database(
+  state: tauri::State<DbState>,
+  app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+  // Read user ID from stored auth state
+  let auth = crate::auth::storage::retrieve_auth_state()
+    .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
+    .ok_or("No active session. Please log in first.")?;
+
+  let user_id = &auth.session.user.id;
+  if user_id.is_empty() {
+    return Err("Invalid user ID in session.".to_string());
+  }
+
+  // Close existing connection if any
+  {
+    let mut guard = state
+      .0
+      .lock()
+      .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    if let Some(conn) = guard.take() {
+      if let Err((_, e)) = conn.close() {
+        log::warn!("[db] Error closing previous connection: {}", e);
+      }
+    }
+  }
+
+  // Initialize user's encrypted database
+  let conn = initialize_user_database(&app_handle, user_id)?;
+
+  let mut guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  *guard = Some(conn);
+
+  log::info!("[db] Opened encrypted database for user {}", user_id);
+  Ok(())
+}
+
+/// Close the current database connection.
+///
+/// Called before logout to cleanly release the database. After this,
+/// all DB operations will return "Database not available" until a new
+/// user logs in.
+#[tauri::command]
+pub fn close_user_database(state: tauri::State<DbState>) -> Result<(), String> {
+  let mut guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+
+  if let Some(conn) = guard.take() {
+    if let Err((_, e)) = conn.close() {
+      log::warn!("[db] Error closing database connection: {}", e);
+    }
+    log::info!("[db] User database closed");
+  }
+  Ok(())
 }
 
 // Helper to convert rusqlite ValueRef to serde_json Value
@@ -426,7 +611,9 @@ pub fn execute_sql(
   }
 }
 
-/// Closes the current database connection, deletes the database file, and initializes a fresh database.
+/// Closes the current database connection, deletes the database file, and initializes a fresh one.
+///
+/// Reads the user ID from the stored auth state to determine which database to reset.
 #[tauri::command]
 pub fn reset_database(
   state: tauri::State<'_, DbState>,
@@ -434,9 +621,16 @@ pub fn reset_database(
 ) -> Result<(), String> {
   log::info!("[db] Attempting to reset database...");
 
-  let db_path = get_db_path(&app_handle)?;
+  // Get user ID from auth state
+  let auth = crate::auth::storage::retrieve_auth_state()
+    .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
+    .ok_or("No active session. Cannot reset database without a logged-in user.")?;
+
+  let user_id = &auth.session.user.id;
+  let db_path = get_user_db_path(&app_handle, user_id)?;
   log::debug!("[db] Target database path for reset: {:?}", db_path);
 
+  // Close existing connection
   let mut conn_guard = state
     .0
     .lock()
@@ -450,6 +644,7 @@ pub fn reset_database(
     log::info!("[db] Closed existing database connection.");
   }
 
+  // Delete the database file
   log::info!("[db] Deleting database file: {:?}", db_path);
   match fs::remove_file(&db_path) {
     Ok(_) => log::info!("[db] Database file deleted successfully."),
@@ -459,8 +654,9 @@ pub fn reset_database(
     Err(e) => return Err(format!("Failed to delete database file: {}", e)),
   }
 
+  // Re-initialize with the same user's encryption key
   log::info!("[db] Re-initializing database...");
-  match initialize_database(&app_handle) {
+  match initialize_user_database(&app_handle, user_id) {
     Ok(new_conn) => {
       let mut guard = state
         .0

@@ -78,19 +78,40 @@ pub fn run() {
         }
       });
 
-      // Initialize the database connection during setup
+      // Open per-user database if a session is already stored (app restart).
+      // The user ID is extracted from the stored session metadata — even if the
+      // access token is expired, the user ID is still valid and the database can
+      // be opened. Token refresh happens later when the frontend calls get_auth_state.
       let app_handle = app.handle();
-      match db::core::initialize_database(&app_handle) {
-        Ok(conn) => {
-          log::info!("[setup] Database initialized successfully.");
-          let state = app_handle.state::<DbState>();
-          *state.0.lock().unwrap() = Some(conn);
+      match crate::auth::storage::retrieve_auth_state() {
+        Ok(Some(state)) => {
+          let user_id = &state.session.user.id;
+          if !user_id.is_empty() {
+            match db::core::initialize_user_database(app_handle, user_id) {
+              Ok(conn) => {
+                let db_state = app_handle.state::<DbState>();
+                *db_state.0.lock().unwrap() = Some(conn);
+                log::info!("[setup] Opened encrypted database for user from stored session");
+              }
+              Err(e) => {
+                log::error!(
+                  "[setup] Failed to open user database: {}. Database will initialize after login.",
+                  e
+                );
+              }
+            }
+          } else {
+            log::warn!("[setup] Stored session has empty user ID. Database will initialize after login.");
+          }
+        }
+        Ok(None) => {
+          log::info!("[setup] No stored session. Database will initialize after login.");
         }
         Err(e) => {
-          // Log the error but do NOT panic — the app will start without a DB.
-          // Features that require the database will fail gracefully at call sites
-          // because they check `conn.as_ref().ok_or(...)`.
-          log::error!("[setup] Failed to initialize database: {}. The app will start with limited functionality.", e);
+          log::warn!(
+            "[setup] Failed to read auth state: {}. Database will initialize after login.",
+            e
+          );
         }
       }
 
@@ -155,6 +176,8 @@ pub fn run() {
       screen_selection::get_screen_dimensions,
       db::core::execute_sql,
       db::core::reset_database,
+      db::core::open_user_database,
+      db::core::close_user_database,
       db::conversations::create_conversation,
       db::conversations::get_messages,
       db::conversations::get_message,
