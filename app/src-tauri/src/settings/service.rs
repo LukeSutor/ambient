@@ -10,11 +10,7 @@ use tauri_plugin_store::{Store, StoreExt};
 ///
 /// Returns `None` if no user is logged in.
 fn get_user_store_path() -> Option<String> {
-  let auth = crate::auth::storage::retrieve_auth_state().ok()??;
-  let user_id = &auth.session.user.id;
-  if user_id.is_empty() {
-    return None;
-  }
+  let user_id = crate::auth::storage::get_current_user_id().ok()??;
   Some(format!("{}/{}/{}", PROFILES_DIR, user_id, USER_STORE_FILENAME))
 }
 
@@ -70,10 +66,10 @@ async fn save_settings_internal(
   settings: &UserSettings,
 ) -> Result<(), String> {
   // Get user ID and ensure profile directory exists
-  let auth = crate::auth::storage::retrieve_auth_state()
-    .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to retrieve user ID: {}", e))?
     .ok_or("No active session. Cannot save settings.")?;
-  ensure_profile_dir(app_handle, &auth.session.user.id)?;
+  ensure_profile_dir(app_handle, &user_id)?;
 
   let store = get_user_settings_store(app_handle)?;
 

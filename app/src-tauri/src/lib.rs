@@ -79,29 +79,24 @@ pub fn run() {
       });
 
       // Open per-user database if a session is already stored (app restart).
-      // The user ID is extracted from the stored session metadata — even if the
-      // access token is expired, the user ID is still valid and the database can
-      // be opened. Token refresh happens later when the frontend calls get_auth_state.
+      // Read the current user ID from the OS keyring — this avoids decrypting
+      // tokens just to get the user ID. Token refresh happens later when the
+      // frontend calls get_auth_state.
       let app_handle = app.handle();
-      match crate::auth::storage::retrieve_auth_state() {
-        Ok(Some(state)) => {
-          let user_id = &state.session.user.id;
-          if !user_id.is_empty() {
-            match db::core::initialize_user_database(app_handle, user_id) {
-              Ok(conn) => {
-                let db_state = app_handle.state::<DbState>();
-                *db_state.0.lock().unwrap() = Some(conn);
-                log::info!("[setup] Opened encrypted database for user from stored session");
-              }
-              Err(e) => {
-                log::error!(
-                  "[setup] Failed to open user database: {}. Database will initialize after login.",
-                  e
-                );
-              }
+      match crate::auth::storage::get_current_user_id() {
+        Ok(Some(user_id)) => {
+          match db::core::initialize_user_database(app_handle, &user_id) {
+            Ok(conn) => {
+              let db_state = app_handle.state::<DbState>();
+              *db_state.0.lock().unwrap() = Some(conn);
+              log::info!("[setup] Opened encrypted database for user from stored session");
             }
-          } else {
-            log::warn!("[setup] Stored session has empty user ID. Database will initialize after login.");
+            Err(e) => {
+              log::error!(
+                "[setup] Failed to open user database: {}. Database will initialize after login.",
+                e
+              );
+            }
           }
         }
         Ok(None) => {

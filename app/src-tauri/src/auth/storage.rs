@@ -19,8 +19,8 @@
 
 use crate::auth::types::{Session, StoredAuthState};
 use crate::constants::{
-    AUTH_KEY, KEYRING_ENCRYPTION_KEY, KEYRING_GOOGLE_REFRESH, KEYRING_SERVICE,
-    KEYRING_SUPABASE_REFRESH, STORE_PATH,
+    AUTH_KEY, KEYRING_CURRENT_USER_ID, KEYRING_ENCRYPTION_KEY, KEYRING_GOOGLE_REFRESH,
+    KEYRING_SERVICE, KEYRING_SUPABASE_REFRESH, PROFILES_DIR, USER_STORE_FILENAME,
 };
 use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
@@ -30,7 +30,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use keyring::Entry;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_store::StoreExt;
 
 // ============================================================================
@@ -63,6 +63,40 @@ struct SessionMetadata {
 
 fn get_app_handle() -> Option<AppHandle> {
     crate::events::get_emitter().get_app_handle()
+}
+
+// ============================================================================
+// Per-User Store Path
+// ============================================================================
+
+/// Construct the per-user store path: `profiles/{user_id}/store.json`.
+///
+/// This path is relative to `app_data_dir` and resolved by `tauri_plugin_store`.
+fn user_store_path(user_id: &str) -> String {
+    format!("{}/{}/{}", PROFILES_DIR, user_id, USER_STORE_FILENAME)
+}
+
+/// Ensure the user's profile directory exists so tauri_plugin_store can save.
+fn ensure_profile_dir(app_handle: &AppHandle, user_id: &str) -> Result<(), String> {
+    let app_data = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
+    let profile_dir = app_data.join(PROFILES_DIR).join(user_id);
+    std::fs::create_dir_all(&profile_dir)
+        .map_err(|e| format!("Failed to create profile directory: {}", e))
+}
+
+/// Get the current user ID from the OS keyring.
+///
+/// Returns `Ok(None)` if no user is currently logged in.
+/// Used by other modules to determine the active user without
+/// expanding the full auth state.
+pub fn get_current_user_id() -> Result<Option<String>, String> {
+    match keyring_get(KEYRING_CURRENT_USER_ID)? {
+        Some(id) if !id.is_empty() => Ok(Some(id)),
+        _ => Ok(None),
+    }
 }
 
 // ============================================================================
@@ -199,6 +233,14 @@ fn decrypt_session_tokens(encrypted_b64: &str) -> Result<EncryptedSessionTokens,
 /// Supabase-only token refreshes), the existing value is preserved.
 /// Google refresh tokens are never overwritten with empty values.
 pub fn store_session(session: &Session) -> Result<(), String> {
+    let user_id = &session.user.id;
+    if user_id.is_empty() {
+        return Err("Cannot store session: user ID is empty".to_string());
+    }
+
+    // Set current user ID in keyring (bootstrap pointer for startup)
+    keyring_set(KEYRING_CURRENT_USER_ID, user_id)?;
+
     // Store Supabase refresh token in keyring
     keyring_set(KEYRING_SUPABASE_REFRESH, &session.refresh_token)?;
 
@@ -239,7 +281,7 @@ pub fn store_session(session: &Session) -> Result<(), String> {
         stored_at: chrono::Utc::now().timestamp(),
     };
 
-    // Write to store.json
+    // Write to per-user store
     let metadata_json = serde_json::to_value(&metadata)
         .map_err(|e| format!("Failed to serialize metadata: {}", e))?;
 
@@ -249,16 +291,21 @@ pub fn store_session(session: &Session) -> Result<(), String> {
     });
 
     let app_handle = get_app_handle().ok_or("AppHandle not initialized")?;
+
+    // Ensure profile directory exists before store write
+    ensure_profile_dir(&app_handle, user_id)?;
+
+    let store_path = user_store_path(user_id);
     let store = app_handle
-        .store(STORE_PATH)
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+        .store(&store_path)
+        .map_err(|e| format!("Failed to open user store: {}", e))?;
 
     store.set(AUTH_KEY, store_data);
     store
         .save()
-        .map_err(|e| format!("Failed to save store: {}", e))?;
+        .map_err(|e| format!("Failed to save user store: {}", e))?;
 
-    log::info!("[auth_storage] Session stored successfully");
+    log::info!("[auth_storage] Session stored for user {}", user_id);
     Ok(())
 }
 
@@ -267,14 +314,18 @@ pub fn store_session(session: &Session) -> Result<(), String> {
 /// Used internally to preserve existing Google access tokens during
 /// Supabase-only session refreshes.
 fn read_encrypted_tokens() -> Result<EncryptedSessionTokens, String> {
+    let user_id = keyring_get(KEYRING_CURRENT_USER_ID)?
+        .ok_or("No current user ID in keyring")?;
+
     let app_handle = get_app_handle().ok_or("AppHandle not initialized")?;
+    let store_path = user_store_path(&user_id);
     let store = app_handle
-        .store(STORE_PATH)
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+        .store(&store_path)
+        .map_err(|e| format!("Failed to open user store: {}", e))?;
 
     let auth_val = store
         .get(AUTH_KEY)
-        .ok_or("No auth data in store")?;
+        .ok_or("No auth data in user store")?;
 
     let encrypted_b64 = auth_val["encrypted_tokens"]
         .as_str()
@@ -292,14 +343,21 @@ fn read_encrypted_tokens() -> Result<EncryptedSessionTokens, String> {
 ///
 /// Returns `Ok(None)` if no session is stored or if decryption fails.
 pub fn retrieve_auth_state() -> Result<Option<StoredAuthState>, String> {
+    // Read current user ID from keyring (bootstrap pointer)
+    let user_id = match keyring_get(KEYRING_CURRENT_USER_ID)? {
+        Some(id) if !id.is_empty() => id,
+        _ => return Ok(None), // No active session
+    };
+
     let app_handle = match get_app_handle() {
         Some(h) => h,
         None => return Ok(None),
     };
 
+    let store_path = user_store_path(&user_id);
     let store = app_handle
-        .store(STORE_PATH)
-        .map_err(|e| format!("Failed to open store: {}", e))?;
+        .store(&store_path)
+        .map_err(|e| format!("Failed to open user store: {}", e))?;
 
     let auth_val = match store.get(AUTH_KEY) {
         Some(v) => v,
@@ -409,18 +467,25 @@ pub fn get_google_refresh_token() -> Result<Option<String>, String> {
 /// The encryption key is preserved so other encrypted data
 /// (if any) can still be read.
 pub fn clear_auth_state() -> Result<(), String> {
-    // Clear refresh tokens from keyring
+    // Read current user ID before clearing (needed to find the right store)
+    let user_id = keyring_get(KEYRING_CURRENT_USER_ID)?;
+
+    // Clear refresh tokens and current user pointer from keyring
     keyring_delete(KEYRING_SUPABASE_REFRESH);
     keyring_delete(KEYRING_GOOGLE_REFRESH);
+    keyring_delete(KEYRING_CURRENT_USER_ID);
 
-    // Clear session data from store.json
-    if let Some(app_handle) = get_app_handle() {
-        if let Ok(store) = app_handle.store(STORE_PATH) {
-            store.delete(AUTH_KEY);
-            let _ = store.save();
+    // Clear session data from per-user store
+    if let Some(user_id) = user_id.filter(|id| !id.is_empty()) {
+        if let Some(app_handle) = get_app_handle() {
+            let store_path = user_store_path(&user_id);
+            if let Ok(store) = app_handle.store(&store_path) {
+                store.delete(AUTH_KEY);
+                let _ = store.save();
+            }
         }
     }
 
-    log::info!("[auth_storage] Auth state cleared (keyring + store)");
+    log::info!("[auth_storage] Auth state cleared (keyring + user store)");
     Ok(())
 }

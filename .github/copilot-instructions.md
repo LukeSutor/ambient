@@ -55,7 +55,7 @@ SettingsProvider → RoleAccessProvider → ModelAccessProvider → SetupProvide
 ### Backend Module Organization
 
 **Top-level modules** ([lib.rs](app/src-tauri/src/lib.rs)):
-- `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in store.json)
+- `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in per-user store.json)
 - `db/`: Per-user encrypted SQLite (SQLCipher) with migrations, conversations, messages, memory, token usage
 - `agents/`: Chat runtime + browser-use runtime
 - `models/`: LLM client (local/cloud providers), llama.cpp server, embedding, OCR
@@ -221,16 +221,17 @@ All user data is stored in per-user profile directories under `{app_data}/profil
 
 ```
 {app_data}/
-├── store.json                          # GLOBAL: auth session only (AES-encrypted tokens)
 ├── models/                             # SHARED: downloaded ML model weights
 ├── profiles/
 │   ├── {user_id_1}/
 │   │   ├── database.sqlite             # Per-user encrypted DB (SQLCipher)
-│   │   ├── store.json                  # Per-user settings
+│   │   ├── store.json                  # Per-user settings + AES-encrypted auth tokens
 │   │   └── attachments/{msg_id}/...    # Per-user file attachments
 │   └── {user_id_2}/
 │       └── ...
 ```
+
+**No global store.json.** The active user is identified by `current_user_id` in the OS keyring, which bootstraps access to the per-user store on startup.
 
 **SQLCipher Encryption:**
 - Each user's DB is encrypted with a unique 32-byte random key
@@ -239,13 +240,13 @@ All user data is stored in per-user profile directories under `{app_data}/profil
 - Verification on open: `SELECT count(*) FROM sqlite_master` to detect wrong key
 
 **DB Lifecycle:**
-1. App startup → reads auth state → if valid session, opens user DB via `initialize_user_database(app_handle, user_id)`
+1. App startup → reads `current_user_id` from keyring → if found, opens user DB via `initialize_user_database(app_handle, user_id)`
 2. Login → frontend calls `invoke("open_user_database")` → closes old DB, opens new user's DB
 3. Logout → `logout()` closes DB connection before clearing auth state
 4. If no session on startup, DB stays `None` (initialized after login)
 
 **Settings Per-User Store:**
-- [settings/service.rs](app/src-tauri/src/settings/service.rs) reads `retrieve_auth_state()` to determine user ID
+- [settings/service.rs](app/src-tauri/src/settings/service.rs) reads `get_current_user_id()` from keyring to determine user ID
 - Opens per-user store at `profiles/{user_id}/store.json` via `tauri_plugin_store`
 - Returns `UserSettings::default()` silently when not logged in
 - Errors on save when not logged in
@@ -415,23 +416,25 @@ Tokens are split across two locations based on sensitivity and lifetime:
 
 | Token | Location | Protection | Rationale |
 |-------|----------|------------|----------|
+| Current user ID | OS keyring (`keyring` crate) | OS-level encryption | Bootstrap pointer — identifies active user on startup |
 | Supabase refresh token | OS keyring (`keyring` crate) | OS-level encryption | Long-lived, high-value — most secure location |
 | Google refresh token | OS keyring (`keyring` crate) | OS-level encryption | Long-lived, high-value — never touches disk |
-| AES encryption key | OS keyring (`keyring` crate) | OS-level encryption | Protects session tokens in store.json |
-| Supabase access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
-| Google access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
-| Session metadata (user, expiry) | `store.json` (plaintext) | None (non-sensitive) | Quick reads for UI state |
+| AES encryption key | OS keyring (`keyring` crate) | OS-level encryption | Protects session tokens in per-user store.json |
 | DB encryption key (per-user) | OS keyring (`keyring` crate) | OS-level encryption | Per-user SQLCipher key as `db_key_{user_id}` |
+| Supabase access token | `profiles/{user_id}/store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
+| Google access token | `profiles/{user_id}/store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
+| Session metadata (user, expiry) | `profiles/{user_id}/store.json` (plaintext) | None (non-sensitive) | Quick reads for UI state |
 | User settings | `profiles/{user_id}/store.json` | None (non-sensitive) | Per-user preferences, isolated from other users |
 
-Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refresh_token`, `google_refresh_token`, `db_key_{user_id}` (per-user DB encryption keys).
+Keyring service name: `"ambient"`. Entry names: `current_user_id`, `encryption_key`, `supabase_refresh_token`, `google_refresh_token`, `db_key_{user_id}` (per-user DB encryption keys).
 
 **Key functions in `storage.rs`:**
-- `store_session()`: Splits a `Session` — refresh tokens → keyring, access tokens → AES-encrypt → store.json
-- `retrieve_auth_state()`: Reads store.json + keyring, decrypts, reconstructs full `StoredAuthState`
+- `store_session()`: Sets `current_user_id` in keyring, splits tokens — refresh tokens → keyring, access tokens → AES-encrypt → per-user store.json
+- `retrieve_auth_state()`: Reads `current_user_id` from keyring → opens per-user store → decrypts tokens → reads refresh tokens from keyring → reconstructs `StoredAuthState`
+- `get_current_user_id()`: Reads `current_user_id` from keyring (lightweight, no decryption)
 - `get_refresh_token()` / `get_google_refresh_token()`: Read directly from keyring (no decryption needed)
-- `get_access_token()` / `get_provider_token()`: Read from encrypted store.json
-- `clear_auth_state()`: Clears both keyring entries and store.json
+- `get_access_token()` / `get_provider_token()`: Read from encrypted per-user store.json
+- `clear_auth_state()`: Clears per-user store auth data + keyring entries (current_user_id, refresh tokens)
 
 **Google Token Refresh Flow:**
 1. `refresh_google_token()` acquires `REFRESH_MUTEX` to serialize refresh requests
@@ -444,9 +447,9 @@ Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refr
 ## Security
 
 ### Sensitive Operations
-- **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in store.json. If store.json is exfiltrated, refresh tokens remain safe in OS keyring.
+- **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in per-user `profiles/{user_id}/store.json`. No global store.json — active user identified by `current_user_id` in keyring.
 - **Database encryption:** Per-user SQLCipher databases with unique 32-byte keys in OS keyring. Raw hex key encoding (no PBKDF2 overhead). Each user's data is cryptographically isolated.
-- **Per-user data isolation:** All user data (DB, settings, attachments) stored under `profiles/{user_id}/`. Auth data in global `store.json` identifies current user. Model weights and server are shared.
+- **Per-user data isolation:** All user data (DB, settings, auth tokens, attachments) stored under `profiles/{user_id}/`. No global data files. Model weights and server are shared.
 - **Code execution:** Isolated subprocess to prevent app crashes
 - **Web scraping:** Uses real browser engine to avoid exposing request patterns
 

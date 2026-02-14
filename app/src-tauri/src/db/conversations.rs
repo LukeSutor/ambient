@@ -902,11 +902,10 @@ pub async fn create_attachments(
   let mut attachments = Vec::new();
   let now = Utc::now();
 
-  // Get user_id from auth state for per-user attachment storage
-  let user_id = match crate::auth::storage::retrieve_auth_state() {
-    Ok(Some(state)) if !state.session.user.id.is_empty() => state.session.user.id.clone(),
-    _ => return Err("No active session. Cannot create attachments.".to_string()),
-  };
+  // Get user_id from keyring for per-user attachment storage
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to get current user ID: {}", e))?
+    .ok_or("No active session. Cannot create attachments.")?;
 
   for data in attachment_data {
     let attachment_id = Uuid::new_v4().to_string();

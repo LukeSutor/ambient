@@ -427,15 +427,10 @@ pub fn open_user_database(
   state: tauri::State<DbState>,
   app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
-  // Read user ID from stored auth state
-  let auth = crate::auth::storage::retrieve_auth_state()
-    .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
+  // Read user ID from keyring
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to get current user ID: {}", e))?
     .ok_or("No active session. Please log in first.")?;
-
-  let user_id = &auth.session.user.id;
-  if user_id.is_empty() {
-    return Err("Invalid user ID in session.".to_string());
-  }
 
   // Close existing connection if any
   {
@@ -451,7 +446,7 @@ pub fn open_user_database(
   }
 
   // Initialize user's encrypted database
-  let conn = initialize_user_database(&app_handle, user_id)?;
+  let conn = initialize_user_database(&app_handle, &user_id)?;
 
   let mut guard = state
     .0
@@ -459,7 +454,7 @@ pub fn open_user_database(
     .map_err(|_| "Failed to acquire DB lock".to_string())?;
   *guard = Some(conn);
 
-  log::info!("[db] Opened encrypted database for user {}", user_id);
+  log::info!("[db] Opened encrypted database for user {}", &user_id);
   Ok(())
 }
 
@@ -623,13 +618,11 @@ pub fn reset_database(
 ) -> Result<(), String> {
   log::info!("[db] Attempting to reset database...");
 
-  // Get user ID from auth state
-  let auth = crate::auth::storage::retrieve_auth_state()
-    .map_err(|e| format!("Failed to retrieve auth state: {}", e))?
+  // Get user ID from keyring
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to get current user ID: {}", e))?
     .ok_or("No active session. Cannot reset database without a logged-in user.")?;
-
-  let user_id = &auth.session.user.id;
-  let db_path = get_user_db_path(&app_handle, user_id)?;
+  let db_path = get_user_db_path(&app_handle, &user_id)?;
   log::debug!("[db] Target database path for reset: {:?}", db_path);
 
   // Close existing connection
@@ -658,7 +651,7 @@ pub fn reset_database(
 
   // Re-initialize with the same user's encryption key
   log::info!("[db] Re-initializing database...");
-  match initialize_user_database(&app_handle, user_id) {
+  match initialize_user_database(&app_handle, &user_id) {
     Ok(new_conn) => {
       let mut guard = state
         .0
