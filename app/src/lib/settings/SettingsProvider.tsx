@@ -210,7 +210,25 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   // Event listeners setup
   useEffect(() => {
     let isMounted = true;
-    let cleanup: UnlistenFn | null = null;
+    let settingsCleanup: UnlistenFn | null = null;
+    let authCleanup: UnlistenFn | null = null;
+
+    const reloadSettings = async () => {
+      dispatch({ type: "INVALIDATE_CACHE" });
+
+      if (isMounted) {
+        try {
+          const settings =
+            await invoke<UserSettings>("load_user_settings");
+          dispatch({ type: "SET_SETTINGS", payload: settings });
+        } catch (error) {
+          console.error(
+            "[SettingsProvider] Failed to reload settings:",
+            error,
+          );
+        }
+      }
+    };
 
     const setupEvents = async () => {
       if (!isMounted) return;
@@ -218,27 +236,18 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       try {
         console.log("[SettingsProvider] Setting up event listeners...");
 
-        cleanup = await listen("settings_changed", () => {
-          void (async () => {
-            console.log(
-              "[SettingsProvider] Settings changed event received, reloading",
-            );
+        settingsCleanup = await listen("settings_changed", () => {
+          console.log(
+            "[SettingsProvider] Settings changed event received, reloading",
+          );
+          void reloadSettings();
+        });
 
-            dispatch({ type: "INVALIDATE_CACHE" });
-
-            if (isMounted) {
-              try {
-                const settings =
-                  await invoke<UserSettings>("load_user_settings");
-                dispatch({ type: "SET_SETTINGS", payload: settings });
-              } catch (error) {
-                console.error(
-                  "[SettingsProvider] Failed to reload settings:",
-                  error,
-                );
-              }
-            }
-          })();
+        authCleanup = await listen("auth_changed", () => {
+          console.log(
+            "[SettingsProvider] Auth changed event received, reloading settings for new user",
+          );
+          void reloadSettings();
         });
 
         console.log("[SettingsProvider] Event listeners initialized");
@@ -251,8 +260,11 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
     return () => {
       isMounted = false;
-      if (cleanup) {
-        cleanup();
+      if (settingsCleanup) {
+        settingsCleanup();
+      }
+      if (authCleanup) {
+        authCleanup();
       }
       console.log("[SettingsProvider] Event listeners cleaned up");
     };

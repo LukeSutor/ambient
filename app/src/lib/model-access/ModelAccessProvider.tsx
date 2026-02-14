@@ -158,6 +158,7 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
       // Re-fetch when auth state changes (login/logout/role change)
       unlistenAuth = await listen("auth_changed", () => {
         void refreshUsage();
+        void refreshModels();
       });
 
       // Re-fetch models when visibility is toggled

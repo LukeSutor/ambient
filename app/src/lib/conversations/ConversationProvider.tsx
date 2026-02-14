@@ -125,7 +125,8 @@ type ConversationAction =
   | {
       type: "NAVIGATE_TO_CONVERSATION";
       payload: { conversationId: string; messageId: string | null };
-    };
+    }
+  | { type: "RESET_STATE" };
 
 /**
  * Conversation reducer - handles all state updates
@@ -522,6 +523,14 @@ function conversationReducer(
         scrollToMessageId: action.payload.messageId,
       };
 
+    case "RESET_STATE":
+      return {
+        ...initialState,
+        // Fresh refs so initialization re-runs
+        ocrTimeoutRef: { current: null },
+        initializationRef: { current: false },
+      };
+
     default:
       return state;
   }
@@ -745,6 +754,14 @@ export function ConversationProvider({ children }: ConversationProviderProps) {
                 messageId: message_id,
               },
             });
+          }),
+
+          // Auth change listener - reset all conversation state for the new user
+          listen("auth_changed", () => {
+            console.log(
+              "[ConversationProvider] Auth changed, resetting conversation state",
+            );
+            dispatch({ type: "RESET_STATE" });
           }),
         ];
 
