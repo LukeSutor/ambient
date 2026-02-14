@@ -52,7 +52,7 @@ impl AgentRuntimeState {
     /// the next chunk from the LLM server.
     pub fn signal_stop(&self) {
         self.should_stop.store(true, Ordering::SeqCst);
-        self.cancel_notify.lock().unwrap().notify_waiters();
+        self.cancel_notify.lock().unwrap_or_else(|e| e.into_inner()).notify_waiters();
     }
 
     /// Reset the stop signal (called when starting a new generation).
@@ -60,7 +60,7 @@ impl AgentRuntimeState {
         self.should_stop.store(false, Ordering::SeqCst);
         // Create a fresh Notify to discard any stale permits from
         // the previous generation's cancellation.
-        *self.cancel_notify.lock().unwrap() = Arc::new(Notify::new());
+        *self.cancel_notify.lock().unwrap_or_else(|e| e.into_inner()) = Arc::new(Notify::new());
     }
 
     /// Mark generation as started.
@@ -94,7 +94,7 @@ impl AgentRuntimeState {
 
     /// Get the cancel notify for sharing with the LLM client.
     pub fn get_cancel_notify(&self) -> Arc<Notify> {
-        self.cancel_notify.lock().unwrap().clone()
+        self.cancel_notify.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 

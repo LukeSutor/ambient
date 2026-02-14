@@ -73,13 +73,33 @@ pub async fn handle_agent_chat(
     // Create runtime and run
     let cancel_signal = state.get_stop_signal();
     let cancel_notify = state.get_cancel_notify();
-    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal, cancel_notify).await?;
-    let result = runtime.run(user_message, attachments).await;
+    let runtime = match AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal, cancel_notify).await {
+        Ok(r) => r,
+        Err(e) => {
+            // Clean up state on runtime creation failure
+            state.finish_generation().await;
+            return Err(e);
+        }
+    };
 
-    // Mark generation as finished
+    // Spawn the runtime in an isolated task so that:
+    // 1. Panics don't propagate and leave is_running stuck
+    // 2. finish_generation() ALWAYS runs regardless of outcome
+    let task_result = tokio::spawn(async move {
+        runtime.run(user_message, attachments).await
+    })
+    .await;
+
+    // ALWAYS mark generation as finished
     state.finish_generation().await;
 
-    result
+    match task_result {
+        Ok(result) => result,
+        Err(join_err) => {
+            log::error!("[agent] Chat runtime task panicked: {}", join_err);
+            Err(AgentError::RuntimeError(format!("Chat session failed unexpectedly: {}", join_err)))
+        }
+    }
 }
 
 /// Agentic runtime managing the tool-using conversation loop.

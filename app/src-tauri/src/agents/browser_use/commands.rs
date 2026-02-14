@@ -25,7 +25,7 @@ pub async fn start_browser_use(
     let cancel_signal = state.get_stop_signal();
     let cancel_notify = state.get_cancel_notify();
 
-    let runtime = BrowserUseRuntime::new(
+    let runtime = match BrowserUseRuntime::new(
         app_handle.clone(),
         conversation_id,
         assistant_message_id,
@@ -33,14 +33,34 @@ pub async fn start_browser_use(
         cancel_notify,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            // Clean up session state on runtime creation failure
+            state.finish_session().await;
+            return Err(e.to_string());
+        }
+    };
 
-    let result = runtime.run(prompt, message_id).await;
+    // Spawn the runtime in an isolated task so that:
+    // 1. Panics don't propagate and leave the session stuck
+    // 2. finish_session() ALWAYS runs regardless of outcome
+    let task_result = tokio::spawn(async move {
+        runtime.run(prompt, message_id).await
+    })
+    .await;
 
-    // Mark session as finished
+    // ALWAYS mark session as finished — this is the critical cleanup
     state.finish_session().await;
 
-    result.map_err(|e| e.to_string())
+    match task_result {
+        Ok(Ok(text)) => Ok(text),
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(join_err) => {
+            log::error!("[browser_use] Session task panicked: {}", join_err);
+            Err(format!("Browser session failed unexpectedly: {}", join_err))
+        }
+    }
 }
 
 // =============================================================================

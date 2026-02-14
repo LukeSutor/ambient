@@ -28,16 +28,24 @@ export function ModelToggles() {
     async (modelKey: string, currentEnabled: boolean) => {
       const newEnabled = !currentEnabled;
       try {
-        await invoke("toggle_model", { modelKey, enabled: newEnabled });
-        // No local state update needed — the Rust command emits
-        // `models_changed`, which the provider handles automatically.
+        await invoke<string | null>("toggle_model", { modelKey, enabled: newEnabled });
+        // State updates happen automatically via the `models_changed` and
+        // `settings_changed` events emitted by the Rust command.
       } catch (error) {
-        console.error(`[ModelToggles] Failed to toggle model ${modelKey}:`, error);
-        toast.error("Failed to toggle model");
+        const msg = String(error);
+        if (msg.includes("Cannot disable the last enabled model")) {
+          toast.error("At least one model must remain enabled");
+        } else {
+          console.error(`[ModelToggles] Failed to toggle model ${modelKey}:`, error);
+          toast.error("Failed to toggle model");
+        }
       }
     },
     [],
   );
+
+  // Count enabled models to visually lock the last one
+  const enabledCount = models.filter((m) => m.is_enabled).length;
 
   if (models.length === 0) {
     return (
@@ -51,6 +59,7 @@ export function ModelToggles() {
     <div className="flex flex-col divide-y divide-border">
       {models.map((model) => {
         const IconComponent = ICON_MAP[model.icon] || Shield;
+        const isLastEnabled = model.is_enabled && enabledCount <= 1;
         return (
           <div
             key={model.model}
@@ -71,6 +80,7 @@ export function ModelToggles() {
             </div>
             <Switch
               checked={model.is_enabled}
+              disabled={isLastEnabled}
               onCheckedChange={() =>
                 void handleToggle(model.model, model.is_enabled)
               }
