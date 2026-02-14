@@ -1074,6 +1074,141 @@ pub fn extract_text_anthropic(response: &Value) -> Option<String> {
         })
 }
 
+// ---------------------------------------------------------------------------
+// Token usage extraction
+// ---------------------------------------------------------------------------
+
+/// Extracted token counts from a provider response.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenUsage {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+}
+
+/// Extracts token usage from an OpenAI response.
+///
+/// OpenAI provides `usage.prompt_tokens` and `usage.completion_tokens`.
+pub fn extract_usage_openai(response: &Value) -> Option<TokenUsage> {
+    response.get("usage").map(|usage| TokenUsage {
+        prompt_tokens: usage
+            .get("prompt_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+        completion_tokens: usage
+            .get("completion_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+    })
+}
+
+/// Extracts token usage from a Gemini response.
+///
+/// Gemini provides `usageMetadata.promptTokenCount` and
+/// `usageMetadata.candidatesTokenCount`.
+pub fn extract_usage_gemini(response: &Value) -> Option<TokenUsage> {
+    response.get("usageMetadata").map(|usage| TokenUsage {
+        prompt_tokens: usage
+            .get("promptTokenCount")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+        completion_tokens: usage
+            .get("candidatesTokenCount")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+    })
+}
+
+/// Extracts token usage from an Anthropic response.
+///
+/// Anthropic provides `usage.input_tokens` and `usage.output_tokens`.
+pub fn extract_usage_anthropic(response: &Value) -> Option<TokenUsage> {
+    response.get("usage").map(|usage| TokenUsage {
+        prompt_tokens: usage
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+        completion_tokens: usage
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Finish reason extraction
+// ---------------------------------------------------------------------------
+
+/// Normalised finish reason across providers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FinishReason {
+    /// Model finished naturally.
+    Stop,
+    /// Model wants to call one or more tools.
+    ToolUse,
+    /// Stopped because of max token limit.
+    MaxTokens,
+    /// Unknown or provider-specific reason.
+    Other(String),
+}
+
+/// Extracts the finish reason from an OpenAI response.
+///
+/// Maps `stop` → `Stop`, `tool_calls` → `ToolUse`, `length` → `MaxTokens`.
+pub fn extract_finish_reason_openai(response: &Value) -> Option<FinishReason> {
+    response
+        .get("choices")
+        .and_then(|c| c.as_array())
+        .and_then(|a| a.first())
+        .and_then(|c| c.get("finish_reason"))
+        .and_then(|r| r.as_str())
+        .map(|reason| match reason {
+            "stop" => FinishReason::Stop,
+            "tool_calls" => FinishReason::ToolUse,
+            "length" => FinishReason::MaxTokens,
+            other => FinishReason::Other(other.to_string()),
+        })
+}
+
+/// Extracts the finish reason from a Gemini response.
+///
+/// Maps `STOP` → `Stop`, `MAX_TOKENS` → `MaxTokens`. Tool calls are detected
+/// via content parts rather than finish reason in Gemini.
+pub fn extract_finish_reason_gemini(response: &Value) -> Option<FinishReason> {
+    response
+        .get("candidates")
+        .and_then(|c| c.as_array())
+        .and_then(|a| a.first())
+        .and_then(|c| c.get("finishReason"))
+        .and_then(|r| r.as_str())
+        .map(|reason| match reason {
+            "STOP" => {
+                // Gemini uses STOP even for tool calls — check parts
+                if has_tool_calls_gemini(response) {
+                    FinishReason::ToolUse
+                } else {
+                    FinishReason::Stop
+                }
+            }
+            "MAX_TOKENS" => FinishReason::MaxTokens,
+            other => FinishReason::Other(other.to_string()),
+        })
+}
+
+/// Extracts the finish reason from an Anthropic response.
+///
+/// Maps `end_turn` → `Stop`, `tool_use` → `ToolUse`, `max_tokens` → `MaxTokens`.
+pub fn extract_finish_reason_anthropic(response: &Value) -> Option<FinishReason> {
+    response
+        .get("stop_reason")
+        .and_then(|r| r.as_str())
+        .map(|reason| match reason {
+            "end_turn" => FinishReason::Stop,
+            "tool_use" => FinishReason::ToolUse,
+            "max_tokens" => FinishReason::MaxTokens,
+            other => FinishReason::Other(other.to_string()),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2113,5 +2248,209 @@ mod tests {
         assert_eq!(openai_calls[0].arguments["query"], "test");
         assert_eq!(gemini_calls[0].arguments["query"], "test");
         assert_eq!(anthropic_calls[0].arguments["query"], "test");
+    }
+
+    // =======================================================================
+    // Token usage extraction
+    // =======================================================================
+
+    #[test]
+    fn test_extract_usage_openai() {
+        let response = json!({
+            "usage": {
+                "prompt_tokens": 42,
+                "completion_tokens": 18,
+                "total_tokens": 60
+            }
+        });
+        let usage = extract_usage_openai(&response).unwrap();
+        assert_eq!(usage, TokenUsage { prompt_tokens: 42, completion_tokens: 18 });
+    }
+
+    #[test]
+    fn test_extract_usage_openai_missing() {
+        assert!(extract_usage_openai(&json!({})).is_none());
+    }
+
+    #[test]
+    fn test_extract_usage_openai_partial() {
+        let response = json!({ "usage": { "prompt_tokens": 10 } });
+        let usage = extract_usage_openai(&response).unwrap();
+        assert_eq!(usage.prompt_tokens, 10);
+        assert_eq!(usage.completion_tokens, 0);
+    }
+
+    #[test]
+    fn test_extract_usage_gemini() {
+        let response = json!({
+            "usageMetadata": {
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 50,
+                "totalTokenCount": 150
+            }
+        });
+        let usage = extract_usage_gemini(&response).unwrap();
+        assert_eq!(usage, TokenUsage { prompt_tokens: 100, completion_tokens: 50 });
+    }
+
+    #[test]
+    fn test_extract_usage_gemini_missing() {
+        assert!(extract_usage_gemini(&json!({})).is_none());
+    }
+
+    #[test]
+    fn test_extract_usage_gemini_partial() {
+        let response = json!({ "usageMetadata": { "promptTokenCount": 30 } });
+        let usage = extract_usage_gemini(&response).unwrap();
+        assert_eq!(usage.prompt_tokens, 30);
+        assert_eq!(usage.completion_tokens, 0);
+    }
+
+    #[test]
+    fn test_extract_usage_anthropic() {
+        let response = json!({
+            "usage": {
+                "input_tokens": 200,
+                "output_tokens": 80
+            }
+        });
+        let usage = extract_usage_anthropic(&response).unwrap();
+        assert_eq!(usage, TokenUsage { prompt_tokens: 200, completion_tokens: 80 });
+    }
+
+    #[test]
+    fn test_extract_usage_anthropic_missing() {
+        assert!(extract_usage_anthropic(&json!({})).is_none());
+    }
+
+    #[test]
+    fn test_extract_usage_anthropic_partial() {
+        let response = json!({ "usage": { "input_tokens": 15 } });
+        let usage = extract_usage_anthropic(&response).unwrap();
+        assert_eq!(usage.prompt_tokens, 15);
+        assert_eq!(usage.completion_tokens, 0);
+    }
+
+    // =======================================================================
+    // Finish reason extraction
+    // =======================================================================
+
+    #[test]
+    fn test_finish_reason_openai_stop() {
+        let response = json!({ "choices": [{ "finish_reason": "stop" }] });
+        assert_eq!(extract_finish_reason_openai(&response), Some(FinishReason::Stop));
+    }
+
+    #[test]
+    fn test_finish_reason_openai_tool_calls() {
+        let response = json!({ "choices": [{ "finish_reason": "tool_calls" }] });
+        assert_eq!(extract_finish_reason_openai(&response), Some(FinishReason::ToolUse));
+    }
+
+    #[test]
+    fn test_finish_reason_openai_length() {
+        let response = json!({ "choices": [{ "finish_reason": "length" }] });
+        assert_eq!(extract_finish_reason_openai(&response), Some(FinishReason::MaxTokens));
+    }
+
+    #[test]
+    fn test_finish_reason_openai_other() {
+        let response = json!({ "choices": [{ "finish_reason": "content_filter" }] });
+        assert_eq!(
+            extract_finish_reason_openai(&response),
+            Some(FinishReason::Other("content_filter".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_finish_reason_openai_missing() {
+        assert_eq!(extract_finish_reason_openai(&json!({})), None);
+    }
+
+    #[test]
+    fn test_finish_reason_gemini_stop_text() {
+        let response = json!({
+            "candidates": [{
+                "content": { "parts": [{ "text": "hello" }] },
+                "finishReason": "STOP"
+            }]
+        });
+        assert_eq!(extract_finish_reason_gemini(&response), Some(FinishReason::Stop));
+    }
+
+    #[test]
+    fn test_finish_reason_gemini_stop_with_tool_calls() {
+        // Gemini uses STOP even for tool calls — should detect ToolUse
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{ "functionCall": { "name": "test", "args": {} } }]
+                },
+                "finishReason": "STOP"
+            }]
+        });
+        assert_eq!(extract_finish_reason_gemini(&response), Some(FinishReason::ToolUse));
+    }
+
+    #[test]
+    fn test_finish_reason_gemini_max_tokens() {
+        let response = json!({
+            "candidates": [{
+                "content": { "parts": [{ "text": "partial..." }] },
+                "finishReason": "MAX_TOKENS"
+            }]
+        });
+        assert_eq!(extract_finish_reason_gemini(&response), Some(FinishReason::MaxTokens));
+    }
+
+    #[test]
+    fn test_finish_reason_gemini_other() {
+        let response = json!({
+            "candidates": [{
+                "content": { "parts": [] },
+                "finishReason": "SAFETY"
+            }]
+        });
+        assert_eq!(
+            extract_finish_reason_gemini(&response),
+            Some(FinishReason::Other("SAFETY".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_finish_reason_gemini_missing() {
+        assert_eq!(extract_finish_reason_gemini(&json!({})), None);
+    }
+
+    #[test]
+    fn test_finish_reason_anthropic_end_turn() {
+        let response = json!({ "stop_reason": "end_turn" });
+        assert_eq!(extract_finish_reason_anthropic(&response), Some(FinishReason::Stop));
+    }
+
+    #[test]
+    fn test_finish_reason_anthropic_tool_use() {
+        let response = json!({ "stop_reason": "tool_use" });
+        assert_eq!(extract_finish_reason_anthropic(&response), Some(FinishReason::ToolUse));
+    }
+
+    #[test]
+    fn test_finish_reason_anthropic_max_tokens() {
+        let response = json!({ "stop_reason": "max_tokens" });
+        assert_eq!(extract_finish_reason_anthropic(&response), Some(FinishReason::MaxTokens));
+    }
+
+    #[test]
+    fn test_finish_reason_anthropic_other() {
+        let response = json!({ "stop_reason": "stop_sequence" });
+        assert_eq!(
+            extract_finish_reason_anthropic(&response),
+            Some(FinishReason::Other("stop_sequence".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_finish_reason_anthropic_missing() {
+        assert_eq!(extract_finish_reason_anthropic(&json!({})), None);
     }
 }

@@ -306,6 +306,11 @@ pub enum MessageMetadata {
 **Providers:**
 - `LocalProvider`: Communicates with llama.cpp server (OpenAI-compatible API)
 - `CloudflareProvider`: Proxies to Gemini via Cloudflare Worker
+- `OpenAIProvider`: Direct OpenAI Chat Completions API (`OPENAI_API_KEY` env var)
+- `GoogleProvider`: Direct Google Gemini REST API (`GOOGLE_API_KEY` env var, supports thinking/thought signatures)
+- `AnthropicProvider`: Direct Anthropic Messages API (`ANTHROPIC_API_KEY` env var, event-based SSE streaming)
+
+**Note:** `OpenAIProvider`, `GoogleProvider`, and `AnthropicProvider` are implemented but not routed to any models yet. They exist for future use when direct API access is needed.
 
 **Streaming:** Use `Arc<AtomicBool>` for cancellation signal, check in tight loops
 
@@ -318,6 +323,8 @@ Per-provider functions:
 - `parse_{openai,gemini,anthropic}_tool_calls()`: Extract `ToolCall[]` from provider response JSON
 - `has_tool_calls_{openai,gemini,anthropic}()`: Check if response contains tool calls
 - `extract_text_{openai,gemini,anthropic}()`: Extract text content from response
+- `extract_usage_{openai,gemini,anthropic}()`: Extract `TokenUsage { prompt_tokens, completion_tokens }` from response
+- `extract_finish_reason_{openai,gemini,anthropic}()`: Extract normalised `FinishReason` (Stop/ToolUse/MaxTokens/Other)
 - `resolve_tool_call()`: Shared — resolves dot-separated names and `activate_skill`
 
 Key format differences:
@@ -328,8 +335,11 @@ Key format differences:
 | Tool call location | `tool_calls[]` array on message | `functionCall` parts in content | `tool_use` content blocks |
 | Tool result role | `tool` role message | `functionResponse` part in `user` | `tool_result` content block in `user` |
 | System messages | `system` role | Separate `system_instruction` | Separate `system` param (skipped in messages) |
-| Images | Not in translation layer | `inline_data` with `mime_type` | `image` source with `media_type` |
-| PDFs | Not in translation layer | `inline_data` | `document` source |
+| Images | `image_url` with data URI | `inline_data` with `mime_type` | `image` source with `media_type` |
+| PDFs | Text extraction fallback | `inline_data` | `document` source |
+| Streaming | SSE `data:` lines, `[DONE]` terminal | SSE `data:` lines | Event-typed SSE (`event:` + `data:` pairs) |
+| Token usage | `usage.prompt_tokens` / `completion_tokens` | `usageMetadata.promptTokenCount` / `candidatesTokenCount` | `usage.input_tokens` / `output_tokens` |
+| Finish reason | `stop` / `tool_calls` / `length` | `STOP` / `MAX_TOKENS` | `end_turn` / `tool_use` / `max_tokens` |
 
 ### Skills System
 
