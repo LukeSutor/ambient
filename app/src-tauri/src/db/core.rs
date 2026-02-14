@@ -156,18 +156,20 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
 
 /// Per-user database path: {app_data}/databases/database_{user_id}.sqlite
 ///
-/// Each user gets their own encrypted database file, identified by their
-/// Supabase user ID (UUID). Files are stored under a `databases/` subdirectory.
+/// Each user gets their own encrypted database file within their profile
+/// directory, identified by their Supabase user ID (UUID).
 fn get_user_db_path(app_handle: &tauri::AppHandle, user_id: &str) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
     .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
-  let db_dir = app_data_path.join("databases");
-  if let Err(e) = std::fs::create_dir_all(&db_dir) {
-    return Err(format!("Failed to create databases directory: {}", e));
+  let profile_dir = app_data_path
+    .join(crate::constants::PROFILES_DIR)
+    .join(user_id);
+  if let Err(e) = std::fs::create_dir_all(&profile_dir) {
+    return Err(format!("Failed to create user profile directory: {}", e));
   }
-  Ok(db_dir.join(format!("database_{}.sqlite", user_id)))
+  Ok(profile_dir.join(crate::constants::USER_DB_FILENAME))
 }
 
 /// Generate or retrieve the per-user database encryption key from the OS keyring.

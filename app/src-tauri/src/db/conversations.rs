@@ -902,12 +902,20 @@ pub async fn create_attachments(
   let mut attachments = Vec::new();
   let now = Utc::now();
 
+  // Get user_id from auth state for per-user attachment storage
+  let user_id = match crate::auth::storage::retrieve_auth_state() {
+    Ok(Some(state)) if !state.session.user.id.is_empty() => state.session.user.id.clone(),
+    _ => return Err("No active session. Cannot create attachments.".to_string()),
+  };
+
   for data in attachment_data {
     let attachment_id = Uuid::new_v4().to_string();
     let file_path = match data.file_type.as_str() {
       "ambient/ocr" => None,
       _ => Some(format!(
-      "attachments/{}/{}",
+      "{}/{}/attachments/{}/{}",
+      crate::constants::PROFILES_DIR,
+      user_id,
       message_id,
       data.name.replace("/", "_")
       )),

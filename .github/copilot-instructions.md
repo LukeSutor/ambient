@@ -10,7 +10,7 @@ Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + N
 - UI: shadcn/ui (Radix primitives) + Tailwind CSS v4
 - Local LLM: llama.cpp server (ships with Qwen3VL-2B)
 - Cloud LLM: Gemini via Cloudflare Worker
-- Database: SQLite with rusqlite + sqlite-vec for embeddings
+- Database: SQLCipher (encrypted SQLite) with rusqlite + sqlite-vec for embeddings
 - State: React Context + useReducer pattern
 
 ## Code Style
@@ -56,7 +56,7 @@ SettingsProvider → RoleAccessProvider → ModelAccessProvider → SetupProvide
 
 **Top-level modules** ([lib.rs](app/src-tauri/src/lib.rs)):
 - `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in store.json)
-- `db/`: SQLite with migrations, conversations, messages, memory, token usage
+- `db/`: Per-user encrypted SQLite (SQLCipher) with migrations, conversations, messages, memory, token usage
 - `agents/`: Chat runtime + browser-use runtime
 - `models/`: LLM client (local/cloud providers), llama.cpp server, embedding, OCR
 - `skills/`: Registry, executor, builtin skills (web-search, code-execution, memory)
@@ -215,11 +215,50 @@ import { emit } from "@tauri-apps/api/event";
 await emit("event_name", { payload: "data" });
 ```
 
+### Per-User Data Isolation
+
+All user data is stored in per-user profile directories under `{app_data}/profiles/{user_id}/`:
+
+```
+{app_data}/
+├── store.json                          # GLOBAL: auth session only (AES-encrypted tokens)
+├── models/                             # SHARED: downloaded ML model weights
+├── profiles/
+│   ├── {user_id_1}/
+│   │   ├── database.sqlite             # Per-user encrypted DB (SQLCipher)
+│   │   ├── store.json                  # Per-user settings
+│   │   └── attachments/{msg_id}/...    # Per-user file attachments
+│   └── {user_id_2}/
+│       └── ...
+```
+
+**SQLCipher Encryption:**
+- Each user's DB is encrypted with a unique 32-byte random key
+- Keys stored in OS keyring as `db_key_{user_id}` (no PBKDF2 overhead — raw key via `PRAGMA key = "x'{hex}'"`)    
+- `rusqlite` feature: `bundled-sqlcipher-vendored-openssl` (bundles SQLCipher + OpenSSL)
+- Verification on open: `SELECT count(*) FROM sqlite_master` to detect wrong key
+
+**DB Lifecycle:**
+1. App startup → reads auth state → if valid session, opens user DB via `initialize_user_database(app_handle, user_id)`
+2. Login → frontend calls `invoke("open_user_database")` → closes old DB, opens new user's DB
+3. Logout → `logout()` closes DB connection before clearing auth state
+4. If no session on startup, DB stays `None` (initialized after login)
+
+**Settings Per-User Store:**
+- [settings/service.rs](app/src-tauri/src/settings/service.rs) reads `retrieve_auth_state()` to determine user ID
+- Opens per-user store at `profiles/{user_id}/store.json` via `tauri_plugin_store`
+- Returns `UserSettings::default()` silently when not logged in
+- Errors on save when not logged in
+
+**Attachments:** Stored at `profiles/{user_id}/attachments/{message_id}/filename` — path stored as relative in DB, resolved via `app_data.join(rel_path)`
+
+**Shared (not per-user):** Model files, llama.cpp server, skill definitions, logs, transient screenshots
+
 ### Database Patterns
 
 **Schema:** Located in [db/core.rs](app/src-tauri/src/db/core.rs) migrations
 
-**Key Tables (SQLite):**
+**Key Tables (SQLite/SQLCipher):**
 - `conversations`: Conversation metadata
 - `conversation_messages`: Messages with `message_type` (text/tool_calls/tool_results) and structured `metadata` JSON
 - `attachments`: File attachments per message
@@ -240,8 +279,13 @@ await emit("event_name", { payload: "data" });
 let state = app_handle.state::<DbState>();
 let conn = state.0.lock().unwrap();
 let conn = conn.as_ref().ok_or("DB not initialized")?;
-// Use conn...
+// Use conn... (automatically points to current user's encrypted DB)
 ```
+
+**Key Commands:**
+- `open_user_database`: Reads auth state, closes existing connection, opens new user's encrypted DB
+- `close_user_database`: Closes current DB connection (called on logout)
+- `reset_database`: Deletes and recreates current user's DB
 
 **Message Storage:** Use structured metadata for tool calls/results, not content field:
 ```rust
@@ -377,8 +421,10 @@ Tokens are split across two locations based on sensitivity and lifetime:
 | Supabase access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
 | Google access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
 | Session metadata (user, expiry) | `store.json` (plaintext) | None (non-sensitive) | Quick reads for UI state |
+| DB encryption key (per-user) | OS keyring (`keyring` crate) | OS-level encryption | Per-user SQLCipher key as `db_key_{user_id}` |
+| User settings | `profiles/{user_id}/store.json` | None (non-sensitive) | Per-user preferences, isolated from other users |
 
-Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refresh_token`, `google_refresh_token`.
+Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refresh_token`, `google_refresh_token`, `db_key_{user_id}` (per-user DB encryption keys).
 
 **Key functions in `storage.rs`:**
 - `store_session()`: Splits a `Session` — refresh tokens → keyring, access tokens → AES-encrypt → store.json
@@ -399,6 +445,8 @@ Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refr
 
 ### Sensitive Operations
 - **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in store.json. If store.json is exfiltrated, refresh tokens remain safe in OS keyring.
+- **Database encryption:** Per-user SQLCipher databases with unique 32-byte keys in OS keyring. Raw hex key encoding (no PBKDF2 overhead). Each user's data is cryptographically isolated.
+- **Per-user data isolation:** All user data (DB, settings, attachments) stored under `profiles/{user_id}/`. Auth data in global `store.json` identifies current user. Model weights and server are shared.
 - **Code execution:** Isolated subprocess to prevent app crashes
 - **Web scraping:** Uses real browser engine to avoid exposing request patterns
 

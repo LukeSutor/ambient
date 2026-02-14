@@ -34,6 +34,9 @@ pub const EMBEDDING_TOKENIZER_LINK: &str = "https://huggingface.co/Snowflake/sno
 pub const STORE_PATH: &str = "store.json";
 pub const SETTINGS_KEY: &str = "settings";
 pub const AUTH_KEY: &str = "auth";
+pub const PROFILES_DIR: &str = "profiles";
+pub const USER_STORE_FILENAME: &str = "store.json";
+pub const USER_DB_FILENAME: &str = "database.sqlite";
 
 // Keyring constants
 pub const KEYRING_SERVICE: &str = "ambient";
