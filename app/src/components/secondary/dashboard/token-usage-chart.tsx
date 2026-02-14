@@ -27,6 +27,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { TimeFilterButtons } from "./time-filter-buttons";
 
+/** Rotating color palette for chart bars when models don't carry their own color. */
+const CHART_COLORS = [
+  "#10b981", // emerald
+  "#60a5fa", // blue
+  "#f59e0b", // amber
+  "#8b5cf6", // violet
+  "#ef4444", // red
+  "#06b6d4", // cyan
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#f97316", // orange
+  "#6366f1", // indigo
+];
+
 export function TokenUsageChart() {
   const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(
     null,
@@ -35,13 +49,14 @@ export function TokenUsageChart() {
   const [logScale, setLogScale] = useState(false);
   const [models, setModels] = useState<ModelEntry[]>([]);
 
-  // Build chart config from DB models
+  // Build chart config from DB models with rotating colors
   const chartConfig = useMemo(() => {
     const config: ChartConfig = {};
-    for (const model of models) {
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
       config[model.model] = {
         label: model.display_name,
-        color: model.color,
+        color: CHART_COLORS[i % CHART_COLORS.length],
       };
     }
     // Fallback if models haven't loaded yet

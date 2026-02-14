@@ -1,6 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -14,13 +13,14 @@ import {
 } from "@/components/ui/select";
 import { useModelAccess } from "@/lib/model-access";
 import type { CloudModelUsage, ModelEntry } from "@/types/models";
-import { Crown, Shield, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  shield: Shield,
-  zap: Zap,
-  crown: Crown,
-};
+/** Resolve a provider image path. Local uses `/logo.png`, everything else
+ *  uses `/providers/{provider}.png` with a fallback to `unknown.png`. */
+function providerImageSrc(model: ModelEntry): string {
+  if (model.provider === "local") return "/logo.png";
+  return `/providers/${model.provider}.png`;
+}
 
 interface ModelSelectorProps {
   /** The currently selected model key (e.g. "qwen3vl-2b"). */
@@ -29,13 +29,17 @@ interface ModelSelectorProps {
   disabled?: boolean;
 }
 
-function ModelIcon({ model }: { model: ModelEntry }) {
-  const IconComponent = ICON_MAP[model.icon] || Shield;
+function ProviderIcon({ model }: { model: ModelEntry }) {
   return (
-    <div
-      className={`flex items-center justify-center rounded-full ${model.icon_bg}`}
-    >
-      <IconComponent className={`h-4 w-4 m-1.5 ${model.icon_color}`} />
+    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+      <img
+        src={providerImageSrc(model)}
+        alt={model.provider}
+        className="h-4 w-4 object-contain"
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = "/providers/unknown.png";
+        }}
+      />
     </div>
   );
 }
@@ -62,14 +66,7 @@ function SelectedModelDisplay({ value, models }: { value: string; models: ModelE
 
   return (
     <div className="flex items-center gap-3">
-      <div
-        className={`flex h-6 w-6 items-center justify-center rounded-full ${model.icon_bg}`}
-      >
-        {(() => {
-          const IconComponent = ICON_MAP[model.icon] || Shield;
-          return <IconComponent className={`h-4 w-4 ${model.icon_color}`} />;
-        })()}
-      </div>
+      <ProviderIcon model={model} />
       <span className="font-medium">{model.display_name}</span>
     </div>
   );
@@ -135,17 +132,9 @@ export function ModelSelector({
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
-                      <ModelIcon model={model} />
+                      <ProviderIcon model={model} />
                       <div className="flex flex-col items-start">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{model.display_name}</span>
-                          <Badge
-                            variant={model.badge_variant as "outline" | "default"}
-                            className={`text-xs ${model.badge_class}`}
-                          >
-                            {model.badge_label}
-                          </Badge>
-                        </div>
+                        <span className="font-medium">{model.display_name}</span>
                         <span className="text-xs text-muted-foreground text-left">
                           {model.description}
                         </span>

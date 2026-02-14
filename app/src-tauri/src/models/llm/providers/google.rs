@@ -28,9 +28,20 @@ const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta"
 pub struct GoogleProvider;
 
 impl GoogleProvider {
-    fn get_api_key() -> Result<String, String> {
+    /// Resolve API key: prefer model-level key (BYOK), then env var.
+    fn resolve_api_key(resolved_model: &ResolvedModel) -> Result<String, String> {
+        if let Some(key) = &resolved_model.api_key {
+            if !key.is_empty() {
+                return Ok(key.clone());
+            }
+        }
         std::env::var("GOOGLE_API_KEY")
-            .map_err(|_| "GOOGLE_API_KEY environment variable not set".to_string())
+            .map_err(|_| "No API key configured for this model and GOOGLE_API_KEY environment variable not set".to_string())
+    }
+
+    /// Resolve API base URL: prefer model-level URL (BYOK), then default.
+    fn resolve_api_base(resolved_model: &ResolvedModel) -> String {
+        resolved_model.api_url.as_deref().unwrap_or(GEMINI_API_BASE).to_string()
     }
 }
 
@@ -43,11 +54,12 @@ impl LlmProvider for GoogleProvider {
         resolved_model: &ResolvedModel,
     ) -> Result<LlmResponse, String> {
         log::info!("[google] Starting Gemini generation");
-        let api_key = Self::get_api_key()?;
+        let api_key = Self::resolve_api_key(resolved_model)?;
+        let api_base = Self::resolve_api_base(resolved_model);
 
         let should_stream = request.stream.unwrap_or(false);
         let enable_thinking = request.use_thinking.unwrap_or(false);
-        let model_key = &resolved_model.model_key;
+        let model_key = resolved_model.effective_model_id();
 
         // Build content messages
         let mut content = Vec::new();
@@ -106,7 +118,7 @@ impl LlmProvider for GoogleProvider {
         if should_stream {
             let endpoint = format!(
                 "{}/models/{}:streamGenerateContent?key={}&alt=sse",
-                GEMINI_API_BASE, model_key, api_key
+                api_base, model_key, api_key
             );
 
             let resp = client
@@ -256,7 +268,7 @@ impl LlmProvider for GoogleProvider {
             // ── Non-streaming ──────────────────────────────────────────────
             let endpoint = format!(
                 "{}/models/{}:generateContent?key={}",
-                GEMINI_API_BASE, model_key, api_key
+                api_base, model_key, api_key
             );
 
             let resp = client

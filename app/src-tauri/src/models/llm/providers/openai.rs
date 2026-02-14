@@ -23,9 +23,20 @@ const OPENAI_API_URL: &str = "https://api.openai.com/v1/chat/completions";
 pub struct OpenAIProvider;
 
 impl OpenAIProvider {
-    fn get_api_key() -> Result<String, String> {
+    /// Resolve API key: prefer model-level key (BYOK), then env var.
+    fn resolve_api_key(resolved_model: &ResolvedModel) -> Result<String, String> {
+        if let Some(key) = &resolved_model.api_key {
+            if !key.is_empty() {
+                return Ok(key.clone());
+            }
+        }
         std::env::var("OPENAI_API_KEY")
-            .map_err(|_| "OPENAI_API_KEY environment variable not set".to_string())
+            .map_err(|_| "No API key configured for this model and OPENAI_API_KEY environment variable not set".to_string())
+    }
+
+    /// Resolve API URL: prefer model-level URL (BYOK), then default.
+    fn resolve_api_url(resolved_model: &ResolvedModel) -> String {
+        resolved_model.api_url.as_deref().unwrap_or(OPENAI_API_URL).to_string()
     }
 }
 
@@ -38,7 +49,8 @@ impl LlmProvider for OpenAIProvider {
         resolved_model: &ResolvedModel,
     ) -> Result<LlmResponse, String> {
         log::info!("[openai] Starting chat completion generation");
-        let api_key = Self::get_api_key()?;
+        let api_key = Self::resolve_api_key(resolved_model)?;
+        let api_url = Self::resolve_api_url(resolved_model);
 
         let should_stream = request.stream.unwrap_or(false);
 
@@ -63,7 +75,7 @@ impl LlmProvider for OpenAIProvider {
 
         // Build request body
         let mut request_body = json!({
-            "model": resolved_model.model_key,
+            "model": resolved_model.effective_model_id(),
             "messages": messages,
             "stream": should_stream,
         });
@@ -98,7 +110,7 @@ impl LlmProvider for OpenAIProvider {
 
         if should_stream {
             let response = client
-                .post(OPENAI_API_URL)
+                .post(&api_url)
                 .header("Content-Type", "application/json")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .json(&request_body)
@@ -310,7 +322,7 @@ impl LlmProvider for OpenAIProvider {
         } else {
             // ── Non-streaming ──────────────────────────────────────────────
             let response = client
-                .post(OPENAI_API_URL)
+                .post(&api_url)
                 .header("Content-Type", "application/json")
                 .header("Authorization", format!("Bearer {}", api_key))
                 .json(&request_body)

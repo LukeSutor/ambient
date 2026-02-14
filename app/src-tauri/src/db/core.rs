@@ -150,6 +150,45 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
 
         CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
       "#,
+    ),
+    // Migration 2: BYOK (Bring Your Own Key) model support
+    // Remove deprecated display metadata columns (color, badge_*, icon_*),
+    // add new columns for custom model configuration.
+    M::up(
+      r#"
+        CREATE TABLE models_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          model TEXT NOT NULL UNIQUE,
+          display_name TEXT NOT NULL,
+          short_description TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          provider TEXT NOT NULL DEFAULT 'local',
+          is_cloud INTEGER NOT NULL DEFAULT 0,
+          is_premium INTEGER NOT NULL DEFAULT 0,
+          is_enabled INTEGER NOT NULL DEFAULT 1,
+          daily_limit INTEGER,
+          is_internal INTEGER NOT NULL DEFAULT 1,
+          api_url TEXT,
+          api_key TEXT,
+          request_format TEXT NOT NULL DEFAULT 'openai',
+          model_id TEXT
+        );
+
+        INSERT INTO models_new (
+          id, model, display_name, short_description, description,
+          provider, is_cloud, is_premium, is_enabled, daily_limit,
+          is_internal, request_format
+        )
+        SELECT
+          id, model, display_name, short_description, description,
+          provider, is_cloud, is_premium, is_enabled, daily_limit,
+          1,
+          CASE provider WHEN 'google' THEN 'gemini' ELSE 'openai' END
+        FROM models;
+
+        DROP TABLE models;
+        ALTER TABLE models_new RENAME TO models;
+      "#,
     )
   ])
 });

@@ -1,5 +1,6 @@
 use super::providers::{
-    local::LocalProvider, cloudflare::CloudflareProvider
+    local::LocalProvider, cloudflare::CloudflareProvider,
+    openai::OpenAIProvider, google::GoogleProvider, anthropic::AnthropicProvider,
 };
 use super::types::{LlmRequest, ProviderPolicy, LlmProvider, LlmResponse};
 use std::sync::Arc;
@@ -15,6 +16,25 @@ pub struct ResolvedModel {
     pub provider: String,
     /// Whether this model uses a cloud provider.
     pub is_cloud: bool,
+    /// Whether this is a built-in model vs a user-added BYOK model.
+    pub is_internal: bool,
+    /// API endpoint URL for BYOK models.
+    pub api_url: Option<String>,
+    /// API key for BYOK models.
+    pub api_key: Option<String>,
+    /// Request format: "openai", "gemini", or "anthropic".
+    pub request_format: String,
+    /// The model identifier sent in API requests (e.g. "gpt-4o").
+    /// For internal models this is None since they use their own routing.
+    pub model_id: Option<String>,
+}
+
+impl ResolvedModel {
+    /// Returns the model identifier to send in API requests.
+    /// For BYOK models this is `model_id`, falling back to `model_key`.
+    pub fn effective_model_id(&self) -> &str {
+        self.model_id.as_deref().unwrap_or(&self.model_key)
+    }
 }
 
 /// Unified generate function that routes to the selected provider.
@@ -54,12 +74,32 @@ pub async fn generate(
         let resolved_clone = resolved.clone();
 
         let gen_future = async move {
-            if !resolved_clone.is_cloud {
-                let provider = LocalProvider;
-                provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+            if resolved_clone.is_internal {
+                // Internal models: local llama.cpp server or Cloudflare proxy
+                if !resolved_clone.is_cloud {
+                    let provider = LocalProvider;
+                    provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+                } else {
+                    let provider = CloudflareProvider;
+                    provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+                }
             } else {
-                let provider = CloudflareProvider;
-                provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+                // BYOK models: route based on request_format
+                match resolved_clone.request_format.as_str() {
+                    "openai" => {
+                        let provider = OpenAIProvider;
+                        provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+                    }
+                    "gemini" => {
+                        let provider = GoogleProvider;
+                        provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+                    }
+                    "anthropic" => {
+                        let provider = AnthropicProvider;
+                        provider.generate(app_handle_clone, attempt_request, &resolved_clone).await
+                    }
+                    other => Err(format!("Unknown request format: {}", other)),
+                }
             }
         };
 
@@ -162,11 +202,21 @@ async fn resolve_model(
                     model_key: entry.model,
                     provider: entry.provider,
                     is_cloud: entry.is_cloud,
+                    is_internal: entry.is_internal,
+                    api_url: entry.api_url,
+                    api_key: entry.api_key,
+                    request_format: entry.request_format,
+                    model_id: entry.model_id,
                 }),
                 Err(_) => Ok(ResolvedModel {
                     model_key: "qwen3vl-2b".to_string(),
                     provider: "local".to_string(),
                     is_cloud: false,
+                    is_internal: true,
+                    api_url: None,
+                    api_key: None,
+                    request_format: "openai".to_string(),
+                    model_id: None,
                 }),
             }
         }
@@ -182,6 +232,11 @@ async fn resolve_model(
                     model_key: entry.model,
                     provider: entry.provider,
                     is_cloud: entry.is_cloud,
+                    is_internal: entry.is_internal,
+                    api_url: entry.api_url,
+                    api_key: entry.api_key,
+                    request_format: entry.request_format,
+                    model_id: entry.model_id,
                 }),
                 Err(e) => {
                     log::warn!(
@@ -192,6 +247,11 @@ async fn resolve_model(
                         model_key: "qwen3vl-2b".to_string(),
                         provider: "local".to_string(),
                         is_cloud: false,
+                        is_internal: true,
+                        api_url: None,
+                        api_key: None,
+                        request_format: "openai".to_string(),
+                        model_id: None,
                     })
                 }
             }

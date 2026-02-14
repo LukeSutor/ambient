@@ -263,7 +263,7 @@ All user data is stored in per-user profile directories under `{app_data}/profil
 - `conversations`: Conversation metadata
 - `conversation_messages`: Messages with `message_type` (text/tool_calls/tool_results) and structured `metadata` JSON
 - `attachments`: File attachments per message
-- `models`: Registered LLM models with display metadata
+- `models`: Registered LLM models with `is_internal` flag, BYOK fields (`api_url`, `api_key`, `request_format`, `model_id`)
 - `memory_entries` + `memory_entries_vec` + `memory_entries_fts`: Extracted facts with embeddings and full-text search
 - `conversation_skills`: Activated skills per conversation
 - `token_usage`: LLM usage tracking (prompt_tokens, completion_tokens, timestamp)
@@ -306,11 +306,27 @@ pub enum MessageMetadata {
 **Providers:**
 - `LocalProvider`: Communicates with llama.cpp server (OpenAI-compatible API)
 - `CloudflareProvider`: Proxies to Gemini via Cloudflare Worker
-- `OpenAIProvider`: Direct OpenAI Chat Completions API (`OPENAI_API_KEY` env var)
-- `GoogleProvider`: Direct Google Gemini REST API (`GOOGLE_API_KEY` env var, supports thinking/thought signatures)
-- `AnthropicProvider`: Direct Anthropic Messages API (`ANTHROPIC_API_KEY` env var, event-based SSE streaming)
+- `OpenAIProvider`: Direct OpenAI Chat Completions API (BYOK or `OPENAI_API_KEY` env var fallback)
+- `GoogleProvider`: Direct Google Gemini REST API (BYOK or `GOOGLE_API_KEY` env var fallback, supports thinking/thought signatures)
+- `AnthropicProvider`: Direct Anthropic Messages API (BYOK or `ANTHROPIC_API_KEY` env var fallback, event-based SSE streaming)
 
-**Note:** `OpenAIProvider`, `GoogleProvider`, and `AnthropicProvider` are implemented but not routed to any models yet. They exist for future use when direct API access is needed.
+**BYOK Routing:**
+`ResolvedModel` carries `is_internal`, `api_url`, `api_key`, `request_format`, and `model_id` from the DB.
+- Internal models: `!is_cloud` → LocalProvider, `is_cloud` → CloudflareProvider
+- BYOK models: route by `request_format`: `"openai"` → OpenAIProvider, `"gemini"` → GoogleProvider, `"anthropic"` → AnthropicProvider
+- Each provider resolves API key/URL from `ResolvedModel` first, falls back to env var
+- `resolved_model.effective_model_id()` returns `model_id` if set, else `model_key`
+
+**BYOK Model Management:**
+- `add_custom_model`: Validates, inserts BYOK model with `is_cloud=1, is_internal=0, daily_limit=NULL`
+- `update_custom_model`: Updates BYOK model fields (blocks internal models)
+- `delete_custom_model`: Deletes BYOK model, auto-switches selection if deleted model was active
+- Model key = `model_id` (the API identifier). Display name capped at 40 chars.
+- Frontend form: react-hook-form + zod + shadcn Field in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
+
+**Model Display:**
+- Provider images at `public/providers/{provider}.png`, local uses `public/logo.png`
+- Token usage chart uses rotating color palette instead of per-model colors
 
 **Streaming:** Use `Arc<AtomicBool>` for cancellation signal, check in tight loops
 

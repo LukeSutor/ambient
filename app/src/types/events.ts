@@ -40,6 +40,8 @@ export type HudChatEvent = { text: string, timestamp: string, conv_id: string, m
 
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
 
+export type ModelsChangedEvent = { timestamp: string, };
+
 export type NavigateToConversationEvent = { conversation_id: string, message_id: string | null, timestamp: string, };
 
 export type OcrResponseEvent = { text: string, success: boolean, timestamp: string, };

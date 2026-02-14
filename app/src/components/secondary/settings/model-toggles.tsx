@@ -12,9 +12,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useModelAccess } from "@/lib/model-access";
+import type { ModelEntry } from "@/types/models";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useMemo } from "react";
+import { Pencil, Plus } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { ModelDialog } from "./model-dialog";
 
 /**
  * ModelVisibilityPopover renders a ghost button that opens a popover
@@ -30,6 +33,8 @@ import { toast } from "sonner";
  */
 export function ModelVisibilityPopover() {
   const { models, isModelAvailable } = useModelAccess();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ModelEntry | null>(null);
 
   /** Model keys the user can actually access (based on tier). */
   const allowedModelKeys = useMemo(
@@ -66,39 +71,76 @@ export function ModelVisibilityPopover() {
     [allowedModelKeys],
   );
 
+  const handleAddModel = useCallback(() => {
+    setEditingModel(null);
+    setDialogOpen(true);
+  }, []);
+
+  const handleEditModel = useCallback((model: ModelEntry) => {
+    setEditingModel(model);
+    setDialogOpen(true);
+  }, []);
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-auto px-1 py-0 text-xs text-muted-foreground">
-          Configure
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start">
-        <PopoverHeader>
-          <PopoverDescription>The checked models will be visible in the model selection dropdowns.</PopoverDescription>
-        </PopoverHeader>
-        <div className="flex flex-col gap-3 mt-4">
-          {models.map((model) => {
-            const isAllowed = isModelAvailable(model.model);
-            // Disable checkbox if this is the last allowed-and-enabled model
-            const isLastAllowedEnabled =
-              model.is_enabled && isAllowed && allowedEnabledCount <= 1;
-            return (
-              <Field key={model.model} orientation="horizontal">
-                <Checkbox
-                  id={`model-${model.model}`}
-                  checked={model.is_enabled}
-                  disabled={isLastAllowedEnabled}
-                  onCheckedChange={() =>
-                    void handleToggle(model.model, model.is_enabled)
-                  }
-                />
-                <Label htmlFor={`model-${model.model}`} className="w-full">{model.display_name}</Label>
-              </Field>
-            );
-          })}
-        </div>
-      </PopoverContent>
-    </Popover>
+    <>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-auto px-1 py-0 text-xs text-muted-foreground">
+            Configure
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start">
+          <PopoverHeader>
+            <PopoverDescription>The checked models will be visible in the model selection dropdowns.</PopoverDescription>
+          </PopoverHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            {models.map((model) => {
+              const isAllowed = isModelAvailable(model.model);
+              // Disable checkbox if this is the last allowed-and-enabled model
+              const isLastAllowedEnabled =
+                model.is_enabled && isAllowed && allowedEnabledCount <= 1;
+              return (
+                <Field key={model.model} orientation="horizontal">
+                  <Checkbox
+                    id={`model-${model.model}`}
+                    checked={model.is_enabled}
+                    disabled={isLastAllowedEnabled}
+                    onCheckedChange={() =>
+                      void handleToggle(model.model, model.is_enabled)
+                    }
+                  />
+                  <Label htmlFor={`model-${model.model}`} className="w-full">{model.display_name}</Label>
+                  {!model.is_internal && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 shrink-0"
+                      onClick={() => handleEditModel(model)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  )}
+                </Field>
+              );
+            })}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full mt-4"
+            onClick={handleAddModel}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Add Model
+          </Button>
+        </PopoverContent>
+      </Popover>
+
+      <ModelDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        model={editingModel}
+      />
+    </>
   );
 }

@@ -32,9 +32,20 @@ const DEFAULT_MAX_TOKENS: u64 = 8192;
 pub struct AnthropicProvider;
 
 impl AnthropicProvider {
-    fn get_api_key() -> Result<String, String> {
+    /// Resolve API key: prefer model-level key (BYOK), then env var.
+    fn resolve_api_key(resolved_model: &ResolvedModel) -> Result<String, String> {
+        if let Some(key) = &resolved_model.api_key {
+            if !key.is_empty() {
+                return Ok(key.clone());
+            }
+        }
         std::env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| "ANTHROPIC_API_KEY environment variable not set".to_string())
+            .map_err(|_| "No API key configured for this model and ANTHROPIC_API_KEY environment variable not set".to_string())
+    }
+
+    /// Resolve API URL: prefer model-level URL (BYOK), then default.
+    fn resolve_api_url(resolved_model: &ResolvedModel) -> String {
+        resolved_model.api_url.as_deref().unwrap_or(ANTHROPIC_API_URL).to_string()
     }
 }
 
@@ -47,10 +58,11 @@ impl LlmProvider for AnthropicProvider {
         resolved_model: &ResolvedModel,
     ) -> Result<LlmResponse, String> {
         log::info!("[anthropic] Starting message generation");
-        let api_key = Self::get_api_key()?;
+        let api_key = Self::resolve_api_key(resolved_model)?;
+        let api_url = Self::resolve_api_url(resolved_model);
 
         let should_stream = request.stream.unwrap_or(false);
-        let model_key = &resolved_model.model_key;
+        let model_key = resolved_model.effective_model_id();
 
         // Build messages — system messages are excluded by format_messages_for_anthropic
         let messages = if let Some(msgs) = request.messages.clone() {
@@ -86,7 +98,7 @@ impl LlmProvider for AnthropicProvider {
 
         if should_stream {
             let resp = client
-                .post(ANTHROPIC_API_URL)
+                .post(&api_url)
                 .header("Content-Type", "application/json")
                 .header("x-api-key", &api_key)
                 .header("anthropic-version", ANTHROPIC_VERSION)
@@ -344,7 +356,7 @@ impl LlmProvider for AnthropicProvider {
         } else {
             // ── Non-streaming ──────────────────────────────────────────────
             let resp = client
-                .post(ANTHROPIC_API_URL)
+                .post(&api_url)
                 .header("Content-Type", "application/json")
                 .header("x-api-key", &api_key)
                 .header("anthropic-version", ANTHROPIC_VERSION)
