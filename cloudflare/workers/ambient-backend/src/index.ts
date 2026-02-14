@@ -17,6 +17,8 @@ type requestData = {
 	systemPrompt?: string;
 	jsonSchema?: object;
 	tools?: any;
+	/** Session token from /v1/usage/start-turn — bypasses per-call rate limiting */
+	sessionToken?: string;
 }
 
 // Map model keys to Gemini API model names and thinking config.
@@ -219,6 +221,11 @@ export default {
 			return handleLlmGenerate(request, env, ctx);
 		}
 
+		// Start a generation turn — checks rate limit, increments usage, returns session token
+		if (url.pathname === '/v1/usage/start-turn' && request.method === 'POST') {
+			return handleStartTurn(request, env);
+		}
+
 		// Usage/remaining endpoint — returns remaining daily uses per model
 		if (url.pathname === '/v1/usage/remaining' && request.method === 'GET') {
 			return handleGetRemainingUses(request, env);
@@ -350,6 +357,152 @@ async function handleGetRemainingUses(request: Request, env: Env): Promise<Respo
 }
 
 /**
+ * Handle starting a generation turn.
+ *
+ * This is called once per user turn (before the agentic loop starts).
+ * It checks the rate limit, increments usage, and returns a session_token.
+ * Subsequent LLM calls in the same turn include the session_token to
+ * bypass per-call rate limiting.
+ *
+ * The session is stored in the `generation_sessions` table and is
+ * server-side enforced — the client cannot forge or extend sessions.
+ */
+async function handleStartTurn(request: Request, env: Env): Promise<Response> {
+	const user = await verifySupabaseUser(request, env);
+	if (!user) {
+		return new Response('Unauthorized: Invalid token', { status: 401 });
+	}
+
+	let body: { modelType: string };
+	try {
+		body = await request.json();
+	} catch {
+		return new Response('Bad Request: Invalid JSON', { status: 400 });
+	}
+
+	if (!body.modelType) {
+		return new Response('Bad Request: Missing modelType', { status: 400 });
+	}
+
+	// Validate model exists in registry
+	if (!MODEL_REGISTRY[body.modelType]) {
+		return new Response('Bad Request: Invalid model type', { status: 400 });
+	}
+
+	const admin = createAdminClient(env);
+
+	// Fetch tier and usage in parallel
+	const [tier, usageToday] = await Promise.all([
+		getUserTier(admin, user.id),
+		getAllUsageToday(admin, user.id),
+	]);
+
+	const modelLimit = await getModelLimitForTier(admin, tier, body.modelType);
+
+	// Block if model is not available for this tier
+	if (!modelLimit || !modelLimit.is_available) {
+		return new Response(JSON.stringify({
+			error: 'model_not_available',
+			message: `${body.modelType} is not available on the ${tier} plan.`,
+		}), {
+			status: 403,
+			headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+		});
+	}
+
+	// Check daily limit (skip for unlimited tiers where daily_limit = -1)
+	const currentUsed = usageToday[body.modelType] ?? 0;
+	if (modelLimit.daily_limit >= 0 && currentUsed >= modelLimit.daily_limit) {
+		return new Response(JSON.stringify({
+			error: 'rate_limit_exceeded',
+			message: `Daily limit of ${modelLimit.daily_limit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
+			daily_limit: modelLimit.daily_limit,
+			requests_used: currentUsed,
+		}), {
+			status: 429,
+			headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+		});
+	}
+
+	// Increment usage for this turn
+	if (modelLimit.daily_limit >= 0) {
+		await incrementUsage(admin, user.id, body.modelType, currentUsed);
+	}
+
+	// Create a generation session
+	const { data: session, error: sessionError } = await admin
+		.from('generation_sessions')
+		.insert({
+			user_id: user.id,
+			model_type: body.modelType,
+		})
+		.select('session_token, max_calls, expires_at')
+		.single();
+
+	if (sessionError || !session) {
+		console.error('Failed to create generation session:', sessionError);
+		return new Response('Internal Server Error: Failed to create session', { status: 500 });
+	}
+
+	return new Response(JSON.stringify({
+		session_token: session.session_token,
+		max_calls: session.max_calls,
+		expires_at: session.expires_at,
+	}), {
+		headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+	});
+}
+
+/**
+ * Validate a session token for a generation request.
+ * Returns the session data if valid, or null if invalid/expired/exhausted.
+ */
+async function validateSession(
+	admin: SupabaseClient,
+	sessionToken: string,
+	userId: string,
+	modelType: string,
+): Promise<{ valid: boolean; reason?: string }> {
+	const { data: session, error } = await admin
+		.from('generation_sessions')
+		.select('id, user_id, model_type, call_count, max_calls, expires_at')
+		.eq('session_token', sessionToken)
+		.single();
+
+	if (error || !session) {
+		return { valid: false, reason: 'Invalid session token' };
+	}
+
+	// Verify ownership
+	if (session.user_id !== userId) {
+		return { valid: false, reason: 'Session does not belong to this user' };
+	}
+
+	// Verify model match
+	if (session.model_type !== modelType) {
+		return { valid: false, reason: 'Session model mismatch' };
+	}
+
+	// Check expiry
+	if (new Date(session.expires_at) < new Date()) {
+		return { valid: false, reason: 'Session expired' };
+	}
+
+	// Check call count
+	if (session.call_count >= session.max_calls) {
+		return { valid: false, reason: 'Session call limit reached' };
+	}
+
+	// Increment call count
+	await admin
+		.from('generation_sessions')
+		.update({ call_count: session.call_count + 1 })
+		.eq('id', session.id);
+
+	return { valid: true };
+}
+
+/**
  * Handle LLM Generation (Gemini)
  */
 async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -377,41 +530,58 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		return new Response('Bad Request: Invalid model type', { status: 400 });
 	}
 
-	// --- Tier-aware rate limit check ---
-	// Fetch tier and today's usage for this model in parallel.
 	const admin = createAdminClient(env);
-	const [tier, usageToday] = await Promise.all([
-		getUserTier(admin, user.id),
-		getAllUsageToday(admin, user.id),
-	]);
 
-	// Only fetch the single model's limit (not all models)
-	const modelLimit = await getModelLimitForTier(admin, tier, body.modelType);
+	// --- Session-based or legacy rate limiting ---
+	// If a session token is provided, validate it (no usage increment).
+	// Otherwise, fall back to per-call rate limiting for backwards compatibility.
+	let usageToday: Record<string, number> = {};
 
-	// Block if model is not available for this tier
-	if (!modelLimit || !modelLimit.is_available) {
-		return new Response(JSON.stringify({
-			error: 'model_not_available',
-			message: `${body.modelType} is not available on the ${tier} plan.`,
-		}), {
-			status: 403,
-			headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-		});
-	}
-
-	// Check daily limit (skip for unlimited tiers where daily_limit = -1)
-	if (modelLimit.daily_limit >= 0) {
-		const used = usageToday[body.modelType] ?? 0;
-		if (used >= modelLimit.daily_limit) {
+	if (body.sessionToken) {
+		const sessionResult = await validateSession(admin, body.sessionToken, user.id, body.modelType);
+		if (!sessionResult.valid) {
 			return new Response(JSON.stringify({
-				error: 'rate_limit_exceeded',
-				message: `Daily limit of ${modelLimit.daily_limit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
-				daily_limit: modelLimit.daily_limit,
-				requests_used: used,
+				error: 'session_invalid',
+				message: sessionResult.reason || 'Invalid session',
 			}), {
-				status: 429,
+				status: 403,
 				headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
 			});
+		}
+		// Session is valid — skip rate limiting and usage increment below
+	} else {
+		// Legacy path: per-call rate limiting (no session token)
+		const [tier, fetchedUsage] = await Promise.all([
+			getUserTier(admin, user.id),
+			getAllUsageToday(admin, user.id),
+		]);
+		usageToday = fetchedUsage;
+
+		const modelLimit = await getModelLimitForTier(admin, tier, body.modelType);
+
+		if (!modelLimit || !modelLimit.is_available) {
+			return new Response(JSON.stringify({
+				error: 'model_not_available',
+				message: `${body.modelType} is not available on the ${tier} plan.`,
+			}), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+			});
+		}
+
+		if (modelLimit.daily_limit >= 0) {
+			const used = usageToday[body.modelType] ?? 0;
+			if (used >= modelLimit.daily_limit) {
+				return new Response(JSON.stringify({
+					error: 'rate_limit_exceeded',
+					message: `Daily limit of ${modelLimit.daily_limit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
+					daily_limit: modelLimit.daily_limit,
+					requests_used: used,
+				}), {
+					status: 429,
+					headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+				});
+			}
 		}
 	}
 
@@ -453,11 +623,13 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		const writer = writable.getWriter();
 		const encoder = new TextEncoder();
 
-		// Increment usage immediately — stream has started successfully
-		const currentUsed = usageToday[body.modelType] ?? 0;
-		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
-			console.error('Failed to increment usage:', e)
-		));
+		// Only increment usage for legacy (non-session) calls
+		if (!body.sessionToken) {
+			const currentUsed = usageToday[body.modelType] ?? 0;
+			ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
+				console.error('Failed to increment usage:', e)
+			));
+		}
 
 		ctx.waitUntil((async () => {
 			try {
@@ -489,11 +661,13 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 			config: chatConfig
 		});
 
-		// Increment usage — generation succeeded
-		const currentUsed = usageToday[body.modelType] ?? 0;
-		ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
-			console.error('Failed to increment usage:', e)
-		));
+		// Only increment usage for legacy (non-session) calls
+		if (!body.sessionToken) {
+			const currentUsed = usageToday[body.modelType] ?? 0;
+			ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
+				console.error('Failed to increment usage:', e)
+			));
+		}
 
 		return new Response(JSON.stringify(response), {
 			headers: { 

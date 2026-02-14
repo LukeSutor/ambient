@@ -12,9 +12,10 @@ use crate::db::conversations::{
     load_conversation_skills, save_conversation_skill,
     MessageMetadata, MessageType, Role,
 };
-use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM}};
+use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM, CloudUsageDecrementedEvent, CLOUD_USAGE_DECREMENTED}};
 use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
+use crate::models::llm::usage::create_generation_session;
 use crate::settings::service::load_user_settings;
 use crate::skills::executor::{execute_tools};
 use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
@@ -101,6 +102,12 @@ pub struct AgentRuntime {
     /// Whether using local model (vs cloud).
     is_local: bool,
 
+    /// The selected model key (e.g. "gemini-3-flash").
+    model_key: String,
+
+    /// Session token for cloud rate limiting (one per turn).
+    session_token: Option<String>,
+
     /// Currently activated skills for this conversation.
     active_skills: Vec<String>,
 
@@ -161,6 +168,8 @@ impl AgentRuntime {
             assistant_message_id,
             config,
             is_local,
+            model_key: model_key.to_string(),
+            session_token: None,
             active_skills,
             iteration: 0,
             cancel_signal,
@@ -173,9 +182,10 @@ impl AgentRuntime {
     /// This is the main execution method that:
     /// 1. Saves the user message
     /// 2. Emits memory save event
-    /// 3. Builds the system prompt with skill summaries
-    /// 4. Gets conversation history (context-limited)
-    /// 5. Enters the agentic loop
+    /// 3. Creates a generation session (for cloud models — one per turn)
+    /// 4. Builds the system prompt with skill summaries
+    /// 5. Gets conversation history (context-limited)
+    /// 6. Enters the agentic loop
     async fn run(
         mut self,
         user_message: String,
@@ -186,6 +196,40 @@ impl AgentRuntime {
 
         // Emit memory save event
         self.emit_memory_save_event(&user_message).await?;
+
+        // For cloud models, create a generation session before entering the loop.
+        // This checks the rate limit and increments usage ONCE for the entire turn.
+        // All subsequent LLM calls in the loop use the session token.
+        if !self.is_local {
+            match create_generation_session(&self.model_key).await {
+                Ok(session) => {
+                    self.session_token = Some(session.session_token);
+                    log::info!("[agent] Generation session created for model '{}'", self.model_key);
+
+                    // Emit usage decrement event so the frontend updates counters
+                    let _ = emit(
+                        CLOUD_USAGE_DECREMENTED,
+                        CloudUsageDecrementedEvent {
+                            model_key: self.model_key.clone(),
+                            timestamp: chrono::Local::now().to_rfc3339(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    if e.contains("rate_limit_exceeded") {
+                        log::info!("[agent] Rate limit reached for model '{}'", self.model_key);
+                        return Err(AgentError::LlmError(e));
+                    }
+                    if e.contains("model_not_available") {
+                        log::info!("[agent] Model '{}' not available on user's tier", self.model_key);
+                        return Err(AgentError::LlmError(e));
+                    }
+                    // For other errors, log and continue without session
+                    // (the worker will fall back to per-call rate limiting)
+                    log::warn!("[agent] Failed to create generation session: {}. Continuing without session.", e);
+                }
+            }
+        }
 
         // Get skill summaries for system prompt, filtered by auth requirements and disabled skills
         // get_filtered_summaries loads settings and auth state internally
@@ -252,7 +296,8 @@ impl AgentRuntime {
                 .with_cancel_notify(Some(self.cancel_notify.clone()))
                 .with_attempts(Some(3))
                 .with_timeout_duration(Some(timeout_duration))
-                .with_slot_id(Some(0));
+                .with_slot_id(Some(0))
+                .with_session_token(self.session_token.clone());
 
             // Generate response from LLM
             let response = match generate(
@@ -263,7 +308,7 @@ impl AgentRuntime {
             .await {
                 Ok(resp) => resp,
                 Err(e) => {
-                    // Check if it's a cancellation error
+                    // Check if it's a cancellation/timeout error
                     if e.contains("cancelled") || e.contains("timed out") {
                         let text: String;
                         if e.contains("timed out") {
@@ -274,7 +319,35 @@ impl AgentRuntime {
                             log::info!("[agent] Generation was cancelled during LLM call");
                         }
                         self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
-                        // Emit event if it hasn't been emitted yet by the provider
+                        let stream_data = ChatStreamEvent {
+                            delta: "".to_string(),
+                            is_finished: true,
+                            full_response: text.clone(),
+                            conv_id: Some(self.conv_id.clone()),
+                            message_id: Some(self.assistant_message_id.clone()),
+                        };
+                        let _ = emit(CHAT_STREAM, stream_data);
+                        return Ok(text);
+                    }
+
+                    // Rate limit / model unavailable — surface a user-friendly message
+                    if e.contains("rate_limit_exceeded") {
+                        let text = "*You've reached your daily usage limit for this model. Please try again tomorrow or switch to a different model.*".to_string();
+                        self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
+                        let stream_data = ChatStreamEvent {
+                            delta: "".to_string(),
+                            is_finished: true,
+                            full_response: text.clone(),
+                            conv_id: Some(self.conv_id.clone()),
+                            message_id: Some(self.assistant_message_id.clone()),
+                        };
+                        let _ = emit(CHAT_STREAM, stream_data);
+                        return Ok(text);
+                    }
+
+                    if e.contains("model_not_available") {
+                        let text = "*This model is not available on your current plan. Please upgrade or switch to a different model.*".to_string();
+                        self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
                         let stream_data = ChatStreamEvent {
                             delta: "".to_string(),
                             is_finished: true,

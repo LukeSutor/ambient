@@ -75,7 +75,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
         className="min-w-48 bg-white/60"
       >
         <DropdownMenuGroup>
-          {models.map((model) => {
+          {models.filter((m) => m.is_enabled).map((model) => {
             const usage = model.is_cloud ? cloudUsage[model.model] : undefined;
             const isUnlimited = usage?.remaining === -1;
             const isUnavailable = usage?.is_available === false;

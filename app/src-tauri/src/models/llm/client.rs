@@ -73,7 +73,12 @@ pub async fn generate(
             Ok(resp) => return Ok(resp),
             Err(e) => {
                 last_error = e.clone();
+                // Don't retry on cancellation or rate limit errors
                 if e.contains("cancelled") {
+                    return Err(e);
+                }
+                if e.contains("rate_limit_exceeded") || e.contains("session_invalid") || e.contains("model_not_available") {
+                    log::warn!("[llm_client] Non-retryable error: {}", e);
                     return Err(e);
                 }
                 log::warn!("[llm_client] Attempt {} failed: {}", attempts, e);

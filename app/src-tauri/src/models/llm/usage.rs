@@ -4,6 +4,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use ts_rs::TS;
 
+/// Response from the `/v1/usage/start-turn` endpoint.
+#[derive(Debug, Clone, Deserialize)]
+pub struct GenerationSession {
+    pub session_token: String,
+    pub max_calls: i32,
+    pub expires_at: String,
+}
+
 /// Usage info for a single cloud model.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
@@ -58,4 +66,67 @@ pub async fn get_remaining_cloud_uses() -> Result<ModelAccessResponse, String> {
         .map_err(|e| format!("Failed to parse remaining uses: {}", e))?;
 
     Ok(response)
+}
+
+/// Create a generation session by calling `/v1/usage/start-turn`.
+///
+/// This checks the rate limit and increments usage once for the entire
+/// turn. Returns a session token that can be included in subsequent
+/// LLM calls to bypass per-call rate limiting.
+///
+/// Returns `Err` with a message containing "rate_limit_exceeded" if the
+/// daily limit has been reached, or "model_not_available" if the model
+/// is not available on the user's tier.
+pub async fn create_generation_session(model_type: &str) -> Result<GenerationSession, String> {
+    let access_token = get_access_token_command()
+        .await?
+        .ok_or_else(|| "No access token found. Please sign in.".to_string())?;
+
+    let client = reqwest::Client::new();
+    let endpoint = format!("{}/v1/usage/start-turn", CLOUDFLARE_BACKEND_URL);
+
+    let resp = client
+        .post(&endpoint)
+        .header("Authorization", format!("Bearer {}", access_token))
+        .json(&serde_json::json!({ "modelType": model_type }))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to start generation turn: {}", e))?;
+
+    if resp.status().as_u16() == 429 {
+        let body: serde_json::Value = resp.json().await.unwrap_or_default();
+        let msg = body.get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("Daily usage limit reached");
+        return Err(format!("rate_limit_exceeded: {}", msg));
+    }
+
+    if resp.status().as_u16() == 403 {
+        let body: serde_json::Value = resp.json().await.unwrap_or_default();
+        let error = body.get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("model_not_available");
+        let msg = body.get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("Model not available on your plan");
+        return Err(format!("{}: {}", error, msg));
+    }
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("Failed to start generation turn ({}): {}", status, text));
+    }
+
+    let session: GenerationSession = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse generation session: {}", e))?;
+
+    log::info!(
+        "[usage] Created generation session for model '{}', token: {}, max_calls: {}",
+        model_type, session.session_token, session.max_calls
+    );
+
+    Ok(session)
 }

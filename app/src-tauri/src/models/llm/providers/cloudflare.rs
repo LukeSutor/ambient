@@ -66,6 +66,11 @@ impl LlmProvider for CloudflareProvider {
       body["tools"] = tools_to_gemini_format(internal_tools);
     }
 
+    // Include session token if available (bypasses per-call rate limiting)
+    if let Some(ref token) = request.session_token {
+      body["sessionToken"] = json!(token);
+    }
+
     let client = reqwest::Client::new();
 
     let mut headers = HeaderMap::new();
@@ -203,15 +208,6 @@ impl LlmProvider for CloudflareProvider {
         completion_tokens,
       ).await?;
 
-      // Notify frontend so usage counters update in real time
-      let _ = emit(
-        CLOUD_USAGE_DECREMENTED,
-        CloudUsageDecrementedEvent {
-          model_key: model_key.clone(),
-          timestamp: chrono::Local::now().to_rfc3339(),
-        },
-      );
-
       if !tool_calls.is_empty() {
         // Include any text generated alongside tool calls (e.g., reasoning)
         let text = if full.is_empty() { None } else { Some(full) };
@@ -289,15 +285,6 @@ impl LlmProvider for CloudflareProvider {
           prompt_tokens,
           completion_tokens,
       ).await?;
-
-      // Notify frontend so usage counters update in real time
-      let _ = emit(
-        CLOUD_USAGE_DECREMENTED,
-        CloudUsageDecrementedEvent {
-          model_key: model_key.clone(),
-          timestamp: chrono::Local::now().to_rfc3339(),
-        },
-      );
 
       Ok(response)
     }

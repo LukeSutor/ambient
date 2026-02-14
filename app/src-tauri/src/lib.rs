@@ -173,6 +173,7 @@ pub fn run() {
       db::token_usage::get_token_usage_consumption,
       db::token_usage::get_token_usage,
       db::models::get_models,
+      db::models::toggle_model,
       setup::setup,
       setup::get_setup_download_info,
       setup::check_setup_complete,

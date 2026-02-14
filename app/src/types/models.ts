@@ -54,4 +54,8 @@ description: string,
 /**
  * The model provider (e.g. "local", "google", "openai").
  */
-provider: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, color: string, badge_label: string, badge_variant: string, badge_class: string, icon: string, icon_color: string, icon_bg: string, };
+provider: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, color: string, badge_label: string, badge_variant: string, badge_class: string, icon: string, icon_color: string, icon_bg: string, 
+/**
+ * Whether this model is enabled/visible in the UI.
+ */
+is_enabled: boolean, };

@@ -7,6 +7,7 @@ import {
   InputGroupButton,
 } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
+import { useModelAccess } from "@/lib/model-access";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
@@ -17,6 +18,7 @@ import { ArrowUpIcon, Globe, Square, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
+import { toast } from "sonner";
 import { AttachmentList } from "./attachment-list";
 import { ModelSelector } from "./model-selector";
 import { PlusMenu } from "./plus-menu";
@@ -81,7 +83,8 @@ export function HUDInputBar() {
     stopGeneration,
   } = useConversation();
   const { closeHUD, setChatExpanded } = useWindows();
-  const { hudDimensions } = useSettings();
+  const { hudDimensions, settings } = useSettings();
+  const { getUsage } = useModelAccess();
 
   // Computed values
   const isLoading = ocrLoading || isStreaming;
@@ -124,6 +127,22 @@ export function HUDInputBar() {
     const query = input.trim();
     if (!query || isLoading) return;
 
+    // Pre-check: block send if the selected cloud model is at its usage limit
+    const modelKey = settings?.model_selection;
+    if (modelKey) {
+      const usage = getUsage(modelKey);
+      if (usage) {
+        if (!usage.is_available) {
+          toast.error("This model is not available on your current plan. Please upgrade or switch models.");
+          return;
+        }
+        if (usage.remaining === 0 && usage.daily_limit !== -1) {
+          toast.error("You've reached your daily usage limit for this model. Try again tomorrow or switch to a different model.");
+          return;
+        }
+      }
+    }
+
     setChatExpanded();
     setInput("");
 
@@ -132,7 +151,7 @@ export function HUDInputBar() {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
     }
-  }, [input, isLoading, conversationId, sendMessage, setChatExpanded]);
+  }, [input, isLoading, conversationId, sendMessage, setChatExpanded, settings, getUsage]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

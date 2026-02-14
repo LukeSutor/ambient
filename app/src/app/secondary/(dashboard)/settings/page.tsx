@@ -3,6 +3,7 @@
 import {
   DangerZone,
   ModelSelector,
+  ModelToggles,
   SettingsSection,
   SkillToggles,
 } from "@/components/secondary/settings";
@@ -199,6 +200,11 @@ export default function Settings() {
       {/* Tools Settings */}
       <SettingsSection title="Tools">
         <SkillToggles />
+      </SettingsSection>
+
+      {/* Model Visibility */}
+      <SettingsSection title="Model Visibility">
+        <ModelToggles />
       </SettingsSection>
 
       {/* Danger zone */}

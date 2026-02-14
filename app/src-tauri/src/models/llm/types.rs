@@ -37,6 +37,9 @@ pub struct LlmRequest {
     /// Pin this request to a specific llama.cpp server slot for KV cache isolation.
     /// Slot 0 is reserved for agentic chat; slot 1+ for background tasks.
     pub slot_id: Option<i32>,
+    /// Session token from `/v1/usage/start-turn` — allows multiple LLM calls
+    /// in a single user turn without per-call rate limiting.
+    pub session_token: Option<String>,
 }
 
 impl LlmRequest {
@@ -109,6 +112,11 @@ impl LlmRequest {
 
     pub fn with_slot_id(mut self, slot_id: Option<i32>) -> Self {
         self.slot_id = slot_id;
+        self
+    }
+
+    pub fn with_session_token(mut self, session_token: Option<String>) -> Self {
+        self.session_token = session_token;
         self
     }
 }
