@@ -1,93 +1,104 @@
 "use client";
 
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useModelAccess } from "@/lib/model-access";
-import { Crown, Shield, Zap } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  shield: Shield,
-  zap: Zap,
-  crown: Crown,
-};
-
 /**
- * ModelToggles component displays all registered models with toggle
- * switches to show/hide them in the HUD input bar model selector.
+ * ModelVisibilityPopover renders a ghost button that opens a popover
+ * with checkboxes for toggling model visibility in the HUD model selector.
  *
  * Uses the centralized ModelAccessProvider for the model list.
  * Toggling a model emits a `models_changed` event from Rust,
  * which the provider listens to for real-time updates.
+ *
+ * The toggle logic is tier-aware: only models the user can access
+ * count toward the "at least one enabled" requirement, and auto-
+ * reselect only picks from accessible models.
  */
-export function ModelToggles() {
-  const { models } = useModelAccess();
+export function ModelVisibilityPopover() {
+  const { models, isModelAvailable } = useModelAccess();
+
+  /** Model keys the user can actually access (based on tier). */
+  const allowedModelKeys = useMemo(
+    () => models.filter((m) => isModelAvailable(m.model)).map((m) => m.model),
+    [models, isModelAvailable],
+  );
+
+  /** Number of enabled models that the user can access. */
+  const allowedEnabledCount = useMemo(
+    () =>
+      models.filter((m) => m.is_enabled && isModelAvailable(m.model)).length,
+    [models, isModelAvailable],
+  );
 
   const handleToggle = useCallback(
     async (modelKey: string, currentEnabled: boolean) => {
       const newEnabled = !currentEnabled;
       try {
-        await invoke<string | null>("toggle_model", { modelKey, enabled: newEnabled });
-        // State updates happen automatically via the `models_changed` and
-        // `settings_changed` events emitted by the Rust command.
+        await invoke<string | null>("toggle_model", {
+          modelKey,
+          enabled: newEnabled,
+          allowedModels: allowedModelKeys,
+        });
       } catch (error) {
         const msg = String(error);
         if (msg.includes("Cannot disable the last enabled model")) {
           toast.error("At least one model must remain enabled");
         } else {
-          console.error(`[ModelToggles] Failed to toggle model ${modelKey}:`, error);
+          console.error(`[ModelVisibilityPopover] Failed to toggle model ${modelKey}:`, error);
           toast.error("Failed to toggle model");
         }
       }
     },
-    [],
+    [allowedModelKeys],
   );
 
-  // Count enabled models to visually lock the last one
-  const enabledCount = models.filter((m) => m.is_enabled).length;
-
-  if (models.length === 0) {
-    return (
-      <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-        Loading models...
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col divide-y divide-border">
-      {models.map((model) => {
-        const IconComponent = ICON_MAP[model.icon] || Shield;
-        const isLastEnabled = model.is_enabled && enabledCount <= 1;
-        return (
-          <div
-            key={model.model}
-            className="flex flex-row items-center justify-between p-4"
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full ${model.icon_bg}`}
-              >
-                <IconComponent className={`h-4 w-4 ${model.icon_color}`} />
-              </div>
-              <div className="flex flex-col">
-                <p className="font-semibold text-sm">{model.display_name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {model.short_description}
-                </p>
-              </div>
-            </div>
-            <Switch
-              checked={model.is_enabled}
-              disabled={isLastEnabled}
-              onCheckedChange={() =>
-                void handleToggle(model.model, model.is_enabled)
-              }
-            />
-          </div>
-        );
-      })}
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-auto px-1 py-0 text-xs text-muted-foreground">
+          Configure
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start">
+        <PopoverHeader>
+          <PopoverDescription>The checked models will be visible in the model selection dropdowns.</PopoverDescription>
+        </PopoverHeader>
+        <div className="flex flex-col gap-3 mt-4">
+          {models.map((model) => {
+            const isAllowed = isModelAvailable(model.model);
+            // Disable checkbox if this is the last allowed-and-enabled model
+            const isLastAllowedEnabled =
+              model.is_enabled && isAllowed && allowedEnabledCount <= 1;
+            return (
+              <Field key={model.model} orientation="horizontal">
+                <Checkbox
+                  id={`model-${model.model}`}
+                  checked={model.is_enabled}
+                  disabled={isLastAllowedEnabled}
+                  onCheckedChange={() =>
+                    void handleToggle(model.model, model.is_enabled)
+                  }
+                />
+                <Label htmlFor={`model-${model.model}`} className="w-full">{model.display_name}</Label>
+              </Field>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

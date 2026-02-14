@@ -3,7 +3,7 @@
 import {
   DangerZone,
   ModelSelector,
-  ModelToggles,
+  ModelVisibilityPopover,
   SettingsSection,
   SkillToggles,
 } from "@/components/secondary/settings";
@@ -28,13 +28,17 @@ interface SettingRowProps {
   title: string;
   description: string;
   children: React.ReactNode;
+  titleAction?: React.ReactNode;
 }
 
-function SettingRow({ title, description, children }: SettingRowProps) {
+function SettingRow({ title, description, children, titleAction }: SettingRowProps) {
   return (
     <div className="flex flex-row items-center justify-between p-4">
       <div className="flex flex-col">
-        <p className="font-semibold text-sm">{title}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-sm">{title}</p>
+          {titleAction}
+        </div>
         <p className="text-sm text-gray-600">{description}</p>
       </div>
       {children}
@@ -134,6 +138,7 @@ export default function Settings() {
         <SettingRow
           title="Model Selection"
           description="Choose the model to use for processing"
+          titleAction={<ModelVisibilityPopover />}
         >
           <ModelSelector
             value={modelSelection}
@@ -200,11 +205,6 @@ export default function Settings() {
       {/* Tools Settings */}
       <SettingsSection title="Tools">
         <SkillToggles />
-      </SettingsSection>
-
-      {/* Model Visibility */}
-      <SettingsSection title="Model Visibility">
-        <ModelToggles />
       </SettingsSection>
 
       {/* Danger zone */}
