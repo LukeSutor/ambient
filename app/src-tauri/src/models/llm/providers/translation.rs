@@ -1,7 +1,8 @@
 //! Tool format translation layer.
 //!
 //! Converts between the unified internal tool format and
-//! provider-specific formats for OpenAI (local) and Gemini (cloud).
+//! provider-specific formats for OpenAI (local), Gemini (cloud),
+//! and Anthropic (cloud).
 //!
 //! This module provides bidirectional translation:
 //! - **Internal → Provider**: Converts tool definitions to provider format
@@ -723,36 +724,674 @@ pub fn extract_text_gemini(response: &Value) -> Option<String> {
         })
 }
 
+// ---------------------------------------------------------------------------
+// Anthropic Messages API
+// ---------------------------------------------------------------------------
+
+/// Translates tool definitions to Anthropic tool format.
+///
+/// Anthropic uses `input_schema` (JSON Schema) instead of `parameters`.
+/// Type names use lowercase JSON Schema types (same as OpenAI).
+pub fn tools_to_anthropic_format(tools: &[ToolDefinition]) -> Vec<Value> {
+    tools
+        .iter()
+        .map(|tool| {
+            let mut properties = json!({});
+            let mut required = Vec::new();
+
+            for param in &tool.parameters {
+                let param_schema = json!({
+                    "type": param.param_type.as_json_schema(),
+                    "description": param.description,
+                });
+                properties[&param.name] = param_schema;
+
+                if param.required {
+                    required.push(param.name.clone());
+                }
+            }
+
+            json!({
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required,
+                }
+            })
+        })
+        .collect()
+}
+
+/// Parses tool calls from an Anthropic Messages API response.
+///
+/// Anthropic returns tool calls as `tool_use` content blocks in the
+/// assistant message's `content` array.
+pub fn parse_anthropic_tool_calls(response: &Value, available_tools: Option<&[ToolDefinition]>) -> Vec<ToolCall> {
+    let mut calls = Vec::new();
+
+    if let Some(content) = response.get("content").and_then(|c| c.as_array()) {
+        for block in content {
+            if block.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
+                let id = block
+                    .get("id")
+                    .and_then(|i| i.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let name = block
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                let arguments = block
+                    .get("input")
+                    .cloned()
+                    .unwrap_or(json!({}));
+
+                let (skill_name, tool_name) = resolve_tool_call(&name, available_tools);
+
+                calls.push(ToolCall {
+                    id,
+                    skill_name,
+                    tool_name,
+                    arguments,
+                    thought_signature: None,
+                });
+            }
+        }
+    }
+
+    calls
+}
+
+/// Format conversation messages for Anthropic Messages API.
+///
+/// Key differences from OpenAI/Gemini:
+/// - System messages are excluded (passed separately via `system` param)
+/// - Assistant tool calls use `tool_use` content blocks
+/// - Tool results use `tool_result` content blocks in `user` messages
+/// - Images use `image` type with `source.type = "base64"`
+/// - PDFs use `document` type with `source.type = "base64"`
+pub fn format_messages_for_anthropic(app_handle: &AppHandle, msgs: &[Message]) -> Vec<Value> {
+    let mut formatted = Vec::new();
+
+    // Collect IDs of most recent images/pdfs across all messages
+    let mut valid_attachments = Vec::new();
+    for msg in msgs.iter().rev() {
+        for attachment in msg.attachments.iter().rev() {
+            if valid_attachments.len() < MAX_RECENT_ATTACHMENTS {
+                valid_attachments.push(attachment.id.clone());
+            }
+        }
+    }
+
+    for msg in msgs {
+        // Anthropic does not support system role in messages — system prompts
+        // are passed via the top-level `system` parameter.
+        if msg.role == Role::System {
+            continue;
+        }
+
+        match msg.message_type {
+            MessageType::ToolCalls => {
+                let mut content_blocks = Vec::new();
+
+                // Add text content first (assistant thinking/commentary)
+                if !msg.content.is_empty() {
+                    content_blocks.push(json!({
+                        "type": "text",
+                        "text": msg.content
+                    }));
+                }
+
+                // Add tool_use blocks
+                if let Some(metadata_vec) = &msg.metadata {
+                    for meta in metadata_vec {
+                        if let MessageMetadata::ToolCall { call_id, tool_name, arguments, .. } = meta {
+                            content_blocks.push(json!({
+                                "type": "tool_use",
+                                "id": call_id,
+                                "name": tool_name,
+                                "input": arguments
+                            }));
+                        }
+                    }
+                }
+
+                if !content_blocks.is_empty() {
+                    formatted.push(json!({
+                        "role": "assistant",
+                        "content": content_blocks
+                    }));
+                }
+            }
+
+            MessageType::ToolResults => {
+                let mut content_blocks = Vec::new();
+
+                if let Some(metadata_vec) = &msg.metadata {
+                    for meta in metadata_vec {
+                        if let MessageMetadata::ToolResult { call_id, result, success, error, screenshot_attachment_id } = meta {
+                            let mut response_obj = if *success {
+                                result.clone().unwrap_or_else(|| json!({"status": "success"}))
+                            } else {
+                                json!({"error": error.as_deref().unwrap_or("Unknown error")})
+                            };
+
+                            // Enrichment: inject skill instructions on activation
+                            if *success {
+                                if let Some(res_val) = result {
+                                    if res_val.get("status").and_then(|s| s.as_str()) == Some("skill_activated") {
+                                        if let Some(skill_name) = res_val.get("skill_name").and_then(|s| s.as_str()) {
+                                            if let Some(skill) = get_skill(skill_name) {
+                                                if let Some(obj) = response_obj.as_object_mut() {
+                                                    obj.insert("instructions".to_string(), json!(skill.instructions));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Build tool_result content — can be string or array of blocks
+                            let result_text = serde_json::to_string(&response_obj)
+                                .unwrap_or_else(|_| "{}".to_string());
+
+                            let mut result_content: Vec<Value> = vec![json!({
+                                "type": "text",
+                                "text": result_text
+                            })];
+
+                            // If there's a screenshot attachment, add it as an image block
+                            if let Some(screenshot_id) = screenshot_attachment_id {
+                                if valid_attachments.contains(screenshot_id) {
+                                    if let Some(attachment) = msg.attachments.iter().find(|a| &a.id == screenshot_id) {
+                                        if attachment.file_type.starts_with("image/") {
+                                            if let Some(rel_path) = &attachment.file_path {
+                                                if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                                    let full_path = app_data.join(rel_path);
+                                                    if full_path.exists() {
+                                                        if let Ok(bytes) = fs::read(&full_path) {
+                                                            let base64_data = general_purpose::STANDARD.encode(bytes);
+                                                            result_content.push(json!({
+                                                                "type": "image",
+                                                                "source": {
+                                                                    "type": "base64",
+                                                                    "media_type": attachment.file_type,
+                                                                    "data": base64_data,
+                                                                }
+                                                            }));
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            let mut tool_result = json!({
+                                "type": "tool_result",
+                                "tool_use_id": call_id,
+                                "content": result_content
+                            });
+
+                            if !success {
+                                tool_result["is_error"] = json!(true);
+                            }
+
+                            content_blocks.push(tool_result);
+                        }
+                    }
+                }
+
+                if !content_blocks.is_empty() {
+                    formatted.push(json!({
+                        "role": "user",
+                        "content": content_blocks
+                    }));
+                }
+            }
+
+            MessageType::Text => {
+                let role = match msg.role {
+                    Role::Assistant => "assistant",
+                    _ => "user",
+                };
+
+                let mut content_blocks = Vec::new();
+
+                // Add attachments before text (Anthropic recommends images before text)
+                for attachment in &msg.attachments {
+                    if !valid_attachments.contains(&attachment.id) {
+                        continue;
+                    }
+
+                    if attachment.file_type.starts_with("image/") {
+                        if let Some(rel_path) = &attachment.file_path {
+                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                let full_path = app_data.join(rel_path);
+                                if full_path.exists() {
+                                    if let Ok(bytes) = fs::read(&full_path) {
+                                        let base64_image = general_purpose::STANDARD.encode(bytes);
+                                        content_blocks.push(json!({
+                                            "type": "image",
+                                            "source": {
+                                                "type": "base64",
+                                                "media_type": attachment.file_type,
+                                                "data": base64_image,
+                                            }
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    } else if attachment.file_type == "application/pdf" {
+                        if let Some(rel_path) = &attachment.file_path {
+                            if let Ok(app_data) = app_handle.path().app_data_dir() {
+                                let full_path = app_data.join(rel_path);
+                                if full_path.exists() {
+                                    if let Ok(bytes) = fs::read(&full_path) {
+                                        let base64_pdf = general_purpose::STANDARD.encode(bytes);
+                                        content_blocks.push(json!({
+                                            "type": "document",
+                                            "source": {
+                                                "type": "base64",
+                                                "media_type": "application/pdf",
+                                                "data": base64_pdf,
+                                            }
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    } else if attachment.file_type == "ambient/ocr" {
+                        if let Some(extracted_text) = &attachment.extracted_text {
+                            content_blocks.push(json!({
+                                "type": "text",
+                                "text": format!("Extracted text from user's screen:\n{}", extracted_text)
+                            }));
+                        }
+                    }
+                }
+
+                // Add text content last
+                if !msg.content.is_empty() {
+                    content_blocks.push(json!({
+                        "type": "text",
+                        "text": msg.content
+                    }));
+                }
+
+                if !content_blocks.is_empty() {
+                    formatted.push(json!({
+                        "role": role,
+                        "content": content_blocks
+                    }));
+                }
+            }
+        }
+    }
+
+    formatted
+}
+
+/// Checks if an Anthropic response contains tool calls.
+pub fn has_tool_calls_anthropic(response: &Value) -> bool {
+    response
+        .get("content")
+        .and_then(|c| c.as_array())
+        .map(|blocks| blocks.iter().any(|b| {
+            b.get("type").and_then(|t| t.as_str()) == Some("tool_use")
+        }))
+        .unwrap_or(false)
+}
+
+/// Extracts text content from an Anthropic response.
+///
+/// Returns the concatenated text from all `text` content blocks.
+pub fn extract_text_anthropic(response: &Value) -> Option<String> {
+    response
+        .get("content")
+        .and_then(|c| c.as_array())
+        .and_then(|blocks| {
+            let mut full_text = String::new();
+            for block in blocks {
+                if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                        full_text.push_str(text);
+                    }
+                }
+            }
+            if full_text.is_empty() {
+                None
+            } else {
+                Some(full_text)
+            }
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::skills::types::ToolParameter;
+    use crate::skills::types::ParameterType;
     use serde_json::json;
 
-    #[test]
-    fn test_openai_format() {
-        let tool = ToolDefinition {
-            name: "test_tool".to_string(),
-            skill_name: Some("test".to_string()),
-            description: "A test tool".to_string(),
-            parameters: vec![],
-            returns: None,
-        };
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
 
-        let result = tools_to_openai_format(&[tool]);
+    fn make_tool(name: &str, description: &str, params: Vec<ToolParameter>) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            skill_name: Some("test-skill".to_string()),
+            description: description.to_string(),
+            parameters: params,
+            returns: None,
+        }
+    }
+
+    fn make_param(name: &str, param_type: ParameterType, required: bool) -> ToolParameter {
+        ToolParameter {
+            name: name.to_string(),
+            param_type,
+            description: format!("{} parameter", name),
+            required,
+            default: None,
+        }
+    }
+
+    fn simple_tool() -> ToolDefinition {
+        make_tool("search_web", "Search the web", vec![
+            make_param("query", ParameterType::String, true),
+            make_param("max_results", ParameterType::Integer, false),
+        ])
+    }
+
+    fn no_params_tool() -> ToolDefinition {
+        make_tool("get_time", "Get the current time", vec![])
+    }
+
+    fn multi_param_tool() -> ToolDefinition {
+        make_tool("calculate", "Perform a calculation", vec![
+            make_param("expression", ParameterType::String, true),
+            make_param("precision", ParameterType::Integer, false),
+            make_param("use_radians", ParameterType::Boolean, false),
+            make_param("values", ParameterType::Array, false),
+            make_param("options", ParameterType::Object, false),
+        ])
+    }
+
+    // =======================================================================
+    // Tool definition formatting
+    // =======================================================================
+
+    // -- OpenAI -------------------------------------------------------------
+
+    #[test]
+    fn test_openai_tools_single_with_params() {
+        let tools = vec![simple_tool()];
+        let result = tools_to_openai_format(&tools);
+
         assert_eq!(result.len(), 1);
         assert_eq!(result[0]["type"], "function");
-        assert_eq!(result[0]["function"]["name"], "test_tool");
+        assert_eq!(result[0]["function"]["name"], "search_web");
+        assert_eq!(result[0]["function"]["description"], "Search the web");
+
+        let params = &result[0]["function"]["parameters"];
+        assert_eq!(params["type"], "object");
+        assert_eq!(params["properties"]["query"]["type"], "string");
+        assert_eq!(params["properties"]["max_results"]["type"], "integer");
+        assert_eq!(params["required"], json!(["query"]));
     }
 
     #[test]
-    fn test_parse_openai_tool_calls() {
+    fn test_openai_tools_no_params() {
+        let tools = vec![no_params_tool()];
+        let result = tools_to_openai_format(&tools);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["function"]["name"], "get_time");
+        assert_eq!(result[0]["function"]["parameters"]["required"], json!([]));
+        assert!(result[0]["function"]["parameters"]["properties"].as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_openai_tools_multiple() {
+        let tools = vec![simple_tool(), no_params_tool()];
+        let result = tools_to_openai_format(&tools);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0]["function"]["name"], "search_web");
+        assert_eq!(result[1]["function"]["name"], "get_time");
+    }
+
+    #[test]
+    fn test_openai_tools_all_param_types() {
+        let tools = vec![multi_param_tool()];
+        let result = tools_to_openai_format(&tools);
+        let props = &result[0]["function"]["parameters"]["properties"];
+
+        assert_eq!(props["expression"]["type"], "string");
+        assert_eq!(props["precision"]["type"], "integer");
+        assert_eq!(props["use_radians"]["type"], "boolean");
+        assert_eq!(props["values"]["type"], "array");
+        assert_eq!(props["options"]["type"], "object");
+    }
+
+    #[test]
+    fn test_openai_tools_empty() {
+        let result = tools_to_openai_format(&[]);
+        assert!(result.is_empty());
+    }
+
+    // -- Gemini -------------------------------------------------------------
+
+    #[test]
+    fn test_gemini_tools_single_with_params() {
+        let tools = vec![simple_tool()];
+        let result = tools_to_gemini_format(&tools);
+
+        let decls = result["functionDeclarations"].as_array().unwrap();
+        assert_eq!(decls.len(), 1);
+        assert_eq!(decls[0]["name"], "search_web");
+        assert_eq!(decls[0]["description"], "Search the web");
+
+        let params = &decls[0]["parameters"];
+        assert_eq!(params["type"], "OBJECT");
+        assert_eq!(params["properties"]["query"]["type"], "STRING");
+        assert_eq!(params["properties"]["max_results"]["type"], "INTEGER");
+        assert_eq!(params["required"], json!(["query"]));
+    }
+
+    #[test]
+    fn test_gemini_tools_no_params() {
+        let tools = vec![no_params_tool()];
+        let result = tools_to_gemini_format(&tools);
+        let decls = result["functionDeclarations"].as_array().unwrap();
+
+        assert_eq!(decls.len(), 1);
+        assert_eq!(decls[0]["name"], "get_time");
+        assert_eq!(decls[0]["parameters"]["required"], json!([]));
+    }
+
+    #[test]
+    fn test_gemini_tools_multiple() {
+        let tools = vec![simple_tool(), no_params_tool()];
+        let result = tools_to_gemini_format(&tools);
+        let decls = result["functionDeclarations"].as_array().unwrap();
+        assert_eq!(decls.len(), 2);
+        assert_eq!(decls[0]["name"], "search_web");
+        assert_eq!(decls[1]["name"], "get_time");
+    }
+
+    #[test]
+    fn test_gemini_tools_all_param_types() {
+        let tools = vec![multi_param_tool()];
+        let result = tools_to_gemini_format(&tools);
+        let props = &result["functionDeclarations"][0]["parameters"]["properties"];
+
+        assert_eq!(props["expression"]["type"], "STRING");
+        assert_eq!(props["precision"]["type"], "INTEGER");
+        assert_eq!(props["use_radians"]["type"], "BOOLEAN");
+        assert_eq!(props["values"]["type"], "ARRAY");
+        assert_eq!(props["options"]["type"], "OBJECT");
+    }
+
+    #[test]
+    fn test_gemini_tools_empty() {
+        let result = tools_to_gemini_format(&[]);
+        assert!(result["functionDeclarations"].as_array().unwrap().is_empty());
+    }
+
+    // -- Anthropic ----------------------------------------------------------
+
+    #[test]
+    fn test_anthropic_tools_single_with_params() {
+        let tools = vec![simple_tool()];
+        let result = tools_to_anthropic_format(&tools);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["name"], "search_web");
+        assert_eq!(result[0]["description"], "Search the web");
+
+        let schema = &result[0]["input_schema"];
+        assert_eq!(schema["type"], "object");
+        assert_eq!(schema["properties"]["query"]["type"], "string");
+        assert_eq!(schema["properties"]["query"]["description"], "query parameter");
+        assert_eq!(schema["properties"]["max_results"]["type"], "integer");
+        assert_eq!(schema["required"], json!(["query"]));
+    }
+
+    #[test]
+    fn test_anthropic_tools_no_params() {
+        let tools = vec![no_params_tool()];
+        let result = tools_to_anthropic_format(&tools);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["name"], "get_time");
+        assert_eq!(result[0]["input_schema"]["required"], json!([]));
+        assert!(result[0]["input_schema"]["properties"].as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_anthropic_tools_multiple() {
+        let tools = vec![simple_tool(), no_params_tool()];
+        let result = tools_to_anthropic_format(&tools);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0]["name"], "search_web");
+        assert_eq!(result[1]["name"], "get_time");
+    }
+
+    #[test]
+    fn test_anthropic_tools_all_param_types() {
+        let tools = vec![multi_param_tool()];
+        let result = tools_to_anthropic_format(&tools);
+        let props = &result[0]["input_schema"]["properties"];
+
+        // Anthropic uses lowercase JSON Schema types (same as OpenAI)
+        assert_eq!(props["expression"]["type"], "string");
+        assert_eq!(props["precision"]["type"], "integer");
+        assert_eq!(props["use_radians"]["type"], "boolean");
+        assert_eq!(props["values"]["type"], "array");
+        assert_eq!(props["options"]["type"], "object");
+    }
+
+    #[test]
+    fn test_anthropic_tools_empty() {
+        let result = tools_to_anthropic_format(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_anthropic_tools_no_function_wrapper() {
+        // Anthropic format does NOT use a "function" wrapper like OpenAI
+        let tools = vec![simple_tool()];
+        let result = tools_to_anthropic_format(&tools);
+
+        assert!(result[0].get("type").is_none(), "Anthropic tools should not have a 'type' wrapper");
+        assert!(result[0].get("function").is_none(), "Anthropic tools should not have 'function' wrapper");
+        assert!(result[0].get("name").is_some(), "Name should be at top level");
+        assert!(result[0].get("input_schema").is_some(), "input_schema should be at top level");
+    }
+
+    // =======================================================================
+    // Parsing tool calls from responses
+    // =======================================================================
+
+    // -- OpenAI -------------------------------------------------------------
+
+    #[test]
+    fn test_parse_openai_single_tool_call() {
         let response = json!({
             "choices": [{
                 "message": {
                     "tool_calls": [{
-                        "id": "call_123",
+                        "id": "call_abc123",
+                        "type": "function",
                         "function": {
-                            "name": "test.skill.search",
+                            "name": "search_web",
+                            "arguments": "{\"query\":\"rust programming\"}"
+                        }
+                    }]
+                }
+            }]
+        });
+
+        let available = vec![simple_tool()];
+        let calls = parse_openai_tool_calls(&response, Some(&available));
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call_abc123");
+        assert_eq!(calls[0].tool_name, "search_web");
+        assert_eq!(calls[0].skill_name, "test-skill");
+        assert_eq!(calls[0].arguments["query"], "rust programming");
+        assert!(calls[0].thought_signature.is_none());
+    }
+
+    #[test]
+    fn test_parse_openai_multiple_tool_calls() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "function": {
+                                "name": "search_web",
+                                "arguments": "{\"query\":\"a\"}"
+                            }
+                        },
+                        {
+                            "id": "call_2",
+                            "function": {
+                                "name": "get_time",
+                                "arguments": "{}"
+                            }
+                        }
+                    ]
+                }
+            }]
+        });
+
+        let calls = parse_openai_tool_calls(&response, None);
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].id, "call_1");
+        assert_eq!(calls[1].id, "call_2");
+    }
+
+    #[test]
+    fn test_parse_openai_dot_separated_name() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {
+                            "name": "web-search.search_web",
                             "arguments": "{\"query\":\"test\"}"
                         }
                     }]
@@ -760,54 +1399,719 @@ mod tests {
             }]
         });
 
-        let calls = parse_openai_tool_calls(&response, Some(&[ToolDefinition {
-            name: "test.skill.search".to_string(),
-            skill_name: Some("test".to_string()),
-            description: "A test tool".to_string(),
-            parameters: vec![],
-            returns: None,
-        }]));
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].skill_name, "test");
-        assert_eq!(calls[0].tool_name, "skill.search");
+        let calls = parse_openai_tool_calls(&response, None);
+        assert_eq!(calls[0].skill_name, "web-search");
+        assert_eq!(calls[0].tool_name, "search_web");
     }
 
     #[test]
-    fn test_gemini_format() {
-        let tool = ToolDefinition {
-            name: "test_tool".to_string(),
-            skill_name: Some("test".to_string()),
-            description: "A test tool".to_string(),
-            parameters: vec![],
-            returns: None,
-        };
-
-        let result = tools_to_gemini_format(&[tool]);
-        assert!(result["functionDeclarations"].is_array());
-        assert_eq!(result["functionDeclarations"][0]["name"], "test_tool");
-    }
-
-    #[test]
-    fn test_has_tool_calls() {
-        let openai_response = json!({
+    fn test_parse_openai_activate_skill() {
+        let response = json!({
             "choices": [{
                 "message": {
-                    "tool_calls": [{"id": "1", "function": {"name": "test"}}]
-                }
-            }]
-        });
-
-        let gemini_response = json!({
-            "candidates": [{
-                "content": {
-                    "parts": [{
-                        "functionCall": {"name": "test"}
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {
+                            "name": "activate_skill",
+                            "arguments": "{\"skill_name\":\"code-execution\"}"
+                        }
                     }]
                 }
             }]
         });
 
-        assert!(has_tool_calls_openai(&openai_response));
-        assert!(has_tool_calls_gemini(&gemini_response));
+        let calls = parse_openai_tool_calls(&response, None);
+        assert_eq!(calls[0].skill_name, "system");
+        assert_eq!(calls[0].tool_name, "activate_skill");
+    }
+
+    #[test]
+    fn test_parse_openai_no_tool_calls() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "content": "Hello world"
+                }
+            }]
+        });
+
+        let calls = parse_openai_tool_calls(&response, None);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_parse_openai_invalid_json_arguments() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "function": {
+                            "name": "search_web",
+                            "arguments": "not valid json"
+                        }
+                    }]
+                }
+            }]
+        });
+
+        let calls = parse_openai_tool_calls(&response, None);
+        assert_eq!(calls.len(), 1);
+        // Invalid JSON falls back to empty object
+        assert_eq!(calls[0].arguments, json!({}));
+    }
+
+    #[test]
+    fn test_parse_openai_empty_response() {
+        let calls = parse_openai_tool_calls(&json!({}), None);
+        assert!(calls.is_empty());
+    }
+
+    // -- Gemini -------------------------------------------------------------
+
+    #[test]
+    fn test_parse_gemini_single_tool_call() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "search_web",
+                            "args": {"query": "rust programming"}
+                        }
+                    }]
+                }
+            }]
+        });
+
+        let available = vec![simple_tool()];
+        let calls = parse_gemini_tool_calls(&response, Some(&available));
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].tool_name, "search_web");
+        assert_eq!(calls[0].skill_name, "test-skill");
+        assert_eq!(calls[0].arguments["query"], "rust programming");
+        // Gemini generates UUIDs for call IDs
+        assert!(!calls[0].id.is_empty());
+    }
+
+    #[test]
+    fn test_parse_gemini_multiple_tool_calls() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": {
+                                "name": "search_web",
+                                "args": {"query": "a"}
+                            }
+                        },
+                        {
+                            "functionCall": {
+                                "name": "get_time",
+                                "args": {}
+                            }
+                        }
+                    ]
+                }
+            }]
+        });
+
+        let calls = parse_gemini_tool_calls(&response, None);
+        assert_eq!(calls.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_gemini_with_thought_signature() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "search_web",
+                            "args": {"query": "test"}
+                        },
+                        "thoughtSignature": "abc123signature"
+                    }]
+                }
+            }]
+        });
+
+        let calls = parse_gemini_tool_calls(&response, None);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].thought_signature, Some("abc123signature".to_string()));
+    }
+
+    #[test]
+    fn test_parse_gemini_no_tool_calls() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": "Hello world"
+                    }]
+                }
+            }]
+        });
+
+        let calls = parse_gemini_tool_calls(&response, None);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_parse_gemini_empty_response() {
+        let calls = parse_gemini_tool_calls(&json!({}), None);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_parse_gemini_dot_separated_name() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {
+                            "name": "web-search.search_web",
+                            "args": {}
+                        }
+                    }]
+                }
+            }]
+        });
+
+        let calls = parse_gemini_tool_calls(&response, None);
+        assert_eq!(calls[0].skill_name, "web-search");
+        assert_eq!(calls[0].tool_name, "search_web");
+    }
+
+    // -- Anthropic ----------------------------------------------------------
+
+    #[test]
+    fn test_parse_anthropic_single_tool_call() {
+        let response = json!({
+            "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_01A09q90qw90lq917835lq9",
+                    "name": "search_web",
+                    "input": {"query": "rust programming"}
+                }
+            ],
+            "stop_reason": "tool_use"
+        });
+
+        let available = vec![simple_tool()];
+        let calls = parse_anthropic_tool_calls(&response, Some(&available));
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "toolu_01A09q90qw90lq917835lq9");
+        assert_eq!(calls[0].tool_name, "search_web");
+        assert_eq!(calls[0].skill_name, "test-skill");
+        assert_eq!(calls[0].arguments["query"], "rust programming");
+        assert!(calls[0].thought_signature.is_none());
+    }
+
+    #[test]
+    fn test_parse_anthropic_multiple_tool_calls() {
+        let response = json!({
+            "content": [
+                {
+                    "type": "text",
+                    "text": "I'll check both for you."
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_01",
+                    "name": "search_web",
+                    "input": {"query": "weather"}
+                },
+                {
+                    "type": "tool_use",
+                    "id": "toolu_02",
+                    "name": "get_time",
+                    "input": {}
+                }
+            ]
+        });
+
+        let calls = parse_anthropic_tool_calls(&response, None);
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].id, "toolu_01");
+        assert_eq!(calls[0].tool_name, "search_web");
+        assert_eq!(calls[1].id, "toolu_02");
+        assert_eq!(calls[1].tool_name, "get_time");
+    }
+
+    #[test]
+    fn test_parse_anthropic_text_blocks_ignored() {
+        let response = json!({
+            "content": [
+                {"type": "text", "text": "Let me search that."},
+                {
+                    "type": "tool_use",
+                    "id": "toolu_01",
+                    "name": "search_web",
+                    "input": {"query": "test"}
+                }
+            ]
+        });
+
+        let calls = parse_anthropic_tool_calls(&response, None);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].tool_name, "search_web");
+    }
+
+    #[test]
+    fn test_parse_anthropic_no_tool_calls() {
+        let response = json!({
+            "content": [
+                {"type": "text", "text": "Hello world"}
+            ]
+        });
+
+        let calls = parse_anthropic_tool_calls(&response, None);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_parse_anthropic_empty_response() {
+        let calls = parse_anthropic_tool_calls(&json!({}), None);
+        assert!(calls.is_empty());
+    }
+
+    #[test]
+    fn test_parse_anthropic_dot_separated_name() {
+        let response = json!({
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_01",
+                "name": "web-search.search_web",
+                "input": {"query": "test"}
+            }]
+        });
+
+        let calls = parse_anthropic_tool_calls(&response, None);
+        assert_eq!(calls[0].skill_name, "web-search");
+        assert_eq!(calls[0].tool_name, "search_web");
+    }
+
+    #[test]
+    fn test_parse_anthropic_activate_skill() {
+        let response = json!({
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_01",
+                "name": "activate_skill",
+                "input": {"skill_name": "code-execution"}
+            }]
+        });
+
+        let calls = parse_anthropic_tool_calls(&response, None);
+        assert_eq!(calls[0].skill_name, "system");
+        assert_eq!(calls[0].tool_name, "activate_skill");
+    }
+
+    #[test]
+    fn test_parse_anthropic_missing_input() {
+        let response = json!({
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_01",
+                "name": "get_time"
+            }]
+        });
+
+        let calls = parse_anthropic_tool_calls(&response, None);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].arguments, json!({}));
+    }
+
+    // =======================================================================
+    // has_tool_calls
+    // =======================================================================
+
+    #[test]
+    fn test_has_tool_calls_openai_true() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": [{"id": "1", "function": {"name": "test", "arguments": "{}"}}]
+                }
+            }]
+        });
+        assert!(has_tool_calls_openai(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_openai_false_no_calls() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "content": "Hello"
+                }
+            }]
+        });
+        assert!(!has_tool_calls_openai(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_openai_false_empty_array() {
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "tool_calls": []
+                }
+            }]
+        });
+        assert!(!has_tool_calls_openai(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_openai_false_empty() {
+        assert!(!has_tool_calls_openai(&json!({})));
+    }
+
+    #[test]
+    fn test_has_tool_calls_gemini_true() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {"name": "test", "args": {}}
+                    }]
+                }
+            }]
+        });
+        assert!(has_tool_calls_gemini(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_gemini_false_text_only() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "Hello"}]
+                }
+            }]
+        });
+        assert!(!has_tool_calls_gemini(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_gemini_false_empty() {
+        assert!(!has_tool_calls_gemini(&json!({})));
+    }
+
+    #[test]
+    fn test_has_tool_calls_anthropic_true() {
+        let response = json!({
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_01",
+                "name": "test",
+                "input": {}
+            }]
+        });
+        assert!(has_tool_calls_anthropic(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_anthropic_true_mixed() {
+        let response = json!({
+            "content": [
+                {"type": "text", "text": "Let me help."},
+                {"type": "tool_use", "id": "toolu_01", "name": "test", "input": {}}
+            ]
+        });
+        assert!(has_tool_calls_anthropic(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_anthropic_false_text_only() {
+        let response = json!({
+            "content": [{"type": "text", "text": "Hello"}]
+        });
+        assert!(!has_tool_calls_anthropic(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_anthropic_false_empty_content() {
+        let response = json!({"content": []});
+        assert!(!has_tool_calls_anthropic(&response));
+    }
+
+    #[test]
+    fn test_has_tool_calls_anthropic_false_no_content() {
+        assert!(!has_tool_calls_anthropic(&json!({})));
+    }
+
+    // =======================================================================
+    // extract_text
+    // =======================================================================
+
+    #[test]
+    fn test_extract_text_openai_simple() {
+        let response = json!({
+            "choices": [{
+                "message": {"content": "Hello world"}
+            }]
+        });
+        assert_eq!(extract_text_openai(&response), Some("Hello world".to_string()));
+    }
+
+    #[test]
+    fn test_extract_text_openai_null_content() {
+        let response = json!({
+            "choices": [{
+                "message": {"content": null}
+            }]
+        });
+        assert_eq!(extract_text_openai(&response), None);
+    }
+
+    #[test]
+    fn test_extract_text_openai_empty() {
+        assert_eq!(extract_text_openai(&json!({})), None);
+    }
+
+    #[test]
+    fn test_extract_text_gemini_simple() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{"text": "Hello world"}]
+                }
+            }]
+        });
+        assert_eq!(extract_text_gemini(&response), Some("Hello world".to_string()));
+    }
+
+    #[test]
+    fn test_extract_text_gemini_multiple_parts() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [
+                        {"text": "Hello "},
+                        {"text": "world"}
+                    ]
+                }
+            }]
+        });
+        assert_eq!(extract_text_gemini(&response), Some("Hello world".to_string()));
+    }
+
+    #[test]
+    fn test_extract_text_gemini_no_text_parts() {
+        let response = json!({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "functionCall": {"name": "test", "args": {}}
+                    }]
+                }
+            }]
+        });
+        assert_eq!(extract_text_gemini(&response), None);
+    }
+
+    #[test]
+    fn test_extract_text_gemini_empty() {
+        assert_eq!(extract_text_gemini(&json!({})), None);
+    }
+
+    #[test]
+    fn test_extract_text_anthropic_simple() {
+        let response = json!({
+            "content": [{"type": "text", "text": "Hello world"}]
+        });
+        assert_eq!(extract_text_anthropic(&response), Some("Hello world".to_string()));
+    }
+
+    #[test]
+    fn test_extract_text_anthropic_multiple_text_blocks() {
+        let response = json!({
+            "content": [
+                {"type": "text", "text": "Hello "},
+                {"type": "text", "text": "world"}
+            ]
+        });
+        assert_eq!(extract_text_anthropic(&response), Some("Hello world".to_string()));
+    }
+
+    #[test]
+    fn test_extract_text_anthropic_mixed_with_tool_use() {
+        let response = json!({
+            "content": [
+                {"type": "text", "text": "Let me search."},
+                {"type": "tool_use", "id": "toolu_01", "name": "search_web", "input": {}}
+            ]
+        });
+        assert_eq!(extract_text_anthropic(&response), Some("Let me search.".to_string()));
+    }
+
+    #[test]
+    fn test_extract_text_anthropic_only_tool_use() {
+        let response = json!({
+            "content": [{
+                "type": "tool_use",
+                "id": "toolu_01",
+                "name": "search_web",
+                "input": {}
+            }]
+        });
+        assert_eq!(extract_text_anthropic(&response), None);
+    }
+
+    #[test]
+    fn test_extract_text_anthropic_empty() {
+        assert_eq!(extract_text_anthropic(&json!({})), None);
+    }
+
+    #[test]
+    fn test_extract_text_anthropic_empty_content() {
+        let response = json!({"content": []});
+        assert_eq!(extract_text_anthropic(&response), None);
+    }
+
+    // =======================================================================
+    // resolve_tool_call
+    // =======================================================================
+
+    #[test]
+    fn test_resolve_dot_separated() {
+        let (skill, tool) = resolve_tool_call("web-search.search_web", None);
+        assert_eq!(skill, "web-search");
+        assert_eq!(tool, "search_web");
+    }
+
+    #[test]
+    fn test_resolve_activate_skill() {
+        let (skill, tool) = resolve_tool_call("activate_skill", None);
+        assert_eq!(skill, "system");
+        assert_eq!(tool, "activate_skill");
+    }
+
+    #[test]
+    fn test_resolve_from_available_tools() {
+        let tools = vec![simple_tool()];
+        let (skill, tool) = resolve_tool_call("search_web", Some(&tools));
+        assert_eq!(skill, "test-skill");
+        assert_eq!(tool, "search_web");
+    }
+
+    #[test]
+    fn test_resolve_unknown_no_tools() {
+        let (skill, tool) = resolve_tool_call("unknown_tool", None);
+        assert_eq!(skill, "unknown");
+        assert_eq!(tool, "unknown_tool");
+    }
+
+    #[test]
+    fn test_resolve_unknown_not_in_tools() {
+        let tools = vec![simple_tool()];
+        let (skill, tool) = resolve_tool_call("other_tool", Some(&tools));
+        assert_eq!(skill, "unknown");
+        assert_eq!(tool, "other_tool");
+    }
+
+    #[test]
+    fn test_resolve_multiple_dots() {
+        // splitn(2, '.') should split at first dot only
+        let (skill, tool) = resolve_tool_call("a.b.c", None);
+        assert_eq!(skill, "a");
+        assert_eq!(tool, "b.c");
+    }
+
+    // =======================================================================
+    // Cross-provider consistency
+    // =======================================================================
+
+    #[test]
+    fn test_all_providers_produce_same_tool_count() {
+        let tools = vec![simple_tool(), no_params_tool(), multi_param_tool()];
+
+        let openai = tools_to_openai_format(&tools);
+        let gemini = tools_to_gemini_format(&tools);
+        let anthropic = tools_to_anthropic_format(&tools);
+
+        assert_eq!(openai.len(), 3);
+        assert_eq!(gemini["functionDeclarations"].as_array().unwrap().len(), 3);
+        assert_eq!(anthropic.len(), 3);
+    }
+
+    #[test]
+    fn test_all_providers_preserve_tool_names() {
+        let tools = vec![simple_tool()];
+
+        let openai = tools_to_openai_format(&tools);
+        let gemini = tools_to_gemini_format(&tools);
+        let anthropic = tools_to_anthropic_format(&tools);
+
+        assert_eq!(openai[0]["function"]["name"], "search_web");
+        assert_eq!(gemini["functionDeclarations"][0]["name"], "search_web");
+        assert_eq!(anthropic[0]["name"], "search_web");
+    }
+
+    #[test]
+    fn test_all_providers_preserve_required_params() {
+        let tools = vec![simple_tool()];
+
+        let openai = tools_to_openai_format(&tools);
+        let gemini = tools_to_gemini_format(&tools);
+        let anthropic = tools_to_anthropic_format(&tools);
+
+        assert_eq!(openai[0]["function"]["parameters"]["required"], json!(["query"]));
+        assert_eq!(gemini["functionDeclarations"][0]["parameters"]["required"], json!(["query"]));
+        assert_eq!(anthropic[0]["input_schema"]["required"], json!(["query"]));
+    }
+
+    #[test]
+    fn test_all_providers_parse_tool_calls_consistently() {
+        let tools = vec![simple_tool()];
+
+        let openai_resp = json!({
+            "choices": [{"message": {"tool_calls": [{
+                "id": "call_1",
+                "function": {"name": "search_web", "arguments": "{\"query\":\"test\"}"}
+            }]}}]
+        });
+
+        let gemini_resp = json!({
+            "candidates": [{"content": {"parts": [{
+                "functionCall": {"name": "search_web", "args": {"query": "test"}}
+            }]}}]
+        });
+
+        let anthropic_resp = json!({
+            "content": [{"type": "tool_use", "id": "toolu_01", "name": "search_web", "input": {"query": "test"}}]
+        });
+
+        let openai_calls = parse_openai_tool_calls(&openai_resp, Some(&tools));
+        let gemini_calls = parse_gemini_tool_calls(&gemini_resp, Some(&tools));
+        let anthropic_calls = parse_anthropic_tool_calls(&anthropic_resp, Some(&tools));
+
+        // All should produce exactly one call
+        assert_eq!(openai_calls.len(), 1);
+        assert_eq!(gemini_calls.len(), 1);
+        assert_eq!(anthropic_calls.len(), 1);
+
+        // All should resolve to the same skill and tool
+        assert_eq!(openai_calls[0].skill_name, "test-skill");
+        assert_eq!(gemini_calls[0].skill_name, "test-skill");
+        assert_eq!(anthropic_calls[0].skill_name, "test-skill");
+
+        assert_eq!(openai_calls[0].tool_name, "search_web");
+        assert_eq!(gemini_calls[0].tool_name, "search_web");
+        assert_eq!(anthropic_calls[0].tool_name, "search_web");
+
+        // All should have the same arguments
+        assert_eq!(openai_calls[0].arguments["query"], "test");
+        assert_eq!(gemini_calls[0].arguments["query"], "test");
+        assert_eq!(anthropic_calls[0].arguments["query"], "test");
     }
 }

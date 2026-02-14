@@ -301,13 +301,35 @@ pub enum MessageMetadata {
 **Unified Interface:**
 - All providers implement `LlmProvider` trait
 - Use `LlmRequest`/`LlmResponse` types (see [models/llm/client.rs](app/src-tauri/src/models/llm/client.rs))
-- Providers handle translation to OpenAI/Gemini formats internally
+- Providers handle translation to OpenAI/Gemini/Anthropic formats internally
 
 **Providers:**
 - `LocalProvider`: Communicates with llama.cpp server (OpenAI-compatible API)
 - `CloudflareProvider`: Proxies to Gemini via Cloudflare Worker
 
 **Streaming:** Use `Arc<AtomicBool>` for cancellation signal, check in tight loops
+
+**Translation Layer** ([models/llm/providers/translation.rs](app/src-tauri/src/models/llm/providers/translation.rs)):
+Bidirectional translation between internal message/tool types and three provider formats (OpenAI, Gemini, Anthropic).
+
+Per-provider functions:
+- `tools_to_{openai,gemini,anthropic}_format()`: Convert `ToolDefinition[]` to provider JSON
+- `format_messages_for_{openai,gemini,anthropic}()`: Convert `Message[]` to provider message format
+- `parse_{openai,gemini,anthropic}_tool_calls()`: Extract `ToolCall[]` from provider response JSON
+- `has_tool_calls_{openai,gemini,anthropic}()`: Check if response contains tool calls
+- `extract_text_{openai,gemini,anthropic}()`: Extract text content from response
+- `resolve_tool_call()`: Shared — resolves dot-separated names and `activate_skill`
+
+Key format differences:
+| Aspect | OpenAI | Gemini | Anthropic |
+|--------|--------|--------|-----------|
+| Tool def key | `parameters` (wrapped in `function`) | `parameters` (in `functionDeclarations`) | `input_schema` (top-level) |
+| Type casing | lowercase (`string`) | UPPERCASE (`STRING`) | lowercase (`string`) |
+| Tool call location | `tool_calls[]` array on message | `functionCall` parts in content | `tool_use` content blocks |
+| Tool result role | `tool` role message | `functionResponse` part in `user` | `tool_result` content block in `user` |
+| System messages | `system` role | Separate `system_instruction` | Separate `system` param (skipped in messages) |
+| Images | Not in translation layer | `inline_data` with `mime_type` | `image` source with `media_type` |
+| PDFs | Not in translation layer | `inline_data` | `document` source |
 
 ### Skills System
 
