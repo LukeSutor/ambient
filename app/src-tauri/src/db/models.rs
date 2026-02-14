@@ -1,4 +1,5 @@
 use crate::db::core::DbState;
+use crate::events::{emit, MODELS_CHANGED, ModelsChangedEvent};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
@@ -120,6 +121,7 @@ pub fn get_model_by_key(app_handle: &tauri::AppHandle, model_key: &str) -> Resul
 /// Toggle a model's enabled state.
 #[tauri::command]
 pub fn toggle_model(
+    _app_handle: tauri::AppHandle,
     state: tauri::State<DbState>,
     model_key: String,
     enabled: bool,
@@ -141,5 +143,14 @@ pub fn toggle_model(
     }
 
     log::info!("[models] Model '{}' is_enabled set to {}", model_key, enabled);
+
+    // Notify frontend listeners so model lists update in real time
+    let _ = emit(
+        MODELS_CHANGED,
+        ModelsChangedEvent {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        },
+    );
+
     Ok(())
 }

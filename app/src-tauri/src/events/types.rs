@@ -150,3 +150,10 @@ pub struct CloudUsageDecrementedEvent {
   pub model_key: String,
   pub timestamp: String,
 }
+
+pub const MODELS_CHANGED: &str = "models_changed";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct ModelsChangedEvent {
+  pub timestamp: String,
+}

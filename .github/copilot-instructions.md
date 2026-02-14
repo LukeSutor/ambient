@@ -35,7 +35,7 @@ Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + N
 
 **Provider Hierarchy** ([AppProvider.tsx](app/src/lib/providers/AppProvider.tsx)):
 ```
-SettingsProvider → RoleAccessProvider → SetupProvider → WindowsProvider → ConversationProvider
+SettingsProvider → RoleAccessProvider → ModelAccessProvider → SetupProvider → WindowsProvider → ConversationProvider
 ```
 
 **Pattern:** Context + useReducer for all state management
@@ -48,8 +48,9 @@ SettingsProvider → RoleAccessProvider → SetupProvider → WindowsProvider �
 - [ConversationProvider](app/src/lib/conversations/ConversationProvider.tsx): Chat messages, streaming, attachments
 - [SettingsProvider](app/src/lib/settings/SettingsProvider.tsx): User settings, HUD dimensions
 - [WindowsProvider](app/src/lib/windows/WindowsProvider.tsx): Window expand/collapse state
-- [RoleAccessProvider](app/src/lib/role-access/RoleAccessProvider.tsx): Auth state, user info
+- [RoleAccessProvider](app/src/lib/role-access/RoleAccessProvider.tsx): Auth state, user info, Google auth status
 - [SetupProvider](app/src/lib/setup/SetupProvider.tsx): Model download progress
+- [ModelAccessProvider](app/src/lib/model-access/ModelAccessProvider.tsx): Cloud usage, model list, user tier — updates in real time via Tauri events (`cloud_usage_decremented`, `models_changed`, `auth_changed`)
 
 ### Backend Module Organization
 
@@ -77,13 +78,37 @@ module/
 **Location:** [agents/chat/runtime.rs](app/src-tauri/src/agents/chat/runtime.rs)
 
 **Loop Architecture:**
-1. Get conversation history (context-limited based on local vs cloud)
-2. Build `LlmRequest` with system prompt, messages, available tools
-3. Generate response via provider (local or cloud)
-4. If text response → save message and return
-5. If tool calls → execute in parallel, save results as messages, loop continues
-6. Repeat until text response or max iterations reached
-7. Check cancellation signal (`Arc<AtomicBool>`) on each iteration
+1. For cloud models: create a generation session via `/v1/usage/start-turn` (checks rate limit, increments usage once)
+2. Get conversation history (context-limited based on local vs cloud)
+3. Build `LlmRequest` with system prompt, messages, available tools, session token
+4. Generate response via provider (local or cloud)
+5. If text response → save message and return
+6. If tool calls → execute in parallel, save results as messages, loop continues
+7. Repeat until text response or max iterations reached
+8. Check cancellation signal (`Arc<AtomicBool>`) on each iteration
+
+**Session-Based Rate Limiting (Cloud Models):**
+- Before the agentic loop, `create_generation_session(model_key)` calls the Cloudflare Worker's `/v1/usage/start-turn` endpoint
+- This checks the user's daily limit, increments `model_usage`, and creates a `generation_sessions` row with a short-lived session token (10 min TTL, max 50 calls)
+- The session token is attached to every `LlmRequest` in the loop via `.with_session_token()`
+- The Cloudflare Worker validates the session on each `/v1/llm/generate` call — checks ownership, model match, expiry, and call count
+- This means a multi-iteration agentic turn only counts as **one** usage against the daily limit
+- Non-retryable errors: `rate_limit_exceeded`, `model_not_available`, `session_invalid`
+
+### Browser-Use Runtime
+
+**Location:** [agents/browser_use/runtime.rs](app/src-tauri/src/agents/browser_use/runtime.rs)
+
+**Loop Architecture:**
+1. Create persistent WebView
+2. For cloud models: create a generation session (same as chat runtime)
+3. LLM decides on an action (navigate, click, type, etc.)
+4. Execute action and take a DOM snapshot
+5. Return snapshot as tool result (attached to `MessageMetadata`)
+6. Loop until `done` tool is called or max iterations reached
+7. Strip old browser states from context to keep it lean (`strip_old_browser_states`)
+
+**Browser Tools:** `navigate`, `click`, `type_text`, `select_option`, `scroll`, `go_back`, `wait`, `done`
 
 **Progressive Skill Disclosure:**
 - Skills start inactive to reduce context size
@@ -103,7 +128,7 @@ cd app
 pnpm install
 
 # 2. Start Cloudflare Worker (required for cloud models)
-cd cloudflare/workers/llm-completions
+cd cloudflare/workers/ambient-backend
 pnpm run dev
 
 # 3. Start Tauri dev (separate terminal)
@@ -194,14 +219,21 @@ await emit("event_name", { payload: "data" });
 
 **Schema:** Located in [db/core.rs](app/src-tauri/src/db/core.rs) migrations
 
-**Key Tables:**
+**Key Tables (SQLite):**
 - `conversations`: Conversation metadata
 - `conversation_messages`: Messages with `message_type` (text/tool_calls/tool_results) and structured `metadata` JSON
 - `attachments`: File attachments per message
-- `memory_entries` + `memory_entries_vec`: Extracted facts with embeddings
-- `tool_calls`: Tool execution audit log
+- `models`: Registered LLM models with display metadata
+- `memory_entries` + `memory_entries_vec` + `memory_entries_fts`: Extracted facts with embeddings and full-text search
 - `conversation_skills`: Activated skills per conversation
 - `token_usage`: LLM usage tracking (prompt_tokens, completion_tokens, timestamp)
+
+**Key Tables (Supabase - cloud):**
+- `profiles`: User metadata (user_id, tier)
+- `subscriptions`: Stripe subscription state
+- `model_limits`: Per-tier daily limits keyed by model_type (e.g. "fast", "pro")
+- `model_usage`: Daily usage counters per user per model_type (upserted on each turn)
+- `generation_sessions`: Short-lived session tokens for per-turn rate limiting (10 min TTL, max 50 calls)
 
 **Access Pattern:**
 ```rust
@@ -270,11 +302,17 @@ Detailed instructions for the AI agent...
 ### Cloudflare Worker
 **Location:** [cloudflare/workers/ambient-backend/](cloudflare/workers/ambient-backend/)
 
-**Purpose:** Proxy for Gemini API (avoids exposing API keys) and backend for refreshing Google OAuth tokens (holds `GOOGLE_CLIENT_SECRET`).
+**Purpose:** Proxy for Gemini API (avoids exposing API keys), backend for refreshing Google OAuth tokens (holds `GOOGLE_CLIENT_SECRET`), and session-based rate limiting for cloud model usage.
+
+**Endpoints:**
+- `POST /v1/llm/generate` — LLM completion (validates session token if provided, else falls back to per-call rate limiting)
+- `POST /v1/usage/remaining` — Get remaining daily uses for all cloud models
+- `POST /v1/usage/start-turn` — Create a generation session (checks rate limit, increments usage once, returns session token)
+- `POST /v1/auth/google/refresh` — Refresh Google OAuth token
 
 **LLM Completion Request:**
 ```typescript
-POST /
+POST /v1/llm/generate
 Authorization: Bearer <supabase_access_token>
 
 {
@@ -284,7 +322,18 @@ Authorization: Bearer <supabase_access_token>
   systemPrompt?: string,
   jsonSchema?: object,
   tools?: any,
+  sessionToken?: string,  // If present, validates session instead of per-call rate limiting
 }
+```
+
+**Start Turn Request:**
+```typescript
+POST /v1/usage/start-turn
+Authorization: Bearer <supabase_access_token>
+
+{ "modelType": "fast" | "pro" }
+
+// Returns: { session_token, max_calls, expires_at }
 ```
 
 **Google Token Refresh:**

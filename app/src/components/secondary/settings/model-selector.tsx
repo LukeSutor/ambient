@@ -13,10 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useModelAccess } from "@/lib/model-access";
-import type { ModelEntry, CloudModelUsage } from "@/types/models";
+import type { CloudModelUsage, ModelEntry } from "@/types/models";
 import { Crown, Shield, Zap } from "lucide-react";
-import { useEffect, useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 const ICON_MAP: Record<string, React.ElementType> = {
   shield: Shield,
@@ -82,24 +80,10 @@ export function ModelSelector({
   onChange,
   disabled,
 }: ModelSelectorProps) {
-  const [models, setModels] = useState<ModelEntry[]>([]);
-  const { cloudUsage } = useModelAccess();
-
-  const fetchModels = useCallback(async () => {
-    try {
-      const result = await invoke<ModelEntry[]>("get_models");
-      setModels(result);
-    } catch (e) {
-      console.error("Failed to fetch models:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
+  const { enabledModels, cloudUsage } = useModelAccess();
 
   const handleChange = (v: string) => {
-    const model = models.find((m) => m.model === v);
+    const model = enabledModels.find((m) => m.model === v);
 
     if (model?.is_cloud) {
       const usage = cloudUsage[model.model];
@@ -120,7 +104,7 @@ export function ModelSelector({
     >
       <SelectTrigger>
         <SelectValue placeholder="Select model">
-          <SelectedModelDisplay value={value} models={models} />
+          <SelectedModelDisplay value={value} models={enabledModels} />
         </SelectValue>
       </SelectTrigger>
       <SelectContent className="w-96" align="end">
@@ -130,7 +114,7 @@ export function ModelSelector({
             Available Models
           </SelectLabel>
 
-          {models.map((model, index) => {
+          {enabledModels.map((model, index) => {
             const usage = cloudUsage[model.model];
             const isUnlimited = usage?.remaining === -1;
             const isUnavailable = model.is_cloud && usage?.is_available === false;

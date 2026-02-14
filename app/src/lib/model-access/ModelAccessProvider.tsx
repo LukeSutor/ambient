@@ -1,6 +1,6 @@
 "use client";
 
-import type { CloudModelUsage, ModelAccessResponse } from "@/types/models";
+import type { CloudModelUsage, ModelAccessResponse, ModelEntry } from "@/types/models";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
@@ -22,12 +22,14 @@ import type { ModelAccessState } from "./types";
 const initialState: ModelAccessState = {
   userTier: "free",
   cloudUsage: {},
+  models: [],
   isHydrated: false,
 };
 
 type ModelAccessAction =
   | { type: "SET_ACCESS_DATA"; payload: { userTier: "free" | "premium" | "admin"; cloudUsage: Record<string, CloudModelUsage> } }
   | { type: "DECREMENT_REMAINING"; payload: { modelKey: string } }
+  | { type: "SET_MODELS"; payload: { models: ModelEntry[] } }
   | { type: "SET_HYDRATED" };
 
 function modelAccessReducer(
@@ -60,6 +62,9 @@ function modelAccessReducer(
       };
     }
 
+    case "SET_MODELS":
+      return { ...state, models: action.payload.models };
+
     case "SET_HYDRATED":
       return { ...state, isHydrated: true };
 
@@ -76,6 +81,8 @@ interface ModelAccessContextType {
   state: ModelAccessState;
   /** Refresh usage data from the Cloudflare backend. */
   refreshUsage: () => Promise<void>;
+  /** Refresh the model list from the local database. */
+  refreshModels: () => Promise<void>;
 }
 
 const ModelAccessContext = createContext<ModelAccessContextType | undefined>(
@@ -93,6 +100,15 @@ interface ModelAccessProviderProps {
 export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
   const [state, dispatch] = useReducer(modelAccessReducer, initialState);
   const isFetching = useRef(false);
+
+  const refreshModels = useCallback(async () => {
+    try {
+      const models = await invoke<ModelEntry[]>("get_models");
+      dispatch({ type: "SET_MODELS", payload: { models } });
+    } catch (e) {
+      console.error("[ModelAccessProvider] Failed to fetch models:", e);
+    }
+  }, []);
 
   const refreshUsage = useCallback(async () => {
     if (isFetching.current) return;
@@ -119,12 +135,14 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
   }, []);
 
   useEffect(() => {
-    // Initial fetch
+    // Initial fetch — models from local DB + usage from cloud
+    void refreshModels();
     void refreshUsage();
 
-    // Listen for real-time usage updates from the Rust backend
+    // Listen for real-time updates from the Rust backend
     let unlistenUsage: UnlistenFn | undefined;
     let unlistenAuth: UnlistenFn | undefined;
+    let unlistenModels: UnlistenFn | undefined;
 
     const subscribe = async () => {
       unlistenUsage = await listen<{ model_key: string }>(
@@ -141,6 +159,11 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
       unlistenAuth = await listen("auth_changed", () => {
         void refreshUsage();
       });
+
+      // Re-fetch models when visibility is toggled
+      unlistenModels = await listen("models_changed", () => {
+        void refreshModels();
+      });
     };
 
     void subscribe();
@@ -148,11 +171,12 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
     return () => {
       unlistenUsage?.();
       unlistenAuth?.();
+      unlistenModels?.();
     };
-  }, [refreshUsage]);
+  }, [refreshUsage, refreshModels]);
 
   return (
-    <ModelAccessContext.Provider value={{ state, refreshUsage }}>
+    <ModelAccessContext.Provider value={{ state, refreshUsage, refreshModels }}>
       {children}
     </ModelAccessContext.Provider>
   );

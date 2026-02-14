@@ -10,10 +10,8 @@ import {
 import { InputGroupButton } from "@/components/ui/input-group";
 import { useModelAccess } from "@/lib/model-access";
 import { useSettings } from "@/lib/settings";
-import type { ModelEntry } from "@/types/models";
 import { ChevronDown } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 interface ModelSelectorProps {
   onOpenChange: (open: boolean) => void;
@@ -23,21 +21,7 @@ interface ModelSelectorProps {
 export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   const { settings, setModelSelection } = useSettings();
   const modelSelection = settings?.model_selection ?? "qwen3vl-2b";
-  const [models, setModels] = useState<ModelEntry[]>([]);
-  const { cloudUsage } = useModelAccess();
-
-  const fetchModels = useCallback(async () => {
-    try {
-      const result = await invoke<ModelEntry[]>("get_models");
-      setModels(result);
-    } catch (e) {
-      console.error("Failed to fetch models:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
+  const { enabledModels, cloudUsage } = useModelAccess();
 
   const handleModelSelectionChange = useCallback(
     async (modelKey: string) => {
@@ -51,9 +35,9 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   );
 
   const currentLabel = useMemo(() => {
-    const model = models.find((m) => m.model === modelSelection);
+    const model = enabledModels.find((m) => m.model === modelSelection);
     return model?.display_name ?? "Local";
-  }, [modelSelection, models]);
+  }, [modelSelection, enabledModels]);
 
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
@@ -75,7 +59,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
         className="min-w-48 bg-white/60"
       >
         <DropdownMenuGroup>
-          {models.filter((m) => m.is_enabled).map((model) => {
+          {enabledModels.map((model) => {
             const usage = model.is_cloud ? cloudUsage[model.model] : undefined;
             const isUnlimited = usage?.remaining === -1;
             const isUnavailable = usage?.is_available === false;

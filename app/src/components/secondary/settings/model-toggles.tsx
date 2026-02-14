@@ -1,10 +1,10 @@
 "use client";
 
 import { Switch } from "@/components/ui/switch";
-import type { ModelEntry } from "@/types/models";
+import { useModelAccess } from "@/lib/model-access";
 import { Crown, Shield, Zap } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -16,35 +16,21 @@ const ICON_MAP: Record<string, React.ElementType> = {
 /**
  * ModelToggles component displays all registered models with toggle
  * switches to show/hide them in the HUD input bar model selector.
+ *
+ * Uses the centralized ModelAccessProvider for the model list.
+ * Toggling a model emits a `models_changed` event from Rust,
+ * which the provider listens to for real-time updates.
  */
 export function ModelToggles() {
-  const [models, setModels] = useState<ModelEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        const result = await invoke<ModelEntry[]>("get_models");
-        setModels(result);
-      } catch (error) {
-        console.error("[ModelToggles] Failed to load models:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void loadModels();
-  }, []);
+  const { models } = useModelAccess();
 
   const handleToggle = useCallback(
     async (modelKey: string, currentEnabled: boolean) => {
       const newEnabled = !currentEnabled;
       try {
         await invoke("toggle_model", { modelKey, enabled: newEnabled });
-        setModels((prev) =>
-          prev.map((m) =>
-            m.model === modelKey ? { ...m, is_enabled: newEnabled } : m,
-          ),
-        );
+        // No local state update needed — the Rust command emits
+        // `models_changed`, which the provider handles automatically.
       } catch (error) {
         console.error(`[ModelToggles] Failed to toggle model ${modelKey}:`, error);
         toast.error("Failed to toggle model");
@@ -53,7 +39,7 @@ export function ModelToggles() {
     [],
   );
 
-  if (loading) {
+  if (models.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
         Loading models...
@@ -62,7 +48,7 @@ export function ModelToggles() {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col divide-y divide-border">
       {models.map((model) => {
         const IconComponent = ICON_MAP[model.icon] || Shield;
         return (
