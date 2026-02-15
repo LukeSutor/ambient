@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + Next.js 15). It features an agentic runtime with tool-calling capabilities, local inference via llama.cpp, optional cloud fallback to Gemini, and browser-use capabilities. The architecture prioritizes privacy, extensibility, and reliability.
+Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + Next.js 15). It features an agentic runtime with tool-calling capabilities, local inference via llama.cpp, optional cloud fallback to Gemini, BYOK (Bring Your Own Key) support for OpenAI/Gemini/Anthropic-compatible APIs, and browser-use capabilities. The architecture prioritizes privacy, extensibility, and reliability.
 
 **Tech Stack:**
 - Backend: Rust with Tauri 2.x
 - Frontend: Next.js 15 (SSG mode), React 19, TypeScript
 - UI: shadcn/ui (Radix primitives) + Tailwind CSS v4
 - Local LLM: llama.cpp server (ships with Qwen3VL-2B)
-- Cloud LLM: Gemini via Cloudflare Worker
+- Cloud LLM: Gemini via Cloudflare Worker + BYOK (OpenAI, Gemini, Anthropic compatible)
 - Database: SQLCipher (encrypted SQLite) with rusqlite + sqlite-vec for embeddings
 - State: React Context + useReducer pattern
 
@@ -331,8 +331,18 @@ pub enum MessageMetadata {
 - Frontend form: react-hook-form + zod + shadcn Field in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
 
 **Model Display:**
-- Provider images at `public/providers/{provider}.png`, local uses `public/logo.png`
+- Provider images at `public/providers/{provider}.webp` (16 providers), local uses `public/logo.png`
+- Supported providers: `openai`, `google`, `anthropic`, `deepseek`, `xai`, `zai`, `minimax`, `qwen`, `nvidia`, `meta`, `mistral`, `microsoft`, `huggingface`, `openrouter`, `groq`, `unknown`
+- Provider display labels defined in `PROVIDER_LABELS` record in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx) (e.g. `xai` → "xAI", `huggingface` → "HuggingFace")
 - Token usage chart uses rotating color palette instead of per-model colors
+
+**Model Dialog (Frontend):**
+- Location: [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
+- Form: react-hook-form + zod validation (`modelFormSchema`)
+- Dual mode: add (new model) or edit (existing `ModelEntry`). `useEffect` with `reset(defaultValues)` auto-populates form when switching modes.
+- Layout: Request Format + Provider in `grid grid-cols-2` side-by-side. Provider uses Radix `Select` dropdown with provider images.
+- Dialog constraints: `max-h-[80vh]` with `overflow-y-auto` on form body for scroll support
+- Delete: inline destructive button in edit mode, auto-switches model selection via `delete_custom_model`
 
 **Streaming:** Use `Arc<AtomicBool>` for cancellation signal, check in tight loops
 
@@ -546,3 +556,11 @@ Contains training experiments and scripts for fine-tuning vision-language models
 2. Implement handler in [skills/builtin/](app/src-tauri/src/skills/builtin/)
 3. Register in [registry.rs](app/src-tauri/src/skills/registry.rs)
 4. Handle tool execution in [executor.rs](app/src-tauri/src/skills/executor.rs)
+
+**Adding a BYOK Provider:**
+1. Add provider image to `public/providers/{provider}.webp`
+2. Add provider key to `PROVIDERS` array + `PROVIDER_LABELS` record in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
+3. If new request format needed: implement `LlmProvider` trait in `src-tauri/src/models/llm/providers/`
+4. Add translation functions in [translation.rs](app/src-tauri/src/models/llm/providers/translation.rs)
+5. Add routing branch in [client.rs](app/src-tauri/src/models/llm/client.rs) `generate()` match
+6. Validate format in `add_custom_model` / `update_custom_model` in [models.rs](app/src-tauri/src/db/models.rs)
