@@ -95,38 +95,6 @@ pub async fn add_token_usage(
   Ok(())
 }
 
-/// Get total token usage for a model by its integer primary key.
-pub async fn get_total_token_usage(
-  app_handle: AppHandle,
-  model_id: i64,
-) -> Result<(u64, u64), String> {
-  let state = app_handle.state::<DbState>();
-  let db_guard = state.0.lock().unwrap();
-  let conn = db_guard
-    .as_ref()
-    .ok_or("Database connection not available")?;
-
-  let mut stmt = conn
-    .prepare(
-      "SELECT SUM(prompt_tokens), SUM(completion_tokens)
-         FROM token_usage
-         WHERE model = ?1",
-    )
-    .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-  let (total_prompt_tokens, total_completion_tokens): (Option<u64>, Option<u64>) =
-    stmt
-      .query_row(params![model_id], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-      })
-      .map_err(|e| format!("Failed to query token usage: {}", e))?;
-
-  Ok((
-    total_prompt_tokens.unwrap_or(0),
-    total_completion_tokens.unwrap_or(0),
-  ))
-}
-
 /// Get total token usage across all local models (is_cloud = 0).
 /// Used for privacy-savings calculations.
 pub async fn get_total_local_token_usage(

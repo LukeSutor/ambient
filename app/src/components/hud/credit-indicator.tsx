@@ -58,8 +58,6 @@ export function CreditIndicator() {
 
   if (!shouldShow) return <div className="ml-auto" />;
 
-  const displayRemaining = Math.max(0, creditsRemaining);
-
   return (
     <HoverCard openDelay={250} closeDelay={100}>
       <HoverCardTrigger className="ml-auto cursor-auto p-2 ">

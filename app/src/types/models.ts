@@ -30,27 +30,6 @@ provider: string,
 display_name: string, };
 
 /**
- * Global credit usage info for the authenticated user.
- */
-export type CreditUsageInfo = { 
-/**
- * Daily credit limit. -1 means unlimited.
- */
-daily_credit_limit: number, 
-/**
- * Credits consumed today.
- */
-credits_used: number, 
-/**
- * Credits remaining today. -1 means unlimited.
- */
-credits_remaining: number, 
-/**
- * Per-model credit costs keyed by model key (e.g. "gemini-3-flash" → 1.0).
- */
-model_costs: { [key in string]?: number }, };
-
-/**
  * Full credit usage response from the backend.
  */
 export type CreditUsageResponse = { 

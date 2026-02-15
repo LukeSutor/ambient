@@ -14,20 +14,6 @@ pub struct GenerationSession {
     pub credit_cost: f64,
 }
 
-/// Global credit usage info for the authenticated user.
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "models.ts")]
-pub struct CreditUsageInfo {
-    /// Daily credit limit. -1 means unlimited.
-    pub daily_credit_limit: f64,
-    /// Credits consumed today.
-    pub credits_used: f64,
-    /// Credits remaining today. -1 means unlimited.
-    pub credits_remaining: f64,
-    /// Per-model credit costs keyed by model key (e.g. "gemini-3-flash" → 1.0).
-    pub model_costs: HashMap<String, f64>,
-}
-
 /// Full credit usage response from the backend.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
