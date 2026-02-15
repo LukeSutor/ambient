@@ -18,8 +18,8 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Toggle } from "@/components/ui/toggle";
-import type { TimeFilter, TokenUsageQueryResult } from "@/types/token_usage";
 import type { ModelEntry } from "@/types/models";
+import type { TimeFilter, TokenUsageQueryResult } from "@/types/token_usage";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ChartColumn } from "lucide-react";
@@ -156,7 +156,7 @@ export function TokenUsageChart() {
               <Bar
                 key={model}
                 dataKey={model}
-                fill={chartConfig[model]?.color || "gray"}
+                fill={chartConfig[model].color ?? "gray"}
                 radius={4}
               />
             ))}

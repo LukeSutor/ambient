@@ -218,14 +218,10 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
       if (isMounted) {
         try {
-          const settings =
-            await invoke<UserSettings>("load_user_settings");
+          const settings = await invoke<UserSettings>("load_user_settings");
           dispatch({ type: "SET_SETTINGS", payload: settings });
         } catch (error) {
-          console.error(
-            "[SettingsProvider] Failed to reload settings:",
-            error,
-          );
+          console.error("[SettingsProvider] Failed to reload settings:", error);
         }
       }
     };

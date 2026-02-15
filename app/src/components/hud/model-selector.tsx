@@ -10,9 +10,9 @@ import {
 import { InputGroupButton } from "@/components/ui/input-group";
 import { useModelAccess } from "@/lib/model-access";
 import { useSettings } from "@/lib/settings";
+import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useMemo } from "react";
-import { cn } from "@/lib/utils";
 
 interface ModelSelectorProps {
   onOpenChange: (open: boolean) => void;
@@ -22,7 +22,13 @@ interface ModelSelectorProps {
 export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   const { settings, setModelSelection } = useSettings();
   const modelSelection = settings?.model_selection ?? "1";
-  const { enabledModels, canAffordModel, modelCosts, creditsRemaining, dailyCreditLimit } = useModelAccess();
+  const {
+    enabledModels,
+    canAffordModel,
+    modelCosts,
+    creditsRemaining,
+    dailyCreditLimit,
+  } = useModelAccess();
 
   const handleModelSelectionChange = useCallback(
     async (modelId: string) => {
@@ -43,10 +49,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <InputGroupButton
-          variant="ghost"
-          disabled={disabled}
-        >
+        <InputGroupButton variant="ghost" disabled={disabled}>
           {currentLabel}
           <ChevronDown />
         </InputGroupButton>
@@ -60,33 +63,59 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
       >
         <DropdownMenuGroup>
           {enabledModels.map((model) => {
-            const cost = model.is_cloud && model.is_internal ? modelCosts[model.model] : undefined;
+            const cost =
+              model.is_cloud && model.is_internal
+                ? modelCosts[model.model]
+                : undefined;
             const isAffordable = canAffordModel(model.model);
-            const isDisabled = model.is_cloud && model.is_internal && !isAffordable;
+            const isDisabled =
+              model.is_cloud && model.is_internal && !isAffordable;
 
             // Build the subtitle and credits line
             let subtitle: { text: string; credits: string; className: string };
             if (isDisabled) {
-              subtitle = { text: `Needs ${cost} credit${cost !== 1 ? "s" : ""} — not enough remaining`, credits: "", className: "text-xs text-destructive" };
-            } else if (model.is_cloud && model.is_internal && cost !== undefined) {
+              subtitle = {
+                text: `Needs ${cost} credit${cost !== 1 ? "s" : ""} — not enough remaining`,
+                credits: "",
+                className: "text-xs text-destructive",
+              };
+            } else if (
+              model.is_cloud &&
+              model.is_internal &&
+              cost !== undefined
+            ) {
               subtitle = {
                 text: model.short_description,
                 credits: `${cost}x`,
                 className: "text-xs text-muted-foreground",
               };
             } else {
-              subtitle = { text: model.short_description, credits: "", className: "text-xs text-muted-foreground" };
+              subtitle = {
+                text: model.short_description,
+                credits: "",
+                className: "text-xs text-muted-foreground",
+              };
             }
 
             return (
               <DropdownMenuItem
                 key={model.id}
-                onClick={() => !isDisabled && void handleModelSelectionChange(model.id.toString())}
+                onClick={() =>
+                  !isDisabled &&
+                  void handleModelSelectionChange(model.id.toString())
+                }
                 className={`py-1.5 px-2 cursor-pointer flex-col gap-0 items-start hover:bg-white/60 ${isDisabled ? "opacity-50 pointer-events-none" : ""}`}
                 disabled={isDisabled}
               >
-                <span className="font-medium text-sm">{model.display_name}</span>
-                <div className={cn("flex flex-row justify-between w-full", subtitle.className)}>
+                <span className="font-medium text-sm">
+                  {model.display_name}
+                </span>
+                <div
+                  className={cn(
+                    "flex flex-row justify-between w-full",
+                    subtitle.className,
+                  )}
+                >
                   <span>{subtitle.text}</span>
                   <span>{subtitle.credits}</span>
                 </div>

@@ -1,9 +1,9 @@
 "use client";
 
-import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
 import { invokeEmitAuthChanged } from "@/lib/role-access/commands";
+import { invoke } from "@tauri-apps/api/core";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -58,6 +58,7 @@ export function GoogleLoginButton({
         })();
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async cancellation pattern
       if (cancelled) {
         unlistenSuccess();
         return;
@@ -75,8 +76,9 @@ export function GoogleLoginButton({
         );
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async cancellation pattern
       if (cancelled) {
-        unlistenSuccess?.();
+        unlistenSuccess();
         unlistenError();
         return;
       }

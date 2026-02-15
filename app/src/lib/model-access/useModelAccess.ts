@@ -1,7 +1,7 @@
 "use client";
 
-import { useModelAccessContext } from "./ModelAccessProvider";
 import { useMemo } from "react";
+import { useModelAccessContext } from "./ModelAccessProvider";
 
 /**
  * Hook to access credit usage data, the model list, and helper functions.
@@ -50,15 +50,15 @@ export function useModelAccess() {
      */
     canAffordModel: (modelKey: string): boolean => {
       if (state.creditsRemaining === -1) return true; // unlimited
-      const cost = state.modelCosts[modelKey];
-      if (cost === undefined) return true; // local/BYOK — no credit cost
-      return state.creditsRemaining >= cost;
+      if (!(modelKey in state.modelCosts)) return true; // local/BYOK — no credit cost
+      return state.creditsRemaining >= state.modelCosts[modelKey];
     },
     /** Usage as a percentage (0–100). Returns 0 for unlimited users. */
-    usagePercent: state.creditsRemaining === -1
-      ? 0
-      : state.dailyCreditLimit > 0
-        ? Math.round((state.creditsUsed / state.dailyCreditLimit) * 100)
-        : 0,
+    usagePercent:
+      state.creditsRemaining === -1
+        ? 0
+        : state.dailyCreditLimit > 0
+          ? Math.round((state.creditsUsed / state.dailyCreditLimit) * 100)
+          : 0,
   };
 }

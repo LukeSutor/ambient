@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Crown, Sparkles, Zap, Brain, ArrowLeft } from "lucide-react";
+import { ArrowLeft, Brain, Crown, Sparkles, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const PRO_FEATURES = [
@@ -29,7 +29,9 @@ export default function UpgradePage() {
     <div className="max-w-2xl mx-auto py-8">
       {/* Back button */}
       <button
-        onClick={() => router.back()}
+        onClick={() => {
+          router.back();
+        }}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
         type="button"
       >

@@ -11,9 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useModelAccess } from "@/lib/model-access";
+import { cn } from "@/lib/utils";
 import type { ModelEntry } from "@/types/models";
 import { Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
 import Image from "next/image";
 
 /** Resolve a provider image path. Local uses `/logo.png`, everything else
@@ -30,9 +30,17 @@ interface ModelSelectorProps {
   disabled?: boolean;
 }
 
-function ProviderIcon({ model, isPreview }: { model: ModelEntry, isPreview?: boolean }) {
+function ProviderIcon({
+  model,
+  isPreview,
+}: { model: ModelEntry; isPreview?: boolean }) {
   return (
-    <div className={cn("flex items-center justify-center flex-shrink-0", isPreview ? "h-4 w-4" : "h-12 w-12")}>
+    <div
+      className={cn(
+        "flex items-center justify-center flex-shrink-0",
+        isPreview ? "h-4 w-4" : "h-12 w-12",
+      )}
+    >
       <Image
         src={providerImageSrc(model)}
         alt={model.provider}
@@ -55,11 +63,16 @@ function CreditCostBadge({ cost }: { cost?: number }) {
   );
 }
 
-function SelectedModelDisplay({ value, models }: { value: string; models: ModelEntry[] }) {
+function SelectedModelDisplay({
+  value,
+  models,
+}: { value: string; models: ModelEntry[] }) {
   const model = models.find((m) => m.id.toString() === value);
   if (!model) {
     // Show a neutral placeholder while models are loading
-    return <span className="font-medium text-muted-foreground">Loading...</span>;
+    return (
+      <span className="font-medium text-muted-foreground">Loading...</span>
+    );
   }
 
   return (
@@ -81,17 +94,14 @@ export function ModelSelector({
     const model = enabledModels.find((m) => m.id.toString() === v);
 
     // Block if user can't afford this model
-    if (model?.is_cloud && model.is_internal && !canAffordModel(model.model)) return;
+    if (model?.is_cloud && model.is_internal && !canAffordModel(model.model))
+      return;
 
     onChange(v);
   };
 
   return (
-    <Select
-      value={value}
-      onValueChange={handleChange}
-      disabled={disabled}
-    >
+    <Select value={value} onValueChange={handleChange} disabled={disabled}>
       <SelectTrigger>
         <SelectValue placeholder="Select model">
           <SelectedModelDisplay value={value} models={enabledModels} />
@@ -105,9 +115,13 @@ export function ModelSelector({
           </SelectLabel>
 
           {enabledModels.map((model, index) => {
-            const cost = model.is_cloud && model.is_internal ? modelCosts[model.model] : undefined;
+            const cost =
+              model.is_cloud && model.is_internal
+                ? modelCosts[model.model]
+                : undefined;
             const isAffordable = canAffordModel(model.model);
-            const isUnaffordable = model.is_cloud && model.is_internal && !isAffordable;
+            const isUnaffordable =
+              model.is_cloud && model.is_internal && !isAffordable;
             const isVisuallyDisabled = isUnaffordable;
 
             return (
@@ -115,14 +129,16 @@ export function ModelSelector({
                 {index > 0 && <SelectSeparator />}
                 <SelectItem
                   value={model.id.toString()}
-                  className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isVisuallyDisabled ? 'opacity-50' : ''}`}
+                  className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isVisuallyDisabled ? "opacity-50" : ""}`}
                   disabled={isUnaffordable}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
                       <ProviderIcon model={model} />
                       <div className="flex flex-col items-start">
-                        <span className="font-medium">{model.display_name}</span>
+                        <span className="font-medium">
+                          {model.display_name}
+                        </span>
                         <span className="text-xs text-muted-foreground text-left">
                           {model.description}
                         </span>
@@ -130,7 +146,9 @@ export function ModelSelector({
                           <CreditCostBadge cost={cost} />
                         )}
                         {isUnaffordable && (
-                          <span className="text-xs text-destructive font-medium">Not enough credits</span>
+                          <span className="text-xs text-destructive font-medium">
+                            Not enough credits
+                          </span>
                         )}
                       </div>
                     </div>

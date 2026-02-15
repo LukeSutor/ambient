@@ -31,7 +31,12 @@ interface SettingRowProps {
   titleAction?: React.ReactNode;
 }
 
-function SettingRow({ title, description, children, titleAction }: SettingRowProps) {
+function SettingRow({
+  title,
+  description,
+  children,
+  titleAction,
+}: SettingRowProps) {
   return (
     <div className="flex flex-row items-center justify-between p-4">
       <div className="flex flex-col">
@@ -66,7 +71,7 @@ export default function Settings() {
         setGpuDevices(devices);
         setGpuDetectionDone(true);
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.warn("[Settings] GPU detection failed:", error);
         setGpuDetectionDone(true);
       });
@@ -113,7 +118,9 @@ export default function Settings() {
         );
       } catch (restartError) {
         console.error("Failed to restart server:", restartError);
-        toast.error("Setting saved but server restart failed. Please restart the app.");
+        toast.error(
+          "Setting saved but server restart failed. Please restart the app.",
+        );
       }
     } catch (error) {
       console.error("Failed to save GPU acceleration setting:", error);

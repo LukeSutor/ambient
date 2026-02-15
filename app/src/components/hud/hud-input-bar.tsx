@@ -47,10 +47,13 @@ export function HUDInputBar() {
       spacerTimeoutRef.current = null;
     }
 
-    const isOpen = isPlusDropdownOpen || isToolsDropdownOpen || isModelDropdownOpen;
+    const isOpen =
+      isPlusDropdownOpen || isToolsDropdownOpen || isModelDropdownOpen;
     if (!isOpen) {
       // Delay retraction so the dropdown close animation can play
-      spacerTimeoutRef.current = setTimeout(() => setSpacerHeight(0), 150);
+      spacerTimeoutRef.current = setTimeout(() => {
+        setSpacerHeight(0);
+      }, 150);
       return () => {
         if (spacerTimeoutRef.current) {
           clearTimeout(spacerTimeoutRef.current);
@@ -70,7 +73,9 @@ export function HUDInputBar() {
       }
     });
 
-    return () => cancelAnimationFrame(rAF);
+    return () => {
+      cancelAnimationFrame(rAF);
+    };
   }, [isPlusDropdownOpen, isToolsDropdownOpen, isModelDropdownOpen]);
 
   const {
@@ -131,9 +136,17 @@ export function HUDInputBar() {
     // Pre-check: block send if the selected cloud model can't be afforded
     const modelId = settings?.model_selection;
     if (modelId) {
-      const selectedModel = enabledModels.find((m) => m.id.toString() === modelId);
-      if (selectedModel?.is_cloud && selectedModel.is_internal && !canAffordModel(selectedModel.model)) {
-        toast.error("Not enough credits for this model. Try a different model or wait until tomorrow.");
+      const selectedModel = enabledModels.find(
+        (m) => m.id.toString() === modelId,
+      );
+      if (
+        selectedModel?.is_cloud &&
+        selectedModel.is_internal &&
+        !canAffordModel(selectedModel.model)
+      ) {
+        toast.error(
+          "Not enough credits for this model. Try a different model or wait until tomorrow.",
+        );
         return;
       }
     }
@@ -146,7 +159,16 @@ export function HUDInputBar() {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
     }
-  }, [input, isLoading, conversationId, sendMessage, setChatExpanded, settings, canAffordModel, enabledModels]);
+  }, [
+    input,
+    isLoading,
+    conversationId,
+    sendMessage,
+    setChatExpanded,
+    settings,
+    canAffordModel,
+    enabledModels,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -225,10 +247,7 @@ export function HUDInputBar() {
         <AttachmentList />
 
         {/* Textarea wrapper — side padding is drag region, top padding is drag region */}
-        <div
-          data-tauri-drag-region
-          className="px-3 pt-2 select-none"
-        >
+        <div data-tauri-drag-region className="px-3 pt-2 select-none">
           <TextareaAutosize
             data-slot="input-group-control"
             maxRows={4}
@@ -264,9 +283,7 @@ export function HUDInputBar() {
           {isBrowserUseActive && (
             <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
               <Globe className="!h-4 !w-4 text-black" />
-              <p className="mx-1 text-black text-xs font-medium">
-                Browser Use
-              </p>
+              <p className="mx-1 text-black text-xs font-medium">Browser Use</p>
               <Button
                 variant="ghost"
                 className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
@@ -277,7 +294,7 @@ export function HUDInputBar() {
               </Button>
             </div>
           )}
-          
+
           <CreditIndicator />
 
           <ModelSelector
@@ -313,7 +330,6 @@ export function HUDInputBar() {
             </InputGroupButton>
           )}
         </InputGroupAddon>
-
       </InputGroup>
 
       {/* Spacer to expand window when dropdowns are open */}

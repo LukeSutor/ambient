@@ -1,8 +1,8 @@
 "use client";
 
 import type { CreditUsageResponse, ModelEntry } from "@/types/models";
-import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import type React from "react";
 import {
   type ReactNode,
@@ -30,7 +30,16 @@ const initialState: ModelAccessState = {
 };
 
 type ModelAccessAction =
-  | { type: "SET_CREDIT_DATA"; payload: { userTier: "free" | "premium" | "admin"; dailyCreditLimit: number; creditsUsed: number; creditsRemaining: number; modelCosts: Record<string, number> } }
+  | {
+      type: "SET_CREDIT_DATA";
+      payload: {
+        userTier: "free" | "premium" | "admin";
+        dailyCreditLimit: number;
+        creditsUsed: number;
+        creditsRemaining: number;
+        modelCosts: Record<string, number>;
+      };
+    }
   | { type: "DECREMENT_CREDITS"; payload: { creditCost: number } }
   | { type: "SET_MODELS"; payload: { models: ModelEntry[] } }
   | { type: "SET_HYDRATED" };
@@ -114,9 +123,7 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
     isFetching.current = true;
 
     try {
-      const result = await invoke<CreditUsageResponse>(
-        "get_credit_usage",
-      );
+      const result = await invoke<CreditUsageResponse>("get_credit_usage");
       console.log("Fetched credit usage data:", result);
       dispatch({
         type: "SET_CREDIT_DATA",
@@ -125,7 +132,7 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
           dailyCreditLimit: result.daily_credit_limit,
           creditsUsed: result.credits_used,
           creditsRemaining: result.credits_remaining,
-          modelCosts: (result.model_costs ?? {}) as Record<string, number>,
+          modelCosts: result.model_costs as Record<string, number>,
         },
       });
     } catch {

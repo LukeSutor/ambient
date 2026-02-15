@@ -55,7 +55,10 @@ export function ModelVisibilityPopover() {
         if (msg.includes("Cannot disable the last enabled model")) {
           toast.error("At least one model must remain enabled");
         } else {
-          console.error(`[ModelVisibilityPopover] Failed to toggle model ${modelId}:`, error);
+          console.error(
+            `[ModelVisibilityPopover] Failed to toggle model ${modelId}:`,
+            error,
+          );
           toast.error("Failed to toggle model");
         }
       }
@@ -77,19 +80,25 @@ export function ModelVisibilityPopover() {
     <>
       <Popover>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-auto px-1 py-0 text-xs text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto px-1 py-0 text-xs text-muted-foreground"
+          >
             Manage models
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start">
           <PopoverHeader>
-            <PopoverDescription>The checked models will be visible in the model selection dropdowns.</PopoverDescription>
+            <PopoverDescription>
+              The checked models will be visible in the model selection
+              dropdowns.
+            </PopoverDescription>
           </PopoverHeader>
           <div className="flex flex-col gap-3 mt-4">
             {models.map((model) => {
               // Disable checkbox if this is the last enabled model
-              const isLastEnabled =
-                model.is_enabled && enabledCount <= 1;
+              const isLastEnabled = model.is_enabled && enabledCount <= 1;
               return (
                 <Field key={model.id} orientation="horizontal">
                   <Checkbox
@@ -100,13 +109,17 @@ export function ModelVisibilityPopover() {
                       void handleToggle(model.id, model.is_enabled)
                     }
                   />
-                  <Label htmlFor={`model-${model.id}`} className="w-full">{model.display_name}</Label>
+                  <Label htmlFor={`model-${model.id}`} className="w-full">
+                    {model.display_name}
+                  </Label>
                   {!model.is_internal && (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0 shrink-0"
-                      onClick={() => handleEditModel(model)}
+                      onClick={() => {
+                        handleEditModel(model);
+                      }}
                     >
                       <Pencil className="h-3 w-3" />
                     </Button>

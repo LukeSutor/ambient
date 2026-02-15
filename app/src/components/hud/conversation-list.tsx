@@ -153,12 +153,14 @@ export function ConversationList() {
     <ContentContainer isStreaming={isStreaming}>
       <div className="relative w-full h-full overflow-hidden">
         {/* Header — drag region */}
-        <div 
+        <div
           data-tauri-drag-region
           className="flex flex-row justify-between items-center absolute top-0 left-0 right-0 z-10 p-2 select-none cursor-grab active:cursor-grabbing"
         >
           <div className="w-9 h-0" /> {/* Spacer for centered title */}
-          <p className="font-bold text-center pointer-events-none">Chat History</p>
+          <p className="font-bold text-center pointer-events-none">
+            Chat History
+          </p>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

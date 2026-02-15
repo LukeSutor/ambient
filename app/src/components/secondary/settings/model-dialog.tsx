@@ -12,8 +12,8 @@ import {
 import {
   Field,
   FieldContent,
-  FieldError,
   FieldDescription,
+  FieldError,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,11 +116,7 @@ interface ModelDialogProps {
   model?: ModelEntry | null;
 }
 
-export function ModelDialog({
-  open,
-  onOpenChange,
-  model,
-}: ModelDialogProps) {
+export function ModelDialog({ open, onOpenChange, model }: ModelDialogProps) {
   const isEditing = !!model;
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -132,7 +128,8 @@ export function ModelDialog({
             model: model.model,
             api_url: model.api_url ?? "",
             api_key: model.api_key ?? "",
-            request_format: model.request_format as (typeof REQUEST_FORMATS)[number],
+            request_format:
+              model.request_format as (typeof REQUEST_FORMATS)[number],
             provider: model.provider as (typeof PROVIDERS)[number],
             display_name: model.display_name,
           }
@@ -167,7 +164,7 @@ export function ModelDialog({
     async (values: ModelFormValues) => {
       setSubmitting(true);
       try {
-        if (isEditing && model) {
+        if (model) {
           const params: UpdateCustomModelParams = {
             id: model.id,
             model: values.model,
@@ -204,7 +201,7 @@ export function ModelDialog({
         setSubmitting(false);
       }
     },
-    [isEditing, model, onOpenChange, reset],
+    [model, onOpenChange, reset],
   );
 
   const handleDelete = useCallback(async () => {
@@ -226,7 +223,9 @@ export function ModelDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Model" : "Add Custom Model"}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Edit Model" : "Add Custom Model"}
+          </DialogTitle>
           <DialogDescription>
             {isEditing
               ? "Update your custom model configuration."
@@ -234,7 +233,12 @@ export function ModelDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 overflow-y-auto pr-1 overflow-x-hidden">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(onSubmit)(e);
+          }}
+          className="flex flex-col gap-4 overflow-y-auto pr-1 overflow-x-hidden"
+        >
           {/* Model ID */}
           <Field data-invalid={!!errors.model}>
             <FieldContent>
@@ -279,7 +283,8 @@ export function ModelDialog({
                 {...register("api_key")}
               />
               <FieldDescription>
-                Optional for localhost models. Stored encrypted in your local database.
+                Optional for localhost models. Stored encrypted in your local
+                database.
               </FieldDescription>
               <FieldError errors={[errors.api_key]} />
             </FieldContent>
@@ -378,7 +383,9 @@ export function ModelDialog({
                 type="button"
                 variant="destructive"
                 size="sm"
-                onClick={handleDelete}
+                onClick={() => {
+                  void handleDelete();
+                }}
                 disabled={deleting || submitting}
               >
                 {deleting ? (
@@ -393,13 +400,17 @@ export function ModelDialog({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  onOpenChange(false);
+                }}
                 disabled={submitting || deleting}
               >
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting || deleting}>
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 {isEditing ? "Save" : "Add Model"}
               </Button>
             </div>

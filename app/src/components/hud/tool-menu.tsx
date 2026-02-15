@@ -9,12 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
-import {
-  Bot,
-  Globe,
-  SquareDashedMousePointer,
-  Wrench,
-} from "lucide-react";
+import { Bot, Globe, SquareDashedMousePointer, Wrench } from "lucide-react";
 import { useCallback } from "react";
 
 interface ToolMenuProps {

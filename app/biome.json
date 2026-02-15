@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["src/types/**"]
+    "ignore": ["src/types/**", "src/components/ui/**"]
   },
   "formatter": {
     "enabled": true,
@@ -43,6 +43,8 @@
               "useSettingsContext",
               "useSetupContext",
               "useRoleAccessContext",
+              "useModelAccessContext",
+              "useWindowsContext",
               "useSidebar",
               "useConversationContext"
             ]

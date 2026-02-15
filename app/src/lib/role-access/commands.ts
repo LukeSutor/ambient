@@ -26,7 +26,8 @@ const ERROR_MESSAGES: Record<AuthErrorResponse["code"], string> = {
   rate_limited: "Too many attempts.",
   o_auth_error: "Sign-in with Google failed. Please try again.",
   session_expired: "Your session has expired. Please sign in again.",
-  google_refresh_token_missing: "Authorization expired. Please re-authenticate with Google.",
+  google_refresh_token_missing:
+    "Authorization expired. Please re-authenticate with Google.",
   invalid_request: "Invalid request. Please check your input and try again.",
   server_error: "A server error occurred. Please try again later.",
   storage_error: "Failed to save your session. Please try again.",

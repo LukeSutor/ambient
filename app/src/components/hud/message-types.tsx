@@ -591,25 +591,25 @@ function getFriendlyToolMessage(call: MessageMetadata): FriendlyToolMessage {
         loadingPrefix: "Navigating",
         finishedPrefix: "Navigated",
         suffix: `to ${args.url}`,
-      }
+      };
     case "browser.click":
       return {
         loadingPrefix: "Clicking",
         finishedPrefix: "Clicked",
-        suffix: `on element`,
-      }
+        suffix: "on element",
+      };
     case "browser.type_text":
       return {
         loadingPrefix: "Typing",
         finishedPrefix: "Typed",
         suffix: `text "${args.text}"`,
-      }
+      };
     case "browser.select_option":
       return {
         loadingPrefix: "Selecting",
         finishedPrefix: "Selected",
-        suffix: `dropdown option`,
-    }
+        suffix: "dropdown option",
+      };
     case "browser.scroll":
       return {
         loadingPrefix: "Scrolling",
