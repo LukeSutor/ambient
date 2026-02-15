@@ -107,7 +107,6 @@ pub async fn toggle_model(
     state: tauri::State<'_, DbState>,
     model_id: i64,
     enabled: bool,
-    allowed_model_ids: Vec<i64>,
 ) -> Result<Option<String>, String> {
     let fallback_id = {
         let db_guard = state.0.lock().unwrap();
@@ -115,44 +114,26 @@ pub async fn toggle_model(
             .as_ref()
             .ok_or("Database connection not available")?;
 
-        // If disabling, ensure at least one other *allowed* model stays enabled.
+        // When disabling, ensure at least one model stays enabled.
         if !enabled {
-            if allowed_model_ids.is_empty() {
-                return Err("Cannot disable the last enabled model".to_string());
-            }
+            let enabled_count: i32 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM models WHERE is_enabled = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(|e| format!("Failed to count enabled models: {}", e))?;
 
-            let placeholders: String = allowed_model_ids
-                .iter()
-                .enumerate()
-                .map(|(i, _)| format!("?{}", i + 1))
-                .collect::<Vec<_>>()
-                .join(",");
+            // If this is the only enabled model, block the toggle.
+            let is_currently_enabled: bool = conn
+                .query_row(
+                    "SELECT is_enabled FROM models WHERE id = ?1",
+                    rusqlite::params![model_id],
+                    |row| row.get::<_, bool>(0),
+                )
+                .map_err(|e| format!("Model id {} not found: {}", model_id, e))?;
 
-            let query = format!(
-                "SELECT COUNT(*) FROM models WHERE is_enabled = 1 AND id IN ({})",
-                placeholders,
-            );
-
-            let mut stmt = conn.prepare(&query)
-                .map_err(|e| format!("Failed to prepare count query: {}", e))?;
-
-            let params: Vec<&dyn rusqlite::types::ToSql> = allowed_model_ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::types::ToSql)
-                .collect();
-
-            let allowed_enabled_count: i32 = stmt
-                .query_row(params.as_slice(), |row| row.get(0))
-                .map_err(|e| format!("Failed to count enabled allowed models: {}", e))?;
-
-            let is_allowed = allowed_model_ids.contains(&model_id);
-            let would_remain = if is_allowed {
-                allowed_enabled_count - 1
-            } else {
-                allowed_enabled_count
-            };
-
-            if would_remain < 1 {
+            if is_currently_enabled && enabled_count <= 1 {
                 return Err("Cannot disable the last enabled model".to_string());
             }
         }
@@ -170,44 +151,14 @@ pub async fn toggle_model(
 
         log::info!("[models] Model id {} is_enabled set to {}", model_id, enabled);
 
-        // If disabling, find a fallback from allowed models only
-        if !enabled && !allowed_model_ids.is_empty() {
-            let placeholders: String = allowed_model_ids
-                .iter()
-                .enumerate()
-                .map(|(i, _)| format!("?{}", i + 2)) // +2 because ?1 is model_id
-                .collect::<Vec<_>>()
-                .join(",");
-
-            let query = format!(
-                "SELECT id FROM models WHERE is_enabled = 1 AND id != ?1 AND id IN ({}) ORDER BY is_cloud ASC, id ASC LIMIT 1",
-                placeholders,
-            );
-
-            let mut stmt = conn.prepare(&query)
-                .map_err(|e| format!("Failed to prepare fallback query: {}", e))?;
-
-            let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::with_capacity(1 + allowed_model_ids.len());
-            params.push(Box::new(model_id));
-            for id in &allowed_model_ids {
-                params.push(Box::new(*id));
-            }
-            let params_ref: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-
-            let fallback: Option<i64> = stmt
-                .query_row(params_ref.as_slice(), |row| row.get(0))
-                .ok();
-            fallback
-        } else if !enabled {
-            // No allowed_model_ids provided — fall back to any enabled model
-            let fallback: Option<i64> = conn
-                .query_row(
-                    "SELECT id FROM models WHERE is_enabled = 1 AND id != ?1 ORDER BY is_cloud ASC, id ASC LIMIT 1",
-                    rusqlite::params![model_id],
-                    |row| row.get(0),
-                )
-                .ok();
-            fallback
+        // If disabling, find a fallback (prefer local models, then lowest id)
+        if !enabled {
+            conn.query_row(
+                "SELECT id FROM models WHERE is_enabled = 1 AND id != ?1 ORDER BY is_cloud ASC, id ASC LIMIT 1",
+                rusqlite::params![model_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .ok()
         } else {
             None
         }

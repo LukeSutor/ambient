@@ -277,13 +277,13 @@ export function HUDInputBar() {
               </Button>
             </div>
           )}
+          
+          <CreditIndicator />
 
           <ModelSelector
             onOpenChange={setIsModelDropdownOpen}
             disabled={isLoading}
           />
-
-          <CreditIndicator />
 
           {isStreaming ? (
             <InputGroupButton

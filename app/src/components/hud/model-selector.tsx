@@ -12,6 +12,7 @@ import { useModelAccess } from "@/lib/model-access";
 import { useSettings } from "@/lib/settings";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useMemo } from "react";
+import { cn } from "@/lib/utils";
 
 interface ModelSelectorProps {
   onOpenChange: (open: boolean) => void;
@@ -43,7 +44,6 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
     <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <InputGroupButton
-          className="ml-auto"
           variant="ghost"
           disabled={disabled}
         >
@@ -64,28 +64,32 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
             const isAffordable = canAffordModel(model.model);
             const isDisabled = model.is_cloud && model.is_internal && !isAffordable;
 
-            // Build the subtitle line
-            let subtitle: { text: string; className: string };
+            // Build the subtitle and credits line
+            let subtitle: { text: string; credits: string; className: string };
             if (isDisabled) {
-              subtitle = { text: `Needs ${cost} credit${cost !== 1 ? "s" : ""} — not enough remaining`, className: "text-xs text-destructive" };
+              subtitle = { text: `Needs ${cost} credit${cost !== 1 ? "s" : ""} — not enough remaining`, credits: "", className: "text-xs text-destructive" };
             } else if (model.is_cloud && model.is_internal && cost !== undefined) {
               subtitle = {
-                text: `${model.short_description} · ${cost} credit${cost !== 1 ? "s" : ""}`,
+                text: model.short_description,
+                credits: `${cost}x`,
                 className: "text-xs text-muted-foreground",
               };
             } else {
-              subtitle = { text: model.short_description, className: "text-xs text-muted-foreground" };
+              subtitle = { text: model.short_description, credits: "", className: "text-xs text-muted-foreground" };
             }
 
             return (
               <DropdownMenuItem
                 key={model.id}
                 onClick={() => !isDisabled && void handleModelSelectionChange(model.id.toString())}
-                className={`py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60 ${isDisabled ? "opacity-50 pointer-events-none" : ""}`}
+                className={`py-1.5 px-2 cursor-pointer flex-col gap-0 items-start hover:bg-white/60 ${isDisabled ? "opacity-50 pointer-events-none" : ""}`}
                 disabled={isDisabled}
               >
                 <span className="font-medium text-sm">{model.display_name}</span>
-                <span className={subtitle.className}>{subtitle.text}</span>
+                <div className={cn("flex flex-row justify-between w-full", subtitle.className)}>
+                  <span>{subtitle.text}</span>
+                  <span>{subtitle.credits}</span>
+                </div>
               </DropdownMenuItem>
             );
           })}

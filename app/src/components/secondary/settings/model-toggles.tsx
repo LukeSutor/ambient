@@ -36,12 +36,6 @@ export function ModelVisibilityPopover() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ModelEntry | null>(null);
 
-  /** All model ids — all models are accessible to all users with the credit system. */
-  const allowedModelIds = useMemo(
-    () => models.map((m) => m.id),
-    [models],
-  );
-
   /** Number of enabled models. */
   const enabledCount = useMemo(
     () => models.filter((m) => m.is_enabled).length,
@@ -55,7 +49,6 @@ export function ModelVisibilityPopover() {
         await invoke<string | null>("toggle_model", {
           modelId,
           enabled: newEnabled,
-          allowedModelIds,
         });
       } catch (error) {
         const msg = String(error);
@@ -67,7 +60,7 @@ export function ModelVisibilityPopover() {
         }
       }
     },
-    [allowedModelIds],
+    [],
   );
 
   const handleAddModel = useCallback(() => {
