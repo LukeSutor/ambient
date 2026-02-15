@@ -2,6 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -32,7 +40,8 @@ import type {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, Trash2 } from "lucide-react";
-import { useCallback, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -82,6 +91,13 @@ const modelFormSchema = z.object({
 
 type ModelFormValues = z.infer<typeof modelFormSchema>;
 
+/** Provider item for the combobox. */
+type ProviderItem = {
+  label: string;
+  value: (typeof PROVIDERS)[number];
+  image: string;
+};
+
 // ── Props ──────────────────────────────────────────────────────────
 interface ModelDialogProps {
   open: boolean;
@@ -99,6 +115,38 @@ export function ModelDialog({
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const providerItems: ProviderItem[] = useMemo(
+    () =>
+      PROVIDERS.map((p) => ({
+        label: p.charAt(0).toUpperCase() + p.slice(1),
+        value: p.toLowerCase() as (typeof PROVIDERS)[number],
+        image: p === "unknown" ? "/logo.png" : `/providers/${p}.webp`,
+      })),
+    [],
+  );
+
+  const defaultValues: ModelFormValues = useMemo(
+    () =>
+      model
+        ? {
+            model: model.model,
+            api_url: model.api_url ?? "",
+            api_key: model.api_key ?? "",
+            request_format: model.request_format as (typeof REQUEST_FORMATS)[number],
+            provider: model.provider as (typeof PROVIDERS)[number],
+            display_name: model.display_name,
+          }
+        : {
+            model: "",
+            api_url: "",
+            api_key: "",
+            request_format: "openai",
+            provider: "openai",
+            display_name: "",
+          },
+    [model],
+  );
+
   const {
     register,
     handleSubmit,
@@ -107,24 +155,13 @@ export function ModelDialog({
     formState: { errors },
   } = useForm<ModelFormValues>({
     resolver: zodResolver(modelFormSchema),
-    defaultValues: model
-      ? {
-          model: model.model,
-          api_url: model.api_url ?? "",
-          api_key: model.api_key ?? "",
-          request_format: model.request_format as (typeof REQUEST_FORMATS)[number],
-          provider: model.provider as (typeof PROVIDERS)[number],
-          display_name: model.display_name,
-        }
-      : {
-          model: "",
-          api_url: "",
-          api_key: "",
-          request_format: "openai",
-          provider: "openai",
-          display_name: "",
-        },
+    defaultValues,
   });
+
+  // Reset form values when the model prop changes (e.g. switching from add → edit or between models)
+  useEffect(() => {
+    reset(defaultValues);
+  }, [defaultValues, reset]);
 
   const onSubmit = useCallback(
     async (values: ModelFormValues) => {
@@ -187,7 +224,7 @@ export function ModelDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Model" : "Add Custom Model"}</DialogTitle>
           <DialogDescription>
@@ -197,7 +234,7 @@ export function ModelDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 overflow-y-auto pr-1 overflow-x-hidden">
           {/* Model ID */}
           <Field data-invalid={!!errors.model}>
             <FieldContent>
@@ -248,61 +285,73 @@ export function ModelDialog({
             </FieldContent>
           </Field>
 
-          {/* Request Format */}
-          <Field data-invalid={!!errors.request_format}>
-            <FieldContent>
-              <Label>Request Format</Label>
-              <Controller
-                control={control}
-                name="request_format"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="gemini">Gemini</SelectItem>
-                      <SelectItem value="anthropic">Anthropic</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              <FieldDescription>
-                Determines how requests are formatted. Most providers use OpenAI-compatible format.
-              </FieldDescription>
-              <FieldError errors={[errors.request_format]} />
-            </FieldContent>
-          </Field>
+          {/* Request Format + Provider (side by side) */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Request Format */}
+            <Field data-invalid={!!errors.request_format}>
+              <FieldContent>
+                <Label>Request Format</Label>
+                <Controller
+                  control={control}
+                  name="request_format"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="gemini">Gemini</SelectItem>
+                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldError errors={[errors.request_format]} />
+              </FieldContent>
+            </Field>
 
-          {/* Provider (for icon) */}
-          <Field data-invalid={!!errors.provider}>
-            <FieldContent>
-              <Label>Provider</Label>
-              <Controller
-                control={control}
-                name="provider"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROVIDERS.map((p) => (
-                        <SelectItem key={p} value={p} className="capitalize">
-                          {p.charAt(0).toUpperCase() + p.slice(1)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              <FieldDescription>
-                Used for the provider icon in the model selector.
-              </FieldDescription>
-              <FieldError errors={[errors.provider]} />
-            </FieldContent>
-          </Field>
+            {/* Provider (combobox with images) */}
+            <Field data-invalid={!!errors.provider}>
+              <FieldContent>
+                <Label>Provider</Label>
+                <Controller
+                  control={control}
+                  name="provider"
+                  render={({ field }) => (
+                    <Combobox
+                      items={providerItems}
+                      itemToStringValue={(item) => item.label}
+                      value={providerItems.find((p) => p.value === field.value) ?? null}
+                      onValueChange={(val) => {
+                        field.onChange(val?.value ?? "unknown");
+                      }}
+                    >
+                      <ComboboxInput placeholder="Search provider..." />
+                      <ComboboxContent>
+                        <ComboboxEmpty>No providers found.</ComboboxEmpty>
+                        <ComboboxList>
+                          {(item) => (
+                            <ComboboxItem key={item.value} value={item}>
+                              <Image
+                                src={item.image}
+                                alt={item.label}
+                                width={20}
+                                height={20}
+                                className="rounded-sm"
+                              />
+                              {item.label}
+                            </ComboboxItem>
+                          )}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+                  )}
+                />
+                <FieldError errors={[errors.provider]} />
+              </FieldContent>
+            </Field>
+          </div>
 
           {/* Display Name */}
           <Field data-invalid={!!errors.display_name}>

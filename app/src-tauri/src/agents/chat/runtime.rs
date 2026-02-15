@@ -122,6 +122,9 @@ pub struct AgentRuntime {
     /// Whether using local model (vs cloud).
     is_local: bool,
 
+    /// Whether this is a built-in (internal) model vs a user-added BYOK model.
+    is_internal: bool,
+
     /// The selected model's API identifier (e.g. "gemini-3-flash").
     model_key: String,
 
@@ -161,11 +164,11 @@ impl AgentRuntime {
 
         let model_selection = settings.model_selection.as_str();
         let model_id: i64 = model_selection.parse().unwrap_or(1);
-        let (is_local, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
-            Ok(entry) => (!entry.is_cloud, entry.model),
+        let (is_local, is_internal, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
+            Ok(entry) => (!entry.is_cloud, entry.is_internal, entry.model),
             Err(e) => {
                 log::warn!("[agent] Could not look up model id {}: {}. Defaulting to local.", model_id, e);
-                (true, "qwen3vl-2b".to_string())
+                (true, true, "qwen3vl-2b".to_string())
             }
         };
 
@@ -189,6 +192,7 @@ impl AgentRuntime {
             assistant_message_id,
             config,
             is_local,
+            is_internal,
             model_key,
             session_token: None,
             active_skills,
@@ -218,10 +222,11 @@ impl AgentRuntime {
         // Emit memory save event
         self.emit_memory_save_event(&user_message).await?;
 
-        // For cloud models, create a generation session before entering the loop.
+        // For internal cloud models, create a generation session before entering the loop.
         // This checks the rate limit and increments usage ONCE for the entire turn.
         // All subsequent LLM calls in the loop use the session token.
-        if !self.is_local {
+        // BYOK models (is_internal=false) use the user's own API key and don't need a session.
+        if !self.is_local && self.is_internal {
             match create_generation_session(&self.model_key).await {
                 Ok(session) => {
                     self.session_token = Some(session.session_token);

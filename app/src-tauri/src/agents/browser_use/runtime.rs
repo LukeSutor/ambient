@@ -43,6 +43,8 @@ pub struct BrowserUseRuntime {
     config: BrowserUseConfig,
     model_key: String,
     is_local: bool,
+    /// Whether this is a built-in (internal) model vs a user-added BYOK model.
+    is_internal: bool,
     session_token: Option<String>,
     iteration: usize,
     cancel_signal: Arc<AtomicBool>,
@@ -64,11 +66,11 @@ impl BrowserUseRuntime {
 
         let model_selection = settings.model_selection.as_str();
         let model_id: i64 = model_selection.parse().unwrap_or(1);
-        let (is_local, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
-            Ok(entry) => (!entry.is_cloud, entry.model),
+        let (is_local, is_internal, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
+            Ok(entry) => (!entry.is_cloud, entry.is_internal, entry.model),
             Err(e) => {
                 log::warn!("[browser_use] Could not look up model id {}: {}. Defaulting to local.", model_id, e);
-                (true, "qwen3vl-2b".to_string())
+                (true, true, "qwen3vl-2b".to_string())
             }
         };
         let config = BrowserUseConfig::default();
@@ -80,6 +82,7 @@ impl BrowserUseRuntime {
             config,
             model_key,
             is_local,
+            is_internal,
             session_token: None,
             iteration: 0,
             cancel_signal,
@@ -112,9 +115,10 @@ impl BrowserUseRuntime {
         create_browser_webview(&self.app_handle, &self.config.start_url)
             .map_err(|e| AgentError::RuntimeError(format!("Failed to create browser: {}", e)))?;
 
-        // For cloud models, create a generation session before entering the loop.
+        // For internal cloud models, create a generation session before entering the loop.
         // This checks the rate limit and increments usage ONCE for the entire turn.
-        if !self.is_local {
+        // BYOK models (is_internal=false) use the user's own API key and don't need a session.
+        if !self.is_local && self.is_internal {
             match create_generation_session(&self.model_key).await {
                 Ok(session) => {
                     self.session_token = Some(session.session_token);
