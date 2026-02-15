@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -14,6 +13,8 @@ import {
 import { useModelAccess } from "@/lib/model-access";
 import type { ModelEntry } from "@/types/models";
 import { Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
+import Image from "next/image";
 
 /** Resolve a provider image path. Local uses `/logo.png`, everything else
  *  uses `/providers/{provider}.webp` with a fallback to `unknown.webp`. */
@@ -29,13 +30,14 @@ interface ModelSelectorProps {
   disabled?: boolean;
 }
 
-function ProviderIcon({ model }: { model: ModelEntry }) {
+function ProviderIcon({ model, isPreview }: { model: ModelEntry, isPreview?: boolean }) {
   return (
-    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-      <img
+    <div className={cn("flex items-center justify-center flex-shrink-0", isPreview ? "h-4 w-4" : "h-12 w-12")}>
+      <Image
         src={providerImageSrc(model)}
         alt={model.provider}
-        className="h-4 w-4 object-contain"
+        width={isPreview ? 16 : 48}
+        height={isPreview ? 16 : 48}
         onError={(e) => {
           (e.target as HTMLImageElement).src = "/providers/unknown.webp";
         }}
@@ -62,7 +64,7 @@ function SelectedModelDisplay({ value, models }: { value: string; models: ModelE
 
   return (
     <div className="flex items-center gap-3">
-      <ProviderIcon model={model} />
+      <ProviderIcon model={model} isPreview />
       <span className="font-medium">{model.display_name}</span>
     </div>
   );

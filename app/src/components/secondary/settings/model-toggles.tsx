@@ -78,7 +78,7 @@ export function ModelVisibilityPopover() {
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="sm" className="h-auto px-1 py-0 text-xs text-muted-foreground">
-            Configure
+            Manage models
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start">

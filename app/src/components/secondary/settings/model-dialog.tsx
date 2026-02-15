@@ -204,7 +204,7 @@ export function ModelDialog({
               <Label htmlFor="model">Model Identifier</Label>
               <Input
                 id="model"
-                placeholder="gpt-4o, claude-3-5-sonnet, etc."
+                placeholder="gpt-5.2, claude-opus-4-6, etc."
                 {...register("model")}
               />
               <FieldDescription>
