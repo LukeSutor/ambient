@@ -28,7 +28,7 @@ import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
 const step1Schema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  email: z.email({ message: "Please enter a valid email address" }),
 });
 
 const step2Schema = z.object({

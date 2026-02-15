@@ -51,7 +51,7 @@ export function VerificationForm({
 }: VerificationFormProps) {
   const isCodeInvalid = hasTriedSubmit && code.length !== 8;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
     onSubmit();
   };

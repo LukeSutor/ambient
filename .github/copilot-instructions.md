@@ -155,7 +155,7 @@ cargo check
 **Always cargo check before finishing a feature.**
 
 ### Key Scripts
-- `pnpm run lint`: Biome + ESLint checks
+- `pnpm run lint`: Biome + ESLint checks (`biome check src/ && eslint src/`)
 - `pnpm run tauri dev`: Development mode with hot reload
 - `pnpm run tauri build`: Platform-specific installers
 - `cargo check`: Rust compilation check

@@ -91,13 +91,13 @@ const modelFormSchema = z.object({
     .string()
     .min(1, "Model identifier is required")
     .max(100, "Model identifier must be at most 100 characters"),
-  api_url: z.string().url("Must be a valid URL"),
+  api_url: z.url("Must be a valid URL"),
   api_key: z.string().optional().or(z.literal("")),
   request_format: z.enum(REQUEST_FORMATS, {
-    errorMap: () => ({ message: "Select a request format" }),
+    error: "Select a request format",
   }),
   provider: z.enum(PROVIDERS, {
-    errorMap: () => ({ message: "Select a provider" }),
+    error: "Select a provider",
   }),
   display_name: z
     .string()
