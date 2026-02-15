@@ -61,10 +61,10 @@ const REQUEST_FORMATS = ["openai", "gemini", "anthropic"] as const;
 
 // ── Zod schema ─────────────────────────────────────────────────────
 const modelFormSchema = z.object({
-  model_id: z
+  model: z
     .string()
-    .min(1, "Model ID is required")
-    .max(100, "Model ID must be at most 100 characters"),
+    .min(1, "Model identifier is required")
+    .max(100, "Model identifier must be at most 100 characters"),
   api_url: z.string().url("Must be a valid URL"),
   api_key: z.string().optional().or(z.literal("")),
   request_format: z.enum(REQUEST_FORMATS, {
@@ -109,7 +109,7 @@ export function ModelDialog({
     resolver: zodResolver(modelFormSchema),
     defaultValues: model
       ? {
-          model_id: model.model_id ?? model.model,
+          model: model.model,
           api_url: model.api_url ?? "",
           api_key: model.api_key ?? "",
           request_format: model.request_format as (typeof REQUEST_FORMATS)[number],
@@ -117,7 +117,7 @@ export function ModelDialog({
           display_name: model.display_name,
         }
       : {
-          model_id: "",
+          model: "",
           api_url: "",
           api_key: "",
           request_format: "openai",
@@ -132,8 +132,8 @@ export function ModelDialog({
       try {
         if (isEditing && model) {
           const params: UpdateCustomModelParams = {
-            model_key: model.model,
-            model_id: values.model_id,
+            id: model.id,
+            model: values.model,
             api_url: values.api_url,
             api_key: values.api_key ?? "",
             request_format: values.request_format,
@@ -144,7 +144,7 @@ export function ModelDialog({
           toast.success("Model updated");
         } else {
           const params: AddCustomModelParams = {
-            model_id: values.model_id,
+            model: values.model,
             api_url: values.api_url,
             api_key: values.api_key ?? "",
             request_format: values.request_format,
@@ -174,7 +174,7 @@ export function ModelDialog({
     if (!model) return;
     setDeleting(true);
     try {
-      await invoke("delete_custom_model", { modelKey: model.model });
+      await invoke("delete_custom_model", { modelId: model.id });
       toast.success("Model deleted");
       reset();
       onOpenChange(false);
@@ -199,18 +199,18 @@ export function ModelDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           {/* Model ID */}
-          <Field data-invalid={!!errors.model_id}>
+          <Field data-invalid={!!errors.model}>
             <FieldContent>
-              <Label htmlFor="model_id">Model ID</Label>
+              <Label htmlFor="model">Model Identifier</Label>
               <Input
-                id="model_id"
+                id="model"
                 placeholder="gpt-4o, claude-3-5-sonnet, etc."
-                {...register("model_id")}
+                {...register("model")}
               />
               <FieldDescription>
                 The identifier sent in API requests.
               </FieldDescription>
-              <FieldError errors={[errors.model_id]} />
+              <FieldError errors={[errors.model]} />
             </FieldContent>
           </Field>
 

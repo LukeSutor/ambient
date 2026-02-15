@@ -79,8 +79,8 @@ pub enum HudState {
   Default,
 }
 
-// Model selection — stores the model key (e.g. "qwen3vl-2b", "gemini-3-flash").
-// Serialized as a plain string in settings.
+// Model selection — stores the model's integer database id (as a string).
+// Serialized as a plain string in settings (e.g. "1" for the default local model).
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(transparent)]
 #[ts(export, export_to = "settings.ts")]
@@ -88,12 +88,12 @@ pub struct ModelSelection(pub String);
 
 impl Default for ModelSelection {
   fn default() -> Self {
-    Self("qwen3vl-2b".to_string())
+    Self("1".to_string())
   }
 }
 
 impl ModelSelection {
-  /// Returns the stored model key.
+  /// Returns the stored model id as a string.
   pub fn as_str(&self) -> &str {
     &self.0
   }

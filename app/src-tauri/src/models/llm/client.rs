@@ -10,8 +10,10 @@ use tauri::AppHandle;
 /// Resolved model information used for routing and API calls.
 #[derive(Clone)]
 pub struct ResolvedModel {
-    /// The model key from the registry (e.g. "qwen3vl-2b", "gemini-3-flash").
-    pub model_key: String,
+    /// Database primary key.
+    pub id: i64,
+    /// The model identifier sent in API requests (e.g. "qwen3vl-2b", "gpt-4o").
+    pub model: String,
     /// The model provider (e.g. "local", "google").
     pub provider: String,
     /// Whether this model uses a cloud provider.
@@ -24,17 +26,6 @@ pub struct ResolvedModel {
     pub api_key: Option<String>,
     /// Request format: "openai", "gemini", or "anthropic".
     pub request_format: String,
-    /// The model identifier sent in API requests (e.g. "gpt-4o").
-    /// For internal models this is None since they use their own routing.
-    pub model_id: Option<String>,
-}
-
-impl ResolvedModel {
-    /// Returns the model identifier to send in API requests.
-    /// For BYOK models this is `model_id`, falling back to `model_key`.
-    pub fn effective_model_id(&self) -> &str {
-        self.model_id.as_deref().unwrap_or(&self.model_key)
-    }
 }
 
 /// Unified generate function that routes to the selected provider.
@@ -193,31 +184,34 @@ async fn resolve_model(
     app_handle: &AppHandle,
     policy: &ProviderPolicy,
 ) -> Result<ResolvedModel, String> {
+    let fallback = || ResolvedModel {
+        id: 1,
+        model: "qwen3vl-2b".to_string(),
+        provider: "local".to_string(),
+        is_cloud: false,
+        is_internal: true,
+        api_url: None,
+        api_key: None,
+        request_format: "openai".to_string(),
+    };
+
+    let from_entry = |entry: crate::db::models::ModelEntry| ResolvedModel {
+        id: entry.id,
+        model: entry.model,
+        provider: entry.provider,
+        is_cloud: entry.is_cloud,
+        is_internal: entry.is_internal,
+        api_url: entry.api_url,
+        api_key: entry.api_key,
+        request_format: entry.request_format,
+    };
+
     match policy {
         ProviderPolicy::ForceLocal => {
-            // When forced local, always use the default local model.
-            // Try to look it up from the DB; fall back to hardcoded defaults.
-            match crate::db::models::get_model_by_key(app_handle, "qwen3vl-2b") {
-                Ok(entry) => Ok(ResolvedModel {
-                    model_key: entry.model,
-                    provider: entry.provider,
-                    is_cloud: entry.is_cloud,
-                    is_internal: entry.is_internal,
-                    api_url: entry.api_url,
-                    api_key: entry.api_key,
-                    request_format: entry.request_format,
-                    model_id: entry.model_id,
-                }),
-                Err(_) => Ok(ResolvedModel {
-                    model_key: "qwen3vl-2b".to_string(),
-                    provider: "local".to_string(),
-                    is_cloud: false,
-                    is_internal: true,
-                    api_url: None,
-                    api_key: None,
-                    request_format: "openai".to_string(),
-                    model_id: None,
-                }),
+            // When forced local, always use the default local model (id=1).
+            match crate::db::models::get_model_by_id(app_handle, 1) {
+                Ok(entry) => Ok(from_entry(entry)),
+                Err(_) => Ok(fallback()),
             }
         }
         ProviderPolicy::Default => {
@@ -225,34 +219,20 @@ async fn resolve_model(
                 .await
                 .map_err(|e| format!("Failed to load user settings: {}", e))?;
 
-            let model_key = settings.model_selection.as_str().to_string();
+            let model_id: i64 = settings
+                .model_selection
+                .as_str()
+                .parse()
+                .unwrap_or(1);
 
-            match crate::db::models::get_model_by_key(app_handle, &model_key) {
-                Ok(entry) => Ok(ResolvedModel {
-                    model_key: entry.model,
-                    provider: entry.provider,
-                    is_cloud: entry.is_cloud,
-                    is_internal: entry.is_internal,
-                    api_url: entry.api_url,
-                    api_key: entry.api_key,
-                    request_format: entry.request_format,
-                    model_id: entry.model_id,
-                }),
+            match crate::db::models::get_model_by_id(app_handle, model_id) {
+                Ok(entry) => Ok(from_entry(entry)),
                 Err(e) => {
                     log::warn!(
-                        "[llm_client] Model '{}' not found in registry, falling back to local: {}",
-                        model_key, e
+                        "[llm_client] Model id {} not found in registry, falling back to local: {}",
+                        model_id, e
                     );
-                    Ok(ResolvedModel {
-                        model_key: "qwen3vl-2b".to_string(),
-                        provider: "local".to_string(),
-                        is_cloud: false,
-                        is_internal: true,
-                        api_url: None,
-                        api_key: None,
-                        request_format: "openai".to_string(),
-                        model_id: None,
-                    })
+                    Ok(fallback())
                 }
             }
         }

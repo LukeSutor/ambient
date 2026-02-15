@@ -97,31 +97,30 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
         END;
 
-        -- Models registry (drives model selector, chart colors, rate limits)
+        -- Models registry
+        -- `model` is the API model identifier (e.g. "qwen3vl-2b", "gpt-4o").
+        -- It is NOT unique — the integer `id` is the canonical row key.
         CREATE TABLE IF NOT EXISTS models (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          model TEXT NOT NULL UNIQUE,
+          model TEXT NOT NULL,
           display_name TEXT NOT NULL,
           short_description TEXT NOT NULL DEFAULT '',
           description TEXT NOT NULL DEFAULT '',
-          provider TEXT NOT NULL DEFAULT 'local',
+          provider TEXT NOT NULL DEFAULT 'unknown',
           is_cloud INTEGER NOT NULL DEFAULT 0,
           is_premium INTEGER NOT NULL DEFAULT 0,
           is_enabled INTEGER NOT NULL DEFAULT 1,
           daily_limit INTEGER,
-          color TEXT NOT NULL DEFAULT '#888888',
-          badge_label TEXT NOT NULL DEFAULT '',
-          badge_variant TEXT NOT NULL DEFAULT 'outline',
-          badge_class TEXT NOT NULL DEFAULT '',
-          icon TEXT NOT NULL DEFAULT 'shield',
-          icon_color TEXT NOT NULL DEFAULT 'text-gray-600',
-          icon_bg TEXT NOT NULL DEFAULT 'bg-gray-100'
+          is_internal INTEGER NOT NULL DEFAULT 1,
+          api_url TEXT,
+          api_key TEXT,
+          request_format TEXT NOT NULL DEFAULT 'openai'
         );
 
-        INSERT OR IGNORE INTO models (model, display_name, short_description, description, provider, is_cloud, is_premium, is_enabled, daily_limit, color, badge_label, badge_variant, icon, icon_color, icon_bg) VALUES
-          ('qwen3vl-2b', 'Local', 'Runs on your device.', 'Ultimate privacy. Runs entirely on your device with no internet required. Your data never leaves your machine.', 'local', 0, 0, 1, NULL, '#10b981', 'Private', 'outline', 'shield', 'text-green-600', 'bg-green-100'),
-          ('gemini-3-flash', 'Gemini 3 Flash', 'Fast cloud model.', 'Google''s fast model with advanced reasoning, tool use, and multimodal capabilities.', 'google', 1, 0, 1, 3, '#60a5fa', 'Enhanced', 'outline', 'zap', 'text-blue-600', 'bg-blue-100'),
-          ('gemini-3-pro', 'Gemini 3 Pro', 'Most advanced model.', 'Google''s most advanced model with state-of-the-art reasoning and generation capabilities.', 'google', 1, 1, 1, 0, '#2563eb', 'Premium', 'default', 'crown', 'text-white', 'bg-gradient-to-r from-purple-500 to-pink-500');
+        INSERT OR IGNORE INTO models (model, display_name, short_description, description, provider, is_cloud, is_premium, is_enabled, daily_limit, is_internal, request_format) VALUES
+          ('qwen3vl-2b', 'Local', 'Runs on your device.', 'Ultimate privacy. Runs entirely on your device with no internet required. Your data never leaves your machine.', 'local', 0, 0, 1, NULL, 1, 'openai'),
+          ('gemini-3-flash', 'Gemini 3 Flash', 'Fast cloud model.', 'Google''s fast model with advanced reasoning, tool use, and multimodal capabilities.', 'google', 1, 0, 1, 3, 1, 'gemini'),
+          ('gemini-3-pro', 'Gemini 3 Pro', 'Most advanced model.', 'Google''s most advanced model with state-of-the-art reasoning and generation capabilities.', 'google', 1, 1, 1, 0, 1, 'gemini');
 
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (
@@ -149,45 +148,6 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         );
 
         CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
-      "#,
-    ),
-    // Migration 2: BYOK (Bring Your Own Key) model support
-    // Remove deprecated display metadata columns (color, badge_*, icon_*),
-    // add new columns for custom model configuration.
-    M::up(
-      r#"
-        CREATE TABLE models_new (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          model TEXT NOT NULL UNIQUE,
-          display_name TEXT NOT NULL,
-          short_description TEXT NOT NULL DEFAULT '',
-          description TEXT NOT NULL DEFAULT '',
-          provider TEXT NOT NULL DEFAULT 'local',
-          is_cloud INTEGER NOT NULL DEFAULT 0,
-          is_premium INTEGER NOT NULL DEFAULT 0,
-          is_enabled INTEGER NOT NULL DEFAULT 1,
-          daily_limit INTEGER,
-          is_internal INTEGER NOT NULL DEFAULT 1,
-          api_url TEXT,
-          api_key TEXT,
-          request_format TEXT NOT NULL DEFAULT 'openai',
-          model_id TEXT
-        );
-
-        INSERT INTO models_new (
-          id, model, display_name, short_description, description,
-          provider, is_cloud, is_premium, is_enabled, daily_limit,
-          is_internal, request_format
-        )
-        SELECT
-          id, model, display_name, short_description, description,
-          provider, is_cloud, is_premium, is_enabled, daily_limit,
-          1,
-          CASE provider WHEN 'google' THEN 'gemini' ELSE 'openai' END
-        FROM models;
-
-        DROP TABLE models;
-        ALTER TABLE models_new RENAME TO models;
       "#,
     )
   ])

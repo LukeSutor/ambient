@@ -16,14 +16,14 @@ import type { CloudModelUsage, ModelEntry } from "@/types/models";
 import { Zap } from "lucide-react";
 
 /** Resolve a provider image path. Local uses `/logo.png`, everything else
- *  uses `/providers/{provider}.png` with a fallback to `unknown.png`. */
+ *  uses `/providers/{provider}.webp` with a fallback to `unknown.webp`. */
 function providerImageSrc(model: ModelEntry): string {
   if (model.provider === "local") return "/logo.png";
-  return `/providers/${model.provider}.png`;
+  return `/providers/${model.provider}.webp`;
 }
 
 interface ModelSelectorProps {
-  /** The currently selected model key (e.g. "qwen3vl-2b"). */
+  /** The currently selected model id (as string, e.g. "1"). */
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
@@ -37,7 +37,7 @@ function ProviderIcon({ model }: { model: ModelEntry }) {
         alt={model.provider}
         className="h-4 w-4 object-contain"
         onError={(e) => {
-          (e.target as HTMLImageElement).src = "/providers/unknown.png";
+          (e.target as HTMLImageElement).src = "/providers/unknown.webp";
         }}
       />
     </div>
@@ -58,7 +58,7 @@ function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
 }
 
 function SelectedModelDisplay({ value, models }: { value: string; models: ModelEntry[] }) {
-  const model = models.find((m) => m.model === value);
+  const model = models.find((m) => m.id.toString() === value);
   if (!model) {
     // Show a neutral placeholder while models are loading
     return <span className="font-medium text-muted-foreground">Loading...</span>;
@@ -80,7 +80,7 @@ export function ModelSelector({
   const { enabledModels, cloudUsage } = useModelAccess();
 
   const handleChange = (v: string) => {
-    const model = enabledModels.find((m) => m.model === v);
+    const model = enabledModels.find((m) => m.id.toString() === v);
 
     if (model?.is_cloud) {
       const usage = cloudUsage[model.model];
@@ -123,10 +123,10 @@ export function ModelSelector({
             const isVisuallyDisabled = isUnavailable || !!isAtLimit;
 
             return (
-              <div key={model.model}>
+              <div key={model.id}>
                 {index > 0 && <SelectSeparator />}
                 <SelectItem
-                  value={model.model}
+                  value={model.id.toString()}
                   className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isVisuallyDisabled ? 'opacity-50' : ''}`}
                   disabled={isRadixDisabled}
                 >

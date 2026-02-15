@@ -84,7 +84,7 @@ export function HUDInputBar() {
   } = useConversation();
   const { closeHUD, setChatExpanded } = useWindows();
   const { hudDimensions, settings } = useSettings();
-  const { getUsage } = useModelAccess();
+  const { getUsage, enabledModels } = useModelAccess();
 
   // Computed values
   const isLoading = ocrLoading || isStreaming;
@@ -128,9 +128,10 @@ export function HUDInputBar() {
     if (!query || isLoading) return;
 
     // Pre-check: block send if the selected cloud model is at its usage limit
-    const modelKey = settings?.model_selection;
-    if (modelKey) {
-      const usage = getUsage(modelKey);
+    const modelId = settings?.model_selection;
+    if (modelId) {
+      const selectedModel = enabledModels.find((m) => m.id.toString() === modelId);
+      const usage = selectedModel ? getUsage(selectedModel.model) : undefined;
       if (usage) {
         if (!usage.is_available) {
           toast.error("This model is not available on your current plan. Please upgrade or switch models.");
@@ -151,7 +152,7 @@ export function HUDInputBar() {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
     }
-  }, [input, isLoading, conversationId, sendMessage, setChatExpanded, settings, getUsage]);
+  }, [input, isLoading, conversationId, sendMessage, setChatExpanded, settings, getUsage, enabledModels]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

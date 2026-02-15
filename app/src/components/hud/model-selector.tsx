@@ -20,13 +20,13 @@ interface ModelSelectorProps {
 
 export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   const { settings, setModelSelection } = useSettings();
-  const modelSelection = settings?.model_selection ?? "qwen3vl-2b";
+  const modelSelection = settings?.model_selection ?? "1";
   const { enabledModels, cloudUsage } = useModelAccess();
 
   const handleModelSelectionChange = useCallback(
-    async (modelKey: string) => {
+    async (modelId: string) => {
       try {
-        await setModelSelection(modelKey);
+        await setModelSelection(modelId);
       } catch (error) {
         console.error("Failed to save model selection setting:", error);
       }
@@ -35,7 +35,7 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   );
 
   const currentLabel = useMemo(() => {
-    const model = enabledModels.find((m) => m.model === modelSelection);
+    const model = enabledModels.find((m) => m.id.toString() === modelSelection);
     return model?.display_name ?? "Local";
   }, [modelSelection, enabledModels]);
 
@@ -83,8 +83,8 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
 
             return (
               <DropdownMenuItem
-                key={model.model}
-                onClick={() => !isDisabled && void handleModelSelectionChange(model.model)}
+                key={model.id}
+                onClick={() => !isDisabled && void handleModelSelectionChange(model.id.toString())}
                 className={`py-1.5 px-2 cursor-pointer flex-col gap-0.5 items-start hover:bg-white/60 ${isDisabled ? "opacity-50 pointer-events-none" : ""}`}
                 disabled={isDisabled}
               >

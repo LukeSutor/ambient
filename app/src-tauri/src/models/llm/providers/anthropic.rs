@@ -62,7 +62,7 @@ impl LlmProvider for AnthropicProvider {
         let api_url = Self::resolve_api_url(resolved_model);
 
         let should_stream = request.stream.unwrap_or(false);
-        let model_key = resolved_model.effective_model_id();
+        let model_key = &resolved_model.model;
 
         // Build messages — system messages are excluded by format_messages_for_anthropic
         let messages = if let Some(msgs) = request.messages.clone() {
@@ -303,7 +303,7 @@ impl LlmProvider for AnthropicProvider {
             // Save token usage
             add_token_usage(
                 app_handle.clone(),
-                model_key,
+                resolved_model.id,
                 prompt_tokens,
                 completion_tokens,
             )
@@ -395,7 +395,7 @@ impl LlmProvider for AnthropicProvider {
             // Save token usage
             add_token_usage(
                 app_handle.clone(),
-                model_key,
+                resolved_model.id,
                 prompt_tokens,
                 completion_tokens,
             )

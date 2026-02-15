@@ -75,7 +75,7 @@ impl LlmProvider for OpenAIProvider {
 
         // Build request body
         let mut request_body = json!({
-            "model": resolved_model.effective_model_id(),
+            "model": resolved_model.model,
             "messages": messages,
             "stream": should_stream,
         });
@@ -272,7 +272,7 @@ impl LlmProvider for OpenAIProvider {
             // Save token usage
             add_token_usage(
                 app_handle.clone(),
-                &resolved_model.model_key,
+                resolved_model.id,
                 prompt_tokens,
                 completion_tokens,
             )
@@ -357,7 +357,7 @@ impl LlmProvider for OpenAIProvider {
             // Save token usage
             add_token_usage(
                 app_handle.clone(),
-                &resolved_model.model_key,
+                resolved_model.id,
                 prompt_tokens,
                 completion_tokens,
             )

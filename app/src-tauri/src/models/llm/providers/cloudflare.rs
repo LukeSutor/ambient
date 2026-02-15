@@ -24,7 +24,8 @@ impl LlmProvider for CloudflareProvider {
   ) -> Result<LlmResponse, String> {
     // Send the model key directly (e.g. "gemini-3-flash", "gemini-3-pro").
     // The Cloudflare worker maps this to the actual API model name.
-    let model_key = resolved_model.model_key.clone();
+    let model_key = resolved_model.model.clone();
+    let model_db_id = resolved_model.id;
 
     let should_stream = request.stream.unwrap_or(false);
     let mut content = Vec::new();
@@ -203,7 +204,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
         app_handle.clone(),
-        &model_key,
+        model_db_id,
         prompt_tokens,
         completion_tokens,
       ).await?;
@@ -281,7 +282,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          &model_key,
+          model_db_id,
           prompt_tokens,
           completion_tokens,
       ).await?;

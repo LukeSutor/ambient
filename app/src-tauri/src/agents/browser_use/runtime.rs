@@ -62,12 +62,13 @@ impl BrowserUseRuntime {
             .await
             .map_err(|e| AgentError::RuntimeError(format!("Failed to load settings: {}", e)))?;
 
-        let model_key = settings.model_selection.as_str();
-        let is_local = match crate::db::models::get_model_by_key(&app_handle, model_key) {
-            Ok(entry) => !entry.is_cloud,
+        let model_selection = settings.model_selection.as_str();
+        let model_id: i64 = model_selection.parse().unwrap_or(1);
+        let (is_local, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
+            Ok(entry) => (!entry.is_cloud, entry.model),
             Err(e) => {
-                log::warn!("[browser_use] Could not look up model '{}': {}. Defaulting to local.", model_key, e);
-                true
+                log::warn!("[browser_use] Could not look up model id {}: {}. Defaulting to local.", model_id, e);
+                (true, "qwen3vl-2b".to_string())
             }
         };
         let config = BrowserUseConfig::default();
@@ -77,7 +78,7 @@ impl BrowserUseRuntime {
             conv_id,
             assistant_message_id,
             config,
-            model_key: model_key.to_string(),
+            model_key,
             is_local,
             session_token: None,
             iteration: 0,

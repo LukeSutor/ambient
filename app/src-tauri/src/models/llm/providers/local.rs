@@ -47,7 +47,7 @@ impl LlmProvider for LocalProvider {
 
     // Build request body
     let mut request_body = json!({
-        "model": resolved_model.model_key,
+        "model": resolved_model.model,
         "messages": messages,
         "stream": should_stream,
         "temperature": 0.7,
@@ -235,7 +235,7 @@ impl LlmProvider for LocalProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          &resolved_model.model_key,
+          resolved_model.id,
           prompt_tokens,
           completion_tokens,
       ).await?;
@@ -311,7 +311,7 @@ impl LlmProvider for LocalProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          &resolved_model.model_key,
+          resolved_model.id,
           prompt_tokens,
           completion_tokens,
       ).await?;

@@ -75,7 +75,7 @@ export default function Settings() {
   const hasGpu = gpuDevices.length > 0;
 
   const hudSize = settings?.hud_size ?? "Normal";
-  const modelSelection = settings?.model_selection ?? "qwen3vl-2b";
+  const modelSelection = settings?.model_selection ?? "1";
 
   const handleHudSizeChange = async (value: string) => {
     const newSize = value as HudSizeOption;

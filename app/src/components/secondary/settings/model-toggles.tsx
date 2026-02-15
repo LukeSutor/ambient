@@ -36,9 +36,9 @@ export function ModelVisibilityPopover() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ModelEntry | null>(null);
 
-  /** Model keys the user can actually access (based on tier). */
-  const allowedModelKeys = useMemo(
-    () => models.filter((m) => isModelAvailable(m.model)).map((m) => m.model),
+  /** Model ids the user can actually access (based on tier). */
+  const allowedModelIds = useMemo(
+    () => models.filter((m) => isModelAvailable(m.model)).map((m) => m.id),
     [models, isModelAvailable],
   );
 
@@ -50,25 +50,25 @@ export function ModelVisibilityPopover() {
   );
 
   const handleToggle = useCallback(
-    async (modelKey: string, currentEnabled: boolean) => {
+    async (modelId: number, currentEnabled: boolean) => {
       const newEnabled = !currentEnabled;
       try {
         await invoke<string | null>("toggle_model", {
-          modelKey,
+          modelId,
           enabled: newEnabled,
-          allowedModels: allowedModelKeys,
+          allowedModelIds,
         });
       } catch (error) {
         const msg = String(error);
         if (msg.includes("Cannot disable the last enabled model")) {
           toast.error("At least one model must remain enabled");
         } else {
-          console.error(`[ModelVisibilityPopover] Failed to toggle model ${modelKey}:`, error);
+          console.error(`[ModelVisibilityPopover] Failed to toggle model ${modelId}:`, error);
           toast.error("Failed to toggle model");
         }
       }
     },
-    [allowedModelKeys],
+    [allowedModelIds],
   );
 
   const handleAddModel = useCallback(() => {
@@ -100,16 +100,16 @@ export function ModelVisibilityPopover() {
               const isLastAllowedEnabled =
                 model.is_enabled && isAllowed && allowedEnabledCount <= 1;
               return (
-                <Field key={model.model} orientation="horizontal">
+                <Field key={model.id} orientation="horizontal">
                   <Checkbox
-                    id={`model-${model.model}`}
+                    id={`model-${model.id}`}
                     checked={model.is_enabled}
                     disabled={isLastAllowedEnabled}
                     onCheckedChange={() =>
-                      void handleToggle(model.model, model.is_enabled)
+                      void handleToggle(model.id, model.is_enabled)
                     }
                   />
-                  <Label htmlFor={`model-${model.model}`} className="w-full">{model.display_name}</Label>
+                  <Label htmlFor={`model-${model.id}`} className="w-full">{model.display_name}</Label>
                   {!model.is_internal && (
                     <Button
                       variant="ghost"

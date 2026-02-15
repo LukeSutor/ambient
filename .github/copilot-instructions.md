@@ -88,7 +88,7 @@ module/
 8. Check cancellation signal (`Arc<AtomicBool>`) on each iteration
 
 **Session-Based Rate Limiting (Cloud Models):**
-- Before the agentic loop, `create_generation_session(model_key)` calls the Cloudflare Worker's `/v1/usage/start-turn` endpoint
+- Before the agentic loop, `create_generation_session(model_type)` calls the Cloudflare Worker's `/v1/usage/start-turn` endpoint
 - This checks the user's daily limit, increments `model_usage`, and creates a `generation_sessions` row with a short-lived session token (10 min TTL, max 50 calls)
 - The session token is attached to every `LlmRequest` in the loop via `.with_session_token()`
 - The Cloudflare Worker validates the session on each `/v1/llm/generate` call — checks ownership, model match, expiry, and call count
@@ -263,7 +263,7 @@ All user data is stored in per-user profile directories under `{app_data}/profil
 - `conversations`: Conversation metadata
 - `conversation_messages`: Messages with `message_type` (text/tool_calls/tool_results) and structured `metadata` JSON
 - `attachments`: File attachments per message
-- `models`: Registered LLM models with `is_internal` flag, BYOK fields (`api_url`, `api_key`, `request_format`, `model_id`)
+- `models`: Registered LLM models with `id` (INTEGER PK), `model` (API identifier, not unique), `display_name`, `provider` (default 'unknown'), `is_internal` flag, BYOK fields (`api_url`, `api_key`, `request_format`). All lookups use `id`, not `model` text.
 - `memory_entries` + `memory_entries_vec` + `memory_entries_fts`: Extracted facts with embeddings and full-text search
 - `conversation_skills`: Activated skills per conversation
 - `token_usage`: LLM usage tracking (prompt_tokens, completion_tokens, timestamp)
@@ -311,17 +311,19 @@ pub enum MessageMetadata {
 - `AnthropicProvider`: Direct Anthropic Messages API (BYOK or `ANTHROPIC_API_KEY` env var fallback, event-based SSE streaming)
 
 **BYOK Routing:**
-`ResolvedModel` carries `is_internal`, `api_url`, `api_key`, `request_format`, and `model_id` from the DB.
+`ResolvedModel` carries `id` (i64 PK), `model` (API identifier), `is_internal`, `api_url`, `api_key`, and `request_format` from the DB.
 - Internal models: `!is_cloud` → LocalProvider, `is_cloud` → CloudflareProvider
 - BYOK models: route by `request_format`: `"openai"` → OpenAIProvider, `"gemini"` → GoogleProvider, `"anthropic"` → AnthropicProvider
 - Each provider resolves API key/URL from `ResolvedModel` first, falls back to env var
-- `resolved_model.effective_model_id()` returns `model_id` if set, else `model_key`
+- `resolved_model.model` is the API identifier sent in requests
+- `resolved_model.id` is used for token usage tracking and DB lookups
 
 **BYOK Model Management:**
-- `add_custom_model`: Validates, inserts BYOK model with `is_cloud=1, is_internal=0, daily_limit=NULL`
-- `update_custom_model`: Updates BYOK model fields (blocks internal models)
-- `delete_custom_model`: Deletes BYOK model, auto-switches selection if deleted model was active
-- Model key = `model_id` (the API identifier). Display name capped at 40 chars.
+- `add_custom_model`: Validates, inserts BYOK model with `is_cloud=1, is_internal=0, daily_limit=NULL`, returns `i64` row id
+- `update_custom_model`: Updates BYOK model fields by `id` (blocks internal models)
+- `delete_custom_model`: Deletes BYOK model by `id`, auto-switches selection if deleted model was active
+- `model` field = the API identifier sent in requests (e.g. `gpt-4o`, `claude-sonnet-4-20250514`). Not unique — multiple entries can share the same API model.
+- `model_selection` in settings stores model `id` as string (e.g. `"1"`, `"4"`)
 - Frontend form: react-hook-form + zod + shadcn Field in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
 
 **Model Display:**

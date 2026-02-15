@@ -189,7 +189,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         const defaults: UserSettings = {
           hud_size: "Normal",
           show_full_thought_traces: false,
-          model_selection: "qwen3vl-2b",
+          model_selection: "1",
           agent_config: {
             local_context_limit: 10,
             cloud_context_limit: 20,

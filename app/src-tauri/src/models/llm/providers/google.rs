@@ -59,7 +59,7 @@ impl LlmProvider for GoogleProvider {
 
         let should_stream = request.stream.unwrap_or(false);
         let enable_thinking = request.use_thinking.unwrap_or(false);
-        let model_key = resolved_model.effective_model_id();
+        let model_key = &resolved_model.model;
 
         // Build content messages
         let mut content = Vec::new();
@@ -242,7 +242,7 @@ impl LlmProvider for GoogleProvider {
             // Save token usage
             add_token_usage(
                 app_handle.clone(),
-                model_key,
+                resolved_model.id,
                 prompt_tokens,
                 completion_tokens,
             )
@@ -323,7 +323,7 @@ impl LlmProvider for GoogleProvider {
             // Save token usage
             add_token_usage(
                 app_handle.clone(),
-                model_key,
+                resolved_model.id,
                 prompt_tokens,
                 completion_tokens,
             )

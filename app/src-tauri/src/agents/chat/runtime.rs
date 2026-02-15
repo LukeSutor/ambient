@@ -122,7 +122,7 @@ pub struct AgentRuntime {
     /// Whether using local model (vs cloud).
     is_local: bool,
 
-    /// The selected model key (e.g. "gemini-3-flash").
+    /// The selected model's API identifier (e.g. "gemini-3-flash").
     model_key: String,
 
     /// Session token for cloud rate limiting (one per turn).
@@ -159,12 +159,13 @@ impl AgentRuntime {
             .await
             .map_err(|e| AgentError::DatabaseError(format!("Failed to load settings: {}", e)))?;
 
-        let model_key = settings.model_selection.as_str();
-        let is_local = match crate::db::models::get_model_by_key(&app_handle, model_key) {
-            Ok(entry) => !entry.is_cloud,
+        let model_selection = settings.model_selection.as_str();
+        let model_id: i64 = model_selection.parse().unwrap_or(1);
+        let (is_local, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
+            Ok(entry) => (!entry.is_cloud, entry.model),
             Err(e) => {
-                log::warn!("[agent] Could not look up model '{}': {}. Defaulting to local.", model_key, e);
-                true
+                log::warn!("[agent] Could not look up model id {}: {}. Defaulting to local.", model_id, e);
+                (true, "qwen3vl-2b".to_string())
             }
         };
 
@@ -188,7 +189,7 @@ impl AgentRuntime {
             assistant_message_id,
             config,
             is_local,
-            model_key: model_key.to_string(),
+            model_key,
             session_token: None,
             active_skills,
             iteration: 0,

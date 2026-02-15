@@ -7,7 +7,7 @@ export type AddCustomModelParams = {
 /**
  * The model identifier for API requests (e.g. "gpt-4o").
  */
-model_id: string, 
+model: string, 
 /**
  * Full API endpoint URL.
  */
@@ -25,7 +25,7 @@ request_format: string,
  */
 provider: string, 
 /**
- * Optional display name (max 40 chars). Falls back to model_id.
+ * Optional display name (max 40 chars). Falls back to model.
  */
 display_name: string, };
 
@@ -63,9 +63,10 @@ models: { [key in string]?: CloudModelUsage }, };
 /**
  * A model entry from the database.
  */
-export type ModelEntry = { id: bigint, 
+export type ModelEntry = { id: number, 
 /**
- * Unique model key (e.g. "qwen3vl-2b", "gemini-3-flash", or user-provided).
+ * Model identifier sent in API requests (e.g. "qwen3vl-2b", "gpt-4o").
+ * NOT unique — use `id` for lookups.
  */
 model: string, 
 /**
@@ -104,25 +105,20 @@ api_key: string | null,
 /**
  * Request format: "openai", "gemini", or "anthropic". Determines which provider to route to.
  */
-request_format: string, 
-/**
- * The model identifier sent in API requests (e.g. "gpt-4o", "claude-3-5-sonnet-20241022").
- * For internal models this is NULL since they use their own routing.
- */
-model_id: string | null, };
+request_format: string, };
 
 /**
  * Parameters for updating a custom (BYOK) model.
  */
 export type UpdateCustomModelParams = { 
 /**
- * The current model key (used to find the row).
+ * The database id of the model to update.
  */
-model_key: string, 
+id: bigint, 
 /**
  * Updated model identifier for API requests.
  */
-model_id: string, 
+model: string, 
 /**
  * Updated API endpoint URL.
  */

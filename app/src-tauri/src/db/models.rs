@@ -12,8 +12,10 @@ const MAX_DISPLAY_NAME_LEN: usize = 40;
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
 pub struct ModelEntry {
+    #[ts(type = "number")]
     pub id: i64,
-    /// Unique model key (e.g. "qwen3vl-2b", "gemini-3-flash", or user-provided).
+    /// Model identifier sent in API requests (e.g. "qwen3vl-2b", "gpt-4o").
+    /// NOT unique — use `id` for lookups.
     pub model: String,
     /// User-friendly name shown in the UI (e.g. "Local", "Gemini 3 Flash").
     pub display_name: String,
@@ -37,9 +39,6 @@ pub struct ModelEntry {
     pub api_key: Option<String>,
     /// Request format: "openai", "gemini", or "anthropic". Determines which provider to route to.
     pub request_format: String,
-    /// The model identifier sent in API requests (e.g. "gpt-4o", "claude-3-5-sonnet-20241022").
-    /// For internal models this is NULL since they use their own routing.
-    pub model_id: Option<String>,
 }
 
 /// Helper to build a ModelEntry from a row with the standard column order.
@@ -59,12 +58,11 @@ fn model_from_row(row: &rusqlite::Row) -> rusqlite::Result<ModelEntry> {
         api_url: row.get(11)?,
         api_key: row.get(12)?,
         request_format: row.get(13)?,
-        model_id: row.get(14)?,
     })
 }
 
 const SELECT_COLS: &str = "id, model, display_name, short_description, description, provider, \
-     is_cloud, is_premium, daily_limit, is_enabled, is_internal, api_url, api_key, request_format, model_id";
+     is_cloud, is_premium, daily_limit, is_enabled, is_internal, api_url, api_key, request_format";
 
 /// Get all models from the database.
 #[tauri::command]
@@ -88,49 +86,46 @@ pub fn get_models(state: tauri::State<DbState>) -> Result<Vec<ModelEntry>, Strin
     Ok(models)
 }
 
-/// Look up a single model by its unique key.
+/// Look up a single model by its integer primary key.
 /// Used by the LLM client to determine provider routing.
-pub fn get_model_by_key(app_handle: &tauri::AppHandle, model_key: &str) -> Result<ModelEntry, String> {
+pub fn get_model_by_id(app_handle: &tauri::AppHandle, id: i64) -> Result<ModelEntry, String> {
     let state = app_handle.state::<DbState>();
     let db_guard = state.0.lock().unwrap();
     let conn = db_guard
         .as_ref()
         .ok_or("Database connection not available")?;
 
-    let query = format!("SELECT {} FROM models WHERE model = ?1", SELECT_COLS);
-    conn.query_row(&query, params![model_key], model_from_row)
-        .map_err(|e| format!("Model '{}' not found: {}", model_key, e))
+    let query = format!("SELECT {} FROM models WHERE id = ?1", SELECT_COLS);
+    conn.query_row(&query, params![id], model_from_row)
+        .map_err(|e| format!("Model id {} not found: {}", id, e))
 }
 
 /// Toggle a model's enabled state.
 ///
-/// Returns the model key that should now be selected (may differ from current
-/// selection if the disabled model was the active one). Returns `None` if
+/// Returns the model id (as string) that should now be selected (may differ from
+/// current selection if the disabled model was the active one). Returns `None` if
 /// the selection doesn't need to change.
 #[tauri::command]
 pub async fn toggle_model(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, DbState>,
-    model_key: String,
+    model_id: i64,
     enabled: bool,
-    allowed_models: Vec<String>,
+    allowed_model_ids: Vec<i64>,
 ) -> Result<Option<String>, String> {
-    let fallback_model = {
+    let fallback_id = {
         let db_guard = state.0.lock().unwrap();
         let conn = db_guard
             .as_ref()
             .ok_or("Database connection not available")?;
 
         // If disabling, ensure at least one other *allowed* model stays enabled.
-        // allowed_models contains model keys the user can actually access
-        // (based on their tier). This prevents auto-selecting a model the
-        // user doesn't have permission to use.
         if !enabled {
-            if allowed_models.is_empty() {
+            if allowed_model_ids.is_empty() {
                 return Err("Cannot disable the last enabled model".to_string());
             }
 
-            let placeholders: String = allowed_models
+            let placeholders: String = allowed_model_ids
                 .iter()
                 .enumerate()
                 .map(|(i, _)| format!("?{}", i + 1))
@@ -138,25 +133,23 @@ pub async fn toggle_model(
                 .join(",");
 
             let query = format!(
-                "SELECT COUNT(*) FROM models WHERE is_enabled = 1 AND model IN ({})",
+                "SELECT COUNT(*) FROM models WHERE is_enabled = 1 AND id IN ({})",
                 placeholders,
             );
 
             let mut stmt = conn.prepare(&query)
                 .map_err(|e| format!("Failed to prepare count query: {}", e))?;
 
-            let params: Vec<&dyn rusqlite::types::ToSql> = allowed_models
+            let params: Vec<&dyn rusqlite::types::ToSql> = allowed_model_ids
                 .iter()
-                .map(|s| s as &dyn rusqlite::types::ToSql)
+                .map(|id| id as &dyn rusqlite::types::ToSql)
                 .collect();
 
             let allowed_enabled_count: i32 = stmt
                 .query_row(params.as_slice(), |row| row.get(0))
                 .map_err(|e| format!("Failed to count enabled allowed models: {}", e))?;
 
-            // If disabling this model would leave zero allowed-and-enabled
-            // models, block the operation
-            let is_allowed = allowed_models.contains(&model_key);
+            let is_allowed = allowed_model_ids.contains(&model_id);
             let would_remain = if is_allowed {
                 allowed_enabled_count - 1
             } else {
@@ -170,51 +163,51 @@ pub async fn toggle_model(
 
         let rows_affected = conn
             .execute(
-                "UPDATE models SET is_enabled = ?1 WHERE model = ?2",
-                rusqlite::params![enabled as i32, model_key],
+                "UPDATE models SET is_enabled = ?1 WHERE id = ?2",
+                rusqlite::params![enabled as i32, model_id],
             )
             .map_err(|e| format!("Failed to toggle model: {}", e))?;
 
         if rows_affected == 0 {
-            return Err(format!("Model '{}' not found", model_key));
+            return Err(format!("Model id {} not found", model_id));
         }
 
-        log::info!("[models] Model '{}' is_enabled set to {}", model_key, enabled);
+        log::info!("[models] Model id {} is_enabled set to {}", model_id, enabled);
 
         // If disabling, find a fallback from allowed models only
-        if !enabled && !allowed_models.is_empty() {
-            let placeholders: String = allowed_models
+        if !enabled && !allowed_model_ids.is_empty() {
+            let placeholders: String = allowed_model_ids
                 .iter()
                 .enumerate()
-                .map(|(i, _)| format!("?{}", i + 2)) // +2 because ?1 is model_key
+                .map(|(i, _)| format!("?{}", i + 2)) // +2 because ?1 is model_id
                 .collect::<Vec<_>>()
                 .join(",");
 
             let query = format!(
-                "SELECT model FROM models WHERE is_enabled = 1 AND model != ?1 AND model IN ({}) ORDER BY is_cloud ASC, id ASC LIMIT 1",
+                "SELECT id FROM models WHERE is_enabled = 1 AND id != ?1 AND id IN ({}) ORDER BY is_cloud ASC, id ASC LIMIT 1",
                 placeholders,
             );
 
             let mut stmt = conn.prepare(&query)
                 .map_err(|e| format!("Failed to prepare fallback query: {}", e))?;
 
-            let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::with_capacity(1 + allowed_models.len());
-            params.push(Box::new(model_key.clone()));
-            for m in &allowed_models {
-                params.push(Box::new(m.clone()));
+            let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::with_capacity(1 + allowed_model_ids.len());
+            params.push(Box::new(model_id));
+            for id in &allowed_model_ids {
+                params.push(Box::new(*id));
             }
             let params_ref: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
 
-            let fallback: Option<String> = stmt
+            let fallback: Option<i64> = stmt
                 .query_row(params_ref.as_slice(), |row| row.get(0))
                 .ok();
             fallback
         } else if !enabled {
-            // No allowed_models provided — fall back to any enabled model
-            let fallback: Option<String> = conn
+            // No allowed_model_ids provided — fall back to any enabled model
+            let fallback: Option<i64> = conn
                 .query_row(
-                    "SELECT model FROM models WHERE is_enabled = 1 AND model != ?1 ORDER BY is_cloud ASC, id ASC LIMIT 1",
-                    rusqlite::params![model_key],
+                    "SELECT id FROM models WHERE is_enabled = 1 AND id != ?1 ORDER BY is_cloud ASC, id ASC LIMIT 1",
+                    rusqlite::params![model_id],
                     |row| row.get(0),
                 )
                 .ok();
@@ -227,14 +220,16 @@ pub async fn toggle_model(
     // If disabling the currently selected model, switch to the fallback
     let mut switched_to: Option<String> = None;
     if !enabled {
-        if let Some(ref fallback) = fallback_model {
+        if let Some(fallback) = fallback_id {
             let settings = crate::settings::service::load_user_settings(app_handle.clone())
                 .await
                 .unwrap_or_default();
 
-            if settings.model_selection.0 == model_key {
+            let model_id_str = model_id.to_string();
+            if settings.model_selection.0 == model_id_str {
+                let fallback_str = fallback.to_string();
                 let mut updated_settings = settings;
-                updated_settings.model_selection = crate::settings::types::ModelSelection(fallback.clone());
+                updated_settings.model_selection = crate::settings::types::ModelSelection(fallback_str.clone());
 
                 if let Err(e) = crate::settings::service::save_user_settings(
                     app_handle.clone(),
@@ -242,8 +237,8 @@ pub async fn toggle_model(
                 ).await {
                     log::warn!("[models] Failed to auto-switch model selection: {}", e);
                 } else {
-                    log::info!("[models] Auto-switched model selection from '{}' to '{}'", model_key, fallback);
-                    switched_to = Some(fallback.clone());
+                    log::info!("[models] Auto-switched model selection from id {} to id {}", model_id, fallback);
+                    switched_to = Some(fallback_str);
 
                     // Notify frontend so settings provider updates
                     let _ = app_handle.emit("settings_changed", ());
@@ -268,7 +263,7 @@ pub async fn toggle_model(
 #[ts(export, export_to = "models.ts")]
 pub struct AddCustomModelParams {
     /// The model identifier for API requests (e.g. "gpt-4o").
-    pub model_id: String,
+    pub model: String,
     /// Full API endpoint URL.
     pub api_url: String,
     /// API authentication key. Empty string treated as None (for localhost models).
@@ -277,7 +272,7 @@ pub struct AddCustomModelParams {
     pub request_format: String,
     /// Provider for display icon (e.g. "openai", "google", "deepseek", "unknown").
     pub provider: String,
-    /// Optional display name (max 40 chars). Falls back to model_id.
+    /// Optional display name (max 40 chars). Falls back to model.
     pub display_name: String,
 }
 
@@ -285,10 +280,10 @@ pub struct AddCustomModelParams {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
 pub struct UpdateCustomModelParams {
-    /// The current model key (used to find the row).
-    pub model_key: String,
+    /// The database id of the model to update.
+    pub id: i64,
     /// Updated model identifier for API requests.
-    pub model_id: String,
+    pub model: String,
     /// Updated API endpoint URL.
     pub api_url: String,
     /// Updated API key. Empty string treated as None.
@@ -303,21 +298,20 @@ pub struct UpdateCustomModelParams {
 
 /// Add a custom BYOK model.
 ///
-/// The model key in the DB is set to `model_id`. The `display_name` defaults
-/// to `model_id` if left empty and is truncated to 40 characters.
+/// Returns the new model's database id.
 #[tauri::command]
 pub fn add_custom_model(
     _app_handle: tauri::AppHandle,
     state: tauri::State<DbState>,
     params: AddCustomModelParams,
-) -> Result<String, String> {
+) -> Result<i64, String> {
     // Validate request_format
     if !["openai", "gemini", "anthropic"].contains(&params.request_format.as_str()) {
         return Err(format!("Invalid request format: {}", params.request_format));
     }
 
-    if params.model_id.trim().is_empty() {
-        return Err("Model ID is required".to_string());
+    if params.model.trim().is_empty() {
+        return Err("Model identifier is required".to_string());
     }
 
     if params.api_url.trim().is_empty() {
@@ -326,14 +320,11 @@ pub fn add_custom_model(
 
     // Build display name
     let display_name = if params.display_name.trim().is_empty() {
-        params.model_id.clone()
+        params.model.clone()
     } else {
         params.display_name.clone()
     };
     let display_name = truncate_display_name(&display_name);
-
-    // Model key = model_id (unique in DB)
-    let model_key = params.model_id.trim().to_string();
 
     // API key: empty string → None
     let api_key = if params.api_key.trim().is_empty() {
@@ -350,10 +341,10 @@ pub fn add_custom_model(
     conn.execute(
         "INSERT INTO models (model, display_name, short_description, description, provider, \
          is_cloud, is_premium, is_enabled, daily_limit, is_internal, api_url, api_key, \
-         request_format, model_id) \
-         VALUES (?1, ?2, ?3, ?4, ?5, 1, 0, 1, NULL, 0, ?6, ?7, ?8, ?9)",
+         request_format) \
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, 0, 1, NULL, 0, ?6, ?7, ?8)",
         rusqlite::params![
-            model_key,
+            params.model.trim(),
             display_name,
             "Custom model added by you.",
             "Custom model added by you.",
@@ -361,19 +352,14 @@ pub fn add_custom_model(
             params.api_url.trim(),
             api_key,
             params.request_format.trim(),
-            params.model_id.trim(),
         ],
     )
-    .map_err(|e| {
-        if e.to_string().contains("UNIQUE constraint failed") {
-            format!("A model with key '{}' already exists", model_key)
-        } else {
-            format!("Failed to add custom model: {}", e)
-        }
-    })?;
+    .map_err(|e| format!("Failed to add custom model: {}", e))?;
 
-    log::info!("[models] Added custom model '{}' (provider: {}, format: {})",
-        model_key, params.provider, params.request_format);
+    let new_id = conn.last_insert_rowid();
+
+    log::info!("[models] Added custom model '{}' id={} (provider: {}, format: {})",
+        params.model.trim(), new_id, params.provider, params.request_format);
 
     let _ = emit(
         MODELS_CHANGED,
@@ -382,13 +368,13 @@ pub fn add_custom_model(
         },
     );
 
-    Ok(model_key)
+    Ok(new_id)
 }
 
 /// Update an existing custom BYOK model. Internal models cannot be edited.
 #[tauri::command]
 pub fn update_custom_model(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     state: tauri::State<DbState>,
     params: UpdateCustomModelParams,
 ) -> Result<(), String> {
@@ -396,8 +382,8 @@ pub fn update_custom_model(
         return Err(format!("Invalid request format: {}", params.request_format));
     }
 
-    if params.model_id.trim().is_empty() {
-        return Err("Model ID is required".to_string());
+    if params.model.trim().is_empty() {
+        return Err("Model identifier is required".to_string());
     }
 
     if params.api_url.trim().is_empty() {
@@ -405,7 +391,7 @@ pub fn update_custom_model(
     }
 
     let display_name = if params.display_name.trim().is_empty() {
-        params.model_id.clone()
+        params.model.clone()
     } else {
         params.display_name.clone()
     };
@@ -417,8 +403,6 @@ pub fn update_custom_model(
         Some(params.api_key.trim().to_string())
     };
 
-    let new_model_key = params.model_id.trim().to_string();
-
     let db_guard = state.0.lock().unwrap();
     let conn = db_guard
         .as_ref()
@@ -427,60 +411,32 @@ pub fn update_custom_model(
     // Verify it's a custom model
     let is_internal: bool = conn
         .query_row(
-            "SELECT is_internal FROM models WHERE model = ?1",
-            params![params.model_key],
+            "SELECT is_internal FROM models WHERE id = ?1",
+            params![params.id],
             |row| row.get::<_, i32>(0).map(|v| v != 0),
         )
-        .map_err(|e| format!("Model '{}' not found: {}", params.model_key, e))?;
+        .map_err(|e| format!("Model id {} not found: {}", params.id, e))?;
 
     if is_internal {
         return Err("Internal models cannot be edited".to_string());
     }
 
-    // Update the model — also update the model key if the model_id changed
     conn.execute(
         "UPDATE models SET model = ?1, display_name = ?2, provider = ?3, api_url = ?4, \
-         api_key = ?5, request_format = ?6, model_id = ?7 WHERE model = ?8",
+         api_key = ?5, request_format = ?6 WHERE id = ?7",
         rusqlite::params![
-            new_model_key,
+            params.model.trim(),
             display_name,
             params.provider.trim(),
             params.api_url.trim(),
             api_key,
             params.request_format.trim(),
-            params.model_id.trim(),
-            params.model_key,
+            params.id,
         ],
     )
-    .map_err(|e| {
-        if e.to_string().contains("UNIQUE constraint failed") {
-            format!("A model with key '{}' already exists", new_model_key)
-        } else {
-            format!("Failed to update model: {}", e)
-        }
-    })?;
+    .map_err(|e| format!("Failed to update model: {}", e))?;
 
-    // If the model key changed, update settings if this was the selected model
-    let old_key = params.model_key.clone();
-    if old_key != new_model_key {
-        let settings_handle = app_handle.clone();
-        let new_key = new_model_key.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Ok(settings) = crate::settings::service::load_user_settings(settings_handle.clone()).await {
-                if settings.model_selection.0 == old_key {
-                    let mut updated = settings;
-                    updated.model_selection = crate::settings::types::ModelSelection(new_key);
-                    if let Err(e) = crate::settings::service::save_user_settings(settings_handle.clone(), updated).await {
-                        log::warn!("[models] Failed to update model selection after rename: {}", e);
-                    } else {
-                        let _ = settings_handle.emit("settings_changed", ());
-                    }
-                }
-            }
-        });
-    }
-
-    log::info!("[models] Updated custom model '{}'", params.model_key);
+    log::info!("[models] Updated custom model id {}", params.id);
 
     let _ = emit(
         MODELS_CHANGED,
@@ -497,7 +453,7 @@ pub fn update_custom_model(
 pub async fn delete_custom_model(
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, DbState>,
-    model_key: String,
+    model_id: i64,
 ) -> Result<(), String> {
     // Phase 1: DB operations (sync, no await while holding lock)
     {
@@ -509,29 +465,30 @@ pub async fn delete_custom_model(
         // Verify it's a custom model
         let is_internal: bool = conn
             .query_row(
-                "SELECT is_internal FROM models WHERE model = ?1",
-                params![model_key],
+                "SELECT is_internal FROM models WHERE id = ?1",
+                params![model_id],
                 |row| row.get::<_, i32>(0).map(|v| v != 0),
             )
-            .map_err(|e| format!("Model '{}' not found: {}", model_key, e))?;
+            .map_err(|e| format!("Model id {} not found: {}", model_id, e))?;
 
         if is_internal {
             return Err("Internal models cannot be deleted".to_string());
         }
 
-        conn.execute("DELETE FROM models WHERE model = ?1 AND is_internal = 0", params![model_key])
+        conn.execute("DELETE FROM models WHERE id = ?1 AND is_internal = 0", params![model_id])
             .map_err(|e| format!("Failed to delete model: {}", e))?;
 
-        log::info!("[models] Deleted custom model '{}'", model_key);
+        log::info!("[models] Deleted custom model id {}", model_id);
     }
     // MutexGuard dropped here — safe to await below
 
     // Phase 2: Check if deleted model was selected and fix up settings
+    let model_id_str = model_id.to_string();
     let settings = crate::settings::service::load_user_settings(app_handle.clone())
         .await
         .unwrap_or_default();
 
-    if settings.model_selection.0 == model_key {
+    if settings.model_selection.0 == model_id_str {
         let fallback = {
             let db_guard = state.0.lock().unwrap();
             let conn = db_guard
@@ -539,16 +496,16 @@ pub async fn delete_custom_model(
                 .ok_or("Database connection not available")?;
 
             conn.query_row(
-                "SELECT model FROM models WHERE is_enabled = 1 ORDER BY is_internal DESC, is_cloud ASC, id ASC LIMIT 1",
+                "SELECT id FROM models WHERE is_enabled = 1 ORDER BY is_internal DESC, is_cloud ASC, id ASC LIMIT 1",
                 [],
-                |row| row.get::<_, String>(0),
+                |row| row.get::<_, i64>(0),
             )
             .ok()
         };
 
-        if let Some(fallback_key) = fallback {
+        if let Some(fallback_id) = fallback {
             let mut updated = settings;
-            updated.model_selection = crate::settings::types::ModelSelection(fallback_key);
+            updated.model_selection = crate::settings::types::ModelSelection(fallback_id.to_string());
             if let Err(e) = crate::settings::service::save_user_settings(app_handle.clone(), updated).await {
                 log::warn!("[models] Failed to auto-switch after delete: {}", e);
             } else {
