@@ -21,7 +21,7 @@ interface ModelSelectorProps {
 export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
   const { settings, setModelSelection } = useSettings();
   const modelSelection = settings?.model_selection ?? "1";
-  const { enabledModels, cloudUsage } = useModelAccess();
+  const { enabledModels, canAffordModel, modelCosts, creditsRemaining, dailyCreditLimit } = useModelAccess();
 
   const handleModelSelectionChange = useCallback(
     async (modelId: string) => {
@@ -60,21 +60,17 @@ export function ModelSelector({ onOpenChange, disabled }: ModelSelectorProps) {
       >
         <DropdownMenuGroup>
           {enabledModels.map((model) => {
-            const usage = model.is_cloud ? cloudUsage[model.model] : undefined;
-            const isUnlimited = usage?.remaining === -1;
-            const isUnavailable = usage?.is_available === false;
-            const isAtLimit = !isUnavailable && !isUnlimited && usage?.is_available && usage.remaining <= 0;
-            const isDisabled = isUnavailable || !!isAtLimit;
+            const cost = model.is_cloud && model.is_internal ? modelCosts[model.model] : undefined;
+            const isAffordable = canAffordModel(model.model);
+            const isDisabled = model.is_cloud && model.is_internal && !isAffordable;
 
             // Build the subtitle line
             let subtitle: { text: string; className: string };
-            if (isUnavailable) {
-              subtitle = { text: "Upgrade to unlock", className: "text-xs text-muted-foreground" };
-            } else if (isAtLimit) {
-              subtitle = { text: "No usage left today", className: "text-xs text-destructive" };
-            } else if (model.is_cloud && usage && !isUnlimited) {
+            if (isDisabled) {
+              subtitle = { text: `Needs ${cost} credit${cost !== 1 ? "s" : ""} — not enough remaining`, className: "text-xs text-destructive" };
+            } else if (model.is_cloud && model.is_internal && cost !== undefined) {
               subtitle = {
-                text: `${model.short_description} ${usage.remaining}/${usage.daily_limit} left today`,
+                text: `${model.short_description} · ${cost} credit${cost !== 1 ? "s" : ""}`,
                 className: "text-xs text-muted-foreground",
               };
             } else {

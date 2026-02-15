@@ -21,11 +21,19 @@ type requestData = {
 	sessionToken?: string;
 }
 
-// Map model keys to Gemini API model names and thinking config.
-// This is the only hardcoded model info — limits come from the `model_limits` table.
-const MODEL_REGISTRY: Record<string, { apiModel: string; thinkingLevel: ThinkingLevel }> = {
-	"gemini-3-flash": { apiModel: "gemini-3-flash-preview", thinkingLevel: ThinkingLevel.MINIMAL },
-	"gemini-3-pro": { apiModel: "gemini-3-pro-preview", thinkingLevel: ThinkingLevel.LOW },
+// Map model keys to Gemini API model names, thinking config, and credit cost.
+// Credit costs are per-request. Supports decimals for future cheaper models.
+const MODEL_REGISTRY: Record<string, { apiModel: string; thinkingLevel: ThinkingLevel; creditCost: number }> = {
+	"gemini-3-flash": { apiModel: "gemini-3-flash-preview", thinkingLevel: ThinkingLevel.MINIMAL, creditCost: 1 },
+	"gemini-3-pro": { apiModel: "gemini-3-pro-preview", thinkingLevel: ThinkingLevel.LOW, creditCost: 3 },
+};
+
+// Daily credit limits per user tier.
+// -1 = unlimited. Premium is placeholder for future use.
+const CREDIT_LIMITS: Record<UserTier, number> = {
+	free: 10,
+	premium: 50,
+	admin: -1,
 };
 
 const extractModelName = (modelType: string): string | null => {
@@ -69,67 +77,12 @@ async function getUserTier(admin: SupabaseClient, userId: string): Promise<UserT
 }
 
 // ---------------------------------------------------------------------------
-// Model limits (database-driven)
+// Credit usage (database-driven)
 // ---------------------------------------------------------------------------
 
-interface ModelLimit {
-	model_type: string;
-	daily_limit: number;
-	is_available: boolean;
-}
-
-/**
- * Fetch model limits for a given tier from the `model_limits` table.
- * Returns a map of model_type → { daily_limit, is_available }.
- */
-async function getModelLimitsForTier(
-	admin: SupabaseClient,
-	tier: UserTier,
-): Promise<Record<string, ModelLimit>> {
-	const { data, error } = await admin
-		.from('model_limits')
-		.select('model_type, daily_limit, is_available')
-		.eq('tier', tier);
-
-	if (error || !data) {
-		console.error('Failed to fetch model limits:', error);
-		return {};
-	}
-
-	const limits: Record<string, ModelLimit> = {};
-	for (const row of data) {
-		limits[row.model_type] = {
-			model_type: row.model_type,
-			daily_limit: row.daily_limit,
-			is_available: row.is_available,
-		};
-	}
-	return limits;
-}
-
-/**
- * Fetch the limit for a single model on a given tier.
- * More efficient than getModelLimitsForTier when only one model is needed
- * (e.g. in the generate path).
- */
-async function getModelLimitForTier(
-	admin: SupabaseClient,
-	tier: UserTier,
-	modelType: string,
-): Promise<ModelLimit | null> {
-	const { data, error } = await admin
-		.from('model_limits')
-		.select('model_type, daily_limit, is_available')
-		.eq('tier', tier)
-		.eq('model_type', modelType)
-		.maybeSingle();
-
-	if (error || !data) return null;
-	return {
-		model_type: data.model_type,
-		daily_limit: data.daily_limit,
-		is_available: data.is_available,
-	};
+/** Create a Supabase admin client (service role — bypasses RLS) */
+function createAdminClient(env: Env): SupabaseClient {
+	return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 /** Get today's date in YYYY-MM-DD format (UTC) */
@@ -137,67 +90,55 @@ function getTodayUTC(): string {
 	return new Date().toISOString().split('T')[0];
 }
 
-/** Create a Supabase admin client (service role — bypasses RLS) */
-function createAdminClient(env: Env): SupabaseClient {
-	return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-}
-
 /**
- * Fetch today's usage for ALL models for a given user in a single query.
- * Returns a map of model_type → requests_used.
+ * Fetch today's total credit usage for a user.
+ * Returns 0 if no usage record exists yet.
  */
-async function getAllUsageToday(admin: SupabaseClient, userId: string): Promise<Record<string, number>> {
+async function getCreditsUsedToday(admin: SupabaseClient, userId: string): Promise<number> {
 	const today = getTodayUTC();
 	const { data, error } = await admin
-		.from('model_usage')
-		.select('model_type, requests_used')
+		.from('credit_usage')
+		.select('credits_used')
 		.eq('user_id', userId)
-		.eq('usage_date', today);
+		.eq('usage_date', today)
+		.maybeSingle();
 
 	if (error) {
-		console.error('Failed to fetch usage:', error);
-		return {};
+		console.error('Failed to fetch credit usage:', error);
+		return 0;
 	}
 
-	const usage: Record<string, number> = {};
-	for (const row of data ?? []) {
-		usage[row.model_type] = row.requests_used;
-	}
-	return usage;
+	return data?.credits_used ?? 0;
 }
 
 /**
- * Increment the request count for a user/model/today.
+ * Increment the credit usage for a user today.
  *
  * Uses Supabase's `.upsert()` with `onConflict` for a single-query operation.
- * The caller passes in `currentUsed` (already fetched during the rate-limit
- * check), so we don't need a separate SELECT — just upsert the new count.
- *
- * Requires a UNIQUE constraint on (user_id, model_type, usage_date).
+ * Requires a UNIQUE constraint on (user_id, usage_date).
  */
-async function incrementUsage(
+async function incrementCreditUsage(
 	admin: SupabaseClient,
 	userId: string,
-	modelType: string,
 	currentUsed: number,
+	creditCost: number,
 ): Promise<void> {
 	const today = getTodayUTC();
 
 	const { error } = await admin
-		.from('model_usage')
+		.from('credit_usage')
 		.upsert(
 			{
 				user_id: userId,
-				model_type: modelType,
 				usage_date: today,
-				requests_used: currentUsed + 1,
+				credits_used: currentUsed + creditCost,
 			},
-			{ onConflict: 'user_id,model_type,usage_date' },
+			{ onConflict: 'user_id,usage_date' },
 		);
 
 	if (error) {
-		console.error('Failed to increment usage:', error);
-		throw new Error('Failed to increment usage');
+		console.error('Failed to increment credit usage:', error);
+		throw new Error('Failed to increment credit usage');
 	}
 }
 
@@ -297,11 +238,10 @@ async function handleGoogleRefresh(request: Request, env: Env): Promise<Response
 }
 
 /**
- * Handle remaining uses query.
+ * Handle remaining credit usage query.
  *
- * Returns the user's effective tier and per-model usage info,
- * all driven by the `profiles`, `subscriptions`, `model_limits`,
- * and `model_usage` tables.
+ * Returns the user's effective tier, global credit usage, and per-model
+ * credit costs. All models are available to all users — no tier-gating.
  */
 async function handleGetRemainingUses(request: Request, env: Env): Promise<Response> {
 	const user = await verifySupabaseUser(request, env);
@@ -311,44 +251,28 @@ async function handleGetRemainingUses(request: Request, env: Env): Promise<Respo
 
 	const admin = createAdminClient(env);
 
-	// Resolve tier and fetch all usage in parallel — these are independent.
-	// Saves a full round-trip vs sequential tier → usage.
-	const [tier, usageToday] = await Promise.all([
+	// Resolve tier and fetch credit usage in parallel
+	const [tier, creditsUsed] = await Promise.all([
 		getUserTier(admin, user.id),
-		getAllUsageToday(admin, user.id),
+		getCreditsUsedToday(admin, user.id),
 	]);
 
-	// Get limits (depends on resolved tier)
-	const limits = await getModelLimitsForTier(admin, tier);
+	const dailyCreditLimit = CREDIT_LIMITS[tier] ?? CREDIT_LIMITS.free;
+	const isUnlimited = dailyCreditLimit === -1;
 
-	// Build response by combining limits + batch usage (all in-memory, no queries)
-	const models: Record<string, {
-		daily_limit: number;
-		requests_used: number;
-		remaining: number;
-		is_available: boolean;
-	}> = {};
-
-	for (const [modelType, limit] of Object.entries(limits)) {
-		if (limit.daily_limit === -1) {
-			models[modelType] = {
-				daily_limit: -1,
-				requests_used: 0,
-				remaining: -1,
-				is_available: limit.is_available,
-			};
-		} else {
-			const used = usageToday[modelType] ?? 0;
-			models[modelType] = {
-				daily_limit: limit.daily_limit,
-				requests_used: used,
-				remaining: Math.max(0, limit.daily_limit - used),
-				is_available: limit.is_available,
-			};
-		}
+	// Build per-model credit costs from the registry
+	const modelCosts: Record<string, number> = {};
+	for (const [modelKey, info] of Object.entries(MODEL_REGISTRY)) {
+		modelCosts[modelKey] = info.creditCost;
 	}
 
-	return new Response(JSON.stringify({ user_tier: tier, models }), {
+	return new Response(JSON.stringify({
+		user_tier: tier,
+		daily_credit_limit: dailyCreditLimit,
+		credits_used: isUnlimited ? 0 : creditsUsed,
+		credits_remaining: isUnlimited ? -1 : Math.max(0, dailyCreditLimit - creditsUsed),
+		model_costs: modelCosts,
+	}), {
 		headers: {
 			'Content-Type': 'application/json',
 			'Access-Control-Allow-Origin': '*',
@@ -360,12 +284,9 @@ async function handleGetRemainingUses(request: Request, env: Env): Promise<Respo
  * Handle starting a generation turn.
  *
  * This is called once per user turn (before the agentic loop starts).
- * It checks the rate limit, increments usage, and returns a session_token.
- * Subsequent LLM calls in the same turn include the session_token to
- * bypass per-call rate limiting.
- *
- * The session is stored in the `generation_sessions` table and is
- * server-side enforced — the client cannot forge or extend sessions.
+ * It checks the global credit limit, increments usage by the model's
+ * credit cost, and returns a session_token. Subsequent LLM calls in
+ * the same turn include the session_token to bypass per-call limiting.
  */
 async function handleStartTurn(request: Request, env: Env): Promise<Response> {
 	const user = await verifySupabaseUser(request, env);
@@ -385,48 +306,38 @@ async function handleStartTurn(request: Request, env: Env): Promise<Response> {
 	}
 
 	// Validate model exists in registry
-	if (!MODEL_REGISTRY[body.modelType]) {
+	const modelInfo = MODEL_REGISTRY[body.modelType];
+	if (!modelInfo) {
 		return new Response('Bad Request: Invalid model type', { status: 400 });
 	}
 
 	const admin = createAdminClient(env);
 
-	// Fetch tier and usage in parallel
-	const [tier, usageToday] = await Promise.all([
+	// Fetch tier and credit usage in parallel
+	const [tier, creditsUsed] = await Promise.all([
 		getUserTier(admin, user.id),
-		getAllUsageToday(admin, user.id),
+		getCreditsUsedToday(admin, user.id),
 	]);
 
-	const modelLimit = await getModelLimitForTier(admin, tier, body.modelType);
+	const dailyCreditLimit = CREDIT_LIMITS[tier] ?? CREDIT_LIMITS.free;
 
-	// Block if model is not available for this tier
-	if (!modelLimit || !modelLimit.is_available) {
-		return new Response(JSON.stringify({
-			error: 'model_not_available',
-			message: `${body.modelType} is not available on the ${tier} plan.`,
-		}), {
-			status: 403,
-			headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-		});
-	}
-
-	// Check daily limit (skip for unlimited tiers where daily_limit = -1)
-	const currentUsed = usageToday[body.modelType] ?? 0;
-	if (modelLimit.daily_limit >= 0 && currentUsed >= modelLimit.daily_limit) {
+	// Check credit limit (skip for unlimited tiers where limit = -1)
+	if (dailyCreditLimit >= 0 && creditsUsed + modelInfo.creditCost > dailyCreditLimit) {
 		return new Response(JSON.stringify({
 			error: 'rate_limit_exceeded',
-			message: `Daily limit of ${modelLimit.daily_limit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
-			daily_limit: modelLimit.daily_limit,
-			requests_used: currentUsed,
+			message: `Not enough credits. This model costs ${modelInfo.creditCost} credit(s) but you only have ${Math.max(0, dailyCreditLimit - creditsUsed)} remaining. Resets at midnight UTC.`,
+			daily_credit_limit: dailyCreditLimit,
+			credits_used: creditsUsed,
+			credit_cost: modelInfo.creditCost,
 		}), {
 			status: 429,
 			headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
 		});
 	}
 
-	// Increment usage for this turn
-	if (modelLimit.daily_limit >= 0) {
-		await incrementUsage(admin, user.id, body.modelType, currentUsed);
+	// Increment credit usage for this turn
+	if (dailyCreditLimit >= 0) {
+		await incrementCreditUsage(admin, user.id, creditsUsed, modelInfo.creditCost);
 	}
 
 	// Create a generation session
@@ -448,6 +359,7 @@ async function handleStartTurn(request: Request, env: Env): Promise<Response> {
 		session_token: session.session_token,
 		max_calls: session.max_calls,
 		expires_at: session.expires_at,
+		credit_cost: modelInfo.creditCost,
 	}), {
 		headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
 	});
@@ -534,8 +446,8 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 
 	// --- Session-based or legacy rate limiting ---
 	// If a session token is provided, validate it (no usage increment).
-	// Otherwise, fall back to per-call rate limiting for backwards compatibility.
-	let usageToday: Record<string, number> = {};
+	// Otherwise, fall back to per-call credit-based rate limiting.
+	let creditsUsedToday = 0;
 
 	if (body.sessionToken) {
 		const sessionResult = await validateSession(admin, body.sessionToken, user.id, body.modelType);
@@ -550,38 +462,29 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		}
 		// Session is valid — skip rate limiting and usage increment below
 	} else {
-		// Legacy path: per-call rate limiting (no session token)
-		const [tier, fetchedUsage] = await Promise.all([
+		// Legacy path: per-call credit-based rate limiting (no session token)
+		const modelInfo = MODEL_REGISTRY[body.modelType];
+		const creditCost = modelInfo?.creditCost ?? 1;
+
+		const [tier, fetchedCredits] = await Promise.all([
 			getUserTier(admin, user.id),
-			getAllUsageToday(admin, user.id),
+			getCreditsUsedToday(admin, user.id),
 		]);
-		usageToday = fetchedUsage;
+		creditsUsedToday = fetchedCredits;
 
-		const modelLimit = await getModelLimitForTier(admin, tier, body.modelType);
+		const dailyCreditLimit = CREDIT_LIMITS[tier] ?? CREDIT_LIMITS.free;
 
-		if (!modelLimit || !modelLimit.is_available) {
+		if (dailyCreditLimit >= 0 && creditsUsedToday + creditCost > dailyCreditLimit) {
 			return new Response(JSON.stringify({
-				error: 'model_not_available',
-				message: `${body.modelType} is not available on the ${tier} plan.`,
+				error: 'rate_limit_exceeded',
+				message: `Not enough credits. This model costs ${creditCost} credit(s) but you only have ${Math.max(0, dailyCreditLimit - creditsUsedToday)} remaining. Resets at midnight UTC.`,
+				daily_credit_limit: dailyCreditLimit,
+				credits_used: creditsUsedToday,
+				credit_cost: creditCost,
 			}), {
-				status: 403,
+				status: 429,
 				headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
 			});
-		}
-
-		if (modelLimit.daily_limit >= 0) {
-			const used = usageToday[body.modelType] ?? 0;
-			if (used >= modelLimit.daily_limit) {
-				return new Response(JSON.stringify({
-					error: 'rate_limit_exceeded',
-					message: `Daily limit of ${modelLimit.daily_limit} requests reached for ${body.modelType}. Resets at midnight UTC.`,
-					daily_limit: modelLimit.daily_limit,
-					requests_used: used,
-				}), {
-					status: 429,
-					headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-				});
-			}
 		}
 	}
 
@@ -623,11 +526,12 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 		const writer = writable.getWriter();
 		const encoder = new TextEncoder();
 
-		// Only increment usage for legacy (non-session) calls
+		// Only increment credit usage for legacy (non-session) calls
 		if (!body.sessionToken) {
-			const currentUsed = usageToday[body.modelType] ?? 0;
-			ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
-				console.error('Failed to increment usage:', e)
+			const modelInfo = MODEL_REGISTRY[body.modelType];
+			const creditCost = modelInfo?.creditCost ?? 1;
+			ctx.waitUntil(incrementCreditUsage(admin, user.id, creditsUsedToday, creditCost).catch(e =>
+				console.error('Failed to increment credit usage:', e)
 			));
 		}
 
@@ -661,11 +565,12 @@ async function handleLlmGenerate(request: Request, env: Env, ctx: ExecutionConte
 			config: chatConfig
 		});
 
-		// Only increment usage for legacy (non-session) calls
+		// Only increment credit usage for legacy (non-session) calls
 		if (!body.sessionToken) {
-			const currentUsed = usageToday[body.modelType] ?? 0;
-			ctx.waitUntil(incrementUsage(admin, user.id, body.modelType, currentUsed).catch(e =>
-				console.error('Failed to increment usage:', e)
+			const modelInfo = MODEL_REGISTRY[body.modelType];
+			const creditCost = modelInfo?.creditCost ?? 1;
+			ctx.waitUntil(incrementCreditUsage(admin, user.id, creditsUsedToday, creditCost).catch(e =>
+				console.error('Failed to increment credit usage:', e)
 			));
 		}
 

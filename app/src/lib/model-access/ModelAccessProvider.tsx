@@ -1,6 +1,6 @@
 "use client";
 
-import type { CloudModelUsage, ModelAccessResponse, ModelEntry } from "@/types/models";
+import type { CreditUsageResponse, ModelEntry } from "@/types/models";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
@@ -21,14 +21,17 @@ import type { ModelAccessState } from "./types";
 
 const initialState: ModelAccessState = {
   userTier: "free",
-  cloudUsage: {},
+  dailyCreditLimit: 10,
+  creditsUsed: 0,
+  creditsRemaining: 10,
+  modelCosts: {},
   models: [],
   isHydrated: false,
 };
 
 type ModelAccessAction =
-  | { type: "SET_ACCESS_DATA"; payload: { userTier: "free" | "premium" | "admin"; cloudUsage: Record<string, CloudModelUsage> } }
-  | { type: "DECREMENT_REMAINING"; payload: { modelKey: string } }
+  | { type: "SET_CREDIT_DATA"; payload: { userTier: "free" | "premium" | "admin"; dailyCreditLimit: number; creditsUsed: number; creditsRemaining: number; modelCosts: Record<string, number> } }
+  | { type: "DECREMENT_CREDITS"; payload: { creditCost: number } }
   | { type: "SET_MODELS"; payload: { models: ModelEntry[] } }
   | { type: "SET_HYDRATED" };
 
@@ -37,28 +40,24 @@ function modelAccessReducer(
   action: ModelAccessAction,
 ): ModelAccessState {
   switch (action.type) {
-    case "SET_ACCESS_DATA":
+    case "SET_CREDIT_DATA":
       return {
         ...state,
         userTier: action.payload.userTier,
-        cloudUsage: action.payload.cloudUsage,
+        dailyCreditLimit: action.payload.dailyCreditLimit,
+        creditsUsed: action.payload.creditsUsed,
+        creditsRemaining: action.payload.creditsRemaining,
+        modelCosts: action.payload.modelCosts,
         isHydrated: true,
       };
 
-    case "DECREMENT_REMAINING": {
-      const { modelKey } = action.payload;
-      const current = state.cloudUsage[modelKey];
-      if (!current || current.remaining === -1) return state; // unlimited
+    case "DECREMENT_CREDITS": {
+      const { creditCost } = action.payload;
+      if (state.creditsRemaining === -1) return state; // unlimited
       return {
         ...state,
-        cloudUsage: {
-          ...state.cloudUsage,
-          [modelKey]: {
-            ...current,
-            requests_used: current.requests_used + 1,
-            remaining: Math.max(0, current.remaining - 1),
-          },
-        },
+        creditsUsed: state.creditsUsed + creditCost,
+        creditsRemaining: Math.max(0, state.creditsRemaining - creditCost),
       };
     }
 
@@ -79,7 +78,7 @@ function modelAccessReducer(
 
 interface ModelAccessContextType {
   state: ModelAccessState;
-  /** Refresh usage data from the Cloudflare backend. */
+  /** Refresh credit usage data from the Cloudflare backend. */
   refreshUsage: () => Promise<void>;
   /** Refresh the model list from the local database. */
   refreshModels: () => Promise<void>;
@@ -115,15 +114,18 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
     isFetching.current = true;
 
     try {
-      const result = await invoke<ModelAccessResponse>(
-        "get_remaining_cloud_uses",
+      const result = await invoke<CreditUsageResponse>(
+        "get_credit_usage",
       );
-      console.log("Fetched model access data:", result);
+      console.log("Fetched credit usage data:", result);
       dispatch({
-        type: "SET_ACCESS_DATA",
+        type: "SET_CREDIT_DATA",
         payload: {
           userTier: result.user_tier as "free" | "premium" | "admin",
-          cloudUsage: result.models as Record<string, CloudModelUsage>,
+          dailyCreditLimit: result.daily_credit_limit,
+          creditsUsed: result.credits_used,
+          creditsRemaining: result.credits_remaining,
+          modelCosts: (result.model_costs ?? {}) as Record<string, number>,
         },
       });
     } catch {
@@ -145,12 +147,12 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
     let unlistenModels: UnlistenFn | undefined;
 
     const subscribe = async () => {
-      unlistenUsage = await listen<{ model_key: string }>(
+      unlistenUsage = await listen<{ credit_cost: number }>(
         "cloud_usage_decremented",
         (event) => {
           dispatch({
-            type: "DECREMENT_REMAINING",
-            payload: { modelKey: event.payload.model_key },
+            type: "DECREMENT_CREDITS",
+            payload: { creditCost: event.payload.credit_cost },
           });
         },
       );

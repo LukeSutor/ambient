@@ -30,35 +30,42 @@ provider: string,
 display_name: string, };
 
 /**
- * Usage info for a single cloud model.
+ * Global credit usage info for the authenticated user.
  */
-export type CloudModelUsage = { 
+export type CreditUsageInfo = { 
 /**
- * Daily request limit. -1 means unlimited.
+ * Daily credit limit. -1 means unlimited.
  */
-daily_limit: number, requests_used: number, 
+daily_credit_limit: number, 
 /**
- * Remaining uses today. -1 means unlimited.
+ * Credits consumed today.
  */
-remaining: number, 
+credits_used: number, 
 /**
- * Whether this model is accessible on the user's current tier.
+ * Credits remaining today. -1 means unlimited.
  */
-is_available: boolean, };
+credits_remaining: number, 
+/**
+ * Per-model credit costs keyed by model key (e.g. "gemini-3-flash" → 1.0).
+ */
+model_costs: { [key in string]?: number }, };
 
 /**
- * Full model access response from the backend.
- * Includes the user's effective tier and per-model usage data.
+ * Full credit usage response from the backend.
  */
-export type ModelAccessResponse = { 
+export type CreditUsageResponse = { 
 /**
  * The user's effective tier: "free", "premium", or "admin".
  */
 user_tier: string, 
 /**
- * Per-model usage keyed by model key (e.g. "gemini-3-flash").
+ * Global credit usage data.
  */
-models: { [key in string]?: CloudModelUsage }, };
+daily_credit_limit: number, credits_used: number, credits_remaining: number, 
+/**
+ * Per-model credit costs keyed by model key (e.g. "gemini-3-flash" → 1.0).
+ */
+model_costs: { [key in string]?: number }, };
 
 /**
  * A model entry from the database.
@@ -85,7 +92,7 @@ description: string,
  * The model provider for display (e.g. "local", "google", "openai", "deepseek").
  * Resolves to a provider image in the UI: `providers/{provider}.png`.
  */
-provider: string, is_cloud: boolean, is_premium: boolean, daily_limit: number | null, 
+provider: string, is_cloud: boolean, 
 /**
  * Whether this model is enabled/visible in the UI.
  */

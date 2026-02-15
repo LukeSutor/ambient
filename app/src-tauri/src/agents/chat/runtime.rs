@@ -225,13 +225,13 @@ impl AgentRuntime {
             match create_generation_session(&self.model_key).await {
                 Ok(session) => {
                     self.session_token = Some(session.session_token);
-                    log::info!("[agent] Generation session created for model '{}'", self.model_key);
+                    log::info!("[agent] Generation session created for model '{}' (cost: {} credits)", self.model_key, session.credit_cost);
 
-                    // Emit usage decrement event so the frontend updates counters
+                    // Emit usage decrement event so the frontend updates credit counters
                     let _ = emit(
                         CLOUD_USAGE_DECREMENTED,
                         CloudUsageDecrementedEvent {
-                            model_key: self.model_key.clone(),
+                            credit_cost: session.credit_cost,
                             timestamp: chrono::Local::now().to_rfc3339(),
                         },
                     );

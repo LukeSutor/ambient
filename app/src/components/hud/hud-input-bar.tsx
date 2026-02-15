@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
 import { toast } from "sonner";
 import { AttachmentList } from "./attachment-list";
+import { CreditIndicator } from "./credit-indicator";
 import { ModelSelector } from "./model-selector";
 import { PlusMenu } from "./plus-menu";
 import { ToolMenu } from "./tool-menu";
@@ -84,7 +85,7 @@ export function HUDInputBar() {
   } = useConversation();
   const { closeHUD, setChatExpanded } = useWindows();
   const { hudDimensions, settings } = useSettings();
-  const { getUsage, enabledModels } = useModelAccess();
+  const { canAffordModel, enabledModels } = useModelAccess();
 
   // Computed values
   const isLoading = ocrLoading || isStreaming;
@@ -127,20 +128,13 @@ export function HUDInputBar() {
     const query = input.trim();
     if (!query || isLoading) return;
 
-    // Pre-check: block send if the selected cloud model is at its usage limit
+    // Pre-check: block send if the selected cloud model can't be afforded
     const modelId = settings?.model_selection;
     if (modelId) {
       const selectedModel = enabledModels.find((m) => m.id.toString() === modelId);
-      const usage = selectedModel ? getUsage(selectedModel.model) : undefined;
-      if (usage) {
-        if (!usage.is_available) {
-          toast.error("This model is not available on your current plan. Please upgrade or switch models.");
-          return;
-        }
-        if (usage.remaining === 0 && usage.daily_limit !== -1) {
-          toast.error("You've reached your daily usage limit for this model. Try again tomorrow or switch to a different model.");
-          return;
-        }
+      if (selectedModel?.is_cloud && selectedModel.is_internal && !canAffordModel(selectedModel.model)) {
+        toast.error("Not enough credits for this model. Try a different model or wait until tomorrow.");
+        return;
       }
     }
 
@@ -152,7 +146,7 @@ export function HUDInputBar() {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
     }
-  }, [input, isLoading, conversationId, sendMessage, setChatExpanded, settings, getUsage, enabledModels]);
+  }, [input, isLoading, conversationId, sendMessage, setChatExpanded, settings, canAffordModel, enabledModels]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -288,6 +282,8 @@ export function HUDInputBar() {
             onOpenChange={setIsModelDropdownOpen}
             disabled={isLoading}
           />
+
+          <CreditIndicator />
 
           {isStreaming ? (
             <InputGroupButton

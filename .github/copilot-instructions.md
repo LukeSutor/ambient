@@ -50,7 +50,7 @@ SettingsProvider → RoleAccessProvider → ModelAccessProvider → SetupProvide
 - [WindowsProvider](app/src/lib/windows/WindowsProvider.tsx): Window expand/collapse state
 - [RoleAccessProvider](app/src/lib/role-access/RoleAccessProvider.tsx): Auth state, user info, Google auth status
 - [SetupProvider](app/src/lib/setup/SetupProvider.tsx): Model download progress
-- [ModelAccessProvider](app/src/lib/model-access/ModelAccessProvider.tsx): Cloud usage, model list, user tier — updates in real time via Tauri events (`cloud_usage_decremented`, `models_changed`, `auth_changed`)
+- [ModelAccessProvider](app/src/lib/model-access/ModelAccessProvider.tsx): Credit usage, model list, user tier — updates in real time via Tauri events (`cloud_usage_decremented`, `models_changed`, `auth_changed`)
 
 ### Backend Module Organization
 
@@ -87,13 +87,18 @@ module/
 7. Repeat until text response or max iterations reached
 8. Check cancellation signal (`Arc<AtomicBool>`) on each iteration
 
-**Session-Based Rate Limiting (Cloud Models):**
-- Before the agentic loop, `create_generation_session(model_type)` calls the Cloudflare Worker's `/v1/usage/start-turn` endpoint
-- This checks the user's daily limit, increments `model_usage`, and creates a `generation_sessions` row with a short-lived session token (10 min TTL, max 50 calls)
+**Session-Based Credit System (Cloud Models):**
+- All cloud models draw from a shared daily credit pool (not per-model limits)
+- Credit costs: Flash = 1 credit, Pro = 3 credits (decimal costs supported via `f64`/`REAL`)
+- Daily credit limits by tier: free = 10, premium = 50, admin = -1 (unlimited)
+- Before the agentic loop, `create_generation_session(model_type)` calls `/v1/usage/start-turn`
+- This checks `credits_used + credit_cost <= daily_credit_limit`, increments `credit_usage`, and creates a `generation_sessions` row (10 min TTL, max 50 calls)
 - The session token is attached to every `LlmRequest` in the loop via `.with_session_token()`
 - The Cloudflare Worker validates the session on each `/v1/llm/generate` call — checks ownership, model match, expiry, and call count
-- This means a multi-iteration agentic turn only counts as **one** usage against the daily limit
-- Non-retryable errors: `rate_limit_exceeded`, `model_not_available`, `session_invalid`
+- Multi-iteration agentic turns count as **one** credit deduction against the daily pool
+- Non-retryable errors: `rate_limit_exceeded`, `session_invalid`
+- `MODEL_REGISTRY` in the worker maps model types to `{ apiModel, thinkingLevel, creditCost }`
+- `CREDIT_LIMITS` maps tiers to daily credit limits
 
 ### Browser-Use Runtime
 
@@ -263,7 +268,7 @@ All user data is stored in per-user profile directories under `{app_data}/profil
 - `conversations`: Conversation metadata
 - `conversation_messages`: Messages with `message_type` (text/tool_calls/tool_results) and structured `metadata` JSON
 - `attachments`: File attachments per message
-- `models`: Registered LLM models with `id` (INTEGER PK), `model` (API identifier, not unique), `display_name`, `provider` (default 'unknown'), `is_internal` flag, BYOK fields (`api_url`, `api_key`, `request_format`). All lookups use `id`, not `model` text.
+- `models`: Registered LLM models with `id` (INTEGER PK), `model` (API identifier, not unique), `display_name`, `provider` (default 'unknown'), `is_internal` flag, BYOK fields (`api_url`, `api_key`, `request_format`). No `is_premium` or `daily_limit` columns — all cloud models share a global credit pool. All lookups use `id`, not `model` text.
 - `memory_entries` + `memory_entries_vec` + `memory_entries_fts`: Extracted facts with embeddings and full-text search
 - `conversation_skills`: Activated skills per conversation
 - `token_usage`: LLM usage tracking (prompt_tokens, completion_tokens, timestamp)
@@ -271,8 +276,7 @@ All user data is stored in per-user profile directories under `{app_data}/profil
 **Key Tables (Supabase - cloud):**
 - `profiles`: User metadata (user_id, tier)
 - `subscriptions`: Stripe subscription state
-- `model_limits`: Per-tier daily limits keyed by model_type (e.g. "fast", "pro")
-- `model_usage`: Daily usage counters per user per model_type (upserted on each turn)
+- `credit_usage`: Daily credit usage per user with `credits_used` (REAL), UNIQUE on `(user_id, usage_date)`. Replaces old `model_usage` + `model_limits` tables.
 - `generation_sessions`: Short-lived session tokens for per-turn rate limiting (10 min TTL, max 50 calls)
 
 **Access Pattern:**
@@ -319,7 +323,7 @@ pub enum MessageMetadata {
 - `resolved_model.id` is used for token usage tracking and DB lookups
 
 **BYOK Model Management:**
-- `add_custom_model`: Validates, inserts BYOK model with `is_cloud=1, is_internal=0, daily_limit=NULL`, returns `i64` row id
+- `add_custom_model`: Validates, inserts BYOK model with `is_cloud=1, is_internal=0`, returns `i64` row id
 - `update_custom_model`: Updates BYOK model fields by `id` (blocks internal models)
 - `delete_custom_model`: Deletes BYOK model by `id`, auto-switches selection if deleted model was active
 - `model` field = the API identifier sent in requests (e.g. `gpt-4o`, `claude-sonnet-4-20250514`). Not unique — multiple entries can share the same API model.
@@ -401,8 +405,8 @@ Detailed instructions for the AI agent...
 
 **Endpoints:**
 - `POST /v1/llm/generate` — LLM completion (validates session token if provided, else falls back to per-call rate limiting)
-- `POST /v1/usage/remaining` — Get remaining daily uses for all cloud models
-- `POST /v1/usage/start-turn` — Create a generation session (checks rate limit, increments usage once, returns session token)
+- `POST /v1/usage/remaining` — Get remaining daily credits and per-model costs
+- `POST /v1/usage/start-turn` — Create a generation session (checks credit limit, increments credits once, returns session token with `credit_cost`)
 - `POST /v1/auth/google/refresh` — Refresh Google OAuth token
 
 **LLM Completion Request:**
@@ -428,7 +432,7 @@ Authorization: Bearer <supabase_access_token>
 
 { "modelType": "fast" | "pro" }
 
-// Returns: { session_token, max_calls, expires_at }
+// Returns: { session_token, max_calls, expires_at, credit_cost }
 ```
 
 **Google Token Refresh:**

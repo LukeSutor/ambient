@@ -10,9 +10,9 @@ export type ChatStreamEvent = { delta: string, is_finished: boolean, full_respon
 
 export type CloudUsageDecrementedEvent = { 
 /**
- * The model key whose usage was consumed (e.g. "gemini-3-flash").
+ * The credit cost that was consumed for this turn.
  */
-model_key: string, timestamp: string, };
+credit_cost: number, timestamp: string, };
 
 export type DatabaseRecoveredEvent = { 
 /**

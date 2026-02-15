@@ -108,19 +108,17 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           description TEXT NOT NULL DEFAULT '',
           provider TEXT NOT NULL DEFAULT 'unknown',
           is_cloud INTEGER NOT NULL DEFAULT 0,
-          is_premium INTEGER NOT NULL DEFAULT 0,
           is_enabled INTEGER NOT NULL DEFAULT 1,
-          daily_limit INTEGER,
           is_internal INTEGER NOT NULL DEFAULT 1,
           api_url TEXT,
           api_key TEXT,
           request_format TEXT NOT NULL DEFAULT 'openai'
         );
 
-        INSERT OR IGNORE INTO models (model, display_name, short_description, description, provider, is_cloud, is_premium, is_enabled, daily_limit, is_internal, request_format) VALUES
-          ('qwen3vl-2b', 'Local', 'Runs on your device.', 'Ultimate privacy. Runs entirely on your device with no internet required. Your data never leaves your machine.', 'local', 0, 0, 1, NULL, 1, 'openai'),
-          ('gemini-3-flash', 'Gemini 3 Flash', 'Fast cloud model.', 'Google''s fast model with advanced reasoning, tool use, and multimodal capabilities.', 'google', 1, 0, 1, 3, 1, 'gemini'),
-          ('gemini-3-pro', 'Gemini 3 Pro', 'Most advanced model.', 'Google''s most advanced model with state-of-the-art reasoning and generation capabilities.', 'google', 1, 1, 1, 0, 1, 'gemini');
+        INSERT OR IGNORE INTO models (model, display_name, short_description, description, provider, is_cloud, is_enabled, is_internal, request_format) VALUES
+          ('qwen3vl-2b', 'Local', 'Runs on your device.', 'Ultimate privacy. Runs entirely on your device with no internet required. Your data never leaves your machine.', 'local', 0, 1, 1, 'openai'),
+          ('gemini-3-flash', 'Gemini 3 Flash', 'Fast cloud model.', 'Google''s fast model with advanced reasoning, tool use, and multimodal capabilities.', 'google', 1, 1, 1, 'gemini'),
+          ('gemini-3-pro', 'Gemini 3 Pro', 'Most advanced model.', 'Google''s most advanced model with state-of-the-art reasoning and generation capabilities.', 'google', 1, 1, 1, 'gemini');
 
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (

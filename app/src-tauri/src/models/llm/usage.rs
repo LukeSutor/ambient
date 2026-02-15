@@ -10,36 +10,42 @@ pub struct GenerationSession {
     pub session_token: String,
     pub max_calls: i32,
     pub expires_at: String,
+    /// The credit cost that was charged for this turn.
+    pub credit_cost: f64,
 }
 
-/// Usage info for a single cloud model.
+/// Global credit usage info for the authenticated user.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
-pub struct CloudModelUsage {
-    /// Daily request limit. -1 means unlimited.
-    pub daily_limit: i32,
-    pub requests_used: i32,
-    /// Remaining uses today. -1 means unlimited.
-    pub remaining: i32,
-    /// Whether this model is accessible on the user's current tier.
-    pub is_available: bool,
+pub struct CreditUsageInfo {
+    /// Daily credit limit. -1 means unlimited.
+    pub daily_credit_limit: f64,
+    /// Credits consumed today.
+    pub credits_used: f64,
+    /// Credits remaining today. -1 means unlimited.
+    pub credits_remaining: f64,
+    /// Per-model credit costs keyed by model key (e.g. "gemini-3-flash" → 1.0).
+    pub model_costs: HashMap<String, f64>,
 }
 
-/// Full model access response from the backend.
-/// Includes the user's effective tier and per-model usage data.
+/// Full credit usage response from the backend.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "models.ts")]
-pub struct ModelAccessResponse {
+pub struct CreditUsageResponse {
     /// The user's effective tier: "free", "premium", or "admin".
     pub user_tier: String,
-    /// Per-model usage keyed by model key (e.g. "gemini-3-flash").
-    pub models: HashMap<String, CloudModelUsage>,
+    /// Global credit usage data.
+    pub daily_credit_limit: f64,
+    pub credits_used: f64,
+    pub credits_remaining: f64,
+    /// Per-model credit costs keyed by model key (e.g. "gemini-3-flash" → 1.0).
+    pub model_costs: HashMap<String, f64>,
 }
 
-/// Get model access info for the authenticated user.
-/// Returns the user's tier and per-model usage from the Cloudflare backend.
+/// Get credit usage info for the authenticated user.
+/// Returns the user's tier and global credit usage from the Cloudflare backend.
 #[tauri::command]
-pub async fn get_remaining_cloud_uses() -> Result<ModelAccessResponse, String> {
+pub async fn get_credit_usage() -> Result<CreditUsageResponse, String> {
     let access_token = get_access_token_command()
         .await?
         .ok_or_else(|| "No access token found. Please sign in.".to_string())?;
@@ -52,18 +58,18 @@ pub async fn get_remaining_cloud_uses() -> Result<ModelAccessResponse, String> {
         .header("Authorization", format!("Bearer {}", access_token))
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch remaining uses: {}", e))?;
+        .map_err(|e| format!("Failed to fetch credit usage: {}", e))?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("Failed to fetch remaining uses ({}): {}", status, text));
+        return Err(format!("Failed to fetch credit usage ({}): {}", status, text));
     }
 
-    let response: ModelAccessResponse = resp
+    let response: CreditUsageResponse = resp
         .json()
         .await
-        .map_err(|e| format!("Failed to parse remaining uses: {}", e))?;
+        .map_err(|e| format!("Failed to parse credit usage: {}", e))?;
 
     Ok(response)
 }

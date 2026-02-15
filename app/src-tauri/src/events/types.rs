@@ -146,8 +146,8 @@ pub const CLOUD_USAGE_DECREMENTED: &str = "cloud_usage_decremented";
 #[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[ts(export, export_to = "events.ts")]
 pub struct CloudUsageDecrementedEvent {
-  /// The model key whose usage was consumed (e.g. "gemini-3-flash").
-  pub model_key: String,
+  /// The credit cost that was consumed for this turn.
+  pub credit_cost: f64,
   pub timestamp: String,
 }
 

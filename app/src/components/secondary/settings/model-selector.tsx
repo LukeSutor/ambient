@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useModelAccess } from "@/lib/model-access";
-import type { CloudModelUsage, ModelEntry } from "@/types/models";
+import type { ModelEntry } from "@/types/models";
 import { Zap } from "lucide-react";
 
 /** Resolve a provider image path. Local uses `/logo.png`, everything else
@@ -44,15 +44,11 @@ function ProviderIcon({ model }: { model: ModelEntry }) {
   );
 }
 
-function RemainingBadge({ usage }: { usage?: CloudModelUsage }) {
-  if (!usage || !usage.is_available) return null;
-  const { remaining, daily_limit } = usage;
-  // Unlimited access (-1) or no daily limit — nothing to show
-  if (remaining === -1 || daily_limit <= 0) return null;
-
+function CreditCostBadge({ cost }: { cost?: number }) {
+  if (cost === undefined) return null;
   return (
-    <span className={`text-xs ${remaining > 0 ? 'text-muted-foreground' : 'text-destructive font-medium'}`}>
-      {remaining > 0 ? `${remaining}/${daily_limit} uses left today` : '0 uses left today'}
+    <span className="text-xs text-muted-foreground">
+      {cost} credit{cost !== 1 ? "s" : ""} per use
     </span>
   );
 }
@@ -77,18 +73,13 @@ export function ModelSelector({
   onChange,
   disabled,
 }: ModelSelectorProps) {
-  const { enabledModels, cloudUsage } = useModelAccess();
+  const { enabledModels, canAffordModel, modelCosts } = useModelAccess();
 
   const handleChange = (v: string) => {
     const model = enabledModels.find((m) => m.id.toString() === v);
 
-    if (model?.is_cloud) {
-      const usage = cloudUsage[model.model];
-      // Block if model is not available for this tier
-      if (usage && !usage.is_available) return;
-      // Block if at daily limit (remaining === -1 means unlimited)
-      if (usage && usage.is_available && usage.remaining !== -1 && usage.remaining <= 0) return;
-    }
+    // Block if user can't afford this model
+    if (model?.is_cloud && model.is_internal && !canAffordModel(model.model)) return;
 
     onChange(v);
   };
@@ -112,15 +103,10 @@ export function ModelSelector({
           </SelectLabel>
 
           {enabledModels.map((model, index) => {
-            const usage = cloudUsage[model.model];
-            const isUnlimited = usage?.remaining === -1;
-            const isUnavailable = model.is_cloud && usage?.is_available === false;
-            const isAtLimit = model.is_cloud && !isUnavailable && !isUnlimited && usage?.is_available && usage.remaining <= 0;
-            // Only use Radix disabled for at-limit models (blocks all interaction).
-            // Unavailable premium models stay interactive so the Upgrade button is clickable —
-            // handleChange() prevents the actual selection.
-            const isRadixDisabled = !!isAtLimit;
-            const isVisuallyDisabled = isUnavailable || !!isAtLimit;
+            const cost = model.is_cloud && model.is_internal ? modelCosts[model.model] : undefined;
+            const isAffordable = canAffordModel(model.model);
+            const isUnaffordable = model.is_cloud && model.is_internal && !isAffordable;
+            const isVisuallyDisabled = isUnaffordable;
 
             return (
               <div key={model.id}>
@@ -128,7 +114,7 @@ export function ModelSelector({
                 <SelectItem
                   value={model.id.toString()}
                   className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isVisuallyDisabled ? 'opacity-50' : ''}`}
-                  disabled={isRadixDisabled}
+                  disabled={isUnaffordable}
                 >
                   <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-3">
@@ -138,25 +124,14 @@ export function ModelSelector({
                         <span className="text-xs text-muted-foreground text-left">
                           {model.description}
                         </span>
-                        {model.is_cloud && usage?.is_available && (
-                          <RemainingBadge usage={usage} />
+                        {model.is_cloud && model.is_internal && (
+                          <CreditCostBadge cost={cost} />
+                        )}
+                        {isUnaffordable && (
+                          <span className="text-xs text-destructive font-medium">Not enough credits</span>
                         )}
                       </div>
                     </div>
-                    {model.is_premium && isUnavailable && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 mr-4 text-xs px-2 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:from-purple-100 hover:to-pink-100"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.location.href = "/secondary/upgrade";
-                        }}
-                      >
-                        Upgrade
-                      </Button>
-                    )}
                   </div>
                 </SelectItem>
               </div>

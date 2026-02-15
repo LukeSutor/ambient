@@ -32,21 +32,20 @@ import { ModelDialog } from "./model-dialog";
  * reselect only picks from accessible models.
  */
 export function ModelVisibilityPopover() {
-  const { models, isModelAvailable } = useModelAccess();
+  const { models } = useModelAccess();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ModelEntry | null>(null);
 
-  /** Model ids the user can actually access (based on tier). */
+  /** All model ids — all models are accessible to all users with the credit system. */
   const allowedModelIds = useMemo(
-    () => models.filter((m) => isModelAvailable(m.model)).map((m) => m.id),
-    [models, isModelAvailable],
+    () => models.map((m) => m.id),
+    [models],
   );
 
-  /** Number of enabled models that the user can access. */
-  const allowedEnabledCount = useMemo(
-    () =>
-      models.filter((m) => m.is_enabled && isModelAvailable(m.model)).length,
-    [models, isModelAvailable],
+  /** Number of enabled models. */
+  const enabledCount = useMemo(
+    () => models.filter((m) => m.is_enabled).length,
+    [models],
   );
 
   const handleToggle = useCallback(
@@ -95,16 +94,15 @@ export function ModelVisibilityPopover() {
           </PopoverHeader>
           <div className="flex flex-col gap-3 mt-4">
             {models.map((model) => {
-              const isAllowed = isModelAvailable(model.model);
-              // Disable checkbox if this is the last allowed-and-enabled model
-              const isLastAllowedEnabled =
-                model.is_enabled && isAllowed && allowedEnabledCount <= 1;
+              // Disable checkbox if this is the last enabled model
+              const isLastEnabled =
+                model.is_enabled && enabledCount <= 1;
               return (
                 <Field key={model.id} orientation="horizontal">
                   <Checkbox
                     id={`model-${model.id}`}
                     checked={model.is_enabled}
-                    disabled={isLastAllowedEnabled}
+                    disabled={isLastEnabled}
                     onCheckedChange={() =>
                       void handleToggle(model.id, model.is_enabled)
                     }

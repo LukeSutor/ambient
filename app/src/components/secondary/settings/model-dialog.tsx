@@ -132,7 +132,7 @@ export function ModelDialog({
       try {
         if (isEditing && model) {
           const params: UpdateCustomModelParams = {
-            id: model.id,
+            id: BigInt(model.id),
             model: values.model,
             api_url: values.api_url,
             api_key: values.api_key ?? "",

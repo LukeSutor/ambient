@@ -27,8 +27,6 @@ pub struct ModelEntry {
     /// Resolves to a provider image in the UI: `providers/{provider}.png`.
     pub provider: String,
     pub is_cloud: bool,
-    pub is_premium: bool,
-    pub daily_limit: Option<i32>,
     /// Whether this model is enabled/visible in the UI.
     pub is_enabled: bool,
     /// Whether this is an internal (built-in) model vs. user-added BYOK model.
@@ -51,18 +49,16 @@ fn model_from_row(row: &rusqlite::Row) -> rusqlite::Result<ModelEntry> {
         description: row.get(4)?,
         provider: row.get(5)?,
         is_cloud: row.get::<_, i32>(6)? != 0,
-        is_premium: row.get::<_, i32>(7)? != 0,
-        daily_limit: row.get(8)?,
-        is_enabled: row.get::<_, i32>(9)? != 0,
-        is_internal: row.get::<_, i32>(10)? != 0,
-        api_url: row.get(11)?,
-        api_key: row.get(12)?,
-        request_format: row.get(13)?,
+        is_enabled: row.get::<_, i32>(7)? != 0,
+        is_internal: row.get::<_, i32>(8)? != 0,
+        api_url: row.get(9)?,
+        api_key: row.get(10)?,
+        request_format: row.get(11)?,
     })
 }
 
 const SELECT_COLS: &str = "id, model, display_name, short_description, description, provider, \
-     is_cloud, is_premium, daily_limit, is_enabled, is_internal, api_url, api_key, request_format";
+     is_cloud, is_enabled, is_internal, api_url, api_key, request_format";
 
 /// Get all models from the database.
 #[tauri::command]
@@ -340,9 +336,9 @@ pub fn add_custom_model(
 
     conn.execute(
         "INSERT INTO models (model, display_name, short_description, description, provider, \
-         is_cloud, is_premium, is_enabled, daily_limit, is_internal, api_url, api_key, \
+         is_cloud, is_enabled, is_internal, api_url, api_key, \
          request_format) \
-         VALUES (?1, ?2, ?3, ?4, ?5, 1, 0, 1, NULL, 0, ?6, ?7, ?8)",
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, 1, 0, ?6, ?7, ?8)",
         rusqlite::params![
             params.model.trim(),
             display_name,
