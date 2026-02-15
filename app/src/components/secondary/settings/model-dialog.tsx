@@ -2,14 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from "@/components/ui/combobox";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -66,6 +58,31 @@ const PROVIDERS = [
   "unknown",
 ] as const;
 
+/** Display labels for each provider value. */
+const PROVIDER_LABELS: Record<(typeof PROVIDERS)[number], string> = {
+  openai: "OpenAI",
+  google: "Google",
+  anthropic: "Anthropic",
+  deepseek: "DeepSeek",
+  xai: "xAI",
+  zai: "Zai",
+  minimax: "MiniMax",
+  qwen: "Qwen",
+  nvidia: "Nvidia",
+  meta: "Meta",
+  mistral: "Mistral",
+  microsoft: "Microsoft",
+  huggingface: "HuggingFace",
+  openrouter: "OpenRouter",
+  groq: "Groq",
+  unknown: "Unknown",
+};
+
+/** Get the image path for a provider. */
+function providerImage(p: (typeof PROVIDERS)[number]) {
+  return p === "unknown" ? "/logo.png" : `/providers/${p}.webp`;
+}
+
 const REQUEST_FORMATS = ["openai", "gemini", "anthropic"] as const;
 
 // ── Zod schema ─────────────────────────────────────────────────────
@@ -91,13 +108,6 @@ const modelFormSchema = z.object({
 
 type ModelFormValues = z.infer<typeof modelFormSchema>;
 
-/** Provider item for the combobox. */
-type ProviderItem = {
-  label: string;
-  value: (typeof PROVIDERS)[number];
-  image: string;
-};
-
 // ── Props ──────────────────────────────────────────────────────────
 interface ModelDialogProps {
   open: boolean;
@@ -114,16 +124,6 @@ export function ModelDialog({
   const isEditing = !!model;
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const providerItems: ProviderItem[] = useMemo(
-    () =>
-      PROVIDERS.map((p) => ({
-        label: p.charAt(0).toUpperCase() + p.slice(1),
-        value: p.toLowerCase() as (typeof PROVIDERS)[number],
-        image: p === "unknown" ? "/logo.png" : `/providers/${p}.webp`,
-      })),
-    [],
-  );
 
   const defaultValues: ModelFormValues = useMemo(
     () =>
@@ -169,7 +169,7 @@ export function ModelDialog({
       try {
         if (isEditing && model) {
           const params: UpdateCustomModelParams = {
-            id: BigInt(model.id),
+            id: model.id,
             model: values.model,
             api_url: values.api_url,
             api_key: values.api_key ?? "",
@@ -311,7 +311,7 @@ export function ModelDialog({
               </FieldContent>
             </Field>
 
-            {/* Provider (combobox with images) */}
+            {/* Provider (dropdown with images) */}
             <Field data-invalid={!!errors.provider}>
               <FieldContent>
                 <Label>Provider</Label>
@@ -319,33 +319,38 @@ export function ModelDialog({
                   control={control}
                   name="provider"
                   render={({ field }) => (
-                    <Combobox
-                      items={providerItems}
-                      itemToStringValue={(item) => item.label}
-                      value={providerItems.find((p) => p.value === field.value) ?? null}
-                      onValueChange={(val) => {
-                        field.onChange(val?.value ?? "unknown");
-                      }}
-                    >
-                      <ComboboxInput placeholder="Search provider..." />
-                      <ComboboxContent>
-                        <ComboboxEmpty>No providers found.</ComboboxEmpty>
-                        <ComboboxList>
-                          {(item) => (
-                            <ComboboxItem key={item.value} value={item}>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select provider">
+                          <span className="flex items-center gap-2">
+                            <Image
+                              src={providerImage(field.value)}
+                              alt={PROVIDER_LABELS[field.value]}
+                              width={16}
+                              height={16}
+                              className="rounded-sm"
+                            />
+                            {PROVIDER_LABELS[field.value]}
+                          </span>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROVIDERS.map((p) => (
+                          <SelectItem key={p} value={p}>
+                            <span className="flex items-center gap-2">
                               <Image
-                                src={item.image}
-                                alt={item.label}
+                                src={providerImage(p)}
+                                alt={PROVIDER_LABELS[p]}
                                 width={20}
                                 height={20}
                                 className="rounded-sm"
                               />
-                              {item.label}
-                            </ComboboxItem>
-                          )}
-                        </ComboboxList>
-                      </ComboboxContent>
-                    </Combobox>
+                              {PROVIDER_LABELS[p]}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
                 />
                 <FieldError errors={[errors.provider]} />

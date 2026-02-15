@@ -228,6 +228,7 @@ pub struct AddCustomModelParams {
 #[ts(export, export_to = "models.ts")]
 pub struct UpdateCustomModelParams {
     /// The database id of the model to update.
+    #[ts(type = "number")]
     pub id: i64,
     /// Updated model identifier for API requests.
     pub model: String,

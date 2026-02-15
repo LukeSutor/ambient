@@ -121,7 +121,7 @@ export type UpdateCustomModelParams = {
 /**
  * The database id of the model to update.
  */
-id: bigint, 
+id: number, 
 /**
  * Updated model identifier for API requests.
  */
