@@ -34,7 +34,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Ellipsis, Loader2, Pen, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { ContentContainer } from "./content-container";
 
 const SKELETON_COUNT = 3;

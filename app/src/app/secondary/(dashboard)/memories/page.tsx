@@ -1,16 +1,10 @@
 "use client";
 
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardFooter,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -24,15 +18,29 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { MemoryEntry } from "@/types/memory";
 import { invoke } from "@tauri-apps/api/core";
 import { type UnlistenFn, listen } from "@tauri-apps/api/event";
-import { Trash2 } from "lucide-react";
+import { Brain, ExternalLink, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 type MemoryListItem = {
   id: string;
   message_id: string;
+  conversation_id: string | null;
   memory_type: string;
   text: string;
   timestamp: string;
@@ -124,15 +132,17 @@ export default function MemoriesPage() {
             const mem = e.payload.memory;
             void (async () => {
               let messageContent: string | null = null;
+              let conversationId: string | null = null;
               if (mem.message_id) {
                 try {
-                  const msg = await invoke<{ content?: string }>(
-                    "get_message",
-                    {
-                      messageId: mem.message_id,
-                    },
-                  );
+                  const msg = await invoke<{
+                    content?: string;
+                    conversation_id?: string;
+                  }>("get_message", {
+                    messageId: mem.message_id,
+                  });
                   messageContent = msg.content ?? "";
+                  conversationId = msg.conversation_id ?? null;
                 } catch (err) {
                   // If fetching fails, proceed without message content
                   console.warn("get_message failed for", mem.message_id, err);
@@ -142,6 +152,7 @@ export default function MemoriesPage() {
               const newItem: MemoryListItem = {
                 id: mem.id,
                 message_id: mem.message_id,
+                conversation_id: conversationId,
                 memory_type: mem.memory_type,
                 text: mem.text,
                 timestamp: mem.timestamp,
@@ -169,6 +180,7 @@ export default function MemoriesPage() {
     try {
       await invoke("delete_memory_entry", { id });
       setItems((prev) => prev.filter((m) => m.id !== id));
+      toast.success("Memory deleted");
     } catch (e: unknown) {
       const message =
         typeof e === "string"
@@ -176,7 +188,7 @@ export default function MemoriesPage() {
           : e instanceof Error
             ? e.message
             : "Failed to delete memory";
-      setError(message);
+      toast.error(message);
     }
   }, []);
 
@@ -186,6 +198,7 @@ export default function MemoriesPage() {
       setItems([]);
       setHasMore(false);
       serverCountRef.current = 0;
+      toast.success("All memories deleted");
     } catch (e: unknown) {
       const message =
         typeof e === "string"
@@ -193,143 +206,207 @@ export default function MemoriesPage() {
           : e instanceof Error
             ? e.message
             : "Failed to delete all memories";
-      setError(message);
+      toast.error(message);
+    }
+  }, []);
+
+  const onOpenConversation = useCallback(async (item: MemoryListItem) => {
+    if (!item.conversation_id) return;
+    try {
+      await invoke("open_main_window_at_conversation", {
+        conversationId: item.conversation_id,
+        messageId: item.message_id,
+      });
+    } catch (e: unknown) {
+      const message =
+        typeof e === "string"
+          ? e
+          : e instanceof Error
+            ? e.message
+            : "Failed to open conversation";
+      toast.error(message);
     }
   }, []);
 
   return (
     <div className="relative flex flex-col items-center justify-start p-4 w-full">
-      <div className="w-full max-w-3xl">
+      <div className="w-full max-w-4xl">
         <Card className="w-full">
           <CardHeader>
-            <CardTitle>Memories</CardTitle>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Memories</CardTitle>
+                <CardDescription>
+                  Facts and preferences learned from your conversations
+                </CardDescription>
+              </div>
+              {items.length > 0 && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete All
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Delete all memories?</DialogTitle>
+                      <DialogDescription>
+                        This will permanently remove all memories and their
+                        indexes.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="secondary">Cancel</Button>
+                      </DialogClose>
+                      <DialogClose asChild>
+                        <Button
+                          variant="destructive"
+                          onClick={() => {
+                            void onDeleteAll();
+                          }}
+                        >
+                          Delete all
+                        </Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
 
             {items.length === 0 && !isLoading ? (
-              <div className="text-sm text-muted-foreground">
-                No memories yet.
-              </div>
+              <Empty className="border rounded-lg py-12">
+                <EmptyMedia variant="icon">
+                  <Brain className="h-6 w-6" />
+                </EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>No memories yet</EmptyTitle>
+                  <EmptyDescription>
+                    Memories are automatically extracted from your conversations
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
-              <Accordion type="single" collapsible className="w-full">
+              <div className="flex flex-col gap-3">
                 {items.map((m) => (
-                  <AccordionItem key={m.id} value={m.id}>
-                    <div className="flex flex-row justify-between items-center gap-4 w-full">
-                      <div className="w-full">
-                        <AccordionTrigger className="w-full text-left">
-                          <span className="truncate font-medium">{m.text}</span>
-                        </AccordionTrigger>
-                      </div>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label="Delete memory"
-                            className="shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Delete this memory?</DialogTitle>
-                            <DialogDescription>
-                              This action cannot be undone.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <Button variant="secondary">Cancel</Button>
-                            </DialogClose>
-                            <DialogClose asChild>
-                              <Button
-                                variant="destructive"
-                                onClick={() => {
-                                  void onDeleteOne(m.id);
-                                }}
-                              >
-                                Delete
-                              </Button>
-                            </DialogClose>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                    <AccordionContent>
-                      <div className="flex flex-col gap-2 text-sm">
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            Original Message
-                          </div>
-                          <div className="whitespace-pre-wrap break-words">
-                            {m.message_content}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            Saved Memory
-                          </div>
-                          <div className="whitespace-pre-wrap break-words">
-                            {m.text}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            Saved On
-                          </div>
-                          <div className="whitespace-pre-wrap break-words">
-                            {new Date(m.timestamp).toLocaleString()}
-                          </div>
-                        </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                  <MemoryCard
+                    key={m.id}
+                    item={m}
+                    onDelete={() => {
+                      void onDeleteOne(m.id);
+                    }}
+                    onOpenConversation={() => {
+                      void onOpenConversation(m);
+                    }}
+                  />
                 ))}
-              </Accordion>
+              </div>
             )}
 
             {/* loader sentinel */}
             {hasMore && <div ref={loaderRef} className="h-8" />}
             {isLoading && (
-              <div className="mt-2 text-sm text-muted-foreground">Loading…</div>
+              <div className="mt-4 flex justify-center">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Loading...
+                </div>
+              </div>
             )}
           </CardContent>
-          {items.length > 0 && (
-            <CardFooter className="justify-end">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="destructive">Delete all memories</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Delete all memories?</DialogTitle>
-                    <DialogDescription>
-                      This will permanently remove all memories and their
-                      indexes.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button variant="secondary">Cancel</Button>
-                    </DialogClose>
-                    <DialogClose asChild>
-                      <Button
-                        variant="destructive"
-                        onClick={() => {
-                          void onDeleteAll();
-                        }}
-                      >
-                        Delete all
-                      </Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardFooter>
-          )}
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function MemoryCard({
+  item,
+  onDelete,
+  onOpenConversation,
+}: {
+  item: MemoryListItem;
+  onDelete: () => void;
+  onOpenConversation: () => void;
+}) {
+  const formattedDate = useMemo(() => {
+    return new Date(item.timestamp).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [item.timestamp]);
+
+  return (
+    <div className="group flex flex-col rounded-lg border bg-card p-4 hover:border-primary/50 transition-colors">
+      {/* Header: icon + text + actions */}
+      <div className="flex items-start gap-3">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium leading-snug">{item.text}</p>
+          {item.message_content && (
+            <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
+              {item.message_content}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {item.conversation_id && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onOpenConversation}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open conversation</TooltipContent>
+            </Tooltip>
+          )}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete this memory?</DialogTitle>
+                <DialogDescription>
+                  This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="secondary">Cancel</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button variant="destructive" onClick={onDelete}>
+                    Delete
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+      {/* Footer: date */}
+      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+        <span>{formattedDate}</span>
       </div>
     </div>
   );

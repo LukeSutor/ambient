@@ -156,7 +156,8 @@ pub fn get_memory_entries_with_message(
 		  me.memory_type,
 		  me.text,
 		  me.timestamp,
-		  cm.content AS message_content
+		  cm.content AS message_content,
+		  cm.conversation_id
 		FROM memory_entries me
 		LEFT JOIN conversation_messages cm ON cm.id = me.message_id
 		ORDER BY me.timestamp DESC
@@ -195,6 +196,12 @@ pub fn get_memory_entries_with_message(
       map.insert(
         "message_content".to_string(),
         serde_json::json!(message_content),
+      );
+      // conversation_id may be NULL if message was deleted
+      let conversation_id: Option<String> = row.get(6).ok();
+      map.insert(
+        "conversation_id".to_string(),
+        serde_json::json!(conversation_id),
       );
       Ok(serde_json::Value::Object(map))
     })

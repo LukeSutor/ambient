@@ -25,10 +25,10 @@ import { ArrowLeft, ArrowRight, Loader2, Mail, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 const step1Schema = z.object({
-  email: z.string().email({ message: "Please enter a valid email address" }),
+  email: z.email({ message: "Please enter a valid email address" }),
 });
 
 const step2Schema = z.object({
