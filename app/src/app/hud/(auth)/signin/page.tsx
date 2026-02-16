@@ -19,7 +19,7 @@ import { Loader2, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Controller, FieldValues, useForm } from "react-hook-form";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 const formSchema = z.object({
   username: z.string().min(1, { message: "Username or email is required" }),
