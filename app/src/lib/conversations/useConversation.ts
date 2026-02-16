@@ -339,9 +339,14 @@ export function useConversation(
             assistantMessageId,
             content,
             userMessage.message.id,
-          ).catch((error) => {
-            toast.error("Failed to start browser use session. Please try again.");
-            console.error("[useConversation] Browser use session error:", error);
+          ).catch((error: unknown) => {
+            toast.error(
+              "Failed to start browser use session. Please try again.",
+            );
+            console.error(
+              "[useConversation] Browser use session error:",
+              error,
+            );
             dispatch({
               type: "FINALIZE_STREAM",
               payload: { content: "*Error starting browser use session*" },
@@ -524,8 +529,10 @@ export function useConversation(
             assistantMessageId,
             userMessage.message.content,
             userMessage.message.id,
-          ).catch((error) => {
-            toast.error("Failed to retry browser use session. Please try again.");
+          ).catch((error: unknown) => {
+            toast.error(
+              "Failed to retry browser use session. Please try again.",
+            );
             console.error("[useConversation] Browser use retry error:", error);
             dispatch({
               type: "FINALIZE_STREAM",
@@ -617,9 +624,14 @@ export function useConversation(
             assistantMessageId,
             content,
             messageId,
-          ).catch((error) => {
-            toast.error("Failed to resubmit browser use session. Please try again.");
-            console.error("[useConversation] Browser use resubmit error:", error);
+          ).catch((error: unknown) => {
+            toast.error(
+              "Failed to resubmit browser use session. Please try again.",
+            );
+            console.error(
+              "[useConversation] Browser use resubmit error:",
+              error,
+            );
             dispatch({
               type: "FINALIZE_STREAM",
               payload: { content: "*Error resubmitting browser use session*" },

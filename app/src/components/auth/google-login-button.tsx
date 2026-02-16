@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { getAuthErrorMessage, useRoleAccess } from "@/lib/role-access";
 import { invokeEmitAuthChanged } from "@/lib/role-access/commands";
+import { invoke } from "@tauri-apps/api/core";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -50,11 +51,14 @@ export function GoogleLoginButton({
         void (async () => {
           setIsLoading(false);
           setError(null);
+          // Open the user's encrypted database after OAuth login
+          await invoke("open_user_database");
           await invokeEmitAuthChanged();
           onSignInSuccessRef.current();
         })();
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async cancellation pattern
       if (cancelled) {
         unlistenSuccess();
         return;
@@ -72,8 +76,9 @@ export function GoogleLoginButton({
         );
       });
 
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- async cancellation pattern
       if (cancelled) {
-        unlistenSuccess?.();
+        unlistenSuccess();
         unlistenError();
         return;
       }

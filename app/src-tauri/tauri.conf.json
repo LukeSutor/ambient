@@ -32,7 +32,7 @@
       "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/attachments/**"]
+        "scope": ["$APPDATA/profiles/*/attachments/**"]
       }
     }
   },

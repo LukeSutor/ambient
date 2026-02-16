@@ -9,6 +9,7 @@ use crate::auth::security::{
     check_rate_limit, record_attempt, clear_rate_limit, RateLimitOp,
 };
 use serde_json::json;
+use tauri::Manager;
 use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
 use crate::constants::{SUPABASE_URL, SUPABASE_ANON_KEY, CLOUDFLARE_BACKEND_URL};
@@ -461,7 +462,22 @@ pub async fn resend_confirmation(email: String) -> Result<ResendConfirmationResp
 }
 
 #[tauri::command]
-pub async fn logout() -> Result<String, String> {
+pub async fn logout(app_handle: tauri::AppHandle) -> Result<String, String> {
+    // Close the user's database before clearing auth state
+    let db_state = app_handle.state::<crate::db::core::DbState>();
+    {
+        let mut guard = db_state
+            .0
+            .lock()
+            .map_err(|_| "Failed to acquire DB lock".to_string())?;
+        if let Some(conn) = guard.take() {
+            if let Err((_, e)) = conn.close() {
+                log::warn!("[auth] Error closing database on logout: {}", e);
+            }
+            log::info!("[auth] Closed user database on logout");
+        }
+    }
+
     // Get access token for server-side logout
     let access_token = get_access_token()
         .ok()

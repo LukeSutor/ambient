@@ -61,6 +61,10 @@ async fn execute_click(app_handle: &AppHandle, args: &Value) -> Result<String, S
         .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
         .ok_or("Missing or invalid 'element_id' argument")?;
 
+    if element_id == 0 {
+        return Err("Invalid element_id: elements are 1-indexed, got 0".to_string());
+    }
+
     let webview = app_handle
         .get_webview_window(get_browser_window_label())
         .ok_or("Browser WebView not found")?;
@@ -97,6 +101,10 @@ async fn execute_type_text(app_handle: &AppHandle, args: &Value) -> Result<Strin
         .get("element_id")
         .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
         .ok_or("Missing or invalid 'element_id' argument")?;
+
+    if element_id == 0 {
+        return Err("Invalid element_id: elements are 1-indexed, got 0".to_string());
+    }
 
     let text = args
         .get("text")
@@ -174,6 +182,10 @@ async fn execute_select_option(app_handle: &AppHandle, args: &Value) -> Result<S
         .get("element_id")
         .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
         .ok_or("Missing or invalid 'element_id' argument")?;
+
+    if element_id == 0 {
+        return Err("Invalid element_id: elements are 1-indexed, got 0".to_string());
+    }
 
     let value = args
         .get("value")

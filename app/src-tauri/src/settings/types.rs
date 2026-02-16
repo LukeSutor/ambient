@@ -79,37 +79,23 @@ pub enum HudState {
   Default,
 }
 
-// Model selection
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+// Model selection — stores the model's integer database id (as a string).
+// Serialized as a plain string in settings (e.g. "1" for the default local model).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(transparent)]
 #[ts(export, export_to = "settings.ts")]
-pub enum ModelSelection {
-  Local,
-  Fast,
-  Pro,
-}
+pub struct ModelSelection(pub String);
 
 impl Default for ModelSelection {
   fn default() -> Self {
-    Self::Local
+    Self("1".to_string())
   }
 }
 
 impl ModelSelection {
-  pub fn as_str(&self) -> &'static str {
-    match self {
-      Self::Local => "local",
-      Self::Fast => "fast",
-      Self::Pro => "pro",
-    }
-  }
-
-  pub fn from_str(s: &str) -> Self {
-    match s {
-      "local" => Self::Local,
-      "fast" => Self::Fast,
-      "pro" => Self::Pro,
-      _ => Self::Local, // Default fallback
-    }
+  /// Returns the stored model id as a string.
+  pub fn as_str(&self) -> &str {
+    &self.0
   }
 }
 

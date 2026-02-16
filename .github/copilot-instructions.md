@@ -2,15 +2,15 @@
 
 ## Project Overview
 
-Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + Next.js 15). It features an agentic runtime with tool-calling capabilities, local inference via llama.cpp, optional cloud fallback to Gemini, and browser-use capabilities. The architecture prioritizes privacy, extensibility, and reliability.
+Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + Next.js 15). It features an agentic runtime with tool-calling capabilities, local inference via llama.cpp, optional cloud fallback to Gemini, BYOK (Bring Your Own Key) support for OpenAI/Gemini/Anthropic-compatible APIs, and browser-use capabilities. The architecture prioritizes privacy, extensibility, and reliability.
 
 **Tech Stack:**
 - Backend: Rust with Tauri 2.x
 - Frontend: Next.js 15 (SSG mode), React 19, TypeScript
 - UI: shadcn/ui (Radix primitives) + Tailwind CSS v4
 - Local LLM: llama.cpp server (ships with Qwen3VL-2B)
-- Cloud LLM: Gemini via Cloudflare Worker
-- Database: SQLite with rusqlite + sqlite-vec for embeddings
+- Cloud LLM: Gemini via Cloudflare Worker + BYOK (OpenAI, Gemini, Anthropic compatible)
+- Database: SQLCipher (encrypted SQLite) with rusqlite + sqlite-vec for embeddings
 - State: React Context + useReducer pattern
 
 ## Code Style
@@ -35,7 +35,7 @@ Ambient is a local-first AI desktop assistant built with **Tauri 2.x** (Rust + N
 
 **Provider Hierarchy** ([AppProvider.tsx](app/src/lib/providers/AppProvider.tsx)):
 ```
-SettingsProvider → RoleAccessProvider → SetupProvider → WindowsProvider → ConversationProvider
+SettingsProvider → RoleAccessProvider → ModelAccessProvider → SetupProvider → WindowsProvider → ConversationProvider
 ```
 
 **Pattern:** Context + useReducer for all state management
@@ -48,14 +48,15 @@ SettingsProvider → RoleAccessProvider → SetupProvider → WindowsProvider �
 - [ConversationProvider](app/src/lib/conversations/ConversationProvider.tsx): Chat messages, streaming, attachments
 - [SettingsProvider](app/src/lib/settings/SettingsProvider.tsx): User settings, HUD dimensions
 - [WindowsProvider](app/src/lib/windows/WindowsProvider.tsx): Window expand/collapse state
-- [RoleAccessProvider](app/src/lib/role-access/RoleAccessProvider.tsx): Auth state, user info
+- [RoleAccessProvider](app/src/lib/role-access/RoleAccessProvider.tsx): Auth state, user info, Google auth status
 - [SetupProvider](app/src/lib/setup/SetupProvider.tsx): Model download progress
+- [ModelAccessProvider](app/src/lib/model-access/ModelAccessProvider.tsx): Credit usage, model list, user tier — updates in real time via Tauri events (`cloud_usage_decremented`, `models_changed`, `auth_changed`)
 
 ### Backend Module Organization
 
 **Top-level modules** ([lib.rs](app/src-tauri/src/lib.rs)):
-- `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in store.json)
-- `db/`: SQLite with migrations, conversations, messages, memory, token usage
+- `auth/`: OAuth flow, split token storage (refresh tokens in OS keyring, session tokens AES-encrypted in per-user store.json)
+- `db/`: Per-user encrypted SQLite (SQLCipher) with migrations, conversations, messages, memory, token usage
 - `agents/`: Chat runtime + browser-use runtime
 - `models/`: LLM client (local/cloud providers), llama.cpp server, embedding, OCR
 - `skills/`: Registry, executor, builtin skills (web-search, code-execution, memory)
@@ -77,13 +78,42 @@ module/
 **Location:** [agents/chat/runtime.rs](app/src-tauri/src/agents/chat/runtime.rs)
 
 **Loop Architecture:**
-1. Get conversation history (context-limited based on local vs cloud)
-2. Build `LlmRequest` with system prompt, messages, available tools
-3. Generate response via provider (local or cloud)
-4. If text response → save message and return
-5. If tool calls → execute in parallel, save results as messages, loop continues
-6. Repeat until text response or max iterations reached
-7. Check cancellation signal (`Arc<AtomicBool>`) on each iteration
+1. For cloud models: create a generation session via `/v1/usage/start-turn` (checks rate limit, increments usage once)
+2. Get conversation history (context-limited based on local vs cloud)
+3. Build `LlmRequest` with system prompt, messages, available tools, session token
+4. Generate response via provider (local or cloud)
+5. If text response → save message and return
+6. If tool calls → execute in parallel, save results as messages, loop continues
+7. Repeat until text response or max iterations reached
+8. Check cancellation signal (`Arc<AtomicBool>`) on each iteration
+
+**Session-Based Credit System (Cloud Models):**
+- All cloud models draw from a shared daily credit pool (not per-model limits)
+- Credit costs: Flash = 1 credit, Pro = 3 credits (decimal costs supported via `f64`/`REAL`)
+- Daily credit limits by tier: free = 10, premium = 50, admin = -1 (unlimited)
+- Before the agentic loop, `create_generation_session(model_type)` calls `/v1/usage/start-turn`
+- This checks `credits_used + credit_cost <= daily_credit_limit`, increments `credit_usage`, and creates a `generation_sessions` row (10 min TTL, max 50 calls)
+- The session token is attached to every `LlmRequest` in the loop via `.with_session_token()`
+- The Cloudflare Worker validates the session on each `/v1/llm/generate` call — checks ownership, model match, expiry, and call count
+- Multi-iteration agentic turns count as **one** credit deduction against the daily pool
+- Non-retryable errors: `rate_limit_exceeded`, `session_invalid`
+- `MODEL_REGISTRY` in the worker maps model types to `{ apiModel, thinkingLevel, creditCost }`
+- `CREDIT_LIMITS` maps tiers to daily credit limits
+
+### Browser-Use Runtime
+
+**Location:** [agents/browser_use/runtime.rs](app/src-tauri/src/agents/browser_use/runtime.rs)
+
+**Loop Architecture:**
+1. Create persistent WebView
+2. For cloud models: create a generation session (same as chat runtime)
+3. LLM decides on an action (navigate, click, type, etc.)
+4. Execute action and take a DOM snapshot
+5. Return snapshot as tool result (attached to `MessageMetadata`)
+6. Loop until `done` tool is called or max iterations reached
+7. Strip old browser states from context to keep it lean (`strip_old_browser_states`)
+
+**Browser Tools:** `navigate`, `click`, `type_text`, `select_option`, `scroll`, `go_back`, `wait`, `done`
 
 **Progressive Skill Disclosure:**
 - Skills start inactive to reduce context size
@@ -103,7 +133,7 @@ cd app
 pnpm install
 
 # 2. Start Cloudflare Worker (required for cloud models)
-cd cloudflare/workers/llm-completions
+cd cloudflare/workers/ambient-backend
 pnpm run dev
 
 # 3. Start Tauri dev (separate terminal)
@@ -190,26 +220,77 @@ import { emit } from "@tauri-apps/api/event";
 await emit("event_name", { payload: "data" });
 ```
 
+### Per-User Data Isolation
+
+All user data is stored in per-user profile directories under `{app_data}/profiles/{user_id}/`:
+
+```
+{app_data}/
+├── models/                             # SHARED: downloaded ML model weights
+├── profiles/
+│   ├── {user_id_1}/
+│   │   ├── database.sqlite             # Per-user encrypted DB (SQLCipher)
+│   │   ├── store.json                  # Per-user settings + AES-encrypted auth tokens
+│   │   └── attachments/{msg_id}/...    # Per-user file attachments
+│   └── {user_id_2}/
+│       └── ...
+```
+
+**No global store.json.** The active user is identified by `current_user_id` in the OS keyring, which bootstraps access to the per-user store on startup.
+
+**SQLCipher Encryption:**
+- Each user's DB is encrypted with a unique 32-byte random key
+- Keys stored in OS keyring as `db_key_{user_id}` (no PBKDF2 overhead — raw key via `PRAGMA key = "x'{hex}'"`)    
+- `rusqlite` feature: `bundled-sqlcipher-vendored-openssl` (bundles SQLCipher + OpenSSL)
+- Verification on open: `SELECT count(*) FROM sqlite_master` to detect wrong key
+
+**DB Lifecycle:**
+1. App startup → reads `current_user_id` from keyring → if found, opens user DB via `initialize_user_database(app_handle, user_id)`
+2. Login → frontend calls `invoke("open_user_database")` → closes old DB, opens new user's DB
+3. Logout → `logout()` closes DB connection before clearing auth state
+4. If no session on startup, DB stays `None` (initialized after login)
+
+**Settings Per-User Store:**
+- [settings/service.rs](app/src-tauri/src/settings/service.rs) reads `get_current_user_id()` from keyring to determine user ID
+- Opens per-user store at `profiles/{user_id}/store.json` via `tauri_plugin_store`
+- Returns `UserSettings::default()` silently when not logged in
+- Errors on save when not logged in
+
+**Attachments:** Stored at `profiles/{user_id}/attachments/{message_id}/filename` — path stored as relative in DB, resolved via `app_data.join(rel_path)`
+
+**Shared (not per-user):** Model files, llama.cpp server, skill definitions, logs, transient screenshots
+
 ### Database Patterns
 
 **Schema:** Located in [db/core.rs](app/src-tauri/src/db/core.rs) migrations
 
-**Key Tables:**
+**Key Tables (SQLite/SQLCipher):**
 - `conversations`: Conversation metadata
 - `conversation_messages`: Messages with `message_type` (text/tool_calls/tool_results) and structured `metadata` JSON
 - `attachments`: File attachments per message
-- `memory_entries` + `memory_entries_vec`: Extracted facts with embeddings
-- `tool_calls`: Tool execution audit log
+- `models`: Registered LLM models with `id` (INTEGER PK), `model` (API identifier, not unique), `display_name`, `provider` (default 'unknown'), `is_internal` flag, BYOK fields (`api_url`, `api_key`, `request_format`). No `is_premium` or `daily_limit` columns — all cloud models share a global credit pool. All lookups use `id`, not `model` text.
+- `memory_entries` + `memory_entries_vec` + `memory_entries_fts`: Extracted facts with embeddings and full-text search
 - `conversation_skills`: Activated skills per conversation
 - `token_usage`: LLM usage tracking (prompt_tokens, completion_tokens, timestamp)
+
+**Key Tables (Supabase - cloud):**
+- `profiles`: User metadata (user_id, tier)
+- `subscriptions`: Stripe subscription state
+- `credit_usage`: Daily credit usage per user with `credits_used` (REAL), UNIQUE on `(user_id, usage_date)`. Replaces old `model_usage` + `model_limits` tables.
+- `generation_sessions`: Short-lived session tokens for per-turn rate limiting (10 min TTL, max 50 calls)
 
 **Access Pattern:**
 ```rust
 let state = app_handle.state::<DbState>();
 let conn = state.0.lock().unwrap();
 let conn = conn.as_ref().ok_or("DB not initialized")?;
-// Use conn...
+// Use conn... (automatically points to current user's encrypted DB)
 ```
+
+**Key Commands:**
+- `open_user_database`: Reads auth state, closes existing connection, opens new user's encrypted DB
+- `close_user_database`: Closes current DB connection (called on logout)
+- `reset_database`: Deletes and recreates current user's DB
 
 **Message Storage:** Use structured metadata for tool calls/results, not content field:
 ```rust
@@ -224,13 +305,73 @@ pub enum MessageMetadata {
 **Unified Interface:**
 - All providers implement `LlmProvider` trait
 - Use `LlmRequest`/`LlmResponse` types (see [models/llm/client.rs](app/src-tauri/src/models/llm/client.rs))
-- Providers handle translation to OpenAI/Gemini formats internally
+- Providers handle translation to OpenAI/Gemini/Anthropic formats internally
 
 **Providers:**
 - `LocalProvider`: Communicates with llama.cpp server (OpenAI-compatible API)
 - `CloudflareProvider`: Proxies to Gemini via Cloudflare Worker
+- `OpenAIProvider`: Direct OpenAI Chat Completions API (BYOK or `OPENAI_API_KEY` env var fallback)
+- `GoogleProvider`: Direct Google Gemini REST API (BYOK or `GOOGLE_API_KEY` env var fallback, supports thinking/thought signatures)
+- `AnthropicProvider`: Direct Anthropic Messages API (BYOK or `ANTHROPIC_API_KEY` env var fallback, event-based SSE streaming)
+
+**BYOK Routing:**
+`ResolvedModel` carries `id` (i64 PK), `model` (API identifier), `is_internal`, `api_url`, `api_key`, and `request_format` from the DB.
+- Internal models: `!is_cloud` → LocalProvider, `is_cloud` → CloudflareProvider
+- BYOK models: route by `request_format`: `"openai"` → OpenAIProvider, `"gemini"` → GoogleProvider, `"anthropic"` → AnthropicProvider
+- Each provider resolves API key/URL from `ResolvedModel` first, falls back to env var
+- `resolved_model.model` is the API identifier sent in requests
+- `resolved_model.id` is used for token usage tracking and DB lookups
+
+**BYOK Model Management:**
+- `add_custom_model`: Validates, inserts BYOK model with `is_cloud=1, is_internal=0`, returns `i64` row id
+- `update_custom_model`: Updates BYOK model fields by `id` (blocks internal models)
+- `delete_custom_model`: Deletes BYOK model by `id`, auto-switches selection if deleted model was active
+- `model` field = the API identifier sent in requests (e.g. `gpt-4o`, `claude-sonnet-4-20250514`). Not unique — multiple entries can share the same API model.
+- `model_selection` in settings stores model `id` as string (e.g. `"1"`, `"4"`)
+- Frontend form: react-hook-form + zod + shadcn Field in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
+
+**Model Display:**
+- Provider images at `public/providers/{provider}.webp` (16 providers), local uses `public/logo.png`
+- Supported providers: `openai`, `google`, `anthropic`, `deepseek`, `xai`, `zai`, `minimax`, `qwen`, `nvidia`, `meta`, `mistral`, `microsoft`, `huggingface`, `openrouter`, `groq`, `unknown`
+- Provider display labels defined in `PROVIDER_LABELS` record in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx) (e.g. `xai` → "xAI", `huggingface` → "HuggingFace")
+- Token usage chart uses rotating color palette instead of per-model colors
+
+**Model Dialog (Frontend):**
+- Location: [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
+- Form: react-hook-form + zod validation (`modelFormSchema`)
+- Dual mode: add (new model) or edit (existing `ModelEntry`). `useEffect` with `reset(defaultValues)` auto-populates form when switching modes.
+- Layout: Request Format + Provider in `grid grid-cols-2` side-by-side. Provider uses Radix `Select` dropdown with provider images.
+- Dialog constraints: `max-h-[80vh]` with `overflow-y-auto` on form body for scroll support
+- Delete: inline destructive button in edit mode, auto-switches model selection via `delete_custom_model`
 
 **Streaming:** Use `Arc<AtomicBool>` for cancellation signal, check in tight loops
+
+**Translation Layer** ([models/llm/providers/translation.rs](app/src-tauri/src/models/llm/providers/translation.rs)):
+Bidirectional translation between internal message/tool types and three provider formats (OpenAI, Gemini, Anthropic).
+
+Per-provider functions:
+- `tools_to_{openai,gemini,anthropic}_format()`: Convert `ToolDefinition[]` to provider JSON
+- `format_messages_for_{openai,gemini,anthropic}()`: Convert `Message[]` to provider message format
+- `parse_{openai,gemini,anthropic}_tool_calls()`: Extract `ToolCall[]` from provider response JSON
+- `has_tool_calls_{openai,gemini,anthropic}()`: Check if response contains tool calls
+- `extract_text_{openai,gemini,anthropic}()`: Extract text content from response
+- `extract_usage_{openai,gemini,anthropic}()`: Extract `TokenUsage { prompt_tokens, completion_tokens }` from response
+- `extract_finish_reason_{openai,gemini,anthropic}()`: Extract normalised `FinishReason` (Stop/ToolUse/MaxTokens/Other)
+- `resolve_tool_call()`: Shared — resolves dot-separated names and `activate_skill`
+
+Key format differences:
+| Aspect | OpenAI | Gemini | Anthropic |
+|--------|--------|--------|-----------|
+| Tool def key | `parameters` (wrapped in `function`) | `parameters` (in `functionDeclarations`) | `input_schema` (top-level) |
+| Type casing | lowercase (`string`) | UPPERCASE (`STRING`) | lowercase (`string`) |
+| Tool call location | `tool_calls[]` array on message | `functionCall` parts in content | `tool_use` content blocks |
+| Tool result role | `tool` role message | `functionResponse` part in `user` | `tool_result` content block in `user` |
+| System messages | `system` role | Separate `system_instruction` | Separate `system` param (skipped in messages) |
+| Images | `image_url` with data URI | `inline_data` with `mime_type` | `image` source with `media_type` |
+| PDFs | Text extraction fallback | `inline_data` | `document` source |
+| Streaming | SSE `data:` lines, `[DONE]` terminal | SSE `data:` lines | Event-typed SSE (`event:` + `data:` pairs) |
+| Token usage | `usage.prompt_tokens` / `completion_tokens` | `usageMetadata.promptTokenCount` / `candidatesTokenCount` | `usage.input_tokens` / `output_tokens` |
+| Finish reason | `stop` / `tool_calls` / `length` | `STOP` / `MAX_TOKENS` | `end_turn` / `tool_use` / `max_tokens` |
 
 ### Skills System
 
@@ -270,11 +411,17 @@ Detailed instructions for the AI agent...
 ### Cloudflare Worker
 **Location:** [cloudflare/workers/ambient-backend/](cloudflare/workers/ambient-backend/)
 
-**Purpose:** Proxy for Gemini API (avoids exposing API keys) and backend for refreshing Google OAuth tokens (holds `GOOGLE_CLIENT_SECRET`).
+**Purpose:** Proxy for Gemini API (avoids exposing API keys), backend for refreshing Google OAuth tokens (holds `GOOGLE_CLIENT_SECRET`), and session-based rate limiting for cloud model usage.
+
+**Endpoints:**
+- `POST /v1/llm/generate` — LLM completion (validates session token if provided, else falls back to per-call rate limiting)
+- `POST /v1/usage/remaining` — Get remaining daily credits and per-model costs
+- `POST /v1/usage/start-turn` — Create a generation session (checks credit limit, increments credits once, returns session token with `credit_cost`)
+- `POST /v1/auth/google/refresh` — Refresh Google OAuth token
 
 **LLM Completion Request:**
 ```typescript
-POST /
+POST /v1/llm/generate
 Authorization: Bearer <supabase_access_token>
 
 {
@@ -284,7 +431,18 @@ Authorization: Bearer <supabase_access_token>
   systemPrompt?: string,
   jsonSchema?: object,
   tools?: any,
+  sessionToken?: string,  // If present, validates session instead of per-call rate limiting
 }
+```
+
+**Start Turn Request:**
+```typescript
+POST /v1/usage/start-turn
+Authorization: Bearer <supabase_access_token>
+
+{ "modelType": "fast" | "pro" }
+
+// Returns: { session_token, max_calls, expires_at, credit_cost }
 ```
 
 **Google Token Refresh:**
@@ -322,21 +480,25 @@ Tokens are split across two locations based on sensitivity and lifetime:
 
 | Token | Location | Protection | Rationale |
 |-------|----------|------------|----------|
+| Current user ID | OS keyring (`keyring` crate) | OS-level encryption | Bootstrap pointer — identifies active user on startup |
 | Supabase refresh token | OS keyring (`keyring` crate) | OS-level encryption | Long-lived, high-value — most secure location |
 | Google refresh token | OS keyring (`keyring` crate) | OS-level encryption | Long-lived, high-value — never touches disk |
-| AES encryption key | OS keyring (`keyring` crate) | OS-level encryption | Protects session tokens in store.json |
-| Supabase access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
-| Google access token | `store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
-| Session metadata (user, expiry) | `store.json` (plaintext) | None (non-sensitive) | Quick reads for UI state |
+| AES encryption key | OS keyring (`keyring` crate) | OS-level encryption | Protects session tokens in per-user store.json |
+| DB encryption key (per-user) | OS keyring (`keyring` crate) | OS-level encryption | Per-user SQLCipher key as `db_key_{user_id}` |
+| Supabase access token | `profiles/{user_id}/store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
+| Google access token | `profiles/{user_id}/store.json` (AES-256-GCM) | Encrypted with keyring key | Short-lived — fast access without keyring I/O |
+| Session metadata (user, expiry) | `profiles/{user_id}/store.json` (plaintext) | None (non-sensitive) | Quick reads for UI state |
+| User settings | `profiles/{user_id}/store.json` | None (non-sensitive) | Per-user preferences, isolated from other users |
 
-Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refresh_token`, `google_refresh_token`.
+Keyring service name: `"ambient"`. Entry names: `current_user_id`, `encryption_key`, `supabase_refresh_token`, `google_refresh_token`, `db_key_{user_id}` (per-user DB encryption keys).
 
 **Key functions in `storage.rs`:**
-- `store_session()`: Splits a `Session` — refresh tokens → keyring, access tokens → AES-encrypt → store.json
-- `retrieve_auth_state()`: Reads store.json + keyring, decrypts, reconstructs full `StoredAuthState`
+- `store_session()`: Sets `current_user_id` in keyring, splits tokens — refresh tokens → keyring, access tokens → AES-encrypt → per-user store.json
+- `retrieve_auth_state()`: Reads `current_user_id` from keyring → opens per-user store → decrypts tokens → reads refresh tokens from keyring → reconstructs `StoredAuthState`
+- `get_current_user_id()`: Reads `current_user_id` from keyring (lightweight, no decryption)
 - `get_refresh_token()` / `get_google_refresh_token()`: Read directly from keyring (no decryption needed)
-- `get_access_token()` / `get_provider_token()`: Read from encrypted store.json
-- `clear_auth_state()`: Clears both keyring entries and store.json
+- `get_access_token()` / `get_provider_token()`: Read from encrypted per-user store.json
+- `clear_auth_state()`: Clears per-user store auth data + keyring entries (current_user_id, refresh tokens)
 
 **Google Token Refresh Flow:**
 1. `refresh_google_token()` acquires `REFRESH_MUTEX` to serialize refresh requests
@@ -349,7 +511,9 @@ Keyring service name: `"ambient"`. Entry names: `encryption_key`, `supabase_refr
 ## Security
 
 ### Sensitive Operations
-- **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in store.json. If store.json is exfiltrated, refresh tokens remain safe in OS keyring.
+- **Token storage:** Split architecture — refresh tokens in OS keyring (keychain), session tokens AES-256-GCM encrypted in per-user `profiles/{user_id}/store.json`. No global store.json — active user identified by `current_user_id` in keyring.
+- **Database encryption:** Per-user SQLCipher databases with unique 32-byte keys in OS keyring. Raw hex key encoding (no PBKDF2 overhead). Each user's data is cryptographically isolated.
+- **Per-user data isolation:** All user data (DB, settings, auth tokens, attachments) stored under `profiles/{user_id}/`. No global data files. Model weights and server are shared.
 - **Code execution:** Isolated subprocess to prevent app crashes
 - **Web scraping:** Uses real browser engine to avoid exposing request patterns
 
@@ -392,3 +556,11 @@ Contains training experiments and scripts for fine-tuning vision-language models
 2. Implement handler in [skills/builtin/](app/src-tauri/src/skills/builtin/)
 3. Register in [registry.rs](app/src-tauri/src/skills/registry.rs)
 4. Handle tool execution in [executor.rs](app/src-tauri/src/skills/executor.rs)
+
+**Adding a BYOK Provider:**
+1. Add provider image to `public/providers/{provider}.webp`
+2. Add provider key to `PROVIDERS` array + `PROVIDER_LABELS` record in [model-dialog.tsx](app/src/components/secondary/settings/model-dialog.tsx)
+3. If new request format needed: implement `LlmProvider` trait in `src-tauri/src/models/llm/providers/`
+4. Add translation functions in [translation.rs](app/src-tauri/src/models/llm/providers/translation.rs)
+5. Add routing branch in [client.rs](app/src-tauri/src/models/llm/client.rs) `generate()` match
+6. Validate format in `add_custom_model` / `update_custom_model` in [models.rs](app/src-tauri/src/db/models.rs)

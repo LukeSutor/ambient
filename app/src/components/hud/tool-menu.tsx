@@ -9,12 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { InputGroupButton } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
-import {
-  Bot,
-  Globe,
-  SquareDashedMousePointer,
-  Wrench,
-} from "lucide-react";
+import { Bot, Globe, SquareDashedMousePointer, Wrench } from "lucide-react";
 import { useCallback } from "react";
 
 interface ToolMenuProps {
@@ -44,7 +39,6 @@ export function ToolMenu({ onOpenChange, disabled }: ToolMenuProps) {
         align="start"
         avoidCollisions={false}
         sideOffset={10}
-        alignOffset={-12}
         className="bg-white/60"
       >
         <DropdownMenuGroup>

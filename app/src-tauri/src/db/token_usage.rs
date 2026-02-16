@@ -58,10 +58,11 @@ pub struct TokenUsageConsumptionResult {
   pub energy_unit: String,
 }
 
-/// Add token usage record
+/// Add token usage record.
+/// `model_id` is the integer primary key from the models table.
 pub async fn add_token_usage(
   app_handle: AppHandle,
-  model: &str,
+  model_id: i64,
   prompt_tokens: u64,
   completion_tokens: u64,
 ) -> Result<(), String> {
@@ -73,16 +74,6 @@ pub async fn add_token_usage(
 
   let now = Utc::now();
 
-  // Get the model ID
-  let model_id: i64 = conn
-    .query_row(
-      "SELECT id FROM models WHERE model = ?1",
-      params![model],
-      |row| row.get(0),
-    )
-    .map_err(|e| format!("Failed to get model ID: {}", e))?;
-
-  // Insert the message
   conn
     .execute(
       "INSERT INTO token_usage (model, prompt_tokens, completion_tokens, timestamp)
@@ -94,7 +85,7 @@ pub async fn add_token_usage(
         now.to_rfc3339(),
       ],
     )
-    .map_err(|e| format!("Failed to add message: {}", e))?;
+    .map_err(|e| format!("Failed to add token usage: {}", e))?;
   
   let event = TokenUsageChangedEvent {
     timestamp: now.to_rfc3339(),
@@ -104,10 +95,10 @@ pub async fn add_token_usage(
   Ok(())
 }
 
-/// Get total token usage for a model
-pub async fn get_total_token_usage(
+/// Get total token usage across all local models (is_cloud = 0).
+/// Used for privacy-savings calculations.
+pub async fn get_total_local_token_usage(
   app_handle: AppHandle,
-  model: &str,
 ) -> Result<(u64, u64), String> {
   let state = app_handle.state::<DbState>();
   let db_guard = state.0.lock().unwrap();
@@ -115,30 +106,21 @@ pub async fn get_total_token_usage(
     .as_ref()
     .ok_or("Database connection not available")?;
 
-  // Get the model ID
-  let model_id: i64 = conn
-    .query_row(
-      "SELECT id FROM models WHERE model = ?1",
-      params![model],
-      |row| row.get(0),
-    )
-    .map_err(|e| format!("Failed to get model ID: {}", e))?;
-
-  // Query total token usage
   let mut stmt = conn
     .prepare(
-      "SELECT SUM(prompt_tokens), SUM(completion_tokens)
-         FROM token_usage
-         WHERE model = ?1",
+      "SELECT SUM(tu.prompt_tokens), SUM(tu.completion_tokens)
+         FROM token_usage tu
+         JOIN models m ON tu.model = m.id
+         WHERE m.is_cloud = 0",
     )
     .map_err(|e| format!("Failed to prepare statement: {}", e))?;
 
   let (total_prompt_tokens, total_completion_tokens): (Option<u64>, Option<u64>) =
     stmt
-      .query_row(params![model_id], |row| {
+      .query_row([], |row| {
         Ok((row.get(0)?, row.get(1)?))
       })
-      .map_err(|e| format!("Failed to query token usage: {}", e))?;
+      .map_err(|e| format!("Failed to query local token usage: {}", e))?;
 
   Ok((
     total_prompt_tokens.unwrap_or(0),
@@ -149,8 +131,8 @@ pub async fn get_total_token_usage(
 /// Get the estimated cost, water, and energy savings for the local token counts
 #[tauri::command]
 pub async fn get_token_usage_consumption(app_handle: AppHandle) -> Result<TokenUsageConsumptionResult, String> {
-  // Get total token usage for local mode
-  let (total_prompt_tokens, total_completion_tokens) = get_total_token_usage(app_handle, "local").await?;
+  // Get total token usage for all local models (is_cloud = 0)
+  let (total_prompt_tokens, total_completion_tokens) = get_total_local_token_usage(app_handle).await?;
   let total_tokens = total_prompt_tokens + total_completion_tokens;
 
   // Calculate estimates based on constants

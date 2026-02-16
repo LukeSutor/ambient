@@ -1,3 +1,4 @@
 .env
 app/src-tauri/.env
 backlog.txt
+stripe.md

@@ -7,6 +7,7 @@ import {
   InputGroupButton,
 } from "@/components/ui/input-group";
 import { useConversation } from "@/lib/conversations";
+import { useModelAccess } from "@/lib/model-access";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useWindows } from "@/lib/windows/useWindows";
@@ -15,9 +16,11 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { ArrowUpIcon, Globe, Square, X } from "lucide-react";
 import type React from "react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TextareaAutosize from "react-textarea-autosize";
+import { toast } from "sonner";
 import { AttachmentList } from "./attachment-list";
+import { CreditIndicator } from "./credit-indicator";
 import { ModelSelector } from "./model-selector";
 import { PlusMenu } from "./plus-menu";
 import { ToolMenu } from "./tool-menu";
@@ -33,6 +36,48 @@ export function HUDInputBar() {
   const [isToolsDropdownOpen, setIsToolsDropdownOpen] = useState(false);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
+  // Dynamic spacer height — measured from dropdown content
+  const [spacerHeight, setSpacerHeight] = useState(0);
+  const spacerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Clear any pending retraction timeout
+    if (spacerTimeoutRef.current) {
+      clearTimeout(spacerTimeoutRef.current);
+      spacerTimeoutRef.current = null;
+    }
+
+    const isOpen =
+      isPlusDropdownOpen || isToolsDropdownOpen || isModelDropdownOpen;
+    if (!isOpen) {
+      // Delay retraction so the dropdown close animation can play
+      spacerTimeoutRef.current = setTimeout(() => {
+        setSpacerHeight(0);
+      }, 150);
+      return () => {
+        if (spacerTimeoutRef.current) {
+          clearTimeout(spacerTimeoutRef.current);
+          spacerTimeoutRef.current = null;
+        }
+      };
+    }
+
+    // Measure dropdown content after Radix renders it
+    const rAF = requestAnimationFrame(() => {
+      const popperWrapper = document.querySelector<HTMLElement>(
+        "[data-radix-popper-content-wrapper]",
+      );
+      if (popperWrapper) {
+        // Use the wrapper's full height + sideOffset buffer
+        setSpacerHeight(popperWrapper.offsetHeight + 5);
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(rAF);
+    };
+  }, [isPlusDropdownOpen, isToolsDropdownOpen, isModelDropdownOpen]);
+
   const {
     ocrLoading,
     isStreaming,
@@ -44,7 +89,8 @@ export function HUDInputBar() {
     stopGeneration,
   } = useConversation();
   const { closeHUD, setChatExpanded } = useWindows();
-  const { hudDimensions } = useSettings();
+  const { hudDimensions, settings } = useSettings();
+  const { canAffordModel, enabledModels } = useModelAccess();
 
   // Computed values
   const isLoading = ocrLoading || isStreaming;
@@ -87,6 +133,24 @@ export function HUDInputBar() {
     const query = input.trim();
     if (!query || isLoading) return;
 
+    // Pre-check: block send if the selected cloud model can't be afforded
+    const modelId = settings?.model_selection;
+    if (modelId) {
+      const selectedModel = enabledModels.find(
+        (m) => m.id.toString() === modelId,
+      );
+      if (
+        selectedModel?.is_cloud &&
+        selectedModel.is_internal &&
+        !canAffordModel(selectedModel.model)
+      ) {
+        toast.error(
+          "Not enough credits for this model. Try a different model or wait until tomorrow.",
+        );
+        return;
+      }
+    }
+
     setChatExpanded();
     setInput("");
 
@@ -95,7 +159,16 @@ export function HUDInputBar() {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
     }
-  }, [input, isLoading, conversationId, sendMessage, setChatExpanded]);
+  }, [
+    input,
+    isLoading,
+    conversationId,
+    sendMessage,
+    setChatExpanded,
+    settings,
+    canAffordModel,
+    enabledModels,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -174,10 +247,7 @@ export function HUDInputBar() {
         <AttachmentList />
 
         {/* Textarea wrapper — side padding is drag region, top padding is drag region */}
-        <div
-          data-tauri-drag-region
-          className="px-3 pt-2 select-none"
-        >
+        <div data-tauri-drag-region className="px-3 pt-2 select-none">
           <TextareaAutosize
             data-slot="input-group-control"
             maxRows={4}
@@ -213,9 +283,7 @@ export function HUDInputBar() {
           {isBrowserUseActive && (
             <div className="flex items-center justify-center bg-blue-500/30 rounded-xl px-2 py-1 shrink-0 overflow-hidden whitespace-nowrap transition-all duration-150">
               <Globe className="!h-4 !w-4 text-black" />
-              <p className="mx-1 text-black text-xs font-medium">
-                Browser Use
-              </p>
+              <p className="mx-1 text-black text-xs font-medium">Browser Use</p>
               <Button
                 variant="ghost"
                 className="!h-4 !w-4 text-black shrink-0 hover:bg-transparent p-0"
@@ -226,6 +294,8 @@ export function HUDInputBar() {
               </Button>
             </div>
           )}
+
+          <CreditIndicator />
 
           <ModelSelector
             onOpenChange={setIsModelDropdownOpen}
@@ -260,21 +330,12 @@ export function HUDInputBar() {
             </InputGroupButton>
           )}
         </InputGroupAddon>
-
       </InputGroup>
 
-      {/* Hidden spacer to expand window when dropdowns are open */}
+      {/* Spacer to expand window when dropdowns are open */}
       <div
-        className={cn(
-          "pointer-events-none overflow-hidden transition-all duration-0",
-          isPlusDropdownOpen && "h-[120px]",
-          isToolsDropdownOpen && "h-[80px]",
-          isModelDropdownOpen && "h-[165px]",
-          !isPlusDropdownOpen &&
-            !isToolsDropdownOpen &&
-            !isModelDropdownOpen &&
-            "h-0 delay-[50ms]",
-        )}
+        className="pointer-events-none overflow-hidden"
+        style={{ height: spacerHeight }}
       />
     </div>
   );

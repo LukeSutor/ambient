@@ -18,28 +18,28 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Toggle } from "@/components/ui/toggle";
+import type { ModelEntry } from "@/types/models";
 import type { TimeFilter, TokenUsageQueryResult } from "@/types/token_usage";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ChartColumn } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import { TimeFilterButtons } from "./time-filter-buttons";
 
-const chartConfig = {
-  local: {
-    label: "Local",
-    color: "#10b981",
-  },
-  fast: {
-    label: "Fast",
-    color: "#60a5fa",
-  },
-  pro: {
-    label: "Pro",
-    color: "#2563eb",
-  },
-} satisfies ChartConfig;
+/** Rotating color palette for chart bars when models don't carry their own color. */
+const CHART_COLORS = [
+  "#10b981", // emerald
+  "#60a5fa", // blue
+  "#f59e0b", // amber
+  "#8b5cf6", // violet
+  "#ef4444", // red
+  "#06b6d4", // cyan
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#f97316", // orange
+  "#6366f1", // indigo
+];
 
 export function TokenUsageChart() {
   const [chartData, setChartData] = useState<TokenUsageQueryResult | null>(
@@ -47,11 +47,42 @@ export function TokenUsageChart() {
   );
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("Last7Days");
   const [logScale, setLogScale] = useState(false);
+  const [models, setModels] = useState<ModelEntry[]>([]);
+
+  // Build chart config from DB models with rotating colors
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {};
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      config[model.model] = {
+        label: model.display_name,
+        color: CHART_COLORS[i % CHART_COLORS.length],
+      };
+    }
+    // Fallback if models haven't loaded yet
+    if (Object.keys(config).length === 0) {
+      return {
+        "qwen3vl-2b": { label: "Local", color: "#10b981" },
+        "gemini-3-flash": { label: "Gemini 3 Flash", color: "#60a5fa" },
+        "gemini-3-pro": { label: "Gemini 3 Pro", color: "#2563eb" },
+      } satisfies ChartConfig;
+    }
+    return config;
+  }, [models]);
+
+  const fetchModels = useCallback(async () => {
+    try {
+      const result = await invoke<ModelEntry[]>("get_models");
+      setModels(result);
+    } catch (error) {
+      console.error("Failed to fetch models:", error);
+    }
+  }, []);
 
   const fetchChartData = useCallback(async () => {
     try {
       const data = await invoke<TokenUsageQueryResult>("get_token_usage", {
-        timeFilter, // React will handle the closure here if we include it in dependencies
+        timeFilter,
       });
       setChartData(data);
     } catch (error) {
@@ -59,13 +90,15 @@ export function TokenUsageChart() {
     }
   }, [timeFilter]);
 
-  // 2. Fetch data whenever timeFilter changes
+  useEffect(() => {
+    void fetchModels();
+  }, [fetchModels]);
+
   useEffect(() => {
     void fetchChartData();
   }, [fetchChartData]);
 
   useEffect(() => {
-    // Listen for changes
     const unlisten = listen("token_usage_changed", () => {
       void fetchChartData();
     });
@@ -123,9 +156,7 @@ export function TokenUsageChart() {
               <Bar
                 key={model}
                 dataKey={model}
-                fill={
-                  chartConfig[model as keyof typeof chartConfig]?.color || "gray"
-                }
+                fill={chartConfig[model].color ?? "gray"}
                 radius={4}
               />
             ))}

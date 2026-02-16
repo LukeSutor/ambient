@@ -1,7 +1,5 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -12,84 +10,75 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ModelSelection } from "@/types/settings";
-import { Crown, Shield, Zap } from "lucide-react";
+import { useModelAccess } from "@/lib/model-access";
+import { cn } from "@/lib/utils";
+import type { ModelEntry } from "@/types/models";
+import { Zap } from "lucide-react";
+import Image from "next/image";
 
-interface ModelConfig {
-  value: ModelSelection;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  iconBgClass: string;
-  badge: {
-    label: string;
-    variant: "outline" | "default";
-    className?: string;
-  };
-  upgradeButton?: boolean;
+/** Resolve a provider image path. Local uses `/logo.png`, everything else
+ *  uses `/providers/{provider}.webp` with a fallback to `unknown.webp`. */
+function providerImageSrc(model: ModelEntry): string {
+  if (model.provider === "local") return "/logo.png";
+  return `/providers/${model.provider}.webp`;
 }
 
-const MODEL_CONFIGS: ModelConfig[] = [
-  {
-    value: "Local",
-    name: "Local",
-    description: "Ultimate privacy. Runs on your device. No internet required.",
-    icon: <Shield className="h-4 w-4 m-1.5 text-green-600" />,
-    iconBgClass: "bg-green-100",
-    badge: { label: "Private", variant: "outline" },
-  },
-  {
-    value: "Fast",
-    name: "Gemini 3 Flash",
-    description:
-      "More powerful. Google's fast model with advanced capabilities.",
-    icon: <Zap className="h-4 w-4 m-1.5 text-blue-600" />,
-    iconBgClass: "bg-blue-100",
-    badge: { label: "Enhanced", variant: "outline" },
-  },
-  {
-    value: "Pro",
-    name: "Gemini 3 Pro",
-    description: "The latest and most advanced model from Google.",
-    icon: <Crown className="h-4 w-4 m-1.5 text-white" />,
-    iconBgClass: "bg-gradient-to-r from-purple-500 to-pink-500",
-    badge: {
-      label: "Premium",
-      variant: "default",
-      className: "bg-gradient-to-r from-purple-500 to-pink-500 border-none",
-    },
-    upgradeButton: true,
-  },
-];
-
 interface ModelSelectorProps {
-  value: ModelSelection;
-  onChange: (value: ModelSelection) => void;
+  /** The currently selected model id (as string, e.g. "1"). */
+  value: string;
+  onChange: (value: string) => void;
   disabled?: boolean;
 }
 
-function ModelIcon({ config }: { config: ModelConfig }) {
+function ProviderIcon({
+  model,
+  isPreview,
+}: { model: ModelEntry; isPreview?: boolean }) {
   return (
     <div
-      className={`flex items-center justify-center rounded-full ${config.iconBgClass}`}
+      className={cn(
+        "flex items-center justify-center flex-shrink-0",
+        isPreview ? "h-4 w-4" : "h-12 w-12",
+      )}
     >
-      {config.icon}
+      <Image
+        src={providerImageSrc(model)}
+        alt={model.provider}
+        width={isPreview ? 16 : 48}
+        height={isPreview ? 16 : 48}
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = "/providers/unknown.webp";
+        }}
+      />
     </div>
   );
 }
 
-function SelectedModelDisplay({ value }: { value: ModelSelection }) {
-  const config = MODEL_CONFIGS.find((m) => m.value === value);
-  if (!config) return null;
+function CreditCostBadge({ cost }: { cost?: number }) {
+  if (cost === undefined) return null;
+  return (
+    <span className="text-xs text-muted-foreground">
+      {cost} credit{cost !== 1 ? "s" : ""} per use
+    </span>
+  );
+}
+
+function SelectedModelDisplay({
+  value,
+  models,
+}: { value: string; models: ModelEntry[] }) {
+  const model = models.find((m) => m.id.toString() === value);
+  if (!model) {
+    // Show a neutral placeholder while models are loading
+    return (
+      <span className="font-medium text-muted-foreground">Loading...</span>
+    );
+  }
 
   return (
     <div className="flex items-center gap-3">
-      <div
-        className={`flex h-6 w-6 items-center justify-center rounded-full ${config.iconBgClass}`}
-      >
-        {config.icon}
-      </div>
-      <span className="font-medium">{config.name}</span>
+      <ProviderIcon model={model} isPreview />
+      <span className="font-medium">{model.display_name}</span>
     </div>
   );
 }
@@ -99,64 +88,75 @@ export function ModelSelector({
   onChange,
   disabled,
 }: ModelSelectorProps) {
+  const { enabledModels, canAffordModel, modelCosts } = useModelAccess();
+
+  const handleChange = (v: string) => {
+    const model = enabledModels.find((m) => m.id.toString() === v);
+
+    // Block if user can't afford this model
+    if (model?.is_cloud && model.is_internal && !canAffordModel(model.model))
+      return;
+
+    onChange(v);
+  };
+
   return (
-    <Select
-      value={value}
-      onValueChange={(v) => {
-        onChange(v as ModelSelection);
-      }}
-      disabled={disabled}
-    >
+    <Select value={value} onValueChange={handleChange} disabled={disabled}>
       <SelectTrigger>
         <SelectValue placeholder="Select model">
-          <SelectedModelDisplay value={value} />
+          <SelectedModelDisplay value={value} models={enabledModels} />
         </SelectValue>
       </SelectTrigger>
-      <SelectContent className="w-96">
+      <SelectContent className="w-96" align="end">
         <SelectGroup>
           <SelectLabel className="text-xs font-medium text-muted-foreground px-2 py-1.5 flex items-center gap-2">
             <Zap className="h-3 w-3" />
             Available Models
           </SelectLabel>
 
-          {MODEL_CONFIGS.map((config, index) => (
-            <div key={config.value}>
-              {index > 0 && <SelectSeparator />}
-              <SelectItem
-                value={config.value}
-                className="py-4 px-4 cursor-pointer h-auto min-h-[4rem]"
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-3">
-                    <ModelIcon config={config} />
-                    <div className="flex flex-col items-start">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{config.name}</span>
-                        <Badge
-                          variant={config.badge.variant}
-                          className={`text-xs ${config.badge.className || ""}`}
-                        >
-                          {config.badge.label}
-                        </Badge>
+          {enabledModels.map((model, index) => {
+            const cost =
+              model.is_cloud && model.is_internal
+                ? modelCosts[model.model]
+                : undefined;
+            const isAffordable = canAffordModel(model.model);
+            const isUnaffordable =
+              model.is_cloud && model.is_internal && !isAffordable;
+            const isVisuallyDisabled = isUnaffordable;
+
+            return (
+              <div key={model.id}>
+                {index > 0 && <SelectSeparator />}
+                <SelectItem
+                  value={model.id.toString()}
+                  className={`py-4 px-4 cursor-pointer h-auto min-h-[4rem] ${isVisuallyDisabled ? "opacity-50" : ""}`}
+                  disabled={isUnaffordable}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-3">
+                      <ProviderIcon model={model} />
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">
+                          {model.display_name}
+                        </span>
+                        <span className="text-xs text-muted-foreground text-left">
+                          {model.description}
+                        </span>
+                        {model.is_cloud && model.is_internal && (
+                          <CreditCostBadge cost={cost} />
+                        )}
+                        {isUnaffordable && (
+                          <span className="text-xs text-destructive font-medium">
+                            Not enough credits
+                          </span>
+                        )}
                       </div>
-                      <span className="text-xs text-muted-foreground text-left">
-                        {config.description}
-                      </span>
                     </div>
                   </div>
-                  {config.upgradeButton && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 mr-4 text-xs px-2 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:from-purple-100 hover:to-pink-100"
-                    >
-                      Upgrade
-                    </Button>
-                  )}
-                </div>
-              </SelectItem>
-            </div>
-          ))}
+                </SelectItem>
+              </div>
+            );
+          })}
         </SelectGroup>
       </SelectContent>
     </Select>

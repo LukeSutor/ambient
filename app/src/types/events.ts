@@ -8,6 +8,22 @@ export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<A
 
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, message_id: string | null, };
 
+export type CloudUsageDecrementedEvent = { 
+/**
+ * The credit cost that was consumed for this turn.
+ */
+credit_cost: number, timestamp: string, };
+
+export type DatabaseRecoveredEvent = { 
+/**
+ * Path to the backup file containing the user's previous data.
+ */
+backup_path: string, 
+/**
+ * Description of the migration error that triggered recovery.
+ */
+reason: string, timestamp: string, };
+
 export type DownloadFinishedEvent = { id: bigint, };
 
 export type DownloadInformationEvent = { n_items: bigint, content_length: bigint, };
@@ -23,6 +39,8 @@ export type GenerateConversationNameEvent = { conv_id: string, message: string, 
 export type HudChatEvent = { text: string, timestamp: string, conv_id: string, message_id: string, attachments: Array<AttachmentData>, };
 
 export type MemoryExtractedEvent = { memory: MemoryEntry, timestamp: string, };
+
+export type ModelsChangedEvent = { timestamp: string, };
 
 export type NavigateToConversationEvent = { conversation_id: string, message_id: string | null, timestamp: string, };
 

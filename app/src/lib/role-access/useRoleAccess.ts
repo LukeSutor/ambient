@@ -1,5 +1,6 @@
 "use client";
 
+import { invoke } from "@tauri-apps/api/core";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
 import { useRoleAccessContext } from "./RoleAccessProvider";
@@ -96,6 +97,8 @@ export function useRoleAccess(location?: string) {
         const result = await invokeSignIn(email, password);
 
         if (result.session) {
+          // Open the user's encrypted database after successful login
+          await invoke("open_user_database");
           dispatch({ type: "SET_LOGGED_IN", payload: true });
         }
 

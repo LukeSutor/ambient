@@ -12,6 +12,9 @@ const eslintConfig = tseslint.config(
   tseslint.configs.stylisticTypeChecked,
   ...compat.extends("next/core-web-vitals"),
   {
+    ignores: ["src/types/**"],
+  },
+  {
     // Disabled rules taken from https://biomejs.dev/linter/rules-sources for ones that
     // are already handled by Biome
     rules: {

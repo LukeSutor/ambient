@@ -19,12 +19,12 @@ use crate::db::conversations::{
     add_message, get_conversation_history, get_message, get_or_refresh_prompt_time,
     Message, MessageMetadata, MessageType, Role,
 };
-use crate::events::{emitter::emit, types::{ChatStreamEvent, CHAT_STREAM}};
+use crate::events::{emitter::emit, types::{ChatStreamEvent, CHAT_STREAM, CloudUsageDecrementedEvent, CLOUD_USAGE_DECREMENTED}};
 use crate::models::llm::client::generate;
 use crate::models::llm::prompts::get_prompt;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
+use crate::models::llm::usage::create_generation_session;
 use crate::settings::service::load_user_settings;
-use crate::settings::types::ModelSelection;
 use crate::skills::types::{AgentError, ToolCall, ToolDefinition, ToolParameter, ParameterType};
 use chrono::Local;
 use std::sync::Arc;
@@ -41,7 +41,11 @@ pub struct BrowserUseRuntime {
     conv_id: String,
     assistant_message_id: String,
     config: BrowserUseConfig,
+    model_key: String,
     is_local: bool,
+    /// Whether this is a built-in (internal) model vs a user-added BYOK model.
+    is_internal: bool,
+    session_token: Option<String>,
     iteration: usize,
     cancel_signal: Arc<AtomicBool>,
     cancel_notify: Arc<tokio::sync::Notify>,
@@ -60,7 +64,15 @@ impl BrowserUseRuntime {
             .await
             .map_err(|e| AgentError::RuntimeError(format!("Failed to load settings: {}", e)))?;
 
-        let is_local = matches!(settings.model_selection, ModelSelection::Local);
+        let model_selection = settings.model_selection.as_str();
+        let model_id: i64 = model_selection.parse().unwrap_or(1);
+        let (is_local, is_internal, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
+            Ok(entry) => (!entry.is_cloud, entry.is_internal, entry.model),
+            Err(e) => {
+                log::warn!("[browser_use] Could not look up model id {}: {}. Defaulting to local.", model_id, e);
+                (true, true, "qwen3vl-2b".to_string())
+            }
+        };
         let config = BrowserUseConfig::default();
 
         Ok(Self {
@@ -68,7 +80,10 @@ impl BrowserUseRuntime {
             conv_id,
             assistant_message_id,
             config,
+            model_key,
             is_local,
+            is_internal,
+            session_token: None,
             iteration: 0,
             cancel_signal,
             cancel_notify,
@@ -99,6 +114,40 @@ impl BrowserUseRuntime {
         // Create browser WebView
         create_browser_webview(&self.app_handle, &self.config.start_url)
             .map_err(|e| AgentError::RuntimeError(format!("Failed to create browser: {}", e)))?;
+
+        // For internal cloud models, create a generation session before entering the loop.
+        // This checks the rate limit and increments usage ONCE for the entire turn.
+        // BYOK models (is_internal=false) use the user's own API key and don't need a session.
+        if !self.is_local && self.is_internal {
+            match create_generation_session(&self.model_key).await {
+                Ok(session) => {
+                    self.session_token = Some(session.session_token);
+                    log::info!("[browser_use] Generation session created for model '{}' (cost: {} credits)", self.model_key, session.credit_cost);
+
+                    // Emit usage decrement event so the frontend updates credit counters
+                    let _ = emit(
+                        CLOUD_USAGE_DECREMENTED,
+                        CloudUsageDecrementedEvent {
+                            credit_cost: session.credit_cost,
+                            timestamp: chrono::Local::now().to_rfc3339(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    if e.contains("rate_limit_exceeded") {
+                        log::info!("[browser_use] Rate limit reached for model '{}'", self.model_key);
+                        destroy_browser_webview(&self.app_handle);
+                        return Err(AgentError::LlmError(e));
+                    }
+                    if e.contains("model_not_available") {
+                        log::info!("[browser_use] Model '{}' not available on user's tier", self.model_key);
+                        destroy_browser_webview(&self.app_handle);
+                        return Err(AgentError::LlmError(e));
+                    }
+                    log::warn!("[browser_use] Failed to create generation session: {}. Continuing without session.", e);
+                }
+            }
+        }
 
         // Build system prompt once (for KV cache stability)
         let system_prompt = self.build_system_prompt().await;
@@ -164,7 +213,8 @@ impl BrowserUseRuntime {
                 .with_cancel_notify(Some(self.cancel_notify.clone()))
                 .with_attempts(Some(3))
                 .with_timeout_duration(Some(timeout_duration))
-                .with_slot_id(Some(0)); // Same slot as agentic chat
+                .with_slot_id(Some(0))
+                .with_session_token(self.session_token.clone());
 
             // Generate response
             let response = match generate(
@@ -185,6 +235,19 @@ impl BrowserUseRuntime {
                         self.emit_final_response(&text).await?;
                         return Ok(text);
                     }
+
+                    // Rate limit / model unavailable — surface user-friendly message
+                    if e.contains("rate_limit_exceeded") {
+                        let text = "*You've reached your daily usage limit for this model. Please try again tomorrow or switch to a different model.*".to_string();
+                        self.emit_final_response(&text).await?;
+                        return Ok(text);
+                    }
+                    if e.contains("model_not_available") {
+                        let text = "*This model is not available on your current plan. Please upgrade or switch to a different model.*".to_string();
+                        self.emit_final_response(&text).await?;
+                        return Ok(text);
+                    }
+
                     return Err(AgentError::LlmError(e));
                 }
             };

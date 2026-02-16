@@ -130,3 +130,30 @@ pub struct NavigateToConversationEvent {
   pub message_id: Option<String>,
   pub timestamp: String,
 }
+
+pub const DATABASE_RECOVERED: &str = "database_recovered";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct DatabaseRecoveredEvent {
+  /// Path to the backup file containing the user's previous data.
+  pub backup_path: String,
+  /// Description of the migration error that triggered recovery.
+  pub reason: String,
+  pub timestamp: String,
+}
+
+pub const CLOUD_USAGE_DECREMENTED: &str = "cloud_usage_decremented";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct CloudUsageDecrementedEvent {
+  /// The credit cost that was consumed for this turn.
+  pub credit_cost: f64,
+  pub timestamp: String,
+}
+
+pub const MODELS_CHANGED: &str = "models_changed";
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
+#[ts(export, export_to = "events.ts")]
+pub struct ModelsChangedEvent {
+  pub timestamp: String,
+}

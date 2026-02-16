@@ -902,12 +902,19 @@ pub async fn create_attachments(
   let mut attachments = Vec::new();
   let now = Utc::now();
 
+  // Get user_id from keyring for per-user attachment storage
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to get current user ID: {}", e))?
+    .ok_or("No active session. Cannot create attachments.")?;
+
   for data in attachment_data {
     let attachment_id = Uuid::new_v4().to_string();
     let file_path = match data.file_type.as_str() {
       "ambient/ocr" => None,
       _ => Some(format!(
-      "attachments/{}/{}",
+      "{}/{}/attachments/{}/{}",
+      crate::constants::PROFILES_DIR,
+      user_id,
       message_id,
       data.name.replace("/", "_")
       )),

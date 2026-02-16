@@ -3,6 +3,7 @@
 import {
   DangerZone,
   ModelSelector,
+  ModelVisibilityPopover,
   SettingsSection,
   SkillToggles,
 } from "@/components/secondary/settings";
@@ -27,13 +28,22 @@ interface SettingRowProps {
   title: string;
   description: string;
   children: React.ReactNode;
+  titleAction?: React.ReactNode;
 }
 
-function SettingRow({ title, description, children }: SettingRowProps) {
+function SettingRow({
+  title,
+  description,
+  children,
+  titleAction,
+}: SettingRowProps) {
   return (
     <div className="flex flex-row items-center justify-between p-4">
       <div className="flex flex-col">
-        <p className="font-semibold text-sm">{title}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-sm">{title}</p>
+          {titleAction}
+        </div>
         <p className="text-sm text-gray-600">{description}</p>
       </div>
       {children}
@@ -61,7 +71,7 @@ export default function Settings() {
         setGpuDevices(devices);
         setGpuDetectionDone(true);
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.warn("[Settings] GPU detection failed:", error);
         setGpuDetectionDone(true);
       });
@@ -70,7 +80,7 @@ export default function Settings() {
   const hasGpu = gpuDevices.length > 0;
 
   const hudSize = settings?.hud_size ?? "Normal";
-  const modelSelection = settings?.model_selection ?? "Local";
+  const modelSelection = settings?.model_selection ?? "1";
 
   const handleHudSizeChange = async (value: string) => {
     const newSize = value as HudSizeOption;
@@ -87,8 +97,7 @@ export default function Settings() {
   const handleModelSelectionChange = async (value: ModelSelection) => {
     try {
       await setModelSelection(value);
-      const displayName = value.charAt(0).toUpperCase() + value.slice(1);
-      toast.success(`Model selection changed to ${displayName}`);
+      toast.success("Model selection updated");
     } catch (error) {
       console.error("Failed to save model selection setting:", error);
       toast.error("Failed to save setting");
@@ -109,7 +118,9 @@ export default function Settings() {
         );
       } catch (restartError) {
         console.error("Failed to restart server:", restartError);
-        toast.error("Setting saved but server restart failed. Please restart the app.");
+        toast.error(
+          "Setting saved but server restart failed. Please restart the app.",
+        );
       }
     } catch (error) {
       console.error("Failed to save GPU acceleration setting:", error);
@@ -134,6 +145,7 @@ export default function Settings() {
         <SettingRow
           title="Model Selection"
           description="Choose the model to use for processing"
+          titleAction={<ModelVisibilityPopover />}
         >
           <ModelSelector
             value={modelSelection}

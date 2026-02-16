@@ -12,11 +12,11 @@ use crate::db::conversations::{
     load_conversation_skills, save_conversation_skill,
     MessageMetadata, MessageType, Role,
 };
-use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM}};
+use crate::events::{emitter::emit, types::{AttachmentData, EXTRACT_INTERACTIVE_MEMORY, ChatStreamEvent, CHAT_STREAM, CloudUsageDecrementedEvent, CLOUD_USAGE_DECREMENTED}};
 use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
+use crate::models::llm::usage::create_generation_session;
 use crate::settings::service::load_user_settings;
-use crate::settings::types::ModelSelection;
 use crate::skills::executor::{execute_tools};
 use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{
@@ -73,13 +73,33 @@ pub async fn handle_agent_chat(
     // Create runtime and run
     let cancel_signal = state.get_stop_signal();
     let cancel_notify = state.get_cancel_notify();
-    let runtime = AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal, cancel_notify).await?;
-    let result = runtime.run(user_message, attachments).await;
+    let runtime = match AgentRuntime::new(app_handle.clone(), conv_id, assistant_message_id, message_id, cancel_signal, cancel_notify).await {
+        Ok(r) => r,
+        Err(e) => {
+            // Clean up state on runtime creation failure
+            state.finish_generation().await;
+            return Err(e);
+        }
+    };
 
-    // Mark generation as finished
+    // Spawn the runtime in an isolated task so that:
+    // 1. Panics don't propagate and leave is_running stuck
+    // 2. finish_generation() ALWAYS runs regardless of outcome
+    let task_result = tokio::spawn(async move {
+        runtime.run(user_message, attachments).await
+    })
+    .await;
+
+    // ALWAYS mark generation as finished
     state.finish_generation().await;
 
-    result
+    match task_result {
+        Ok(result) => result,
+        Err(join_err) => {
+            log::error!("[agent] Chat runtime task panicked: {}", join_err);
+            Err(AgentError::RuntimeError(format!("Chat session failed unexpectedly: {}", join_err)))
+        }
+    }
 }
 
 /// Agentic runtime managing the tool-using conversation loop.
@@ -101,6 +121,15 @@ pub struct AgentRuntime {
 
     /// Whether using local model (vs cloud).
     is_local: bool,
+
+    /// Whether this is a built-in (internal) model vs a user-added BYOK model.
+    is_internal: bool,
+
+    /// The selected model's API identifier (e.g. "gemini-3-flash").
+    model_key: String,
+
+    /// Session token for cloud rate limiting (one per turn).
+    session_token: Option<String>,
 
     /// Currently activated skills for this conversation.
     active_skills: Vec<String>,
@@ -133,10 +162,15 @@ impl AgentRuntime {
             .await
             .map_err(|e| AgentError::DatabaseError(format!("Failed to load settings: {}", e)))?;
 
-        let is_local = matches!(
-            settings.model_selection,
-            ModelSelection::Local
-        );
+        let model_selection = settings.model_selection.as_str();
+        let model_id: i64 = model_selection.parse().unwrap_or(1);
+        let (is_local, is_internal, model_key) = match crate::db::models::get_model_by_id(&app_handle, model_id) {
+            Ok(entry) => (!entry.is_cloud, entry.is_internal, entry.model),
+            Err(e) => {
+                log::warn!("[agent] Could not look up model id {}: {}. Defaulting to local.", model_id, e);
+                (true, true, "qwen3vl-2b".to_string())
+            }
+        };
 
         // Load runtime config (use defaults for now, could be from settings in future)
         let config = AgentRuntimeConfig::default();
@@ -158,6 +192,9 @@ impl AgentRuntime {
             assistant_message_id,
             config,
             is_local,
+            is_internal,
+            model_key,
+            session_token: None,
             active_skills,
             iteration: 0,
             cancel_signal,
@@ -170,9 +207,10 @@ impl AgentRuntime {
     /// This is the main execution method that:
     /// 1. Saves the user message
     /// 2. Emits memory save event
-    /// 3. Builds the system prompt with skill summaries
-    /// 4. Gets conversation history (context-limited)
-    /// 5. Enters the agentic loop
+    /// 3. Creates a generation session (for cloud models — one per turn)
+    /// 4. Builds the system prompt with skill summaries
+    /// 5. Gets conversation history (context-limited)
+    /// 6. Enters the agentic loop
     async fn run(
         mut self,
         user_message: String,
@@ -183,6 +221,41 @@ impl AgentRuntime {
 
         // Emit memory save event
         self.emit_memory_save_event(&user_message).await?;
+
+        // For internal cloud models, create a generation session before entering the loop.
+        // This checks the rate limit and increments usage ONCE for the entire turn.
+        // All subsequent LLM calls in the loop use the session token.
+        // BYOK models (is_internal=false) use the user's own API key and don't need a session.
+        if !self.is_local && self.is_internal {
+            match create_generation_session(&self.model_key).await {
+                Ok(session) => {
+                    self.session_token = Some(session.session_token);
+                    log::info!("[agent] Generation session created for model '{}' (cost: {} credits)", self.model_key, session.credit_cost);
+
+                    // Emit usage decrement event so the frontend updates credit counters
+                    let _ = emit(
+                        CLOUD_USAGE_DECREMENTED,
+                        CloudUsageDecrementedEvent {
+                            credit_cost: session.credit_cost,
+                            timestamp: chrono::Local::now().to_rfc3339(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    if e.contains("rate_limit_exceeded") {
+                        log::info!("[agent] Rate limit reached for model '{}'", self.model_key);
+                        return Err(AgentError::LlmError(e));
+                    }
+                    if e.contains("model_not_available") {
+                        log::info!("[agent] Model '{}' not available on user's tier", self.model_key);
+                        return Err(AgentError::LlmError(e));
+                    }
+                    // For other errors, log and continue without session
+                    // (the worker will fall back to per-call rate limiting)
+                    log::warn!("[agent] Failed to create generation session: {}. Continuing without session.", e);
+                }
+            }
+        }
 
         // Get skill summaries for system prompt, filtered by auth requirements and disabled skills
         // get_filtered_summaries loads settings and auth state internally
@@ -249,7 +322,8 @@ impl AgentRuntime {
                 .with_cancel_notify(Some(self.cancel_notify.clone()))
                 .with_attempts(Some(3))
                 .with_timeout_duration(Some(timeout_duration))
-                .with_slot_id(Some(0));
+                .with_slot_id(Some(0))
+                .with_session_token(self.session_token.clone());
 
             // Generate response from LLM
             let response = match generate(
@@ -260,7 +334,7 @@ impl AgentRuntime {
             .await {
                 Ok(resp) => resp,
                 Err(e) => {
-                    // Check if it's a cancellation error
+                    // Check if it's a cancellation/timeout error
                     if e.contains("cancelled") || e.contains("timed out") {
                         let text: String;
                         if e.contains("timed out") {
@@ -271,7 +345,35 @@ impl AgentRuntime {
                             log::info!("[agent] Generation was cancelled during LLM call");
                         }
                         self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
-                        // Emit event if it hasn't been emitted yet by the provider
+                        let stream_data = ChatStreamEvent {
+                            delta: "".to_string(),
+                            is_finished: true,
+                            full_response: text.clone(),
+                            conv_id: Some(self.conv_id.clone()),
+                            message_id: Some(self.assistant_message_id.clone()),
+                        };
+                        let _ = emit(CHAT_STREAM, stream_data);
+                        return Ok(text);
+                    }
+
+                    // Rate limit / model unavailable — surface a user-friendly message
+                    if e.contains("rate_limit_exceeded") {
+                        let text = "*You've reached your daily usage limit for this model. Please try again tomorrow or switch to a different model.*".to_string();
+                        self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
+                        let stream_data = ChatStreamEvent {
+                            delta: "".to_string(),
+                            is_finished: true,
+                            full_response: text.clone(),
+                            conv_id: Some(self.conv_id.clone()),
+                            message_id: Some(self.assistant_message_id.clone()),
+                        };
+                        let _ = emit(CHAT_STREAM, stream_data);
+                        return Ok(text);
+                    }
+
+                    if e.contains("model_not_available") {
+                        let text = "*This model is not available on your current plan. Please upgrade or switch to a different model.*".to_string();
+                        self.save_assistant_message_with_id(&self.assistant_message_id, &text, MessageType::Text, None).await?;
                         let stream_data = ChatStreamEvent {
                             delta: "".to_string(),
                             is_finished: true,

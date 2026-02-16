@@ -1,4 +1,7 @@
+use crate::constants::{KEYRING_DB_KEY_PREFIX, KEYRING_SERVICE};
+use keyring::Entry;
 use once_cell::sync::Lazy;
+use rand::RngCore;
 use rusqlite::types::{Value as RusqliteValue, ValueRef};
 use rusqlite::{
   ffi::sqlite3_auto_extension, params_from_iter, Connection, Result as RusqliteResult,
@@ -25,7 +28,8 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           conv_type TEXT NOT NULL DEFAULT 'chat',
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
-          message_count INTEGER NOT NULL DEFAULT 0
+          message_count INTEGER NOT NULL DEFAULT 0,
+          prompt_cached_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS conversation_messages (
@@ -34,11 +38,26 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
           role TEXT NOT NULL,
           content TEXT NOT NULL,
           timestamp TEXT NOT NULL,
+          message_type TEXT NOT NULL DEFAULT 'text',
+          metadata TEXT,
           FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
         );
 
         CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON conversation_messages(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_messages_type ON conversation_messages(message_type);
+
+        -- Active skills per conversation
+        CREATE TABLE IF NOT EXISTS conversation_skills (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          skill_name TEXT NOT NULL,
+          activated_at TEXT NOT NULL,
+          FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+          UNIQUE(conversation_id, skill_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conv_skills ON conversation_skills(conversation_id);
 
         -- Memory tables
         CREATE TABLE IF NOT EXISTS memory_entries (
@@ -61,18 +80,47 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE INDEX IF NOT EXISTS idx_memory_entries_memory_type ON memory_entries(memory_type);
         CREATE INDEX IF NOT EXISTS idx_memory_entries_message_id ON memory_entries(message_id);
 
-        -- Token usage tracking
-        CREATE TABLE IF NOT EXISTS models (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          model TEXT NOT NULL UNIQUE
+        -- Memory FTS (full-text search)
+        CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
+          text,
+          content='memory_entries'
         );
 
-        -- Insert default models
-        INSERT OR IGNORE INTO models (model) VALUES
-          ('local'),
-          ('fast'),
-          ('pro');
+        CREATE TRIGGER IF NOT EXISTS memory_entries_ai AFTER INSERT ON memory_entries BEGIN
+          INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS memory_entries_ad AFTER DELETE ON memory_entries BEGIN
+          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS memory_entries_au AFTER UPDATE ON memory_entries BEGIN
+          INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
+          INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
+        END;
 
+        -- Models registry
+        -- `model` is the API model identifier (e.g. "qwen3vl-2b", "gpt-4o").
+        -- It is NOT unique — the integer `id` is the canonical row key.
+        CREATE TABLE IF NOT EXISTS models (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          model TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          short_description TEXT NOT NULL DEFAULT '',
+          description TEXT NOT NULL DEFAULT '',
+          provider TEXT NOT NULL DEFAULT 'unknown',
+          is_cloud INTEGER NOT NULL DEFAULT 0,
+          is_enabled INTEGER NOT NULL DEFAULT 1,
+          is_internal INTEGER NOT NULL DEFAULT 1,
+          api_url TEXT,
+          api_key TEXT,
+          request_format TEXT NOT NULL DEFAULT 'openai'
+        );
+
+        INSERT OR IGNORE INTO models (model, display_name, short_description, description, provider, is_cloud, is_enabled, is_internal, request_format) VALUES
+          ('qwen3vl-2b', 'Local', 'Runs on your device.', 'Ultimate privacy. Runs entirely on your device with no internet required. Your data never leaves your machine.', 'local', 0, 1, 1, 'openai'),
+          ('gemini-3-flash', 'Gemini 3 Flash', 'Fast cloud model.', 'Google''s fast model with advanced reasoning, tool use, and multimodal capabilities.', 'google', 1, 1, 1, 'gemini'),
+          ('gemini-3-pro', 'Gemini 3 Pro', 'Most advanced model.', 'Google''s most advanced model with state-of-the-art reasoning and generation capabilities.', 'google', 1, 1, 1, 'gemini');
+
+        -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           model INTEGER,
@@ -99,87 +147,114 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
 
         CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
       "#,
-    ),
-    M::up(
-      r#"
-        -- Agentic runtime migration: Enhanced message storage
-        -- Add new columns to conversation_messages
-        ALTER TABLE conversation_messages ADD COLUMN message_type TEXT NOT NULL DEFAULT 'text';
-        ALTER TABLE conversation_messages ADD COLUMN metadata TEXT;
-
-        -- message_type values:
-        -- 'text'           - Regular text message (user or assistant)
-        -- 'tool_call'      - Assistant requesting tool execution
-        -- 'tool_result'    - Result from tool execution
-        -- 'thinking'       - Internal reasoning/planning step
-        -- 'skill_activation' - Skill activation request
-
-        -- Create index for efficient filtering by message type
-        CREATE INDEX IF NOT EXISTS idx_messages_type ON conversation_messages(message_type);
-
-        -- Active skills per conversation
-        CREATE TABLE IF NOT EXISTS conversation_skills (
-            id TEXT PRIMARY KEY,
-            conversation_id TEXT NOT NULL,
-            skill_name TEXT NOT NULL,
-            activated_at TEXT NOT NULL,
-            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
-            UNIQUE(conversation_id, skill_name)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_conv_skills ON conversation_skills(conversation_id);
-      "#,
-    ),
-    M::up(
-      r#"
-        -- Memory FTS migration
-        CREATE VIRTUAL TABLE IF NOT EXISTS memory_entries_fts USING fts5(
-            text,
-            content='memory_entries'
-        );
-
-        -- Triggers to keep memory_entries_fts in sync
-        CREATE TRIGGER IF NOT EXISTS memory_entries_ai AFTER INSERT ON memory_entries BEGIN
-            INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
-        END;
-        CREATE TRIGGER IF NOT EXISTS memory_entries_ad AFTER DELETE ON memory_entries BEGIN
-            INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
-        END;
-        CREATE TRIGGER IF NOT EXISTS memory_entries_au AFTER UPDATE ON memory_entries BEGIN
-            INSERT INTO memory_entries_fts(memory_entries_fts, rowid, text) VALUES('delete', old.rowid, old.text);
-            INSERT INTO memory_entries_fts(rowid, text) VALUES (new.rowid, new.text);
-        END;
-
-        -- Initial sync
-        INSERT INTO memory_entries_fts(rowid, text) SELECT rowid, text FROM memory_entries;
-      "#,
-    ),
-    M::up(
-      r#"
-        -- Add prompt_cached_at for system prompt time caching.
-        -- Stores the timestamp used in the system prompt so it stays stable
-        -- across messages within a 10-minute window (enables KV cache reuse).
-        ALTER TABLE conversations ADD COLUMN prompt_cached_at TEXT;
-      "#,
-    ),
+    )
   ])
 });
 
-fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, String> {
+/// Per-user database path: {app_data}/databases/database_{user_id}.sqlite
+///
+/// Each user gets their own encrypted database file within their profile
+/// directory, identified by their Supabase user ID (UUID).
+fn get_user_db_path(app_handle: &tauri::AppHandle, user_id: &str) -> Result<PathBuf, String> {
   let app_data_path = app_handle
     .path()
     .app_data_dir()
     .map_err(|e| format!("Could not resolve app data directory: {}", e))?;
-  if let Err(e) = std::fs::create_dir_all(&app_data_path) {
-    return Err(format!("Failed to create app data directory: {}", e));
+  let profile_dir = app_data_path
+    .join(crate::constants::PROFILES_DIR)
+    .join(user_id);
+  if let Err(e) = std::fs::create_dir_all(&profile_dir) {
+    return Err(format!("Failed to create user profile directory: {}", e));
   }
-  Ok(app_data_path.join("database.sqlite"))
+  Ok(profile_dir.join(crate::constants::USER_DB_FILENAME))
 }
 
-/// Initializes the SQLite database connection, registers extensions, and runs migrations.
-pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, String> {
-  let db_path = get_db_path(app_handle)?;
+/// Generate or retrieve the per-user database encryption key from the OS keyring.
+///
+/// Each user gets a unique 32-byte AES-256 key stored in the OS credential store
+/// (Windows Credential Manager / macOS Keychain / Linux Secret Service).
+/// The key is used as a raw SQLCipher key via `PRAGMA key`.
+///
+/// If no key exists for this user, a cryptographically random key is generated
+/// and stored. If the stored key is invalid (wrong length), it is replaced.
+fn get_or_create_user_db_key(user_id: &str) -> Result<Vec<u8>, String> {
+  let keyring_name = format!("{}{}", KEYRING_DB_KEY_PREFIX, user_id);
+  let entry = Entry::new(KEYRING_SERVICE, &keyring_name)
+    .map_err(|e| format!("Keyring entry error for DB key: {}", e))?;
 
+  // Try to read existing key
+  match entry.get_password() {
+    Ok(key_hex) => {
+      // Decode hex to bytes
+      let key_bytes = hex_decode(&key_hex)?;
+      if key_bytes.len() == 32 {
+        return Ok(key_bytes);
+      }
+      log::warn!("[db] Invalid DB key length in keyring ({}), generating new key", key_bytes.len());
+    }
+    Err(keyring::Error::NoEntry) => {
+      log::info!("[db] No existing DB key for user, generating new key");
+    }
+    Err(e) => {
+      return Err(format!("Keyring read error for DB key: {}", e));
+    }
+  }
+
+  // Generate a new 32-byte random key
+  let mut key = [0u8; 32];
+  rand::rngs::OsRng.fill_bytes(&mut key);
+  let key_hex = hex_encode(&key);
+
+  entry
+    .set_password(&key_hex)
+    .map_err(|e| format!("Failed to store DB key in keyring: {}", e))?;
+
+  log::info!("[db] Generated and stored new DB encryption key for user");
+  Ok(key.to_vec())
+}
+
+/// Set the SQLCipher encryption key on a connection.
+///
+/// Must be called immediately after opening a connection, before any other
+/// operations. Uses raw hex key format to avoid PBKDF2 key derivation overhead.
+/// Verifies the key works by querying `sqlite_master`.
+fn set_encryption_key(conn: &Connection, key_bytes: &[u8]) -> Result<(), String> {
+  let hex_key = hex_encode(key_bytes);
+  // SQLCipher raw key format: PRAGMA key = "x'<hex>'";
+  conn
+    .execute_batch(&format!("PRAGMA key = \"x'{}'\"", hex_key))
+    .map_err(|e| format!("Failed to set database encryption key: {}", e))?;
+
+  // Verify the key by reading the schema — if wrong, SQLCipher returns
+  // "file is not a database" on the first real query.
+  conn
+    .execute_batch("SELECT count(*) FROM sqlite_master;")
+    .map_err(|e| format!("Database key verification failed (wrong key?): {}", e))?;
+
+  Ok(())
+}
+
+/// Encode bytes to hex string.
+fn hex_encode(bytes: &[u8]) -> String {
+  bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+/// Decode hex string to bytes.
+fn hex_decode(hex: &str) -> Result<Vec<u8>, String> {
+  if hex.len() % 2 != 0 {
+    return Err("Invalid hex string length".to_string());
+  }
+  (0..hex.len())
+    .step_by(2)
+    .map(|i| {
+      u8::from_str_radix(&hex[i..i + 2], 16)
+        .map_err(|e| format!("Invalid hex character: {}", e))
+    })
+    .collect()
+}
+
+/// Register the sqlite_vec extension globally (idempotent).
+fn register_sqlite_vec_extension() -> Result<(), String> {
   unsafe {
     let rc = sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_vec_init as *const ())));
     if rc != 0 {
@@ -190,12 +265,14 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
     }
   }
   log::info!("[db] Registered sqlite_vec extension");
+  Ok(())
+}
 
-  let mut conn =
-    Connection::open(&db_path).map_err(|e| format!("Failed to open database connection: {}", e))?;
-
+/// Try to apply migrations to an open connection.
+/// Returns `Ok(())` on success, or an error string on failure.
+fn apply_migrations(conn: &mut Connection) -> Result<(), String> {
   log::info!("[db] Applying database migrations...");
-  MIGRATIONS.to_latest(&mut conn).map_err(|e| match e {
+  MIGRATIONS.to_latest(conn).map_err(|e| match e {
     rusqlite_migration::Error::RusqliteError { query: _, err } => {
       format!("SQLite error during migration: {}", err)
     }
@@ -205,8 +282,198 @@ pub fn initialize_database(app_handle: &tauri::AppHandle) -> Result<Connection, 
     other => format!("Unknown migration error: {}", other),
   })?;
   log::info!("[db] Migrations applied successfully.");
+  Ok(())
+}
 
-  Ok(conn)
+/// Back up the existing database file by copying it to a timestamped path.
+/// Returns the backup path on success.
+fn backup_database(db_path: &PathBuf) -> Result<PathBuf, String> {
+  let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+  let stem = db_path
+    .file_stem()
+    .and_then(|s| s.to_str())
+    .unwrap_or("database");
+  let backup_name = format!("{}_backup_{}.sqlite", stem, timestamp);
+  let backup_path = db_path
+    .parent()
+    .ok_or("Cannot determine database parent directory")?
+    .join(&backup_name);
+
+  fs::copy(db_path, &backup_path)
+    .map_err(|e| format!("Failed to back up database: {}", e))?;
+
+  log::info!("[db] Database backed up to {:?}", backup_path);
+  Ok(backup_path)
+}
+
+/// Open (or create) an encrypted per-user SQLite database.
+///
+/// Each user's database is identified by their Supabase user ID and encrypted
+/// with a per-user key stored in the OS keyring. The flow:
+///
+/// 1. Resolve path: `{app_data}/databases/database_{user_id}.sqlite`
+/// 2. Register sqlite-vec extension (idempotent)
+/// 3. Open SQLite connection
+/// 4. Set SQLCipher encryption key via `PRAGMA key` (raw hex)
+/// 5. Apply schema migrations (with backup + recovery on failure)
+///
+/// If migrations fail, the existing database is backed up and a fresh
+/// encrypted database is created. A `database_recovered` event is emitted.
+pub fn initialize_user_database(
+  app_handle: &tauri::AppHandle,
+  user_id: &str,
+) -> Result<Connection, String> {
+  let db_path = get_user_db_path(app_handle, user_id)?;
+  log::info!("[db] Opening database for user at {:?}", db_path);
+
+  register_sqlite_vec_extension()?;
+
+  let key_bytes = get_or_create_user_db_key(user_id)?;
+
+  let mut conn = Connection::open(&db_path)
+    .map_err(|e| format!("Failed to open database connection: {}", e))?;
+
+  set_encryption_key(&conn, &key_bytes)?;
+
+  match apply_migrations(&mut conn) {
+    Ok(()) => {
+      log::info!("[db] User database initialized successfully");
+      Ok(conn)
+    }
+    Err(migration_err) => {
+      log::warn!(
+        "[db] Migration failed: {}. Attempting recovery with backup...",
+        migration_err
+      );
+
+      // Close the broken connection
+      if let Err((_, e)) = conn.close() {
+        log::warn!("[db] Error closing connection during recovery: {}", e);
+      }
+
+      // Back up the existing database so the user never loses data
+      let backup_path = match backup_database(&db_path) {
+        Ok(path) => path,
+        Err(backup_err) => {
+          return Err(format!(
+            "Migration failed ({}) and backup also failed ({}). \
+             Please manually copy {:?} before restarting.",
+            migration_err, backup_err, db_path
+          ));
+        }
+      };
+
+      // Delete the old database and create a fresh one
+      if let Err(e) = fs::remove_file(&db_path) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+          return Err(format!(
+            "Migration failed and could not remove old database: {}",
+            e
+          ));
+        }
+      }
+
+      let mut fresh_conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open fresh database: {}", e))?;
+
+      set_encryption_key(&fresh_conn, &key_bytes)?;
+
+      apply_migrations(&mut fresh_conn).map_err(|e| {
+        format!(
+          "Failed to apply migrations to fresh database: {}. Backup at {:?}",
+          e, backup_path
+        )
+      })?;
+
+      // Emit recovery event so the frontend can notify the user
+      let backup_path_str = backup_path.to_string_lossy().to_string();
+      log::info!(
+        "[db] Database recovered successfully. Backup at: {}",
+        backup_path_str
+      );
+
+      if let Ok(emitter) = std::panic::catch_unwind(|| {
+        crate::events::emitter::emit(
+          crate::events::types::DATABASE_RECOVERED,
+          crate::events::types::DatabaseRecoveredEvent {
+            backup_path: backup_path_str.clone(),
+            reason: migration_err.clone(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+          },
+        )
+      }) {
+        if let Err(e) = emitter {
+          log::debug!("[db] Could not emit recovery event (emitter not ready): {}", e);
+        }
+      }
+
+      Ok(fresh_conn)
+    }
+  }
+}
+
+/// Open the database for the currently authenticated user.
+///
+/// Reads the stored auth state to determine the user ID, then opens (or creates)
+/// their encrypted database. Any previously open connection is closed first.
+///
+/// Called by the frontend after successful login, and by `lib.rs` on app startup
+/// when a stored session exists.
+#[tauri::command]
+pub fn open_user_database(
+  state: tauri::State<DbState>,
+  app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+  // Read user ID from keyring
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to get current user ID: {}", e))?
+    .ok_or("No active session. Please log in first.")?;
+
+  // Close existing connection if any
+  {
+    let mut guard = state
+      .0
+      .lock()
+      .map_err(|_| "Failed to acquire DB lock".to_string())?;
+    if let Some(conn) = guard.take() {
+      if let Err((_, e)) = conn.close() {
+        log::warn!("[db] Error closing previous connection: {}", e);
+      }
+    }
+  }
+
+  // Initialize user's encrypted database
+  let conn = initialize_user_database(&app_handle, &user_id)?;
+
+  let mut guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+  *guard = Some(conn);
+
+  log::info!("[db] Opened encrypted database for user {}", &user_id);
+  Ok(())
+}
+
+/// Close the current database connection.
+///
+/// Called before logout to cleanly release the database. After this,
+/// all DB operations will return "Database not available" until a new
+/// user logs in.
+#[tauri::command]
+pub fn close_user_database(state: tauri::State<DbState>) -> Result<(), String> {
+  let mut guard = state
+    .0
+    .lock()
+    .map_err(|_| "Failed to acquire DB lock".to_string())?;
+
+  if let Some(conn) = guard.take() {
+    if let Err((_, e)) = conn.close() {
+      log::warn!("[db] Error closing database connection: {}", e);
+    }
+    log::info!("[db] User database closed");
+  }
+  Ok(())
 }
 
 // Helper to convert rusqlite ValueRef to serde_json Value
@@ -338,7 +605,9 @@ pub fn execute_sql(
   }
 }
 
-/// Closes the current database connection, deletes the database file, and initializes a fresh database.
+/// Closes the current database connection, deletes the database file, and initializes a fresh one.
+///
+/// Reads the user ID from the stored auth state to determine which database to reset.
 #[tauri::command]
 pub fn reset_database(
   state: tauri::State<'_, DbState>,
@@ -346,9 +615,14 @@ pub fn reset_database(
 ) -> Result<(), String> {
   log::info!("[db] Attempting to reset database...");
 
-  let db_path = get_db_path(&app_handle)?;
+  // Get user ID from keyring
+  let user_id = crate::auth::storage::get_current_user_id()
+    .map_err(|e| format!("Failed to get current user ID: {}", e))?
+    .ok_or("No active session. Cannot reset database without a logged-in user.")?;
+  let db_path = get_user_db_path(&app_handle, &user_id)?;
   log::debug!("[db] Target database path for reset: {:?}", db_path);
 
+  // Close existing connection
   let mut conn_guard = state
     .0
     .lock()
@@ -362,6 +636,7 @@ pub fn reset_database(
     log::info!("[db] Closed existing database connection.");
   }
 
+  // Delete the database file
   log::info!("[db] Deleting database file: {:?}", db_path);
   match fs::remove_file(&db_path) {
     Ok(_) => log::info!("[db] Database file deleted successfully."),
@@ -371,8 +646,9 @@ pub fn reset_database(
     Err(e) => return Err(format!("Failed to delete database file: {}", e)),
   }
 
+  // Re-initialize with the same user's encryption key
   log::info!("[db] Re-initializing database...");
-  match initialize_database(&app_handle) {
+  match initialize_user_database(&app_handle, &user_id) {
     Ok(new_conn) => {
       let mut guard = state
         .0

@@ -132,7 +132,9 @@ export function MessageList() {
           {isLoading ? (
             <div className="h-6 w-40 rounded-lg bg-white/20 animate-pulse" />
           ) : (
-            <p className="font-bold text-center pointer-events-none">{conversationName}</p>
+            <p className="font-bold text-center pointer-events-none">
+              {conversationName}
+            </p>
           )}
 
           <Tooltip>

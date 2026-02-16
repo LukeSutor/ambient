@@ -78,18 +78,35 @@ pub fn run() {
         }
       });
 
-      // Initialize the database connection during setup
+      // Open per-user database if a session is already stored (app restart).
+      // Read the current user ID from the OS keyring — this avoids decrypting
+      // tokens just to get the user ID. Token refresh happens later when the
+      // frontend calls get_auth_state.
       let app_handle = app.handle();
-      match db::core::initialize_database(&app_handle) {
-        Ok(conn) => {
-          log::info!("[setup] Database initialized successfully.");
-          // Store the connection in the managed state using the app_handle
-          let state = app_handle.state::<DbState>();
-          *state.0.lock().unwrap() = Some(conn);
+      match crate::auth::storage::get_current_user_id() {
+        Ok(Some(user_id)) => {
+          match db::core::initialize_user_database(app_handle, &user_id) {
+            Ok(conn) => {
+              let db_state = app_handle.state::<DbState>();
+              *db_state.0.lock().unwrap() = Some(conn);
+              log::info!("[setup] Opened encrypted database for user from stored session");
+            }
+            Err(e) => {
+              log::error!(
+                "[setup] Failed to open user database: {}. Database will initialize after login.",
+                e
+              );
+            }
+          }
+        }
+        Ok(None) => {
+          log::info!("[setup] No stored session. Database will initialize after login.");
         }
         Err(e) => {
-          log::error!("[setup] Failed to initialize database: {}", e);
-          panic!("Database initialization failed: {}", e);
+          log::warn!(
+            "[setup] Failed to read auth state: {}. Database will initialize after login.",
+            e
+          );
         }
       }
 
@@ -154,6 +171,8 @@ pub fn run() {
       screen_selection::get_screen_dimensions,
       db::core::execute_sql,
       db::core::reset_database,
+      db::core::open_user_database,
+      db::core::close_user_database,
       db::conversations::create_conversation,
       db::conversations::get_messages,
       db::conversations::get_message,
@@ -171,12 +190,18 @@ pub fn run() {
       db::memory::delete_all_memories,
       db::token_usage::get_token_usage_consumption,
       db::token_usage::get_token_usage,
+      db::models::get_models,
+      db::models::toggle_model,
+      db::models::add_custom_model,
+      db::models::update_custom_model,
+      db::models::delete_custom_model,
       setup::setup,
       setup::get_setup_download_info,
       setup::check_setup_complete,
       models::llm::server::spawn_llama_server,
       models::llm::server::restart_llama_server,
       models::llm::server::detect_gpu_devices,
+      models::llm::usage::get_credit_usage,
       agents::chat::runtime::handle_agent_chat,
       agents::chat::state::stop_agent_chat,
       models::embedding::embedding::generate_embedding,

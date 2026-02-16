@@ -1,4 +1,5 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
+use crate::models::llm::client::ResolvedModel;
 use crate::events::{emitter::emit, types::*};
 use crate::auth::commands::get_access_token_command;
 use crate::db::token_usage::add_token_usage;
@@ -19,12 +20,12 @@ impl LlmProvider for CloudflareProvider {
     &self,
     app_handle: AppHandle,
     request: LlmRequest,
+    resolved_model: &ResolvedModel,
   ) -> Result<LlmResponse, String> {
-    // Get model type from user settings
-    let settings = crate::settings::service::load_user_settings(app_handle.clone())
-      .await
-      .map_err(|e| format!("Failed to load user settings: {}", e))?;
-    let model = settings.model_selection.as_str().to_string();
+    // Send the model key directly (e.g. "gemini-3-flash", "gemini-3-pro").
+    // The Cloudflare worker maps this to the actual API model name.
+    let model_key = resolved_model.model.clone();
+    let model_db_id = resolved_model.id;
 
     let should_stream = request.stream.unwrap_or(false);
     let mut content = Vec::new();
@@ -46,7 +47,7 @@ impl LlmProvider for CloudflareProvider {
 
     // Build request body
     let mut body = json!({
-        "modelType": model,
+        "modelType": model_key,
         "content": content,
         "stream": should_stream,
         "systemPrompt": request.system_prompt.unwrap_or_else(|| "You are a helpful assistant.".to_string()),
@@ -64,6 +65,11 @@ impl LlmProvider for CloudflareProvider {
     // Handle internal tools translation
     if let Some(internal_tools) = &request.internal_tools {
       body["tools"] = tools_to_gemini_format(internal_tools);
+    }
+
+    // Include session token if available (bypasses per-call rate limiting)
+    if let Some(ref token) = request.session_token {
+      body["sessionToken"] = json!(token);
     }
 
     let client = reqwest::Client::new();
@@ -93,6 +99,9 @@ impl LlmProvider for CloudflareProvider {
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
         log::error!("Cloudflare streaming error status: {}. Body: {}", status, text);
+        if status.as_u16() == 429 {
+          return Err("rate_limit_exceeded".to_string());
+        }
         return Err(format!("Cloudflare error {}: {}", status, text));
       }
 
@@ -195,7 +204,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
         app_handle.clone(),
-        &model,
+        model_db_id,
         prompt_tokens,
         completion_tokens,
       ).await?;
@@ -232,6 +241,9 @@ impl LlmProvider for CloudflareProvider {
       if !status.is_success() {
         let text = resp.text().await.unwrap_or_default();
         log::error!("Cloudflare error status: {}. Body: {}", status, text);
+        if status.as_u16() == 429 {
+          return Err("rate_limit_exceeded".to_string());
+        }
         return Err(format!("Cloudflare error {}: {}", status, text));
       }
 
@@ -270,7 +282,7 @@ impl LlmProvider for CloudflareProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          &model,
+          model_db_id,
           prompt_tokens,
           completion_tokens,
       ).await?;

@@ -1,69 +1,84 @@
 # Ambient
 
-Ambient is a local-first AI assistant that aims to have all the features of a cloud-based service like ChatGPT, Claude, or Gemini. It comes with an agentic chat runtime that includes web search, code execution, agentic memory, and Google Mail and Calendar integration.
+A local-first AI desktop assistant. Run models on your machine, bring your own API keys, or use built-in cloud models — all from a lightweight app that lives in your system tray.
 
-## Overview
+Built with [Tauri](https://tauri.app) (Rust + Next.js).
 
-Ambient is a desktop app that runs AI models locally via llama.cpp, with an optional cloud fallback. Think of it as a lightweight “brain for your computer”: chat with it, give it context from your screen, and let it help with routine tasks. It runs efficiently in the background and prioritizes privacy and speed.
+## Features
 
-Built with Tauri (Rust + Next.js).
+**Local inference**
+- Ships with [llama.cpp](https://github.com/ggerganov/llama.cpp) and a built-in model downloader (Qwen3VL-2B)
+- GPU support through the Vulkan API
+- Vision support understands images and screen captures out of the box
 
-## Key features
+**Agentic runtime**
+- Web search via Tauri WebView
+- Sandboxed Python code execution via [RustPython](https://github.com/RustPython/RustPython)
+- Agentic memory across conversations
+- Google Mail and Calendar integration
+- Headless browser-use automation via Tauri Webview
 
-- Local‑first inference with llama.cpp
-  - Ships with a built‑in model downloader
-- Agentic runtime built on top of the [skills](https://agentskills.io/home) specification
-  - Web search using Tauri's webview window as a scraper
-  - Sandboxed code execution using [rustpython](https://github.com/RustPython/RustPython)
-  - Agentic memory for remembering past conversations
-  - Google mail and calendar integration for work automation
-- Screen region context with OCR
-  - Snipping‑tool‑style region capture
-  - Extracts text with [ocrs](https://github.com/robertknight/ocrs) and injects it into the conversation
-- Runs in the background, designed to be helpful without getting in your way
+**Bring Your Own Key (BYOK)**
+- Connect any OpenAI, Gemini, or Anthropic-compatible API
+- API keys are stored encrypted in a local SQLite database and never leave your machine
 
-## How it works
+**Screen context**
+- Snipping-tool-style region capture
+- Local OCR with [ocrs](https://github.com/robertknight/ocrs)
+- Extracted text is injected directly into the conversation
 
-- The Tauri/Rust backend manages windowing, screen capture, OCR, and model orchestration
-- llama.cpp runs locally; the app communicates with it through a local http server
-- When you choose, Gemini can be used for more advanced capabilities
-- Supabase for auth and profile data
-- Cloudflare Workers for cloud LLM completions
-- All local artifacts (models, database, caches) never leave your computer
+**Privacy-first**
+- All local data (models, conversations, attachments) stays on your machine
+- Encrypted databases (SQLCipher)
+- Cloud features are disabled by default and opt-in
 
-## Roadmap (vision)
+## Quick Start
 
-- Proactive assistance: draft emails or messages based on detected screen context
-- Scheduling: suggest/create calendar events from chats or on‑screen cues
-- Rich automations: configurable actions triggered by screen activity
+### Prerequisites
 
-## Quick start (Windows)
+- [Rust](https://rustup.rs) (MSVC toolchain on Windows)
+- [Node.js](https://nodejs.org) LTS + [pnpm](https://pnpm.io)
 
-Prerequisites
-- Rust toolchain (MSVC)
-- Node.js LTS and pnpm
+### Development
 
-Steps
-1) Clone the repo and install dependencies
-2) Create and fill in `cloudflare/workers/llm-completions/.env` (see `.env.example`)
-3) Start the cloudflare worker using `pnpm run dev`
-4) Start the app in development mode using `pnpm run tauri dev`
+```bash
+# Install dependencies
+cd app && pnpm install
 
-## Configuration
+# Start the Cloudflare Worker (needed for built-in cloud models)
+cd cloudflare/workers/ambient-backend
+pnpm install && pnpm run dev
 
-- Local models via llama.cpp
-  - A built‑in downloader fetches Qwen3VL-2B
-- Optional Gemini 3 Flash and Pro through Cloudflare Worker
+# In a separate terminal — start the app
+cd app && pnpm run tauri dev
+```
 
-## Privacy
+### Build
 
-- Local‑first by design: inference and screen processing happen on your machine
-- Optional Gemini access through Cloudflare is opt‑in
-- Artifacts (models, logs, messages, attachments) are stored locally
+```bash
+cd app && pnpm run tauri build
+```
 
-## Project structure
+## Architecture
 
-- `app/` – Tauri app with Next.js frontend and Rust backend
-- `app/src-tauri/` – Tauri config, Rust commands, binaries, and environment
-- `cloudflare/` – Cloudflare worker backend
-- `ml/` – experiments and training scripts
+```
+app/                    Tauri application
+├── src/                Next.js frontend (React 19, TypeScript, shadcn/ui)
+├── src-tauri/          Rust backend
+│   └── src/
+│       ├── agents/     Chat + browser-use agentic runtimes
+│       ├── models/     LLM providers, llama.cpp server, embeddings
+│       ├── skills/     Tool registry and execution
+│       ├── db/         SQLite database, migrations, CRUD
+│       ├── auth/       Supabase auth, OAuth, token storage (OS keyring + AES)
+│       └── settings/   User preferences
+cloudflare/             Cloudflare Worker backend (cloud LLM proxy, rate limiting)
+```
+
+## How It Works
+
+- **Local models** run via llama.cpp as a background process — the app talks to it over a local HTTP server
+- **BYOK models** connect directly to the provider's API using your key
+- **Built-in cloud models** (Gemini) are proxied through a Cloudflare Worker
+- **Supabase** handles authentication and user profiles
+- **All local artifacts** (models, databases, caches, attachments) never leave your computer

@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useRoleAccessContext } from "@/lib/role-access/RoleAccessProvider";
 import type { SupabaseUser } from "@/types/auth";
 import type { OcrResponseEvent } from "@/types/events";
 import type { SkillSummary, ToolDefinition, ToolResult } from "@/types/skills";
-import { useRoleAccessContext } from "@/lib/role-access/RoleAccessProvider";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
@@ -181,16 +181,31 @@ export default function Dev() {
   const [embeddingError, setEmbeddingError] = useState<string | null>(null);
 
   // --- Browser Use Testing ---
-  const [browserUrl, setBrowserUrl] = useState<string>("https://www.google.com");
+  const [browserUrl, setBrowserUrl] = useState<string>(
+    "https://www.google.com",
+  );
   const [browserCreated, setBrowserCreated] = useState<boolean>(false);
   const [browserSnapshot, setBrowserSnapshot] = useState<string | null>(null);
-  const [browserActionName, setBrowserActionName] = useState<string>("navigate");
-  const [browserActionArgs, setBrowserActionArgs] = useState<string>('{"url": "https://www.google.com"}');
-  const [browserActionResult, setBrowserActionResult] = useState<string | null>(null);
+  const [browserActionName, setBrowserActionName] =
+    useState<string>("navigate");
+  const [browserActionArgs, setBrowserActionArgs] = useState<string>(
+    '{"url": "https://www.google.com"}',
+  );
+  const [browserActionResult, setBrowserActionResult] = useState<string | null>(
+    null,
+  );
   const [browserLoading, setBrowserLoading] = useState<boolean>(false);
   const [browserError, setBrowserError] = useState<string | null>(null);
 
-  const browserActions = ["navigate", "click", "type_text", "select_option", "scroll", "go_back", "wait"];
+  const browserActions = [
+    "navigate",
+    "click",
+    "type_text",
+    "select_option",
+    "scroll",
+    "go_back",
+    "wait",
+  ];
 
   const browserActionTemplates: Record<string, string> = {
     navigate: '{"url": "https://www.google.com"}',
@@ -198,7 +213,7 @@ export default function Dev() {
     type_text: '{"element_id": 1, "text": "hello", "press_enter": true}',
     select_option: '{"element_id": 1, "value": "option1"}',
     scroll: '{"direction": "down"}',
-    go_back: '{}',
+    go_back: "{}",
     wait: '{"seconds": 2}',
   };
 
@@ -427,10 +442,12 @@ export default function Dev() {
         <h2 className="text-lg font-semibold">Google Auth Status</h2>
         <div className="space-y-2 text-sm">
           <div>
-            <strong>Is Logged In (Supabase):</strong> {authState.isLoggedIn ? "✅ Yes" : "❌ No"}
+            <strong>Is Logged In (Supabase):</strong>{" "}
+            {authState.isLoggedIn ? "✅ Yes" : "❌ No"}
           </div>
           <div>
-            <strong>Is Google Authenticated:</strong> {authState.isGoogleAuthenticated ? "✅ Yes" : "❌ No"}
+            <strong>Is Google Authenticated:</strong>{" "}
+            {authState.isGoogleAuthenticated ? "✅ Yes" : "❌ No"}
           </div>
         </div>
       </div>
@@ -723,13 +740,17 @@ export default function Dev() {
           <div className="flex gap-2">
             <Input
               value={browserUrl}
-              onChange={(e) => setBrowserUrl(e.target.value)}
+              onChange={(e) => {
+                setBrowserUrl(e.target.value);
+              }}
               placeholder="https://www.google.com"
               className="bg-white"
             />
             {!browserCreated ? (
               <Button
-                onClick={() => { void handleBrowserCreate(); }}
+                onClick={() => {
+                  void handleBrowserCreate();
+                }}
                 disabled={browserLoading}
                 className="shrink-0"
               >
@@ -737,7 +758,9 @@ export default function Dev() {
               </Button>
             ) : (
               <Button
-                onClick={() => { void handleBrowserDestroy(); }}
+                onClick={() => {
+                  void handleBrowserDestroy();
+                }}
                 disabled={browserLoading}
                 variant="destructive"
                 className="shrink-0"
@@ -756,7 +779,9 @@ export default function Dev() {
           <div className="space-y-2">
             <div className="flex gap-2">
               <Button
-                onClick={() => { void handleBrowserSnapshot(); }}
+                onClick={() => {
+                  void handleBrowserSnapshot();
+                }}
                 disabled={browserLoading}
                 variant="outline"
                 className="w-full"
@@ -776,25 +801,33 @@ export default function Dev() {
               value={browserActionName}
               onChange={(e) => {
                 setBrowserActionName(e.target.value);
-                setBrowserActionArgs(browserActionTemplates[e.target.value] || "{}");
+                setBrowserActionArgs(
+                  browserActionTemplates[e.target.value] || "{}",
+                );
               }}
             >
               {browserActions.map((a) => (
-                <option key={a} value={a}>{a}</option>
+                <option key={a} value={a}>
+                  {a}
+                </option>
               ))}
             </select>
 
             <Label>Arguments (JSON)</Label>
             <Textarea
               value={browserActionArgs}
-              onChange={(e) => setBrowserActionArgs(e.target.value)}
+              onChange={(e) => {
+                setBrowserActionArgs(e.target.value);
+              }}
               className="bg-white font-mono text-xs"
               rows={3}
             />
 
             <div className="flex gap-2">
               <Button
-                onClick={() => { void handleBrowserAction(); }}
+                onClick={() => {
+                  void handleBrowserAction();
+                }}
                 disabled={browserLoading}
                 variant="outline"
                 className="flex-1"
@@ -802,7 +835,9 @@ export default function Dev() {
                 Execute Action
               </Button>
               <Button
-                onClick={() => { void handleBrowserActionThenSnapshot(); }}
+                onClick={() => {
+                  void handleBrowserActionThenSnapshot();
+                }}
                 disabled={browserLoading}
                 className="flex-1"
               >
@@ -816,7 +851,9 @@ export default function Dev() {
         {browserActionResult && (
           <div className="p-2 bg-green-100 border border-green-300 rounded text-sm">
             <h3 className="font-semibold mb-1 text-xs">Action Result:</h3>
-            <pre className="text-xs whitespace-pre-wrap">{browserActionResult}</pre>
+            <pre className="text-xs whitespace-pre-wrap">
+              {browserActionResult}
+            </pre>
           </div>
         )}
 
@@ -825,18 +862,23 @@ export default function Dev() {
           <div className="p-2 bg-white border rounded text-sm overflow-auto max-h-96">
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-xs">
-                Snapshot ({browserSnapshot.length} chars, ~{Math.ceil(browserSnapshot.length / 4)} tokens)
+                Snapshot ({browserSnapshot.length} chars, ~
+                {Math.ceil(browserSnapshot.length / 4)} tokens)
               </h3>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 text-xs"
-                onClick={() => { void navigator.clipboard.writeText(browserSnapshot); }}
+                onClick={() => {
+                  void navigator.clipboard.writeText(browserSnapshot);
+                }}
               >
                 Copy
               </Button>
             </div>
-            <pre className="text-[10px] leading-tight whitespace-pre-wrap font-mono">{browserSnapshot}</pre>
+            <pre className="text-[10px] leading-tight whitespace-pre-wrap font-mono">
+              {browserSnapshot}
+            </pre>
           </div>
         )}
 

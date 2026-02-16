@@ -1,8 +1,8 @@
 "use client";
 
 import { Switch } from "@/components/ui/switch";
-import { useSettings } from "@/lib/settings";
 import { useRoleAccess } from "@/lib/role-access";
+import { useSettings } from "@/lib/settings";
 import type { SkillSummary } from "@/types/skills";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
@@ -11,14 +11,11 @@ import { useCallback, useEffect, useState } from "react";
 const SKILL_DESCRIPTIONS: Record<string, string> = {
   "web-search":
     "Search the web for up-to-date information, news, and answers to your questions",
-  "memory-search":
-    "Recall information from your past conversations",
+  "memory-search": "Recall information from your past conversations",
   "code-execution":
     "Run code snippets to perform calculations, data processing, and more",
-  calendar:
-    "View, create, and manage events on your Google Calendar",
-  email:
-    "Read and search emails using your Gmail account",
+  calendar: "View, create, and manage events on your Google Calendar",
+  email: "Read and search emails using your Gmail account",
 };
 
 /**
@@ -68,7 +65,12 @@ function getLockedReason(
  */
 export function SkillToggles() {
   const { settings, toggleSkill } = useSettings();
-  const { isOnline, isLoggedIn, isGoogleAuthenticated, refresh: refreshAuth } = useRoleAccess();
+  const {
+    isOnline,
+    isLoggedIn,
+    isGoogleAuthenticated,
+    refresh: refreshAuth,
+  } = useRoleAccess();
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,9 +79,10 @@ export function SkillToggles() {
       try {
         // Refresh auth state to ensure Google auth status is current
         await refreshAuth();
-        const availableSkills =
-          await invoke<SkillSummary[]>("get_available_skills");
-          console.log("Available skills:", availableSkills);
+        const availableSkills = await invoke<SkillSummary[]>(
+          "get_available_skills",
+        );
+        console.log("Available skills:", availableSkills);
         setSkills(availableSkills);
       } catch (error) {
         console.error("[SkillToggles] Failed to load skills:", error);
@@ -106,9 +109,7 @@ export function SkillToggles() {
 
   if (loading) {
     return (
-      <div className="p-4 text-sm text-muted-foreground">
-        Loading tools...
-      </div>
+      <div className="p-4 text-sm text-muted-foreground">Loading tools...</div>
     );
   }
 
@@ -123,39 +124,42 @@ export function SkillToggles() {
   const disabledSkills = settings?.disabled_skills ?? [];
 
   return (
-    <div className="flex flex-col">
-      {skills.map((skill, index) => {
+    <div className="flex flex-col divide-y divide-border">
+      {skills.map((skill) => {
         const isEnabled = !disabledSkills.includes(skill.name);
-        const lockedReason = getLockedReason(skill, isOnline, isLoggedIn, isGoogleAuthenticated);
+        const lockedReason = getLockedReason(
+          skill,
+          isOnline,
+          isLoggedIn,
+          isGoogleAuthenticated,
+        );
         const isLocked = lockedReason !== null;
 
         return (
-          <div key={`skill-toggle-${skill.name}`}>
-            <div className="flex flex-row items-center justify-between p-4">
-              <div className="flex flex-col gap-0.5 pr-4">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-sm">
-                    {formatSkillName(skill.name)}
-                  </p>
-                  {isLocked && (
-                    <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                      {lockedReason}
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {getSkillDescription(skill)}
+          <div
+            key={`skill-toggle-${skill.name}`}
+            className="flex flex-row items-center justify-between p-4"
+          >
+            <div className="flex flex-col gap-0.5 pr-4">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-sm">
+                  {formatSkillName(skill.name)}
                 </p>
+                {isLocked && (
+                  <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                    {lockedReason}
+                  </span>
+                )}
               </div>
-              <Switch
-                checked={isEnabled && !isLocked}
-                disabled={isLocked}
-                onCheckedChange={() => void handleToggle(skill.name)}
-              />
+              <p className="text-sm text-muted-foreground">
+                {getSkillDescription(skill)}
+              </p>
             </div>
-            {index < skills.length - 1 && (
-              <div className="border-t border-gray-300" />
-            )}
+            <Switch
+              checked={isEnabled && !isLocked}
+              disabled={isLocked}
+              onCheckedChange={() => void handleToggle(skill.name)}
+            />
           </div>
         );
       })}

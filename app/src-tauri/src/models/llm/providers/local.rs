@@ -1,4 +1,5 @@
 use crate::models::llm::types::{LlmRequest, LlmProvider, LlmResponse};
+use crate::models::llm::client::ResolvedModel;
 use crate::db::token_usage::add_token_usage;
 use crate::models::llm::providers::translation::{tools_to_openai_format, has_tool_calls_openai, parse_openai_tool_calls, resolve_tool_call, format_messages_for_openai};
 use crate::models::llm::server::{perform_health_check, get_current_server_config};
@@ -15,6 +16,7 @@ impl LlmProvider for LocalProvider {
     &self,
     app_handle: AppHandle,
     request: LlmRequest,
+    resolved_model: &ResolvedModel,
   ) -> Result<LlmResponse, String> {
     log::info!("[llama_server] Starting chat completion generation");
     let config = get_current_server_config(&app_handle).map_err(|e| e.to_string())?;
@@ -45,7 +47,7 @@ impl LlmProvider for LocalProvider {
 
     // Build request body
     let mut request_body = json!({
-        "model": "local",
+        "model": resolved_model.model,
         "messages": messages,
         "stream": should_stream,
         "temperature": 0.7,
@@ -233,7 +235,7 @@ impl LlmProvider for LocalProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          "local",
+          resolved_model.id,
           prompt_tokens,
           completion_tokens,
       ).await?;
@@ -309,7 +311,7 @@ impl LlmProvider for LocalProvider {
       // Save token usage
       add_token_usage(
           app_handle.clone(),
-          "local",
+          resolved_model.id,
           prompt_tokens,
           completion_tokens,
       ).await?;
