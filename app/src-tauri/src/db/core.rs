@@ -182,6 +182,33 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         CREATE INDEX IF NOT EXISTS idx_automation_tasks_enabled ON automation_tasks(is_enabled);
         CREATE INDEX IF NOT EXISTS idx_automation_tasks_system ON automation_tasks(is_system);
 
+        -- Insert builtin system tasks
+        INSERT OR IGNORE INTO automation_tasks (
+          id, name, description, task_type, is_enabled, is_system,
+          prompt_template, model_id, disabled_skills, notify_on_complete,
+          notify_on_error, max_iterations, timeout_seconds,
+          schedule_type, schedule_value, schedule_timezone,
+          trigger_type, trigger_config, created_at, updated_at
+        ) VALUES
+          ('system_daily_summary',
+           'Daily Summary',
+           'Generate a summary of your day''s activities and conversations',
+           'scheduled', 0, 1,
+           'Review today''s conversations and activities. Provide a brief summary of key topics discussed, decisions made, and any action items.',
+           NULL, '[]', 1, 1, 10, 120,
+           'daily', '18:00', 'local',
+           NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
+          ),
+          ('system_weekly_review',
+           'Weekly Review',
+           'Compile a weekly review of your productivity and key insights',
+           'scheduled', 0, 1,
+           'Review the past week''s conversations and activities. Highlight key themes, insights, completed tasks, and provide suggestions for the coming week.',
+           NULL, '[]', 1, 1, 10, 120,
+           'specific_days', 'fri|17:00', 'local',
+           NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
+          );
+
         -- Automation execution history
         CREATE TABLE IF NOT EXISTS automation_runs (
           id TEXT PRIMARY KEY,

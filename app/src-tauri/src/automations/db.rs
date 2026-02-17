@@ -378,6 +378,22 @@ pub fn update_task_run_times(
     Ok(())
 }
 
+/// Clear the next_run_at field for a task (called when a task is disabled).
+pub fn clear_next_run_at(app_handle: &tauri::AppHandle, task_id: &str) -> Result<(), String> {
+    let state = app_handle.state::<DbState>();
+    let conn = state.0.lock().map_err(|_| "Failed to acquire DB lock".to_string())?;
+    let conn = conn.as_ref().ok_or("Database not available")?;
+
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE automation_tasks SET next_run_at = NULL, updated_at = ?1 WHERE id = ?2",
+        rusqlite::params![now, task_id],
+    )
+    .map_err(|e| format!("Failed to clear next_run_at: {}", e))?;
+
+    Ok(())
+}
+
 /// Get all enabled scheduled tasks.
 pub fn get_enabled_scheduled_tasks(
     app_handle: &tauri::AppHandle,

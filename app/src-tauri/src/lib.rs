@@ -92,10 +92,7 @@ pub fn run() {
               *db_state.0.lock().unwrap() = Some(conn);
               log::info!("[setup] Opened encrypted database for user from stored session");
 
-              // Initialize system tasks and reschedule enabled automations
-              if let Err(e) = automations::system_tasks::initialize_system_tasks(app_handle) {
-                log::warn!("[setup] Failed to initialize system tasks: {}", e);
-              }
+              // Reschedule enabled automations
               let app_handle_for_automations = app_handle.clone();
               tauri::async_runtime::spawn(async move {
                 automations::scheduler::reschedule_all(&app_handle_for_automations).await;

@@ -196,6 +196,9 @@ pub async fn toggle_automation_task(
             if let Err(e) = super::scheduler::schedule_task(&app_handle, &task).await {
                 log::warn!("[automations] Failed to schedule task: {}", e);
             }
+        } else {
+            // Clear next_run_at when disabled so UI shows no scheduled time
+            let _ = db::clear_next_run_at(&app_handle, &task_id);
         }
     }
 
