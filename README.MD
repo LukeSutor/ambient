@@ -1,6 +1,6 @@
-# Ambient
+# ambient
 
-A local-first AI desktop assistant. Run models on your machine, bring your own API keys, or use built-in cloud models — all from a lightweight app that lives in your system tray.
+A local-first AI assistant with web search, code execution, memory, and Google Mail and Calendar integration.
 
 Built with [Tauri](https://tauri.app) (Rust + Next.js).
 
