@@ -113,7 +113,7 @@ pub async fn generate(
                     return Err(e);
                 }
                 log::warn!("[llm_client] Attempt {} failed: {}", attempts, e);
-                
+
                 if attempts < max_attempts {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }

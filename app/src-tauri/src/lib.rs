@@ -1,5 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod auth;
+pub mod automations;
 pub mod constants;
 pub mod db;
 pub mod events;
@@ -90,6 +91,15 @@ pub fn run() {
               let db_state = app_handle.state::<DbState>();
               *db_state.0.lock().unwrap() = Some(conn);
               log::info!("[setup] Opened encrypted database for user from stored session");
+
+              // Initialize system tasks and reschedule enabled automations
+              if let Err(e) = automations::system_tasks::initialize_system_tasks(app_handle) {
+                log::warn!("[setup] Failed to initialize system tasks: {}", e);
+              }
+              let app_handle_for_automations = app_handle.clone();
+              tauri::async_runtime::spawn(async move {
+                automations::scheduler::reschedule_all(&app_handle_for_automations).await;
+              });
             }
             Err(e) => {
               log::error!(
@@ -225,6 +235,18 @@ pub fn run() {
       skills::registry::get_available_skills,
       skills::registry::get_skill_tools_command,
       skills::executor::execute_skill_tool,
+      automations::commands::get_automation_tasks,
+      automations::commands::get_automation_task,
+      automations::commands::create_automation_task,
+      automations::commands::update_automation_task,
+      automations::commands::delete_automation_task,
+      automations::commands::toggle_automation_task,
+      automations::commands::get_automation_runs,
+      automations::commands::get_latest_automation_run,
+      automations::commands::run_automation_task,
+      automations::commands::get_automation_triggers,
+      automations::commands::add_automation_trigger,
+      automations::commands::delete_automation_trigger,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
