@@ -12,7 +12,7 @@ export function DynamicChatContent() {
   const { isChatExpanded, isChatHistoryExpanded } = useWindows();
   const { hudDimensions } = useSettings();
 
-  const isVisible = isChatExpanded || isChatHistoryExpanded;
+  const isVisible = true;
   const showBothPanels = isChatExpanded && isChatHistoryExpanded;
   const maxHeight = hudDimensions
     ? `${hudDimensions.chat_max_height}px`

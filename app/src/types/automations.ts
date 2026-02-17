@@ -36,7 +36,7 @@ export type AutomationTrigger = { id: string, task_id: string, trigger_type: str
 /**
  * Parameters for creating a new automation task.
  */
-export type CreateAutomationParams = { name: string, description: string | null, task_type: string, prompt_template: string, model_id: bigint | null, disabled_skills: Array<string> | null, notify_on_complete: boolean | null, notify_on_error: boolean | null, max_iterations: number, timeout_seconds: number, schedule_type: string | null, schedule_value: string | null, schedule_timezone: string | null, trigger_type: string | null, trigger_config: string | null, };
+export type CreateAutomationParams = { name: string, description: string | null, task_type: string, prompt_template: string, model_id: number, disabled_skills: Array<string> | null, notify_on_complete: boolean | null, notify_on_error: boolean | null, max_iterations: number, timeout_seconds: number, schedule_type: string | null, schedule_value: string | null, schedule_timezone: string | null, trigger_type: string | null, trigger_config: string | null, };
 
 /**
  * Notification type for automation results.

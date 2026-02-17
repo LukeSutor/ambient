@@ -104,7 +104,7 @@ export function MessageList() {
   }, [messages]);
 
   return (
-    <ContentContainer isStreaming={isStreaming}>
+    <ContentContainer>
       <div className="relative w-full h-full overflow-hidden">
         {/* Header — drag region */}
         <div

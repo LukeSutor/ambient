@@ -905,7 +905,7 @@ function AutomationDialog({
     setSaving(true);
     try {
       const resolvedModelId =
-        modelId === "auto" ? null : BigInt(modelId);
+        modelId === "auto" ? null : Number.parseInt(modelId);
       const sv = buildScheduleValue();
       const tc = buildTriggerConfig();
 

@@ -1,17 +1,17 @@
+import { useConversation } from "@/lib/conversations";
 import { cn } from "@/lib/utils";
 import type React from "react";
 
 interface ContentContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  isStreaming?: boolean;
 }
 
 export function ContentContainer({
   children,
   className,
-  isStreaming,
   ...props
 }: ContentContainerProps) {
+  const { isStreaming } = useConversation();
   return (
     <div
       className={cn(
