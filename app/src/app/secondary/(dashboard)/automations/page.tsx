@@ -14,6 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Field,
+  FieldContent,
+  FieldError,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,6 +43,7 @@ import type {
 } from "@/types/automations";
 import type { ModelEntry } from "@/types/models";
 import type { SkillSummary } from "@/types/skills";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -56,20 +62,44 @@ import {
 } from "lucide-react";
 import {
   type KeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod/v4";
+import Image from "next/image";
 
 // ── Time Helpers ─────────────────────────────────────────────────────
 
-/** Parse flexible time input ("5pm", "5:00 PM", "17:00") → "HH:MM" 24h. */
+/**
+ * Returns true if the input is syntactically valid but genuinely ambiguous.
+ * Only "1200" (without am/pm) is currently flagged — it could be noon or midnight.
+ */
+function isAmbiguousTime(input: string): boolean {
+  const s = input.trim().toLowerCase().replace(/\s+/g, "");
+  return /^1200$/.test(s);
+}
+
+/**
+ * Parse flexible time input → "HH:MM" 24h, or null if invalid/ambiguous.
+ * Supports:
+ *   "5pm"       → "17:00"
+ *   "5:00 PM"   → "17:00"
+ *   "520pm"     → "17:20"  (3 digits + am/pm: first digit = hours, last 2 = mins)
+ *   "1030am"    → "10:30"  (4 digits + am/pm: first 2 digits = hours, last 2 = mins)
+ *   "17:00"     → "17:00"
+ *   "0830"      → "08:30"  (4-digit 24 h without am/pm)
+ *   "1200"      → null     (ambiguous — caller should use isAmbiguousTime)
+ */
 function parseTimeInput(input: string): string | null {
   const s = input.trim().toLowerCase().replace(/\s+/g, "");
-  // HH:MM AM/PM
+
+  // HH:MM AM/PM  e.g. "5:30pm", "10:00 AM"
   let m = s.match(/^(\d{1,2}):(\d{2})(am|pm)$/);
   if (m) {
     let h = Number.parseInt(m[1]);
@@ -79,7 +109,29 @@ function parseTimeInput(input: string): string | null {
     if (h <= 23 && min <= 59)
       return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
   }
-  // H AM/PM (e.g. "5pm")
+
+  // HHMMAM/PM without colon — 3 or 4 digits + am/pm  e.g. "520pm", "1030am"
+  m = s.match(/^(\d{3,4})(am|pm)$/);
+  if (m) {
+    const digits = m[1];
+    let h: number;
+    let min: number;
+    if (digits.length === 3) {
+      // e.g. "520pm" → h=5, min=20
+      h = Number.parseInt(digits[0]);
+      min = Number.parseInt(digits.slice(1));
+    } else {
+      // e.g. "1030am" → h=10, min=30
+      h = Number.parseInt(digits.slice(0, 2));
+      min = Number.parseInt(digits.slice(2));
+    }
+    if (m[2] === "pm" && h < 12) h += 12;
+    if (m[2] === "am" && h === 12) h = 0;
+    if (h <= 23 && min <= 59)
+      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+
+  // H or HH AM/PM  e.g. "5pm", "12am"
   m = s.match(/^(\d{1,2})(am|pm)$/);
   if (m) {
     let h = Number.parseInt(m[1]);
@@ -87,7 +139,8 @@ function parseTimeInput(input: string): string | null {
     if (m[2] === "am" && h === 12) h = 0;
     if (h <= 23) return `${String(h).padStart(2, "0")}:00`;
   }
-  // HH:MM 24h
+
+  // HH:MM 24h  e.g. "17:00", "9:30"
   m = s.match(/^(\d{1,2}):(\d{2})$/);
   if (m) {
     const h = Number.parseInt(m[1]);
@@ -95,7 +148,24 @@ function parseTimeInput(input: string): string | null {
     if (h <= 23 && min <= 59)
       return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
   }
+
+  // HHMM 24h (4-digit, no colon, no am/pm)  e.g. "0830", "1700"
+  // "1200" is the only ambiguous case and is handled as error by isAmbiguousTime.
+  m = s.match(/^(\d{4})$/);
+  if (m) {
+    if (isAmbiguousTime(s)) return null;
+    const h = Number.parseInt(s.slice(0, 2));
+    const min = Number.parseInt(s.slice(2));
+    if (h <= 23 && min <= 59)
+      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+
   return null;
+}
+
+/** Returns the provider image path for a model provider string. */
+function providerImage(provider: string): string {
+  return provider === "unknown" ? "/logo.png" : `/providers/${provider}.webp`;
 }
 
 /** Format "HH:MM" (24h) → "5:00 PM" (12h). */
@@ -164,6 +234,90 @@ function formatNextRun(d: string | null): string {
   });
   return `${dateStr} at ${timeStr}`;
 }
+
+// ── Automation Form Schema ────────────────────────────────────────────
+
+const automationSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").max(100),
+    description: z.string().optional().or(z.literal("")),
+    taskType: z.enum(["scheduled", "semantic"]),
+    promptTemplate: z.string().min(1, "Prompt is required"),
+    scheduleType: z.enum(["interval", "daily", "weekdays", "specific_days"]),
+    scheduleValue: z.string().optional(),
+    timeInput: z.string().optional(),
+    selectedDays: z.array(z.string()),
+    triggerType: z.enum(["screen_content", "url_visit"]),
+    triggerTags: z.array(z.string()),
+    maxIterations: z.coerce
+      .number()
+      .int()
+      .min(1, "At least 1 iteration")
+      .max(50, "Max 50 iterations"),
+    timeoutSeconds: z.coerce
+      .number()
+      .int()
+      .min(10, "At least 10 seconds")
+      .max(600, "Max 600 seconds"),
+    modelId: z.string(),
+    disabledSkills: z.array(z.string()),
+    notifyOnComplete: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.taskType === "scheduled") {
+      if (data.scheduleType === "interval") {
+        const n = Number(data.scheduleValue);
+        if (!data.scheduleValue || Number.isNaN(n) || n < 1) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["scheduleValue"],
+            message: "Enter a valid number of minutes (min 1)",
+          });
+        }
+      } else {
+        const ti = data.timeInput?.trim() ?? "";
+        if (!ti) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["timeInput"],
+            message: "Time is required",
+          });
+        } else if (isAmbiguousTime(ti)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["timeInput"],
+            message:
+              "Ambiguous time — '1200' could be noon or midnight. Use '12:00 PM' or '12:00 AM'",
+          });
+        } else if (!parseTimeInput(ti)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["timeInput"],
+            message: "Invalid time. Try '5pm', '5:20 PM', or '17:00'",
+          });
+        }
+        if (
+          data.scheduleType === "specific_days" &&
+          data.selectedDays.length === 0
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["selectedDays"],
+            message: "Select at least one day",
+          });
+        }
+      }
+    }
+    if (data.taskType === "semantic" && data.triggerTags.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["triggerTags"],
+        message: "Add at least one trigger pattern",
+      });
+    }
+  });
+
+type AutomationFormValues = z.infer<typeof automationSchema>;
 
 const ALL_DAYS = [
   { key: "mon", label: "Mon" },
@@ -361,9 +515,11 @@ function SkillMultiSelect({
         {allSkills.map((skill) => (
           <label
             key={skill.name}
+            htmlFor={`skill-${skill.name}`}
             className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer"
           >
             <Checkbox
+              id={`skill-${skill.name}`}
               checked={!disabledSkills.includes(skill.name)}
               onCheckedChange={() => toggleSkill(skill.name)}
             />
@@ -572,7 +728,7 @@ function TaskSection({
   onViewRuns,
 }: {
   title: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   tasks: AutomationTask[];
   onToggle: (task: AutomationTask, enabled: boolean) => void;
   onDelete: (task: AutomationTask) => void;
@@ -654,8 +810,9 @@ function TaskCard({
           </div>
 
           <div className="text-xs text-muted-foreground shrink-0 w-36 text-right space-y-0.5">
-            <div>Last: {formatDate(task.last_run_at)}</div>
-            <div>Next: {formatNextRun(task.next_run_at)}</div>
+            {/* suppressHydrationWarning prevents locale-dependent date mismatches between SSR and client */}
+            <div suppressHydrationWarning>Last: {formatDate(task.last_run_at)}</div>
+            <div suppressHydrationWarning>Next: {formatNextRun(task.next_run_at)}</div>
           </div>
         </div>
 
@@ -721,7 +878,6 @@ function AutomationDialog({
   const [saving, setSaving] = useState(false);
   const { models } = useModelAccess();
 
-  // Available skills
   const [availableSkills, setAvailableSkills] = useState<SkillSummary[]>([]);
   useEffect(() => {
     invoke<SkillSummary[]>("get_available_skills")
@@ -734,219 +890,189 @@ function AutomationDialog({
     [models],
   );
 
-  // Form state
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [taskType, setTaskType] = useState("scheduled");
-  const [promptTemplate, setPromptTemplate] = useState("");
-  const [scheduleType, setScheduleType] = useState("interval");
-  const [scheduleValue, setScheduleValue] = useState("");
-  const [timeInput, setTimeInput] = useState("");
-  const [selectedDays, setSelectedDays] = useState<string[]>([]);
-  const [triggerType, setTriggerType] = useState("screen_content");
-  const [triggerTags, setTriggerTags] = useState<string[]>([]);
-  const [maxIterations, setMaxIterations] = useState("10");
-  const [timeoutSeconds, setTimeoutSeconds] = useState("120");
-  const [modelId, setModelId] = useState<string>("auto");
-  const [disabledSkills, setDisabledSkills] = useState<string[]>([]);
-  const [notifyOnComplete, setNotifyOnComplete] = useState(true);
+  // Default model: first local (non-cloud) model
+  const defaultModelId = useMemo(() => {
+    const local = enabledModels.find((m: ModelEntry) => !m.is_cloud);
+    return local ? String(local.id) : String(enabledModels[0]?.id ?? "");
+  }, [enabledModels]);
 
-  // Populate form when editing
-  useEffect(() => {
-    if (!open) return;
-    if (editTask) {
-      setName(editTask.name);
-      setDescription(editTask.description);
-      setTaskType(editTask.task_type);
-      setPromptTemplate(editTask.prompt_template);
-      const st = editTask.schedule_type ?? "interval";
-      setScheduleType(st);
-
-      // Parse schedule value
-      const sv = editTask.schedule_value ?? "";
+  const buildDefaultValues = useCallback(
+    (task: AutomationTask | null): AutomationFormValues => {
+      if (!task) {
+        return {
+          name: "",
+          description: "",
+          taskType: "scheduled",
+          promptTemplate: "",
+          scheduleType: "interval",
+          scheduleValue: "",
+          timeInput: "",
+          selectedDays: [],
+          triggerType: "screen_content",
+          triggerTags: [],
+          maxIterations: 10,
+          timeoutSeconds: 120,
+          modelId: defaultModelId,
+          disabledSkills: [],
+          notifyOnComplete: true,
+        };
+      }
+      const st = (task.schedule_type ?? "interval") as AutomationFormValues["scheduleType"];
+      const sv = task.schedule_value ?? "";
+      let scheduleValue = "";
+      let timeInput = "";
+      let selectedDays: string[] = [];
       if (st === "interval") {
-        setScheduleValue(sv);
-        setTimeInput("");
-        setSelectedDays([]);
+        scheduleValue = sv;
       } else if (st === "daily" || st === "weekdays") {
-        setScheduleValue("");
-        setTimeInput(sv ? formatTime12h(sv) : "");
-        setSelectedDays([]);
+        timeInput = sv ? formatTime12h(sv) : "";
       } else if (st === "specific_days") {
         const [days, time] = sv.split("|");
-        setSelectedDays(days ? days.split(",") : []);
-        setTimeInput(time ? formatTime12h(time) : "");
-        setScheduleValue("");
+        selectedDays = days ? days.split(",") : [];
+        timeInput = time ? formatTime12h(time) : "";
       }
 
-      setTriggerType(editTask.trigger_type ?? "screen_content");
-      // Parse trigger config
-      if (editTask.trigger_config) {
+      let triggerTags: string[] = [];
+      if (task.trigger_config) {
         try {
-          const cfg = JSON.parse(editTask.trigger_config);
-          const tags =
-            cfg.keywords ?? cfg.url_patterns ?? [];
-          setTriggerTags(tags);
+          const cfg = JSON.parse(task.trigger_config);
+          triggerTags = cfg.keywords ?? cfg.url_patterns ?? [];
         } catch {
-          setTriggerTags([]);
+          /* ignore */
         }
-      } else {
-        setTriggerTags([]);
       }
 
-      setMaxIterations(String(editTask.max_iterations));
-      setTimeoutSeconds(String(editTask.timeout_seconds));
-      setModelId(
-        editTask.model_id != null ? String(editTask.model_id) : "auto",
-      );
-      setDisabledSkills(editTask.disabled_skills ?? []);
-      setNotifyOnComplete(editTask.notify_on_complete);
-    } else {
-      // Reset for create
-      setName("");
-      setDescription("");
-      setTaskType("scheduled");
-      setPromptTemplate("");
-      setScheduleType("interval");
-      setScheduleValue("");
-      setTimeInput("");
-      setSelectedDays([]);
-      setTriggerType("screen_content");
-      setTriggerTags([]);
-      setMaxIterations("10");
-      setTimeoutSeconds("120");
-      setModelId("auto");
-      setDisabledSkills([]);
-      setNotifyOnComplete(true);
-    }
-  }, [editTask, open]);
+      return {
+        name: task.name,
+        description: task.description ?? "",
+        taskType: task.task_type as AutomationFormValues["taskType"],
+        promptTemplate: task.prompt_template,
+        scheduleType: st,
+        scheduleValue,
+        timeInput,
+        selectedDays,
+        triggerType: (task.trigger_type ?? "screen_content") as AutomationFormValues["triggerType"],
+        triggerTags,
+        maxIterations: Number(task.max_iterations),
+        timeoutSeconds: Number(task.timeout_seconds),
+        modelId: task.model_id != null ? String(task.model_id) : defaultModelId,
+        disabledSkills: task.disabled_skills ?? [],
+        notifyOnComplete: task.notify_on_complete,
+      };
+    },
+    [defaultModelId],
+  );
 
-  // Reset schedule value when schedule type changes
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<AutomationFormValues>({
+    // biome-ignore lint/suspicious/noExplicitAny: type incompatibility between @hookform/resolvers v5 and react-hook-form
+    resolver: zodResolver(automationSchema) as any,
+    defaultValues: buildDefaultValues(editTask),
+  });
+
+  // Sync form when dialog opens or editTask changes
+  useEffect(() => {
+    if (open) {
+      reset(buildDefaultValues(editTask));
+    }
+  }, [open, editTask, reset, buildDefaultValues]);
+
+  const watchedTaskType = watch("taskType");
+  const watchedScheduleType = watch("scheduleType");
+  const watchedTriggerType = watch("triggerType");
+
   const handleScheduleTypeChange = (val: string) => {
-    setScheduleType(val);
-    setScheduleValue("");
-    setTimeInput("");
-    setSelectedDays([]);
+    setValue("scheduleType", val as AutomationFormValues["scheduleType"]);
+    setValue("scheduleValue", "");
+    setValue("timeInput", "");
+    setValue("selectedDays", []);
   };
 
-  /** Normalize the time input when user leaves the field. */
-  const handleTimeBlur = () => {
-    if (!timeInput.trim()) return;
-    const parsed = parseTimeInput(timeInput);
+  /** Auto-format the time field on blur if unambiguous; leave ambiguous/invalid for Zod to report. */
+  const handleTimeBlur = useCallback(() => {
+    const ti = watch("timeInput")?.trim() ?? "";
+    if (!ti || isAmbiguousTime(ti)) return;
+    const parsed = parseTimeInput(ti);
     if (parsed) {
-      setTimeInput(formatTime12h(parsed));
-    } else {
-      toast.error("Invalid time format. Try '5pm' or '5:00 PM' or '17:00'");
+      setValue("timeInput", formatTime12h(parsed), { shouldValidate: false });
     }
-  };
+  }, [watch, setValue]);
 
-  /** Build the final schedule_value from UI state. */
-  const buildScheduleValue = (): string | null => {
-    if (scheduleType === "interval") {
-      return scheduleValue || null;
-    }
-    // Parse the displayed time back to 24h
-    const t = parseTimeInput(timeInput);
+  const buildScheduleValue = (data: AutomationFormValues): string | null => {
+    if (data.scheduleType === "interval") return data.scheduleValue || null;
+    const t = parseTimeInput(data.timeInput ?? "");
     if (!t) return null;
-
-    if (scheduleType === "daily" || scheduleType === "weekdays") {
+    if (data.scheduleType === "daily" || data.scheduleType === "weekdays")
       return t;
-    }
-    if (scheduleType === "specific_days") {
-      if (selectedDays.length === 0) return null;
-      return `${selectedDays.join(",")}|${t}`;
-    }
-    return null;
-  };
-
-  /** Build trigger_config JSON from tags. */
-  const buildTriggerConfig = (): string | null => {
-    if (triggerTags.length === 0) return null;
-    if (triggerType === "screen_content") {
-      return JSON.stringify({ keywords: triggerTags });
-    }
-    if (triggerType === "url_visit") {
-      return JSON.stringify({ url_patterns: triggerTags });
+    if (data.scheduleType === "specific_days") {
+      if (data.selectedDays.length === 0) return null;
+      return `${data.selectedDays.join(",")}|${t}`;
     }
     return null;
   };
 
-  const handleSave = async () => {
-    if (!name.trim() || !promptTemplate.trim()) {
-      toast.error("Name and prompt are required");
-      return;
-    }
+  const buildTriggerConfig = (data: AutomationFormValues): string | null => {
+    if (data.triggerTags.length === 0) return null;
+    if (data.triggerType === "screen_content")
+      return JSON.stringify({ keywords: data.triggerTags });
+    return JSON.stringify({ url_patterns: data.triggerTags });
+  };
 
-    // Validate schedule for scheduled tasks
-    if (taskType === "scheduled") {
-      if (scheduleType === "interval" && !scheduleValue) {
-        toast.error("Please enter a number of minutes");
-        return;
-      }
-      if (scheduleType !== "interval") {
-        const parsedTime = parseTimeInput(timeInput);
-        if (!parsedTime) {
-          toast.error("Please enter a valid time");
-          return;
-        }
-        if (scheduleType === "specific_days" && selectedDays.length === 0) {
-          toast.error("Please select at least one day");
-          return;
-        }
-      }
-    }
-
-    // Validate trigger for semantic tasks
-    if (taskType === "semantic" && triggerTags.length === 0) {
-      toast.error("Please add at least one trigger pattern");
-      return;
-    }
-
+  const onSubmit = async (data: AutomationFormValues) => {
     setSaving(true);
     try {
-      const resolvedModelId =
-        modelId === "auto" ? null : Number.parseInt(modelId);
-      const sv = buildScheduleValue();
-      const tc = buildTriggerConfig();
+      // Default to local model (id=1) if modelId is somehow not set
+      const resolvedModelId = data.modelId
+        ? Number.parseInt(data.modelId)
+        : 1;
+      const sv = buildScheduleValue(data);
+      const tc = buildTriggerConfig(data);
 
       if (isEdit && editTask) {
         await invoke("update_automation_task", {
           params: {
             id: editTask.id,
-            name,
-            description: description || null,
-            prompt_template: promptTemplate,
-            schedule_type: taskType === "scheduled" ? scheduleType : null,
-            schedule_value: taskType === "scheduled" ? sv : null,
-            trigger_type: taskType === "semantic" ? triggerType : null,
-            trigger_config: taskType === "semantic" ? tc : null,
-            max_iterations: Number.parseInt(maxIterations) || null,
-            timeout_seconds: Number.parseInt(timeoutSeconds) || null,
+            name: data.name,
+            description: data.description || null,
+            prompt_template: data.promptTemplate,
+            schedule_type: data.taskType === "scheduled" ? data.scheduleType : null,
+            schedule_value: data.taskType === "scheduled" ? sv : null,
+            trigger_type: data.taskType === "semantic" ? data.triggerType : null,
+            trigger_config: data.taskType === "semantic" ? tc : null,
+            max_iterations: data.maxIterations,
+            timeout_seconds: data.timeoutSeconds,
             model_id: resolvedModelId,
-            disabled_skills: disabledSkills,
-            notify_on_complete: notifyOnComplete,
+            disabled_skills: data.disabledSkills,
+            notify_on_complete: data.notifyOnComplete,
             notify_on_error: true,
             is_enabled: null,
           },
         });
         toast.success("Automation updated");
       } else {
-        const params: CreateAutomationParams = {
-          name,
-          description: description || null,
-          task_type: taskType,
-          prompt_template: promptTemplate,
+        const params = {
+          name: data.name,
+          description: data.description || null,
+          task_type: data.taskType,
+          prompt_template: data.promptTemplate,
           model_id: resolvedModelId,
-          disabled_skills: disabledSkills.length > 0 ? disabledSkills : null,
-          notify_on_complete: notifyOnComplete,
+          disabled_skills: data.disabledSkills.length > 0 ? data.disabledSkills : null,
+          notify_on_complete: data.notifyOnComplete,
           notify_on_error: true,
-          max_iterations: Number.parseInt(maxIterations) || 10,
-          timeout_seconds: Number.parseInt(timeoutSeconds) || 120,
-          schedule_type: taskType === "scheduled" ? scheduleType : null,
-          schedule_value: taskType === "scheduled" ? sv : null,
+          max_iterations: data.maxIterations,
+          timeout_seconds: data.timeoutSeconds,
+          schedule_type: data.taskType === "scheduled" ? data.scheduleType : null,
+          schedule_value: data.taskType === "scheduled" ? sv : null,
           schedule_timezone: null,
-          trigger_type: taskType === "semantic" ? triggerType : null,
-          trigger_config: taskType === "semantic" ? tc : null,
+          trigger_type: data.taskType === "semantic" ? data.triggerType : null,
+          trigger_config: data.taskType === "semantic" ? tc : null,
         };
         await invoke("create_automation_task", { params });
         toast.success("Automation created");
@@ -973,243 +1099,369 @@ function AutomationDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-2">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(onSubmit)(e);
+          }}
+          className="space-y-4 mt-2"
+        >
           {/* Name */}
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Daily Summary"
-            />
-          </div>
+          <Field data-invalid={!!errors.name}>
+            <FieldContent>
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                placeholder="Daily Summary"
+                {...register("name")}
+              />
+              <FieldError errors={[errors.name]} />
+            </FieldContent>
+          </Field>
 
           {/* Description */}
-          <div className="space-y-1.5">
-            <Label htmlFor="desc">Description</Label>
-            <Input
-              id="desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="A brief description of what this does"
-            />
-          </div>
+          <Field>
+            <FieldContent>
+              <Label htmlFor="desc">Description</Label>
+              <Input
+                id="desc"
+                placeholder="A brief description of what this does"
+                {...register("description")}
+              />
+            </FieldContent>
+          </Field>
 
           {/* Task Type */}
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Select value={taskType} onValueChange={setTaskType}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="scheduled">
-                  Scheduled (time-based)
-                </SelectItem>
-                <SelectItem value="semantic">
-                  Trigger-based (event-driven)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Field>
+            <FieldContent>
+              <Label>Type</Label>
+              <Controller
+                name="taskType"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="scheduled">
+                        Scheduled (time-based)
+                      </SelectItem>
+                      <SelectItem value="semantic">
+                        Trigger-based (event-driven)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FieldContent>
+          </Field>
 
           {/* ── Schedule Fields ── */}
-          {taskType === "scheduled" && (
+          {watchedTaskType === "scheduled" && (
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Schedule</Label>
-                <Select
-                  value={scheduleType}
-                  onValueChange={handleScheduleTypeChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="interval">Every N minutes</SelectItem>
-                    <SelectItem value="daily">Every day</SelectItem>
-                    <SelectItem value="weekdays">
-                      Every weekday (Mon–Fri)
-                    </SelectItem>
-                    <SelectItem value="specific_days">Specific days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {scheduleType === "interval" && (
-                <div className="space-y-1.5">
-                  <Label>Minutes</Label>
-                  <Input
-                    type="number"
-                    value={scheduleValue}
-                    onChange={(e) => setScheduleValue(e.target.value)}
-                    placeholder="30"
-                    min={1}
+              <Field>
+                <FieldContent>
+                  <Label>Schedule</Label>
+                  <Controller
+                    name="scheduleType"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          handleScheduleTypeChange(v);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="interval">
+                            Every N minutes
+                          </SelectItem>
+                          <SelectItem value="daily">Every day</SelectItem>
+                          <SelectItem value="weekdays">
+                            Every weekday (Mon–Fri)
+                          </SelectItem>
+                          <SelectItem value="specific_days">
+                            Specific days
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   />
-                </div>
-              )}
+                </FieldContent>
+              </Field>
 
-              {(scheduleType === "daily" || scheduleType === "weekdays") && (
-                <div className="space-y-1.5">
-                  <Label>Time</Label>
-                  <Input
-                    value={timeInput}
-                    onChange={(e) => setTimeInput(e.target.value)}
-                    onBlur={handleTimeBlur}
-                    placeholder="5:00 PM"
-                  />
-                </div>
-              )}
-
-              {scheduleType === "specific_days" && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label>Days</Label>
-                    <DaySelector
-                      selected={selectedDays}
-                      onChange={setSelectedDays}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Time</Label>
+              {watchedScheduleType === "interval" && (
+                <Field data-invalid={!!errors.scheduleValue}>
+                  <FieldContent>
+                    <Label>Minutes</Label>
                     <Input
-                      value={timeInput}
-                      onChange={(e) => setTimeInput(e.target.value)}
-                      onBlur={handleTimeBlur}
-                      placeholder="5:00 PM"
+                      type="number"
+                      placeholder="30"
+                      min={1}
+                      {...register("scheduleValue")}
                     />
-                  </div>
+                    <FieldError errors={[errors.scheduleValue]} />
+                  </FieldContent>
+                </Field>
+              )}
+
+              {(watchedScheduleType === "daily" ||
+                watchedScheduleType === "weekdays") && (
+                <Field data-invalid={!!errors.timeInput}>
+                  <FieldContent>
+                    <Label>Time</Label>
+                    <Controller
+                      name="timeInput"
+                      control={control}
+                      render={({ field }) => (
+                        <Input
+                          placeholder="5:00 PM"
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          onBlur={() => {
+                            field.onBlur();
+                            handleTimeBlur();
+                          }}
+                        />
+                      )}
+                    />
+                    <FieldError errors={[errors.timeInput]} />
+                  </FieldContent>
+                </Field>
+              )}
+
+              {watchedScheduleType === "specific_days" && (
+                <>
+                  <Field data-invalid={!!errors.selectedDays}>
+                    <FieldContent>
+                      <Label>Days</Label>
+                      <Controller
+                        name="selectedDays"
+                        control={control}
+                        render={({ field }) => (
+                          <DaySelector
+                            selected={field.value}
+                            onChange={field.onChange}
+                          />
+                        )}
+                      />
+                      <FieldError errors={[errors.selectedDays?.root]} />
+                    </FieldContent>
+                  </Field>
+                  <Field data-invalid={!!errors.timeInput}>
+                    <FieldContent>
+                      <Label>Time</Label>
+                      <Controller
+                        name="timeInput"
+                        control={control}
+                        render={({ field }) => (
+                          <Input
+                            placeholder="5:00 PM"
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            onBlur={() => {
+                              field.onBlur();
+                              handleTimeBlur();
+                            }}
+                          />
+                        )}
+                      />
+                      <FieldError errors={[errors.timeInput]} />
+                    </FieldContent>
+                  </Field>
                 </>
               )}
             </div>
           )}
 
           {/* ── Trigger Fields ── */}
-          {taskType === "semantic" && (
+          {watchedTaskType === "semantic" && (
             <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Trigger Type</Label>
-                <Select value={triggerType} onValueChange={(v) => { setTriggerType(v); setTriggerTags([]); }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="screen_content">
-                      Screen Content
-                    </SelectItem>
-                    <SelectItem value="url_visit">URL Visit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>
-                  {triggerType === "screen_content"
-                    ? "Match keywords"
-                    : "Match URL patterns"}
-                </Label>
-                <TagInput
-                  tags={triggerTags}
-                  onChange={setTriggerTags}
-                  placeholder={
-                    triggerType === "screen_content"
-                      ? 'Type a keyword and press Enter (e.g. "error")'
-                      : 'Type a URL pattern and press Enter (e.g. "twitter.com")'
-                  }
-                />
-                <p className="text-xs text-muted-foreground">
-                  {triggerType === "screen_content"
-                    ? "Triggers when any of these strings appear on screen."
-                    : "Triggers when any URL containing these patterns is visible."}
-                </p>
-              </div>
+              <Field>
+                <FieldContent>
+                  <Label>Trigger Type</Label>
+                  <Controller
+                    name="triggerType"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          setValue("triggerTags", []);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="screen_content">
+                            Screen Content
+                          </SelectItem>
+                          <SelectItem value="url_visit">URL Visit</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </FieldContent>
+              </Field>
+              <Field data-invalid={!!errors.triggerTags}>
+                <FieldContent>
+                  <Label>
+                    {watchedTriggerType === "screen_content"
+                      ? "Match keywords"
+                      : "Match URL patterns"}
+                  </Label>
+                  <Controller
+                    name="triggerTags"
+                    control={control}
+                    render={({ field }) => (
+                      <TagInput
+                        tags={field.value}
+                        onChange={field.onChange}
+                        placeholder={
+                          watchedTriggerType === "screen_content"
+                            ? 'Type a keyword and press Enter (e.g. "error")'
+                            : 'Type a URL pattern and press Enter (e.g. "twitter.com")'
+                        }
+                      />
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {watchedTriggerType === "screen_content"
+                      ? "Triggers when any of these strings appear on screen."
+                      : "Triggers when any URL containing these patterns is visible."}
+                  </p>
+                  <FieldError errors={[errors.triggerTags?.root]} />
+                </FieldContent>
+              </Field>
             </div>
           )}
 
           {/* Prompt */}
-          <div className="space-y-1.5">
-            <Label htmlFor="prompt">Prompt</Label>
-            <Textarea
-              id="prompt"
-              value={promptTemplate}
-              onChange={(e) => setPromptTemplate(e.target.value)}
-              placeholder="What should this automation do when it runs?"
-              rows={4}
-            />
-          </div>
+          <Field data-invalid={!!errors.promptTemplate}>
+            <FieldContent>
+              <Label htmlFor="prompt">Prompt</Label>
+              <Textarea
+                id="prompt"
+                placeholder="What should this automation do when it runs?"
+                rows={4}
+                {...register("promptTemplate")}
+              />
+              <FieldError errors={[errors.promptTemplate]} />
+            </FieldContent>
+          </Field>
 
           {/* Model Selection */}
-          <div className="space-y-1.5">
-            <Label>Model</Label>
-            <Select value={modelId} onValueChange={setModelId}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto (default model)</SelectItem>
-                {enabledModels.map((m: ModelEntry) => (
-                  <SelectItem key={m.id} value={String(m.id)}>
-                    {m.display_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Field>
+            <FieldContent>
+              <Label>Model</Label>
+              <Controller
+                name="modelId"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {enabledModels.map((m: ModelEntry) => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                          <div className="flex items-center gap-2">
+                            <Image
+                              src={providerImage(m.provider)}
+                              width={16}
+                              height={16}
+                              className="rounded-sm shrink-0"
+                              alt={m.provider}
+                            />
+                            {m.display_name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </FieldContent>
+          </Field>
 
           {/* Skill Selection */}
           {availableSkills.length > 0 && (
-            <div className="space-y-1.5">
-              <Label>Tools</Label>
-              <SkillMultiSelect
-                allSkills={availableSkills}
-                disabledSkills={disabledSkills}
-                onChange={setDisabledSkills}
-              />
-            </div>
+            <Field>
+              <FieldContent>
+                <Label>Tools</Label>
+                <Controller
+                  name="disabledSkills"
+                  control={control}
+                  render={({ field }) => (
+                    <SkillMultiSelect
+                      allSkills={availableSkills}
+                      disabledSkills={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+              </FieldContent>
+            </Field>
           )}
 
           {/* Notify toggle */}
           <div className="flex items-center justify-between">
             <Label htmlFor="notify">Notify on completion</Label>
-            <Switch
-              id="notify"
-              checked={notifyOnComplete}
-              onCheckedChange={setNotifyOnComplete}
+            <Controller
+              name="notifyOnComplete"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id="notify"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
             />
           </div>
 
           {/* Advanced */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Max Iterations</Label>
-              <Input
-                type="number"
-                value={maxIterations}
-                onChange={(e) => setMaxIterations(e.target.value)}
-                min={1}
-                max={50}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Timeout (seconds)</Label>
-              <Input
-                type="number"
-                value={timeoutSeconds}
-                onChange={(e) => setTimeoutSeconds(e.target.value)}
-                min={10}
-                max={600}
-              />
-            </div>
+            <Field data-invalid={!!errors.maxIterations}>
+              <FieldContent>
+                <Label>Max Iterations</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  {...register("maxIterations")}
+                />
+                <FieldError errors={[errors.maxIterations]} />
+              </FieldContent>
+            </Field>
+            <Field data-invalid={!!errors.timeoutSeconds}>
+              <FieldContent>
+                <Label>Timeout (seconds)</Label>
+                <Input
+                  type="number"
+                  min={10}
+                  max={600}
+                  {...register("timeoutSeconds")}
+                />
+                <FieldError errors={[errors.timeoutSeconds]} />
+              </FieldContent>
+            </Field>
           </div>
 
           {/* Save */}
           <div className="flex justify-end pt-2">
-            <Button onClick={handleSave} disabled={saving}>
+            <Button type="submit" disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {isEdit ? "Save Changes" : "Create Automation"}
             </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -1274,7 +1526,7 @@ function RunHistoryDialog({
                       >
                         {run.status}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground" suppressHydrationWarning>
                         {formatDate(run.started_at)}
                       </span>
                     </div>
