@@ -11,12 +11,14 @@
 //! - **code_execution**: Execute code in a sandboxed environment
 //! - **calendar**: Manage calendar events
 //! - **email**: Send and manage emails
+//! - **automation_management**: Create and manage background automations
 
 pub mod web_search;
 pub mod memory_search;
 pub mod code_execution;
 pub mod calendar;
 pub mod email;
+pub mod automation_management;
 
 // Re-export common types for convenience
 pub use crate::skills::types::{ToolCall, ToolResult, AgentError, AgentResult};

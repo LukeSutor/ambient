@@ -88,6 +88,13 @@ async fn execute_single_tool(
             |h, c| async move { super::builtin::email::execute(&h, &c).await },
         )
         .await,
+        "automation-management" => execute_builtin(
+            app_handle.clone(),
+            call.clone(),
+            "automation-management",
+            |h, c| async move { super::builtin::automation_management::execute(&h, &c).await },
+        )
+        .await,
         _ => Err(format!("Unknown skill: {}", call.skill_name)),
     };
 
