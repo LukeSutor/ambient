@@ -3,6 +3,7 @@
 import { useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import {
+  Bot,
   Code,
   FolderOpen,
   House,
@@ -41,6 +42,11 @@ const data = {
       title: "Your Uploads",
       url: "/secondary/uploads",
       icon: FolderOpen,
+    },
+    {
+      title: "Automations",
+      url: "/secondary/automations",
+      icon: Bot,
     },
   ],
   navSecondary: [

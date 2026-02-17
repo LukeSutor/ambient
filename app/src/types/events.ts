@@ -6,6 +6,14 @@ export type AttachmentData = { name: string, file_type: string, data: string, };
 
 export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<Attachment>, timestamp: string, };
 
+export type AutomationRunCompletedEvent = { run_id: string, task_id: string, status: string, result_summary: string | null, timestamp: string, };
+
+export type AutomationRunEvent = { run_id: string, task_id: string, timestamp: string, };
+
+export type AutomationTaskDeletedEvent = { task_id: string, timestamp: string, };
+
+export type AutomationTaskEvent = { task_id: string, task_name: string, timestamp: string, };
+
 export type ChatStreamEvent = { delta: string, is_finished: boolean, full_response: string, conv_id: string | null, message_id: string | null, };
 
 export type CloudUsageDecrementedEvent = { 

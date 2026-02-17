@@ -200,7 +200,9 @@ pub struct CreateAutomationParams {
     pub disabled_skills: Option<Vec<String>>,
     pub notify_on_complete: Option<bool>,
     pub notify_on_error: Option<bool>,
+    #[ts(type = "number")]
     pub max_iterations: Option<i64>,
+    #[ts(type = "number")]
     pub timeout_seconds: Option<i64>,
     pub schedule_type: Option<String>,
     pub schedule_value: Option<String>,
