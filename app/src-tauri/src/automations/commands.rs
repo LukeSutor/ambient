@@ -59,15 +59,31 @@ pub async fn create_automation_task(
         },
     );
 
-    // If it's a scheduled task, register it with the scheduler
-    if task.task_type == "scheduled" && task.is_enabled {
-        let app_handle_clone = app_handle.clone();
-        let task_clone = task.clone();
-        tokio::spawn(async move {
-            if let Err(e) = super::scheduler::schedule_task(&app_handle_clone, &task_clone).await {
-                log::warn!("[automations] Failed to schedule task {}: {}", task_clone.id, e);
+    // If it's a scheduled task, compute next_run_at and register with scheduler
+    if task.task_type == "scheduled" {
+        // Compute and store next_run_at
+        if let (Some(st), Some(sv)) = (task.schedule_type.as_deref(), task.schedule_value.as_deref())
+        {
+            if let Ok(next) = super::scheduler::calculate_next_run_time(st, sv) {
+                let _ = db::update_task_run_times(&app_handle, &task.id, None, Some(&next));
             }
-        });
+        }
+
+        if task.is_enabled {
+            let app_handle_clone = app_handle.clone();
+            let task_clone = task.clone();
+            tokio::spawn(async move {
+                if let Err(e) =
+                    super::scheduler::schedule_task(&app_handle_clone, &task_clone).await
+                {
+                    log::warn!(
+                        "[automations] Failed to schedule task {}: {}",
+                        task_clone.id,
+                        e
+                    );
+                }
+            });
+        }
     }
 
     Ok(task)
@@ -102,18 +118,20 @@ pub async fn update_automation_task(
         },
     );
 
-    // Reschedule if it's a scheduled task
+    // Reschedule if it's a scheduled task.
+    // Unschedule first (awaited in-place to ensure old task is cancelled before
+    // scheduling the new one), then schedule if still enabled.
     if task.task_type == "scheduled" {
-        let app_handle_clone = app_handle.clone();
-        let task_clone = task.clone();
-        tokio::spawn(async move {
-            super::scheduler::unschedule_task(&task_id).await;
-            if task_clone.is_enabled {
-                if let Err(e) = super::scheduler::schedule_task(&app_handle_clone, &task_clone).await {
-                    log::warn!("[automations] Failed to reschedule task {}: {}", task_clone.id, e);
-                }
+        super::scheduler::unschedule_task(&task_id).await;
+        if task.is_enabled {
+            if let Err(e) = super::scheduler::schedule_task(&app_handle, &task).await {
+                log::warn!(
+                    "[automations] Failed to reschedule task {}: {}",
+                    task.id,
+                    e
+                );
             }
-        });
+        }
     }
 
     Ok(task)
@@ -173,16 +191,12 @@ pub async fn toggle_automation_task(
 
     // Update scheduler
     if task.task_type == "scheduled" {
-        let app_handle_clone = app_handle.clone();
-        let task_clone = task.clone();
-        tokio::spawn(async move {
-            super::scheduler::unschedule_task(&task_id).await;
-            if task_clone.is_enabled {
-                if let Err(e) = super::scheduler::schedule_task(&app_handle_clone, &task_clone).await {
-                    log::warn!("[automations] Failed to schedule task: {}", e);
-                }
+        super::scheduler::unschedule_task(&task_id).await;
+        if task.is_enabled {
+            if let Err(e) = super::scheduler::schedule_task(&app_handle, &task).await {
+                log::warn!("[automations] Failed to schedule task: {}", e);
             }
-        });
+        }
     }
 
     // Emit event

@@ -334,7 +334,8 @@ pub fn delete_task(app_handle: &tauri::AppHandle, task_id: &str) -> Result<(), S
     Ok(())
 }
 
-/// Update the last_run_at and next_run_at timestamps for a task.
+/// Update the last_run_at and/or next_run_at timestamps for a task.
+/// Only updates fields that are provided (Some). Leaves others unchanged.
 pub fn update_task_run_times(
     app_handle: &tauri::AppHandle,
     task_id: &str,
@@ -346,11 +347,33 @@ pub fn update_task_run_times(
     let conn = conn.as_ref().ok_or("Database not available")?;
 
     let now = chrono::Utc::now().to_rfc3339();
-    conn.execute(
-        "UPDATE automation_tasks SET last_run_at = ?1, next_run_at = ?2, updated_at = ?3 WHERE id = ?4",
-        rusqlite::params![last_run_at, next_run_at, now, task_id],
-    )
-    .map_err(|e| format!("Failed to update run times: {}", e))?;
+    let mut sets = vec!["updated_at = ?1".to_string()];
+    let mut params_vec: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(now)];
+    let mut idx = 2u32;
+
+    if let Some(lra) = last_run_at {
+        sets.push(format!("last_run_at = ?{}", idx));
+        params_vec.push(Box::new(lra.to_string()));
+        idx += 1;
+    }
+
+    if let Some(nra) = next_run_at {
+        sets.push(format!("next_run_at = ?{}", idx));
+        params_vec.push(Box::new(nra.to_string()));
+        idx += 1;
+    }
+
+    let sql = format!(
+        "UPDATE automation_tasks SET {} WHERE id = ?{}",
+        sets.join(", "),
+        idx,
+    );
+    params_vec.push(Box::new(task_id.to_string()));
+
+    let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+        params_vec.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, params_refs.as_slice())
+        .map_err(|e| format!("Failed to update run times: {}", e))?;
 
     Ok(())
 }

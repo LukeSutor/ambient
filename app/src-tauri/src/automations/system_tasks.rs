@@ -35,8 +35,8 @@ const SYSTEM_TASKS: &[SystemTaskDef] = &[
         description: "Compile a weekly review of your productivity and key insights",
         task_type: TaskType::Scheduled,
         prompt: "Review the past week's conversations and activities. Highlight key themes, insights, completed tasks, and provide suggestions for the coming week.",
-        schedule_type: Some(ScheduleType::Weekly),
-        schedule_value: Some("fri,17:00"),
+        schedule_type: Some(ScheduleType::SpecificDays),
+        schedule_value: Some("fri|17:00"),
     },
 ];
 

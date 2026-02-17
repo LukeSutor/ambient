@@ -43,12 +43,13 @@ impl TaskType {
 pub enum ScheduleType {
     /// Every N minutes
     Interval,
-    /// Specific time each day
+    /// Specific time each day (every day)
     Daily,
-    /// Specific day and time each week
-    Weekly,
-    /// One-time execution at a specific datetime
-    Once,
+    /// Specific time on weekdays only (Mon–Fri)
+    Weekdays,
+    /// Specific days of the week at a specific time
+    /// Value format: "mon,thu|15:00"
+    SpecificDays,
 }
 
 impl ScheduleType {
@@ -56,8 +57,8 @@ impl ScheduleType {
         match self {
             ScheduleType::Interval => "interval",
             ScheduleType::Daily => "daily",
-            ScheduleType::Weekly => "weekly",
-            ScheduleType::Once => "once",
+            ScheduleType::Weekdays => "weekdays",
+            ScheduleType::SpecificDays => "specific_days",
         }
     }
 
@@ -65,8 +66,8 @@ impl ScheduleType {
         match s {
             "interval" => Ok(ScheduleType::Interval),
             "daily" => Ok(ScheduleType::Daily),
-            "weekly" => Ok(ScheduleType::Weekly),
-            "once" => Ok(ScheduleType::Once),
+            "weekdays" => Ok(ScheduleType::Weekdays),
+            "specific_days" => Ok(ScheduleType::SpecificDays),
             _ => Err(format!("Unknown schedule type: {}", s)),
         }
     }
@@ -79,8 +80,6 @@ impl ScheduleType {
 pub enum TriggerType {
     /// Trigger when specific text appears on screen (OCR)
     ScreenContent,
-    /// Trigger when specific app gains focus
-    AppFocus,
     /// Trigger when visiting specific URLs
     UrlVisit,
 }
@@ -89,7 +88,6 @@ impl TriggerType {
     pub fn as_str(&self) -> &'static str {
         match self {
             TriggerType::ScreenContent => "screen_content",
-            TriggerType::AppFocus => "app_focus",
             TriggerType::UrlVisit => "url_visit",
         }
     }
@@ -97,7 +95,6 @@ impl TriggerType {
     pub fn from_str(s: &str) -> Result<Self, String> {
         match s {
             "screen_content" => Ok(TriggerType::ScreenContent),
-            "app_focus" => Ok(TriggerType::AppFocus),
             "url_visit" => Ok(TriggerType::UrlVisit),
             _ => Err(format!("Unknown trigger type: {}", s)),
         }
@@ -196,6 +193,7 @@ pub struct CreateAutomationParams {
     pub description: Option<String>,
     pub task_type: String,
     pub prompt_template: String,
+    #[ts(type = "number")]
     pub model_id: Option<i64>,
     pub disabled_skills: Option<Vec<String>>,
     pub notify_on_complete: Option<bool>,

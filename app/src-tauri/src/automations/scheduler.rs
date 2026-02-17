@@ -2,9 +2,11 @@
 //!
 //! Uses tokio timers to schedule tasks at intervals or specific times.
 //! Manages a global map of running scheduled tasks with cancellation support.
+//! All time-based schedules operate in the user's local timezone.
 
 use super::types::AutomationTask;
 use chrono::Datelike;
+use chrono::TimeZone;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,7 +26,7 @@ static SCHEDULER: Lazy<RwLock<HashMap<String, ScheduledTaskHandle>>> =
 /// Schedule a task to run on its configured schedule.
 ///
 /// Spawns a tokio task that loops: sleep until next run → execute → repeat.
-/// For `once` tasks, the loop runs exactly once.
+/// If a task with the same ID is already scheduled, it is cancelled first.
 pub async fn schedule_task(
     app_handle: &AppHandle,
     task: &AutomationTask,
@@ -36,26 +38,30 @@ pub async fn schedule_task(
     let schedule_type = task.schedule_type.as_deref().unwrap_or("interval").to_string();
     let schedule_value = task.schedule_value.as_deref().unwrap_or("15").to_string();
 
-    // Validate and parse the schedule
-    let _ = parse_schedule_duration(&schedule_type, &schedule_value)?;
+    // Validate the schedule
+    let _ = calculate_next_duration(&schedule_type, &schedule_value)?;
 
     let cancel = Arc::new(AtomicBool::new(false));
-    let cancel_clone = cancel.clone();
+    let cancel_for_handle = cancel.clone();
     let task_id = task.id.clone();
     let task_clone = task.clone();
     let app = app_handle.clone();
 
-    // Store the handle first
+    // Store the handle, cancelling any existing schedule for this task
     {
         let mut scheduler = SCHEDULER.write().await;
-        // Cancel any existing schedule for this task
         if let Some(existing) = scheduler.remove(&task_id) {
             existing.cancel.store(true, Ordering::SeqCst);
         }
         scheduler.insert(
             task_id.clone(),
-            ScheduledTaskHandle { cancel: cancel_clone },
+            ScheduledTaskHandle { cancel: cancel_for_handle },
         );
+    }
+
+    // Compute and store next_run_at
+    if let Ok(next) = calculate_next_run_time(&schedule_type, &schedule_value) {
+        let _ = super::db::update_task_run_times(&app, &task_id, None, Some(&next));
     }
 
     // Spawn the scheduling loop
@@ -75,10 +81,7 @@ pub async fn schedule_task(
             }
 
             // Calculate duration until next run
-            let duration = match calculate_next_duration(
-                task_clone.schedule_type.as_deref().unwrap_or("interval"),
-                task_clone.schedule_value.as_deref().unwrap_or("15"),
-            ) {
+            let duration = match calculate_next_duration(&schedule_type, &schedule_value) {
                 Ok(d) => d,
                 Err(e) => {
                     log::error!(
@@ -103,9 +106,13 @@ pub async fn schedule_task(
             loop {
                 if cancel.load(Ordering::SeqCst) {
                     log::info!("[scheduler] Task '{}' cancelled during sleep", task_clone.id);
-                    // Remove from map before exiting
+                    // Only remove from map if we're still the current schedule
                     let mut scheduler = SCHEDULER.write().await;
-                    scheduler.remove(&task_clone.id);
+                    if let Some(handle) = scheduler.get(&task_clone.id) {
+                        if Arc::ptr_eq(&cancel, &handle.cancel) {
+                            scheduler.remove(&task_clone.id);
+                        }
+                    }
                     return;
                 }
 
@@ -114,7 +121,6 @@ pub async fn schedule_task(
                     break;
                 }
 
-                // Check cancellation every 5 seconds or remaining time, whichever is smaller
                 let check_interval = std::cmp::min(
                     remaining,
                     tokio::time::Duration::from_secs(5),
@@ -129,7 +135,6 @@ pub async fn schedule_task(
             // Execute the automation
             log::info!("[scheduler] Executing scheduled task '{}'", task_clone.id);
 
-            // Re-read the task from DB to get latest state
             match super::db::get_task_by_id(&app, &task_clone.id) {
                 Ok(current_task) => {
                     if !current_task.is_enabled {
@@ -167,19 +172,25 @@ pub async fn schedule_task(
                 }
             }
 
-            // For `once` tasks, only execute once
-            if task_clone.schedule_type.as_deref() == Some("once") {
-                log::info!(
-                    "[scheduler] One-time task '{}' finished, removing schedule",
-                    task_clone.id
+            // After execution, compute and store next_run_at
+            if let Ok(next) = calculate_next_run_time(&schedule_type, &schedule_value) {
+                let _ = super::db::update_task_run_times(
+                    &app,
+                    &task_clone.id,
+                    None,
+                    Some(&next),
                 );
-                break;
             }
         }
 
-        // Clean up
+        // Clean up — only remove from map if we're still the current schedule.
+        // This prevents a superseded task from removing a newly-scheduled entry.
         let mut scheduler = SCHEDULER.write().await;
-        scheduler.remove(&task_clone.id);
+        if let Some(handle) = scheduler.get(&task_clone.id) {
+            if Arc::ptr_eq(&cancel, &handle.cancel) {
+                scheduler.remove(&task_clone.id);
+            }
+        }
     });
 
     Ok(())
@@ -195,8 +206,6 @@ pub async fn unschedule_task(task_id: &str) {
 }
 
 /// Reschedule all enabled scheduled tasks on app startup.
-///
-/// Called after database is initialized to restore all active schedules.
 pub async fn reschedule_all(app_handle: &AppHandle) {
     match super::db::get_enabled_scheduled_tasks(app_handle) {
         Ok(tasks) => {
@@ -220,8 +229,24 @@ pub async fn reschedule_all(app_handle: &AppHandle) {
     }
 }
 
-/// Parse a schedule into a one-shot duration.
-fn parse_schedule_duration(schedule_type: &str, schedule_value: &str) -> Result<std::time::Duration, String> {
+/// Calculate the next run time as an RFC3339 string in the local timezone.
+pub fn calculate_next_run_time(
+    schedule_type: &str,
+    schedule_value: &str,
+) -> Result<String, String> {
+    let duration = calculate_next_duration(schedule_type, schedule_value)?;
+    let next = chrono::Local::now()
+        + chrono::Duration::from_std(duration)
+            .map_err(|e| format!("Duration conversion error: {}", e))?;
+    Ok(next.to_rfc3339())
+}
+
+/// Calculate the duration until the next run based on schedule type and value.
+/// All time calculations use the user's local timezone.
+fn calculate_next_duration(
+    schedule_type: &str,
+    schedule_value: &str,
+) -> Result<std::time::Duration, String> {
     match schedule_type {
         "interval" => {
             let minutes: u64 = schedule_value
@@ -232,121 +257,151 @@ fn parse_schedule_duration(schedule_type: &str, schedule_value: &str) -> Result<
             }
             Ok(std::time::Duration::from_secs(minutes * 60))
         }
-        "daily" | "weekly" | "once" => {
-            // These are calculated dynamically in calculate_next_duration
-            Ok(std::time::Duration::from_secs(60)) // placeholder
-        }
-        _ => Err(format!("Unknown schedule type: {}", schedule_type)),
-    }
-}
-
-/// Calculate the duration until the next run based on schedule type and value.
-fn calculate_next_duration(
-    schedule_type: &str,
-    schedule_value: &str,
-) -> Result<std::time::Duration, String> {
-    match schedule_type {
-        "interval" => {
-            let minutes: u64 = schedule_value
-                .parse()
-                .map_err(|_| format!("Invalid interval value: {}", schedule_value))?;
-            Ok(std::time::Duration::from_secs(minutes * 60))
-        }
         "daily" => {
-            // schedule_value = "HH:MM" (e.g. "17:00")
-            let parts: Vec<&str> = schedule_value.split(':').collect();
-            if parts.len() != 2 {
-                return Err(format!("Invalid daily schedule value: {}. Expected HH:MM", schedule_value));
-            }
-            let hour: u32 = parts[0].parse().map_err(|_| "Invalid hour")?;
-            let minute: u32 = parts[1].parse().map_err(|_| "Invalid minute")?;
-
-            let now = chrono::Local::now();
-            let today_target = now
-                .date_naive()
-                .and_hms_opt(hour, minute, 0)
-                .ok_or("Invalid time")?;
-            let today_target = chrono::Local
-                .from_local_datetime(&today_target)
-                .single()
-                .ok_or("Ambiguous local time")?;
-
-            let target = if today_target > now {
-                today_target
-            } else {
-                // Schedule for tomorrow
-                today_target + chrono::Duration::days(1)
-            };
-
-            let duration = (target - now).to_std().map_err(|e| format!("Duration error: {}", e))?;
-            Ok(duration)
+            // schedule_value = "HH:MM" in 24h format (e.g. "17:00")
+            let (hour, minute) = parse_time_value(schedule_value)?;
+            duration_until_next_daily(hour, minute)
         }
-        "weekly" => {
-            // schedule_value = "DAY,HH:MM" (e.g. "monday,09:00")
-            let parts: Vec<&str> = schedule_value.split(',').collect();
+        "weekdays" => {
+            // schedule_value = "HH:MM" in 24h format, runs Mon–Fri only
+            let (hour, minute) = parse_time_value(schedule_value)?;
+            duration_until_next_weekday(hour, minute)
+        }
+        "specific_days" => {
+            // schedule_value = "mon,thu|15:00" (pipe-separated: days|time)
+            let parts: Vec<&str> = schedule_value.split('|').collect();
             if parts.len() != 2 {
                 return Err(format!(
-                    "Invalid weekly schedule value: {}. Expected DAY,HH:MM",
+                    "Invalid specific_days value: {}. Expected 'day1,day2|HH:MM'",
                     schedule_value
                 ));
             }
-            let day_str = parts[0].trim().to_lowercase();
-            let time_parts: Vec<&str> = parts[1].trim().split(':').collect();
-            if time_parts.len() != 2 {
-                return Err("Invalid time format in weekly schedule".to_string());
+            let days_str = parts[0].trim();
+            let time_str = parts[1].trim();
+            let (hour, minute) = parse_time_value(time_str)?;
+
+            let target_weekdays: Vec<chrono::Weekday> = days_str
+                .split(',')
+                .map(|d| parse_weekday(d.trim()))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            if target_weekdays.is_empty() {
+                return Err("No days specified for specific_days schedule".to_string());
             }
-            let hour: u32 = time_parts[0].parse().map_err(|_| "Invalid hour")?;
-            let minute: u32 = time_parts[1].parse().map_err(|_| "Invalid minute")?;
 
-            let target_weekday = match day_str.as_str() {
-                "monday" | "mon" => chrono::Weekday::Mon,
-                "tuesday" | "tue" => chrono::Weekday::Tue,
-                "wednesday" | "wed" => chrono::Weekday::Wed,
-                "thursday" | "thu" => chrono::Weekday::Thu,
-                "friday" | "fri" => chrono::Weekday::Fri,
-                "saturday" | "sat" => chrono::Weekday::Sat,
-                "sunday" | "sun" => chrono::Weekday::Sun,
-                _ => return Err(format!("Invalid weekday: {}", day_str)),
-            };
-
-            let now = chrono::Local::now();
-            let current_weekday = now.weekday();
-            let days_ahead = (target_weekday.num_days_from_monday() as i64
-                - current_weekday.num_days_from_monday() as i64
-                + 7) % 7;
-
-            let target_date = now.date_naive() + chrono::Duration::days(days_ahead);
-            let target_dt = target_date
-                .and_hms_opt(hour, minute, 0)
-                .ok_or("Invalid time")?;
-            let target_dt = chrono::Local
-                .from_local_datetime(&target_dt)
-                .single()
-                .ok_or("Ambiguous local time")?;
-
-            let target = if target_dt > now {
-                target_dt
-            } else {
-                // It's the same weekday but the time already passed → next week
-                target_dt + chrono::Duration::weeks(1)
-            };
-
-            let duration = (target - now).to_std().map_err(|e| format!("Duration error: {}", e))?;
-            Ok(duration)
-        }
-        "once" => {
-            // schedule_value = ISO 8601 datetime
-            let target = chrono::DateTime::parse_from_rfc3339(schedule_value)
-                .map_err(|e| format!("Invalid once schedule value: {}. Expected ISO 8601: {}", schedule_value, e))?;
-            let now = chrono::Utc::now();
-            let duration = target
-                .signed_duration_since(now)
-                .to_std()
-                .unwrap_or(std::time::Duration::from_secs(0));
-            Ok(duration)
+            duration_until_next_specific_day(&target_weekdays, hour, minute)
         }
         _ => Err(format!("Unknown schedule type: {}", schedule_type)),
     }
 }
 
-use chrono::TimeZone;
+/// Parse "HH:MM" format into (hour, minute).
+fn parse_time_value(time_str: &str) -> Result<(u32, u32), String> {
+    let parts: Vec<&str> = time_str.split(':').collect();
+    if parts.len() != 2 {
+        return Err(format!("Invalid time format: {}. Expected HH:MM", time_str));
+    }
+    let hour: u32 = parts[0]
+        .parse()
+        .map_err(|_| format!("Invalid hour in: {}", time_str))?;
+    let minute: u32 = parts[1]
+        .parse()
+        .map_err(|_| format!("Invalid minute in: {}", time_str))?;
+    if hour > 23 || minute > 59 {
+        return Err(format!("Time out of range: {}", time_str));
+    }
+    Ok((hour, minute))
+}
+
+/// Parse a weekday string into a chrono::Weekday.
+fn parse_weekday(s: &str) -> Result<chrono::Weekday, String> {
+    match s.to_lowercase().as_str() {
+        "monday" | "mon" => Ok(chrono::Weekday::Mon),
+        "tuesday" | "tue" => Ok(chrono::Weekday::Tue),
+        "wednesday" | "wed" => Ok(chrono::Weekday::Wed),
+        "thursday" | "thu" => Ok(chrono::Weekday::Thu),
+        "friday" | "fri" => Ok(chrono::Weekday::Fri),
+        "saturday" | "sat" => Ok(chrono::Weekday::Sat),
+        "sunday" | "sun" => Ok(chrono::Weekday::Sun),
+        _ => Err(format!("Invalid weekday: {}", s)),
+    }
+}
+
+/// Duration until the next occurrence of a daily HH:MM in local time.
+fn duration_until_next_daily(hour: u32, minute: u32) -> Result<std::time::Duration, String> {
+    let now = chrono::Local::now();
+    let today_target = now
+        .date_naive()
+        .and_hms_opt(hour, minute, 0)
+        .ok_or("Invalid time")?;
+    let today_target = chrono::Local
+        .from_local_datetime(&today_target)
+        .single()
+        .ok_or("Ambiguous local time")?;
+
+    let target = if today_target > now {
+        today_target
+    } else {
+        today_target + chrono::Duration::days(1)
+    };
+
+    (target - now)
+        .to_std()
+        .map_err(|e| format!("Duration error: {}", e))
+}
+
+/// Duration until the next weekday (Mon–Fri) occurrence of HH:MM.
+fn duration_until_next_weekday(hour: u32, minute: u32) -> Result<std::time::Duration, String> {
+    let now = chrono::Local::now();
+    for days_ahead in 0..=7 {
+        let candidate_date = now.date_naive() + chrono::Duration::days(days_ahead);
+        let weekday = candidate_date.weekday();
+        if weekday == chrono::Weekday::Sat || weekday == chrono::Weekday::Sun {
+            continue;
+        }
+        let candidate_dt = candidate_date
+            .and_hms_opt(hour, minute, 0)
+            .ok_or("Invalid time")?;
+        let candidate = chrono::Local
+            .from_local_datetime(&candidate_dt)
+            .single()
+            .ok_or("Ambiguous local time")?;
+
+        if candidate > now {
+            return (candidate - now)
+                .to_std()
+                .map_err(|e| format!("Duration error: {}", e));
+        }
+    }
+    Err("Could not find next weekday occurrence".to_string())
+}
+
+/// Duration until the next occurrence of one of the specified weekdays at HH:MM.
+fn duration_until_next_specific_day(
+    target_days: &[chrono::Weekday],
+    hour: u32,
+    minute: u32,
+) -> Result<std::time::Duration, String> {
+    let now = chrono::Local::now();
+    for days_ahead in 0..=7 {
+        let candidate_date = now.date_naive() + chrono::Duration::days(days_ahead);
+        let weekday = candidate_date.weekday();
+        if !target_days.contains(&weekday) {
+            continue;
+        }
+        let candidate_dt = candidate_date
+            .and_hms_opt(hour, minute, 0)
+            .ok_or("Invalid time")?;
+        let candidate = chrono::Local
+            .from_local_datetime(&candidate_dt)
+            .single()
+            .ok_or("Ambiguous local time")?;
+
+        if candidate > now {
+            return (candidate - now)
+                .to_std()
+                .map_err(|e| format!("Duration error: {}", e));
+        }
+    }
+    Err("Could not find next occurrence for specified days".to_string())
+}

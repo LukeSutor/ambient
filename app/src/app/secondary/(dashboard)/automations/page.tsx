@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +17,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,16 +30,20 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useModelAccess } from "@/lib/model-access/useModelAccess";
 import type {
   AutomationRun,
   AutomationTask,
   CreateAutomationParams,
 } from "@/types/automations";
+import type { ModelEntry } from "@/types/models";
+import type { SkillSummary } from "@/types/skills";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
   Bot,
   Calendar,
+  ChevronDown,
   Clock,
   Eye,
   Loader2,
@@ -45,54 +52,327 @@ import {
   Play,
   Plus,
   Trash2,
+  X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
-// ── Helpers ──────────────────────────────────────────────────────────
+// ── Time Helpers ─────────────────────────────────────────────────────
 
+/** Parse flexible time input ("5pm", "5:00 PM", "17:00") → "HH:MM" 24h. */
+function parseTimeInput(input: string): string | null {
+  const s = input.trim().toLowerCase().replace(/\s+/g, "");
+  // HH:MM AM/PM
+  let m = s.match(/^(\d{1,2}):(\d{2})(am|pm)$/);
+  if (m) {
+    let h = Number.parseInt(m[1]);
+    const min = Number.parseInt(m[2]);
+    if (m[3] === "pm" && h < 12) h += 12;
+    if (m[3] === "am" && h === 12) h = 0;
+    if (h <= 23 && min <= 59)
+      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+  // H AM/PM (e.g. "5pm")
+  m = s.match(/^(\d{1,2})(am|pm)$/);
+  if (m) {
+    let h = Number.parseInt(m[1]);
+    if (m[2] === "pm" && h < 12) h += 12;
+    if (m[2] === "am" && h === 12) h = 0;
+    if (h <= 23) return `${String(h).padStart(2, "0")}:00`;
+  }
+  // HH:MM 24h
+  m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const h = Number.parseInt(m[1]);
+    const min = Number.parseInt(m[2]);
+    if (h <= 23 && min <= 59)
+      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+/** Format "HH:MM" (24h) → "5:00 PM" (12h). */
+function formatTime12h(time24: string): string {
+  const [hStr, mStr] = time24.split(":");
+  let h = Number.parseInt(hStr ?? "0");
+  const min = mStr ?? "00";
+  const period = h >= 12 ? "PM" : "AM";
+  if (h > 12) h -= 12;
+  if (h === 0) h = 12;
+  return `${h}:${min} ${period}`;
+}
+
+/** Format an ISO timestamp for display in 12h local time. */
 function formatDate(d: string | null): string {
   if (!d) return "Never";
   const date = new Date(d);
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
   });
 }
 
+/** Smart formatting for next run time. */
+function formatNextRun(d: string | null): string {
+  if (!d) return "—";
+  const now = new Date();
+  const next = new Date(d);
+  const diffMs = next.getTime() - now.getTime();
+  if (diffMs < 0) return "Overdue";
+
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  const timeStr = next.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  // Same day
+  if (next.toDateString() === now.toDateString()) {
+    return `Today at ${timeStr}`;
+  }
+
+  // Within 48 hours (tomorrow)
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (next.toDateString() === tomorrow.toDateString()) {
+    return `Tomorrow at ${timeStr}`;
+  }
+
+  // Within 7 days – show weekday name
+  if (diffDays <= 7) {
+    const dayName = next.toLocaleDateString(undefined, { weekday: "long" });
+    return `${dayName} at ${timeStr}`;
+  }
+
+  // More than 7 days – show date
+  const dateStr = next.toLocaleDateString(undefined, {
+    month: "numeric",
+    day: "numeric",
+  });
+  return `${dateStr} at ${timeStr}`;
+}
+
+const ALL_DAYS = [
+  { key: "mon", label: "Mon" },
+  { key: "tue", label: "Tue" },
+  { key: "wed", label: "Wed" },
+  { key: "thu", label: "Thu" },
+  { key: "fri", label: "Fri" },
+  { key: "sat", label: "Sat" },
+  { key: "sun", label: "Sun" },
+] as const;
+
 function scheduleLabel(task: AutomationTask): string {
   if (task.task_type === "semantic") {
-    return task.trigger_type ?? "Trigger";
+    if (task.trigger_type === "screen_content") return "Screen content";
+    if (task.trigger_type === "url_visit") return "URL match";
+    return "Trigger";
   }
+  const sv = task.schedule_value ?? "";
   switch (task.schedule_type) {
     case "interval":
-      return `Every ${task.schedule_value ?? "?"} min`;
-    case "daily":
-      return `Daily at ${task.schedule_value ?? "?"}`;
-    case "weekly":
-      return `Weekly: ${task.schedule_value ?? "?"}`;
-    case "once":
-      return "One-time";
+      return `Every ${sv} min`;
+    case "daily": {
+      const t = sv ? formatTime12h(sv) : "?";
+      return `Daily at ${t}`;
+    }
+    case "weekdays": {
+      const t = sv ? formatTime12h(sv) : "?";
+      return `Weekdays at ${t}`;
+    }
+    case "specific_days": {
+      const [days, time] = sv.split("|");
+      const t = time ? formatTime12h(time) : "?";
+      const d = days
+        ?.split(",")
+        .map((x) => x.charAt(0).toUpperCase() + x.slice(1))
+        .join(", ");
+      return `${d} at ${t}`;
+    }
     default:
       return "No schedule";
   }
 }
 
 function taskTypeIcon(task: AutomationTask) {
-  if (task.task_type === "semantic") {
-    return <Eye className="h-4 w-4" />;
-  }
-  switch (task.schedule_type) {
-    case "interval":
-      return <Clock className="h-4 w-4" />;
-    case "daily":
-    case "weekly":
-      return <Calendar className="h-4 w-4" />;
-    default:
-      return <Bot className="h-4 w-4" />;
-  }
+  if (task.task_type === "semantic") return <Eye className="h-4 w-4" />;
+  if (task.schedule_type === "interval") return <Clock className="h-4 w-4" />;
+  return <Calendar className="h-4 w-4" />;
+}
+
+// ── Tag Input ────────────────────────────────────────────────────────
+
+function TagInput({
+  tags,
+  onChange,
+  placeholder,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  placeholder: string;
+}) {
+  const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addTag = () => {
+    const val = input.trim();
+    if (val && !tags.includes(val)) {
+      onChange([...tags, val]);
+      setInput("");
+    }
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTag();
+    }
+  };
+
+  const removeTag = (tag: string) => {
+    onChange(tags.filter((t) => t !== tag));
+  };
+
+  return (
+    <div
+      className="flex flex-wrap gap-1.5 rounded-md border border-input p-2 min-h-10 cursor-text bg-background"
+      onClick={() => inputRef.current?.focus()}
+      onKeyDown={() => {}}
+    >
+      {tags.map((tag) => (
+        <Badge
+          key={tag}
+          variant="secondary"
+          className="flex items-center gap-1 pr-1"
+        >
+          {tag}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeTag(tag);
+            }}
+            className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      ))}
+      <input
+        ref={inputRef}
+        className="flex-1 min-w-25 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={addTag}
+        placeholder={tags.length === 0 ? placeholder : ""}
+      />
+    </div>
+  );
+}
+
+// ── Day Selector ─────────────────────────────────────────────────────
+
+function DaySelector({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (days: string[]) => void;
+}) {
+  const toggle = (day: string) => {
+    if (selected.includes(day)) {
+      onChange(selected.filter((d) => d !== day));
+    } else {
+      onChange([...selected, day]);
+    }
+  };
+
+  return (
+    <div className="flex gap-1">
+      {ALL_DAYS.map((d) => (
+        <button
+          key={d.key}
+          type="button"
+          className={`px-2 py-1 text-xs rounded-md border transition-colors ${
+            selected.includes(d.key)
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background border-input hover:bg-accent"
+          }`}
+          onClick={() => toggle(d.key)}
+        >
+          {d.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Skill Multi-Select ───────────────────────────────────────────────
+
+function SkillMultiSelect({
+  allSkills,
+  disabledSkills,
+  onChange,
+}: {
+  allSkills: SkillSummary[];
+  disabledSkills: string[];
+  onChange: (disabled: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const toggleSkill = (name: string) => {
+    if (disabledSkills.includes(name)) {
+      onChange(disabledSkills.filter((s) => s !== name));
+    } else {
+      onChange([...disabledSkills, name]);
+    }
+  };
+
+  const enabledCount = allSkills.length - disabledSkills.length;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="w-full justify-between text-sm font-normal"
+        >
+          {enabledCount === allSkills.length
+            ? "All tools enabled"
+            : `${enabledCount}/${allSkills.length} tools enabled`}
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-2 max-h-60 overflow-y-auto" align="start">
+        {allSkills.map((skill) => (
+          <label
+            key={skill.name}
+            className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-accent cursor-pointer"
+          >
+            <Checkbox
+              checked={!disabledSkills.includes(skill.name)}
+              onCheckedChange={() => toggleSkill(skill.name)}
+            />
+            <span className="text-sm truncate">{skill.name}</span>
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // ── Main Page ────────────────────────────────────────────────────────
@@ -122,7 +402,6 @@ export default function AutomationsPage() {
     fetchTasks();
   }, [fetchTasks]);
 
-  // Listen for events
   useEffect(() => {
     const listeners = [
       listen("automation_task_created", () => fetchTasks()),
@@ -140,10 +419,7 @@ export default function AutomationsPage() {
 
   const handleToggle = async (task: AutomationTask, enabled: boolean) => {
     try {
-      await invoke("toggle_automation_task", {
-        taskId: task.id,
-        enabled,
-      });
+      await invoke("toggle_automation_task", { taskId: task.id, enabled });
       toast.success(`${task.name} ${enabled ? "enabled" : "disabled"}`);
       fetchTasks();
     } catch (e) {
@@ -231,7 +507,6 @@ export default function AutomationsPage() {
               onViewRuns={(t) => setRunHistoryTask(t)}
             />
           )}
-
           {semanticTasks.length > 0 && (
             <TaskSection
               title="Trigger-Based Tasks"
@@ -247,14 +522,12 @@ export default function AutomationsPage() {
         </div>
       )}
 
-      {/* Create/Edit Dialog */}
       <AutomationDialog
         open={dialogOpen}
         onClose={handleDialogClose}
         editTask={editTask}
       />
 
-      {/* Run History Dialog */}
       {runHistoryTask && (
         <RunHistoryDialog
           task={runHistoryTask}
@@ -380,8 +653,9 @@ function TaskCard({
             <span>{scheduleLabel(task)}</span>
           </div>
 
-          <div className="text-xs text-muted-foreground shrink-0 w-28 text-right">
-            Last run: {formatDate(task.last_run_at)}
+          <div className="text-xs text-muted-foreground shrink-0 w-36 text-right space-y-0.5">
+            <div>Last: {formatDate(task.last_run_at)}</div>
+            <div>Next: {formatNextRun(task.next_run_at)}</div>
           </div>
         </div>
 
@@ -445,45 +719,157 @@ function AutomationDialog({
 }) {
   const isEdit = !!editTask;
   const [saving, setSaving] = useState(false);
+  const { models } = useModelAccess();
+
+  // Available skills
+  const [availableSkills, setAvailableSkills] = useState<SkillSummary[]>([]);
+  useEffect(() => {
+    invoke<SkillSummary[]>("get_available_skills")
+      .then(setAvailableSkills)
+      .catch(() => {});
+  }, []);
+
+  const enabledModels = useMemo(
+    () => (models ?? []).filter((m: ModelEntry) => m.is_enabled),
+    [models],
+  );
 
   // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [taskType, setTaskType] = useState<string>("scheduled");
+  const [taskType, setTaskType] = useState("scheduled");
   const [promptTemplate, setPromptTemplate] = useState("");
-  const [scheduleType, setScheduleType] = useState<string>("interval");
+  const [scheduleType, setScheduleType] = useState("interval");
   const [scheduleValue, setScheduleValue] = useState("");
-  const [triggerType, setTriggerType] = useState<string>("screen_content");
-  const [triggerConfig, setTriggerConfig] = useState("");
+  const [timeInput, setTimeInput] = useState("");
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [triggerType, setTriggerType] = useState("screen_content");
+  const [triggerTags, setTriggerTags] = useState<string[]>([]);
   const [maxIterations, setMaxIterations] = useState("10");
   const [timeoutSeconds, setTimeoutSeconds] = useState("120");
+  const [modelId, setModelId] = useState<string>("auto");
+  const [disabledSkills, setDisabledSkills] = useState<string[]>([]);
+  const [notifyOnComplete, setNotifyOnComplete] = useState(true);
 
   // Populate form when editing
   useEffect(() => {
+    if (!open) return;
     if (editTask) {
       setName(editTask.name);
       setDescription(editTask.description);
       setTaskType(editTask.task_type);
       setPromptTemplate(editTask.prompt_template);
-      setScheduleType(editTask.schedule_type ?? "interval");
-      setScheduleValue(editTask.schedule_value ?? "");
+      const st = editTask.schedule_type ?? "interval";
+      setScheduleType(st);
+
+      // Parse schedule value
+      const sv = editTask.schedule_value ?? "";
+      if (st === "interval") {
+        setScheduleValue(sv);
+        setTimeInput("");
+        setSelectedDays([]);
+      } else if (st === "daily" || st === "weekdays") {
+        setScheduleValue("");
+        setTimeInput(sv ? formatTime12h(sv) : "");
+        setSelectedDays([]);
+      } else if (st === "specific_days") {
+        const [days, time] = sv.split("|");
+        setSelectedDays(days ? days.split(",") : []);
+        setTimeInput(time ? formatTime12h(time) : "");
+        setScheduleValue("");
+      }
+
       setTriggerType(editTask.trigger_type ?? "screen_content");
-      setTriggerConfig(editTask.trigger_config ?? "");
+      // Parse trigger config
+      if (editTask.trigger_config) {
+        try {
+          const cfg = JSON.parse(editTask.trigger_config);
+          const tags =
+            cfg.keywords ?? cfg.url_patterns ?? [];
+          setTriggerTags(tags);
+        } catch {
+          setTriggerTags([]);
+        }
+      } else {
+        setTriggerTags([]);
+      }
+
       setMaxIterations(String(editTask.max_iterations));
       setTimeoutSeconds(String(editTask.timeout_seconds));
+      setModelId(
+        editTask.model_id != null ? String(editTask.model_id) : "auto",
+      );
+      setDisabledSkills(editTask.disabled_skills ?? []);
+      setNotifyOnComplete(editTask.notify_on_complete);
     } else {
+      // Reset for create
       setName("");
       setDescription("");
       setTaskType("scheduled");
       setPromptTemplate("");
       setScheduleType("interval");
       setScheduleValue("");
+      setTimeInput("");
+      setSelectedDays([]);
       setTriggerType("screen_content");
-      setTriggerConfig("");
+      setTriggerTags([]);
       setMaxIterations("10");
       setTimeoutSeconds("120");
+      setModelId("auto");
+      setDisabledSkills([]);
+      setNotifyOnComplete(true);
     }
   }, [editTask, open]);
+
+  // Reset schedule value when schedule type changes
+  const handleScheduleTypeChange = (val: string) => {
+    setScheduleType(val);
+    setScheduleValue("");
+    setTimeInput("");
+    setSelectedDays([]);
+  };
+
+  /** Normalize the time input when user leaves the field. */
+  const handleTimeBlur = () => {
+    if (!timeInput.trim()) return;
+    const parsed = parseTimeInput(timeInput);
+    if (parsed) {
+      setTimeInput(formatTime12h(parsed));
+    } else {
+      toast.error("Invalid time format. Try '5pm' or '5:00 PM' or '17:00'");
+    }
+  };
+
+  /** Build the final schedule_value from UI state. */
+  const buildScheduleValue = (): string | null => {
+    if (scheduleType === "interval") {
+      return scheduleValue || null;
+    }
+    // Parse the displayed time back to 24h
+    const t = parseTimeInput(timeInput);
+    if (!t) return null;
+
+    if (scheduleType === "daily" || scheduleType === "weekdays") {
+      return t;
+    }
+    if (scheduleType === "specific_days") {
+      if (selectedDays.length === 0) return null;
+      return `${selectedDays.join(",")}|${t}`;
+    }
+    return null;
+  };
+
+  /** Build trigger_config JSON from tags. */
+  const buildTriggerConfig = (): string | null => {
+    if (triggerTags.length === 0) return null;
+    if (triggerType === "screen_content") {
+      return JSON.stringify({ keywords: triggerTags });
+    }
+    if (triggerType === "url_visit") {
+      return JSON.stringify({ url_patterns: triggerTags });
+    }
+    return null;
+  };
 
   const handleSave = async () => {
     if (!name.trim() || !promptTemplate.trim()) {
@@ -491,8 +877,38 @@ function AutomationDialog({
       return;
     }
 
+    // Validate schedule for scheduled tasks
+    if (taskType === "scheduled") {
+      if (scheduleType === "interval" && !scheduleValue) {
+        toast.error("Please enter a number of minutes");
+        return;
+      }
+      if (scheduleType !== "interval") {
+        const parsedTime = parseTimeInput(timeInput);
+        if (!parsedTime) {
+          toast.error("Please enter a valid time");
+          return;
+        }
+        if (scheduleType === "specific_days" && selectedDays.length === 0) {
+          toast.error("Please select at least one day");
+          return;
+        }
+      }
+    }
+
+    // Validate trigger for semantic tasks
+    if (taskType === "semantic" && triggerTags.length === 0) {
+      toast.error("Please add at least one trigger pattern");
+      return;
+    }
+
     setSaving(true);
     try {
+      const resolvedModelId =
+        modelId === "auto" ? null : BigInt(modelId);
+      const sv = buildScheduleValue();
+      const tc = buildTriggerConfig();
+
       if (isEdit && editTask) {
         await invoke("update_automation_task", {
           params: {
@@ -501,13 +917,16 @@ function AutomationDialog({
             description: description || null,
             prompt_template: promptTemplate,
             schedule_type: taskType === "scheduled" ? scheduleType : null,
-            schedule_value:
-              taskType === "scheduled" ? scheduleValue || null : null,
+            schedule_value: taskType === "scheduled" ? sv : null,
             trigger_type: taskType === "semantic" ? triggerType : null,
-            trigger_config:
-              taskType === "semantic" ? triggerConfig || null : null,
+            trigger_config: taskType === "semantic" ? tc : null,
             max_iterations: Number.parseInt(maxIterations) || null,
             timeout_seconds: Number.parseInt(timeoutSeconds) || null,
+            model_id: resolvedModelId,
+            disabled_skills: disabledSkills,
+            notify_on_complete: notifyOnComplete,
+            notify_on_error: true,
+            is_enabled: null,
           },
         });
         toast.success("Automation updated");
@@ -517,19 +936,17 @@ function AutomationDialog({
           description: description || null,
           task_type: taskType,
           prompt_template: promptTemplate,
-          model_id: null,
-          disabled_skills: null,
-          notify_on_complete: true,
+          model_id: resolvedModelId,
+          disabled_skills: disabledSkills.length > 0 ? disabledSkills : null,
+          notify_on_complete: notifyOnComplete,
           notify_on_error: true,
           max_iterations: Number.parseInt(maxIterations) || 10,
           timeout_seconds: Number.parseInt(timeoutSeconds) || 120,
           schedule_type: taskType === "scheduled" ? scheduleType : null,
-          schedule_value:
-            taskType === "scheduled" ? scheduleValue || null : null,
+          schedule_value: taskType === "scheduled" ? sv : null,
           schedule_timezone: null,
           trigger_type: taskType === "semantic" ? triggerType : null,
-          trigger_config:
-            taskType === "semantic" ? triggerConfig || null : null,
+          trigger_config: taskType === "semantic" ? tc : null,
         };
         await invoke("create_automation_task", { params });
         toast.success("Automation created");
@@ -570,9 +987,9 @@ function AutomationDialog({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="desc">Description</Label>
             <Input
-              id="description"
+              id="desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="A brief description of what this does"
@@ -597,56 +1014,83 @@ function AutomationDialog({
             </Select>
           </div>
 
-          {/* Schedule fields */}
+          {/* ── Schedule Fields ── */}
           {taskType === "scheduled" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Schedule Type</Label>
-                <Select value={scheduleType} onValueChange={setScheduleType}>
+                <Label>Schedule</Label>
+                <Select
+                  value={scheduleType}
+                  onValueChange={handleScheduleTypeChange}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="interval">Every N minutes</SelectItem>
-                    <SelectItem value="daily">Daily at time</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="once">One-time</SelectItem>
+                    <SelectItem value="daily">Every day</SelectItem>
+                    <SelectItem value="weekdays">
+                      Every weekday (Mon–Fri)
+                    </SelectItem>
+                    <SelectItem value="specific_days">Specific days</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>
-                  {scheduleType === "interval"
-                    ? "Minutes"
-                    : scheduleType === "daily"
-                      ? "Time (HH:MM)"
-                      : scheduleType === "weekly"
-                        ? "Day,Time"
-                        : "DateTime (ISO)"}
-                </Label>
-                <Input
-                  value={scheduleValue}
-                  onChange={(e) => setScheduleValue(e.target.value)}
-                  placeholder={
-                    scheduleType === "interval"
-                      ? "30"
-                      : scheduleType === "daily"
-                        ? "09:00"
-                        : scheduleType === "weekly"
-                          ? "monday,09:00"
-                          : "2025-01-01T00:00:00Z"
-                  }
-                />
-              </div>
+
+              {scheduleType === "interval" && (
+                <div className="space-y-1.5">
+                  <Label>Minutes</Label>
+                  <Input
+                    type="number"
+                    value={scheduleValue}
+                    onChange={(e) => setScheduleValue(e.target.value)}
+                    placeholder="30"
+                    min={1}
+                  />
+                </div>
+              )}
+
+              {(scheduleType === "daily" || scheduleType === "weekdays") && (
+                <div className="space-y-1.5">
+                  <Label>Time</Label>
+                  <Input
+                    value={timeInput}
+                    onChange={(e) => setTimeInput(e.target.value)}
+                    onBlur={handleTimeBlur}
+                    placeholder="5:00 PM"
+                  />
+                </div>
+              )}
+
+              {scheduleType === "specific_days" && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Days</Label>
+                    <DaySelector
+                      selected={selectedDays}
+                      onChange={setSelectedDays}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Time</Label>
+                    <Input
+                      value={timeInput}
+                      onChange={(e) => setTimeInput(e.target.value)}
+                      onBlur={handleTimeBlur}
+                      placeholder="5:00 PM"
+                    />
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {/* Trigger fields */}
+          {/* ── Trigger Fields ── */}
           {taskType === "semantic" && (
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Trigger Type</Label>
-                <Select value={triggerType} onValueChange={setTriggerType}>
+                <Select value={triggerType} onValueChange={(v) => { setTriggerType(v); setTriggerTags([]); }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -655,19 +1099,29 @@ function AutomationDialog({
                       Screen Content
                     </SelectItem>
                     <SelectItem value="url_visit">URL Visit</SelectItem>
-                    <SelectItem value="app_focus">App Focus</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Trigger Config (JSON)</Label>
-                <Textarea
-                  value={triggerConfig}
-                  onChange={(e) => setTriggerConfig(e.target.value)}
-                  placeholder='{"keywords": ["error", "alert"]}'
-                  rows={3}
-                  className="font-mono text-sm"
+                <Label>
+                  {triggerType === "screen_content"
+                    ? "Match keywords"
+                    : "Match URL patterns"}
+                </Label>
+                <TagInput
+                  tags={triggerTags}
+                  onChange={setTriggerTags}
+                  placeholder={
+                    triggerType === "screen_content"
+                      ? 'Type a keyword and press Enter (e.g. "error")'
+                      : 'Type a URL pattern and press Enter (e.g. "twitter.com")'
+                  }
                 />
+                <p className="text-xs text-muted-foreground">
+                  {triggerType === "screen_content"
+                    ? "Triggers when any of these strings appear on screen."
+                    : "Triggers when any URL containing these patterns is visible."}
+                </p>
               </div>
             </div>
           )}
@@ -681,6 +1135,46 @@ function AutomationDialog({
               onChange={(e) => setPromptTemplate(e.target.value)}
               placeholder="What should this automation do when it runs?"
               rows={4}
+            />
+          </div>
+
+          {/* Model Selection */}
+          <div className="space-y-1.5">
+            <Label>Model</Label>
+            <Select value={modelId} onValueChange={setModelId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto (default model)</SelectItem>
+                {enabledModels.map((m: ModelEntry) => (
+                  <SelectItem key={m.id} value={String(m.id)}>
+                    {m.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Skill Selection */}
+          {availableSkills.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Tools</Label>
+              <SkillMultiSelect
+                allSkills={availableSkills}
+                disabledSkills={disabledSkills}
+                onChange={setDisabledSkills}
+              />
+            </div>
+          )}
+
+          {/* Notify toggle */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="notify">Notify on completion</Label>
+            <Switch
+              id="notify"
+              checked={notifyOnComplete}
+              onCheckedChange={setNotifyOnComplete}
             />
           </div>
 
@@ -708,7 +1202,7 @@ function AutomationDialog({
             </div>
           </div>
 
-          {/* Save button */}
+          {/* Save */}
           <div className="flex justify-end pt-2">
             <Button onClick={handleSave} disabled={saving}>
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -734,21 +1228,14 @@ function RunHistoryDialog({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRuns = async () => {
-      try {
-        const result = await invoke<AutomationRun[]>("get_automation_runs", {
-          taskId: task.id,
-          limit: 20,
-          offset: 0,
-        });
-        setRuns(result);
-      } catch (e) {
-        console.error("Failed to fetch runs:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRuns();
+    invoke<AutomationRun[]>("get_automation_runs", {
+      taskId: task.id,
+      limit: 20,
+      offset: 0,
+    })
+      .then(setRuns)
+      .catch((e) => console.error("Failed to fetch runs:", e))
+      .finally(() => setLoading(false));
   }, [task.id]);
 
   return (

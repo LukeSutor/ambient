@@ -282,15 +282,6 @@ async fn should_trigger(
                 for pattern in patterns {
                     if let Some(pat) = pattern.as_str() {
                         if screen_lower.contains(&pat.to_lowercase()) {
-                            // Check work hours if configured
-                            if let (Some(start), Some(end)) = (
-                                config.get("work_hours_start").and_then(|s| s.as_str()),
-                                config.get("work_hours_end").and_then(|e| e.as_str()),
-                            ) {
-                                if !is_within_work_hours(start, end) {
-                                    continue;
-                                }
-                            }
                             return true;
                         }
                     }
@@ -298,20 +289,6 @@ async fn should_trigger(
             }
             false
         }
-        "app_focus" => {
-            // Check for app name in screen text (simplified)
-            if let Some(app_name) = config.get("app_name").and_then(|a| a.as_str()) {
-                return screen_text.to_lowercase().contains(&app_name.to_lowercase());
-            }
-            false
-        }
         _ => false,
     }
-}
-
-/// Check if the current time is within work hours.
-fn is_within_work_hours(start: &str, end: &str) -> bool {
-    let now = chrono::Local::now();
-    let current_time = now.format("%H:%M").to_string();
-    current_time.as_str() >= start && current_time.as_str() <= end
 }

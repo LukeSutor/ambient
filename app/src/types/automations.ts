@@ -51,7 +51,7 @@ export type RunStatus = "running" | "completed" | "failed" | "cancelled";
 /**
  * Schedule type for time-based automations.
  */
-export type ScheduleType = "interval" | "daily" | "weekly" | "once";
+export type ScheduleType = "interval" | "daily" | "weekdays" | "specific_days";
 
 /**
  * Type of automation task.
@@ -61,7 +61,7 @@ export type TaskType = "scheduled" | "semantic";
 /**
  * Trigger type for event-based automations.
  */
-export type TriggerType = "screen_content" | "app_focus" | "url_visit";
+export type TriggerType = "screen_content" | "url_visit";
 
 /**
  * Parameters for updating an existing automation task.

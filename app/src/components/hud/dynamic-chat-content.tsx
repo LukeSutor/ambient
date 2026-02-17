@@ -1,3 +1,4 @@
+import { AutomationNotificationBanner } from "@/components/hud/automation-notification-banner";
 import { ConversationList } from "@/components/hud/conversation-list";
 import { MessageList } from "@/components/hud/message-list";
 import { useConversation } from "@/lib/conversations";
@@ -43,6 +44,9 @@ export function DynamicChatContent() {
       )}
       style={containerStyle}
     >
+      {/* Automation notification banner */}
+      <AutomationNotificationBanner />
+
       <div
         className={cn(
           "flex flex-row justify-center min-h-0",
