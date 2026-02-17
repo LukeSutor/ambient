@@ -146,6 +146,70 @@ static MIGRATIONS: Lazy<Migrations<'static>> = Lazy::new(|| {
         );
 
         CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
+
+        -- ============================================================================
+        -- AUTOMATION TABLES
+        -- ============================================================================
+
+        -- Automation tasks (scheduled and semantic/event-based)
+        CREATE TABLE IF NOT EXISTS automation_tasks (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL DEFAULT '',
+          task_type TEXT NOT NULL CHECK(task_type IN ('scheduled', 'semantic')),
+          is_enabled INTEGER NOT NULL DEFAULT 1,
+          is_system INTEGER NOT NULL DEFAULT 0,
+          prompt_template TEXT NOT NULL DEFAULT '',
+          model_id INTEGER,
+          disabled_skills TEXT NOT NULL DEFAULT '[]',
+          notify_on_complete INTEGER NOT NULL DEFAULT 1,
+          notify_on_error INTEGER NOT NULL DEFAULT 1,
+          max_iterations INTEGER NOT NULL DEFAULT 10,
+          timeout_seconds INTEGER NOT NULL DEFAULT 120,
+          schedule_type TEXT CHECK(schedule_type IN ('interval', 'daily', 'weekly', 'once')),
+          schedule_value TEXT,
+          schedule_timezone TEXT NOT NULL DEFAULT 'local',
+          trigger_type TEXT CHECK(trigger_type IN ('screen_content', 'app_focus', 'url_visit')),
+          trigger_config TEXT,
+          last_run_at TEXT,
+          next_run_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (model_id) REFERENCES models(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_automation_tasks_type ON automation_tasks(task_type);
+        CREATE INDEX IF NOT EXISTS idx_automation_tasks_enabled ON automation_tasks(is_enabled);
+        CREATE INDEX IF NOT EXISTS idx_automation_tasks_system ON automation_tasks(is_system);
+
+        -- Automation execution history
+        CREATE TABLE IF NOT EXISTS automation_runs (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'running' CHECK(status IN ('running', 'completed', 'failed', 'cancelled')),
+          result_text TEXT,
+          error_message TEXT,
+          started_at TEXT NOT NULL,
+          completed_at TEXT,
+          credits_used REAL NOT NULL DEFAULT 0.0,
+          FOREIGN KEY (task_id) REFERENCES automation_tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_automation_runs_task ON automation_runs(task_id);
+        CREATE INDEX IF NOT EXISTS idx_automation_runs_started ON automation_runs(started_at DESC);
+
+        -- Semantic trigger patterns for event-based automations
+        CREATE TABLE IF NOT EXISTS automation_triggers (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          trigger_type TEXT NOT NULL CHECK(trigger_type IN ('screen_content', 'app_focus', 'url_visit')),
+          trigger_config TEXT NOT NULL DEFAULT '{}',
+          is_enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES automation_tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_automation_triggers_task ON automation_triggers(task_id);
       "#,
     )
   ])
