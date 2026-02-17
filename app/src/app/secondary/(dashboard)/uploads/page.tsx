@@ -2,13 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -256,98 +249,91 @@ export default function UploadsPage() {
   }, []);
 
   return (
-    <div className="relative flex flex-col items-center justify-start p-4 w-full">
-      <div className="w-full max-w-4xl">
-        <Card className="w-full">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Your Uploads</CardTitle>
-                <CardDescription>
-                  Images, PDFs, and OCR captures from your conversations
-                </CardDescription>
-              </div>
-            </div>
-            <div className="relative mt-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by file name..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                }}
-                className="pl-9"
-              />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                  onClick={() => {
-                    setSearchTerm("");
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
-
-            {items.length === 0 && !isLoading ? (
-              <Empty className="border rounded-lg py-12">
-                <EmptyMedia variant="icon">
-                  <FolderOpen className="h-6 w-6" />
-                </EmptyMedia>
-                <EmptyHeader>
-                  <EmptyTitle>
-                    {debouncedSearch ? "No results found" : "No uploads yet"}
-                  </EmptyTitle>
-                  <EmptyDescription>
-                    {debouncedSearch
-                      ? "Try a different search term"
-                      : "Upload images, PDFs, or capture screen content in your conversations"}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {items.map((item) => (
-                  <UploadCard
-                    key={item.id}
-                    item={item}
-                    onPreview={() => {
-                      void handleOpenPreview(item);
-                    }}
-                    onDelete={() => {
-                      setDeleteTarget(item);
-                    }}
-                    onOpenConversation={() => {
-                      void onOpenInConversation(item);
-                    }}
-                    getAttachmentIcon={getAttachmentIcon}
-                    getTypeLabel={getTypeLabel}
-                    getTypeBadgeColor={getTypeBadgeColor}
-                    loadAttachmentData={loadAttachmentData}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Loader sentinel */}
-            {hasMore && <div ref={loaderRef} className="h-8" />}
-            {isLoading && (
-              <div className="mt-4 flex justify-center">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Loading...
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+    <div className="relative flex flex-col items-center justify-start p-4 w-full max-w-4xl mx-auto">
+      <div className="flex items-end justify-between w-full mb-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold font-sora">Uploads</h1>
+          <p className="text-muted-foreground mt-1">
+            Images, PDFs, and OCR captures from your conversations
+          </p>
+        </div>
+        <div className="relative w-64 shrink-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by file name..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+            }}
+            className="pl-9"
+          />
+          {searchTerm && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+              onClick={() => {
+                setSearchTerm("");
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
+
+      {error && <div className="mb-3 text-sm text-red-600 w-full">{error}</div>}
+
+      {items.length === 0 && !isLoading ? (
+        <Empty className="border rounded-lg py-12 w-full">
+          <EmptyMedia variant="icon">
+            <FolderOpen className="h-6 w-6" />
+          </EmptyMedia>
+          <EmptyHeader>
+            <EmptyTitle>
+              {debouncedSearch ? "No results found" : "No uploads yet"}
+            </EmptyTitle>
+            <EmptyDescription>
+              {debouncedSearch
+                ? "Try a different search term"
+                : "Upload images, PDFs, or capture screen content in your conversations"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+          {items.map((item) => (
+            <UploadCard
+              key={item.id}
+              item={item}
+              onPreview={() => {
+                void handleOpenPreview(item);
+              }}
+              onDelete={() => {
+                setDeleteTarget(item);
+              }}
+              onOpenConversation={() => {
+                void onOpenInConversation(item);
+              }}
+              getAttachmentIcon={getAttachmentIcon}
+              getTypeLabel={getTypeLabel}
+              getTypeBadgeColor={getTypeBadgeColor}
+              loadAttachmentData={loadAttachmentData}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Loader sentinel */}
+      {hasMore && <div ref={loaderRef} className="h-8" />}
+      {isLoading && (
+        <div className="mt-4 flex justify-center">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Loading...
+          </div>
+        </div>
+      )}
 
       {/* Preview Dialog */}
       <PreviewDialog

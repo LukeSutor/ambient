@@ -12,7 +12,7 @@ export function DynamicChatContent() {
   const { isChatExpanded, isChatHistoryExpanded } = useWindows();
   const { hudDimensions } = useSettings();
 
-  const isVisible = true;
+  const isVisible = isChatExpanded || isChatHistoryExpanded;
   const showBothPanels = isChatExpanded && isChatHistoryExpanded;
   const maxHeight = hudDimensions
     ? `${hudDimensions.chat_max_height}px`
@@ -37,42 +37,44 @@ export function DynamicChatContent() {
   );
 
   return (
-    <div
-      className={cn(
-        "flex flex-col transition-[max-height,opacity] duration-300 ease-in-out overflow-hidden",
-        isVisible ? "opacity-100 pb-2" : "opacity-0 pointer-events-none",
-      )}
-      style={containerStyle}
-    >
-      {/* Automation notification banner */}
+    <>
+      {/* Notification banner is always rendered outside the collapse so it shows even when chat is closed */}
       <AutomationNotificationBanner />
 
       <div
         className={cn(
-          "flex flex-row justify-center min-h-0",
-          showBothPanels && "space-x-2",
+          "flex flex-col transition-[max-height,opacity] duration-300 ease-in-out overflow-hidden",
+          isVisible ? "opacity-100 pb-2" : "opacity-0 pointer-events-none",
         )}
+        style={containerStyle}
       >
-        {/* Conversation list */}
         <div
           className={cn(
-            "overflow-hidden transition-all duration-300 min-h-0",
-            conversationsClass,
+            "flex flex-row justify-center min-h-0",
+            showBothPanels && "space-x-2",
           )}
         >
-          <ConversationList />
-        </div>
+          {/* Conversation list */}
+          <div
+            className={cn(
+              "overflow-hidden transition-all duration-300 min-h-0",
+              conversationsClass,
+            )}
+          >
+            <ConversationList />
+          </div>
 
-        {/* Message list */}
-        <div
-          className={cn(
-            "overflow-hidden transition-all duration-300 min-h-0",
-            messagesClass,
-          )}
-        >
-          <MessageList />
+          {/* Message list */}
+          <div
+            className={cn(
+              "overflow-hidden transition-all duration-300 min-h-0",
+              messagesClass,
+            )}
+          >
+            <MessageList />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -4,9 +4,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   Dialog,
@@ -229,98 +226,91 @@ export default function MemoriesPage() {
   }, []);
 
   return (
-    <div className="relative flex flex-col items-center justify-start p-4 w-full">
-      <div className="w-full max-w-4xl">
-        <Card className="w-full">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Memories</CardTitle>
-                <CardDescription>
-                  Facts and preferences learned from your conversations
-                </CardDescription>
-              </div>
-              {items.length > 0 && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete All
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Delete all memories?</DialogTitle>
-                      <DialogDescription>
-                        This will permanently remove all memories and their
-                        indexes.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <DialogClose asChild>
-                        <Button variant="secondary">Cancel</Button>
-                      </DialogClose>
-                      <DialogClose asChild>
-                        <Button
-                          variant="destructive"
-                          onClick={() => {
-                            void onDeleteAll();
-                          }}
-                        >
-                          Delete all
-                        </Button>
-                      </DialogClose>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
-
-            {items.length === 0 && !isLoading ? (
-              <Empty className="border rounded-lg py-12">
-                <EmptyMedia variant="icon">
-                  <Brain className="h-6 w-6" />
-                </EmptyMedia>
-                <EmptyHeader>
-                  <EmptyTitle>No memories yet</EmptyTitle>
-                  <EmptyDescription>
-                    Memories are automatically extracted from your conversations
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {items.map((m) => (
-                  <MemoryCard
-                    key={m.id}
-                    item={m}
-                    onDelete={() => {
-                      void onDeleteOne(m.id);
+    <div className="relative flex flex-col items-center justify-start p-4 w-full max-w-4xl mx-auto">
+      <div className="flex items-center justify-between w-full mb-6">
+        <div>
+          <h1 className="text-3xl font-bold font-sora">Memories</h1>
+          <p className="text-muted-foreground mt-1">
+            Facts and preferences learned from your conversations
+          </p>
+        </div>
+        {items.length > 0 && (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete All
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete all memories?</DialogTitle>
+                <DialogDescription>
+                  This will permanently remove all memories and their
+                  indexes.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="secondary">Cancel</Button>
+                </DialogClose>
+                <DialogClose asChild>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      void onDeleteAll();
                     }}
-                    onOpenConversation={() => {
-                      void onOpenConversation(m);
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* loader sentinel */}
-            {hasMore && <div ref={loaderRef} className="h-8" />}
-            {isLoading && (
-              <div className="mt-4 flex justify-center">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  Loading...
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  >
+                    Delete all
+                  </Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
+
+      {error && <div className="mb-3 text-sm text-red-600 w-full">{error}</div>}
+
+      {items.length === 0 && !isLoading ? (
+        <Empty className="border rounded-lg py-12 w-full">
+          <EmptyMedia variant="icon">
+            <Brain className="h-6 w-6" />
+          </EmptyMedia>
+          <EmptyHeader>
+            <EmptyTitle>No memories yet</EmptyTitle>
+            <EmptyDescription>
+              Memories are automatically extracted from your conversations
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-3 w-full">
+          {items.map((m) => (
+            <MemoryCard
+              key={m.id}
+              item={m}
+              onDelete={() => {
+                void onDeleteOne(m.id);
+              }}
+              onOpenConversation={() => {
+                void onOpenConversation(m);
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* loader sentinel */}
+      {hasMore && <div ref={loaderRef} className="h-8" />}
+      {isLoading && (
+        <div className="mt-4 flex justify-center">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Loading...
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -343,71 +333,73 @@ function MemoryCard({
   }, [item.timestamp]);
 
   return (
-    <div className="group flex flex-col rounded-lg border bg-card p-4 hover:border-primary/50 transition-colors">
-      {/* Header: icon + text + actions */}
-      <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
-          <Sparkles className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium leading-snug">{item.text}</p>
-          {item.message_content && (
-            <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
-              {item.message_content}
-            </p>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {item.conversation_id && (
-            <Tooltip>
-              <TooltipTrigger asChild>
+    <Card className="hover:shadow-sm transition-shadow">
+      <CardContent className="py-4 px-5">
+        {/* Header: icon + text + actions */}
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium leading-snug">{item.text}</p>
+            {item.message_content && (
+              <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">
+                {item.message_content}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {item.conversation_id && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={onOpenConversation}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Open conversation</TooltipContent>
+              </Tooltip>
+            )}
+            <Dialog>
+              <DialogTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
-                  onClick={onOpenConversation}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>Open conversation</TooltipContent>
-            </Tooltip>
-          )}
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete this memory?</DialogTitle>
-                <DialogDescription>
-                  This action cannot be undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="secondary">Cancel</Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button variant="destructive" onClick={onDelete}>
-                    Delete
-                  </Button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete this memory?</DialogTitle>
+                  <DialogDescription>
+                    This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="secondary">Cancel</Button>
+                  </DialogClose>
+                  <DialogClose asChild>
+                    <Button variant="destructive" onClick={onDelete}>
+                      Delete
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-      </div>
-      {/* Footer: date */}
-      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-        <span>{formattedDate}</span>
-      </div>
-    </div>
+        {/* Footer: date */}
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{formattedDate}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
