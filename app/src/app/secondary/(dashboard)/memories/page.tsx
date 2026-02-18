@@ -334,12 +334,9 @@ function MemoryCard({
 
   return (
     <Card className="hover:shadow-sm transition-shadow">
-      <CardContent className="py-4 px-5">
+      <CardContent>
         {/* Header: icon + text + actions */}
         <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary mt-0.5">
-            <Sparkles className="h-4 w-4" />
-          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium leading-snug">{item.text}</p>
             {item.message_content && (

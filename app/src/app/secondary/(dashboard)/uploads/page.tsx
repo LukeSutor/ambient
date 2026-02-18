@@ -250,7 +250,7 @@ export default function UploadsPage() {
 
   return (
     <div className="relative flex flex-col items-center justify-start p-4 w-full max-w-4xl mx-auto">
-      <div className="flex items-end justify-between w-full mb-6 gap-4">
+      <div className="flex items-center justify-between w-full mb-6 gap-4">
         <div>
           <h1 className="text-3xl font-bold font-sora">Uploads</h1>
           <p className="text-muted-foreground mt-1">

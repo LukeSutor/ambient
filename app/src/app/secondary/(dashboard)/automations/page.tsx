@@ -1554,7 +1554,7 @@ function RunHistoryDialog({
           <div className="space-y-2 mt-2">
             {runs.map((run) => (
               <Card key={run.id}>
-                <CardContent className="py-3 px-4">
+                <CardContent>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Badge

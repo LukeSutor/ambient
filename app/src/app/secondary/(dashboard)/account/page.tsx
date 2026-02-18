@@ -80,11 +80,11 @@ export default function AccountPage() {
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Account Information
-        </h1>
-        <p className="text-muted-foreground">Manage your account information</p>
+      <div>
+        <h1 className="text-3xl font-bold font-sora">Account Information</h1>
+        <p className="text-muted-foreground mt-1">
+          Manage your account information
+        </p>
       </div>
 
       {/* Profile Information Card */}
