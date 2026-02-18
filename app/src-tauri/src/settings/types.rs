@@ -114,6 +114,10 @@ pub struct UserSettings {
   /// Only effective when a compatible GPU is detected.
   #[serde(default)]
   pub gpu_acceleration: bool,
+  /// How often the screen monitor polls for semantic automation triggers (seconds).
+  /// Clamped to [5, 300]. Defaults to 30 when not set.
+  #[serde(default)]
+  pub screen_poll_interval_secs: Option<u64>,
 }
 
 impl Default for UserSettings {
@@ -125,6 +129,7 @@ impl Default for UserSettings {
       agent_config: crate::skills::types::AgentRuntimeConfig::default(),
       disabled_skills: Vec::new(),
       gpu_acceleration: false,
+      screen_poll_interval_secs: None,
     }
   }
 }

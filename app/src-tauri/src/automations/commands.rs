@@ -84,6 +84,12 @@ pub async fn create_automation_task(
                 }
             });
         }
+    } else if task.task_type == "semantic" {
+        // A new semantic task was added — restart the screen monitor so it picks it up.
+        let app_handle_for_monitor = app_handle.clone();
+        tokio::spawn(async move {
+            super::triggers::restart_screen_monitor(&app_handle_for_monitor).await;
+        });
     }
 
     Ok(task)
@@ -132,6 +138,12 @@ pub async fn update_automation_task(
                 );
             }
         }
+    } else if task.task_type == "semantic" {
+        // Semantic task changed — restart screen monitor.
+        let app_handle_for_monitor = app_handle.clone();
+        tokio::spawn(async move {
+            super::triggers::restart_screen_monitor(&app_handle_for_monitor).await;
+        });
     }
 
     Ok(task)
@@ -152,10 +164,16 @@ pub async fn delete_automation_task(
     let _ = crate::events::emitter::emit(
         super::events::AUTOMATION_TASK_DELETED,
         super::events::AutomationTaskDeletedEvent {
-            task_id,
+            task_id: task_id.clone(),
             timestamp: chrono::Utc::now().to_rfc3339(),
         },
     );
+
+    // Restart screen monitor in case we just removed the last semantic task.
+    let app_handle_for_monitor = app_handle.clone();
+    tokio::spawn(async move {
+        super::triggers::restart_screen_monitor(&app_handle_for_monitor).await;
+    });
 
     Ok(())
 }

@@ -96,6 +96,10 @@ pub fn run() {
               let app_handle_for_automations = app_handle.clone();
               tauri::async_runtime::spawn(async move {
                 automations::scheduler::reschedule_all(&app_handle_for_automations).await;
+
+                // Start screen monitor for semantic triggers (stops automatically
+                // when there are no enabled semantic tasks).
+                automations::triggers::start_screen_monitor(&app_handle_for_automations).await;
               });
             }
             Err(e) => {

@@ -74,8 +74,15 @@ pub async fn start_screen_monitor(app_handle: &AppHandle) {
                 break;
             }
 
-            // Sleep for the polling interval
-            tokio::time::sleep(tokio::time::Duration::from_secs(DEFAULT_POLL_INTERVAL)).await;
+            // Sleep for the polling interval (read from settings, clamped to [5, 300] seconds)
+            let poll_secs = {
+                let settings = crate::settings::service::load_user_settings(app.clone()).await;
+                settings
+                    .map(|s| s.screen_poll_interval_secs.unwrap_or(DEFAULT_POLL_INTERVAL))
+                    .unwrap_or(DEFAULT_POLL_INTERVAL)
+                    .clamp(5, 300)
+            };
+            tokio::time::sleep(tokio::time::Duration::from_secs(poll_secs)).await;
 
             if !MONITOR_RUNNING.load(Ordering::SeqCst) {
                 break;
@@ -160,6 +167,17 @@ pub async fn start_screen_monitor(app_handle: &AppHandle) {
 pub async fn stop_screen_monitor() {
     MONITOR_RUNNING.store(false, Ordering::SeqCst);
     log::info!("[triggers] Screen monitor stop requested");
+}
+
+/// Restart the screen monitor.
+///
+/// Stops the current monitor (if running) and starts a fresh one.
+/// This is useful when automation tasks are added, removed, or changed.
+pub async fn restart_screen_monitor(app_handle: &AppHandle) {
+    stop_screen_monitor().await;
+    // Give the running loop a moment to observe the stop signal.
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    start_screen_monitor(app_handle).await;
 }
 
 /// Get current screen text, using cache if available and fresh.

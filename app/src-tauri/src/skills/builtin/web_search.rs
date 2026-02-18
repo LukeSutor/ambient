@@ -201,10 +201,6 @@ fn add_scrape_chunk(
         pending.extraction_started = true;
 
         if pending.total_chunks.is_none() {
-            log::info!(
-                "[web_search] Starting chunk reception: expecting {} chunks",
-                total_chunks
-            );
             pending.total_chunks = Some(total_chunks);
             pending.chunks = vec![None; total_chunks];
         } else if pending.total_chunks != Some(total_chunks) {
@@ -250,7 +246,6 @@ fn add_scrape_chunk(
         }
 
         if pending.received_chunks == total_chunks {
-            log::info!("[web_search] All chunks received, assembling content");
             let encoded = pending
                 .chunks
                 .iter()
@@ -258,7 +253,6 @@ fn add_scrape_chunk(
                 .collect::<String>();
             drop(slot);
             let html = base64_decode_html(&encoded)?;
-            log::debug!("[web_search] Decoded content length: {} bytes", html.len());
             resolve_pending_scrape(request_id, Ok(html));
         }
 
@@ -853,7 +847,6 @@ async fn scrape_url_with_webview(
     .on_navigation(move |nav_url| {
         // Check if this is our custom scheme with scraped data
         if nav_url.scheme() == SCRAPE_RESULT_SCHEME {
-            log::debug!("[web_search] Intercepted scraper navigation: {}", nav_url.host_str().unwrap_or("unknown"));
             let host = nav_url.host_str();
             let path = nav_url.path();
 
@@ -899,13 +892,6 @@ async fn scrape_url_with_webview(
                         return false;
                     }
                 };
-
-                log::debug!(
-                    "[web_search] Received chunk {}/{} (token: {})",
-                    index + 1,
-                    total,
-                    &exec_token[..exec_token.len().min(10)]
-                );
 
                 if let Err(e) = add_scrape_chunk(&req_id, &exec_token, index, total, chunk) {
                     log::error!("[web_search] Failed to add chunk: {}", e);
