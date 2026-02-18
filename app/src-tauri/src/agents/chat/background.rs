@@ -12,7 +12,7 @@ use crate::models::llm::client::generate;
 use crate::models::llm::types::{LlmRequest, LlmResponse};
 use crate::models::llm::usage::create_generation_session;
 use crate::skills::executor::execute_tools;
-use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
+use crate::skills::registry::{canonicalize_skill_name, get_filtered_summaries, get_skill_tools, skill_exists};
 use crate::skills::types::{AgentRuntimeConfig, SkillSummary, ToolDefinition};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,7 +48,7 @@ pub async fn run_background(
     };
 
     // Resolve which model to use
-    let (is_local, is_internal, model_key) = resolve_model(app_handle, model_id);
+    let (is_local, is_internal, model_key, resolved_model_id) = resolve_model(app_handle, model_id);
 
     // For internal cloud models, create a generation session ONCE for the entire turn.
     // BYOK models use the user's own API key — no session needed.
@@ -159,7 +159,8 @@ pub async fn run_background(
             .with_attempts(Some(2))
             .with_timeout_duration(Some(if is_local { 60 } else { 15 }))
             .with_slot_id(Some(2)) // Use slot 2 to avoid KV-cache conflicts with interactive chat
-            .with_session_token(session_token.clone());
+            .with_session_token(session_token.clone())
+            .with_override_model_id(Some(resolved_model_id));
 
         let response = match generate(app_handle.clone(), request, Some(is_local)).await {
             Ok(r) => r,
@@ -205,9 +206,11 @@ pub async fn run_background(
                         if let Some(name) =
                             call.arguments.get("skill_name").and_then(|v| v.as_str())
                         {
-                            if skill_exists(name) && !active_skills.contains(&name.to_string()) {
-                                active_skills.push(name.to_string());
-                                log::info!("[background_agent] Activated skill: {}", name);
+                            // Normalize skill name: LLMs sometimes use underscores instead of hyphens.
+                            let canonical = canonicalize_skill_name(name);
+                            if skill_exists(&canonical) && !active_skills.contains(&canonical) {
+                                active_skills.push(canonical.clone());
+                                log::info!("[background_agent] Activated skill: {}", canonical);
                             }
                         }
                     }
@@ -250,17 +253,18 @@ pub async fn run_background(
 ///
 /// If `model_id` is provided and the model exists in the DB, use it.
 /// Otherwise fall back to the local model.
-fn resolve_model(app_handle: &AppHandle, model_id: Option<i64>) -> (bool, bool, String) {
+/// Returns `(is_local, is_internal, model_key, model_db_id)`.
+fn resolve_model(app_handle: &AppHandle, model_id: Option<i64>) -> (bool, bool, String, i64) {
     let id = model_id.unwrap_or(1); // 1 == local model (first migration insert)
     match crate::db::models::get_model_by_id(app_handle, id) {
-        Ok(entry) => (!entry.is_cloud, entry.is_internal, entry.model),
+        Ok(entry) => (!entry.is_cloud, entry.is_internal, entry.model, entry.id),
         Err(e) => {
             log::warn!(
                 "[background_agent] Could not resolve model id {}: {}. Using local.",
                 id,
                 e
             );
-            (true, true, "qwen3vl-2b".to_string())
+            (true, true, "qwen3vl-2b".to_string(), 1)
         }
     }
 }

@@ -19,6 +19,7 @@ use crate::models::llm::usage::create_generation_session;
 use crate::settings::service::load_user_settings;
 use crate::skills::executor::{execute_tools};
 use crate::skills::registry::{get_filtered_summaries, get_skill_tools, skill_exists};
+use crate::skills::registry::canonicalize_skill_name;
 use crate::skills::types::{
     AgentError, AgentRuntimeConfig,
     SkillSummary, ToolCall, ToolDefinition, ToolResult,
@@ -615,17 +616,21 @@ impl AgentRuntime {
     ) -> Result<(), AgentError> {
         log::info!("[agent] Activating skill '{}'", skill_name);
 
+        // Normalize skill name: LLMs sometimes use underscores instead of hyphens
+        // (e.g. "web_search" instead of "web-search").
+        let canonical = canonicalize_skill_name(skill_name);
+
         // Verify skill exists
-        if !skill_exists(skill_name) {
+        if !skill_exists(&canonical) {
             return Err(AgentError::SkillNotFound(skill_name.to_string()));
         }
 
         // Add to active skills if not already active
-        if !self.active_skills.contains(&skill_name.to_string()) {
-            self.active_skills.push(skill_name.to_string());
+        if !self.active_skills.contains(&canonical) {
+            self.active_skills.push(canonical.clone());
 
             // Persist to database
-            save_conversation_skill(&self.app_handle, &self.conv_id, skill_name)
+            save_conversation_skill(&self.app_handle, &self.conv_id, &canonical)
                 .await?;
         }
 

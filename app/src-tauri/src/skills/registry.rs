@@ -400,6 +400,22 @@ pub fn skill_exists(name: &str) -> bool {
     }
 }
 
+/// Canonicalizes a skill name by trying the given name first, then the
+/// hyphenated variant (e.g. `web_search` → `web-search`).
+///
+/// This normalizes LLM responses that use underscores instead of hyphens.
+/// Returns the canonical name if found, or the original if not found.
+pub fn canonicalize_skill_name(name: &str) -> String {
+    if skill_exists(name) {
+        return name.to_string();
+    }
+    let hyphenated = name.replace('_', "-");
+    if skill_exists(&hyphenated) {
+        return hyphenated;
+    }
+    name.to_string()
+}
+
 /// Checks if a skill requires Google authentication.
 ///
 /// Returns true if the skill exists and requires Google auth.

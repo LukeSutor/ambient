@@ -40,6 +40,10 @@ pub struct LlmRequest {
     /// Session token from `/v1/usage/start-turn` — allows multiple LLM calls
     /// in a single user turn without per-call rate limiting.
     pub session_token: Option<String>,
+    /// Override the model used for generation (by DB id).
+    /// When set, bypasses the user's model selection in settings.
+    /// If the specified model cannot be found, falls back to user settings.
+    pub override_model_id: Option<i64>,
 }
 
 impl LlmRequest {
@@ -117,6 +121,11 @@ impl LlmRequest {
 
     pub fn with_session_token(mut self, session_token: Option<String>) -> Self {
         self.session_token = session_token;
+        self
+    }
+
+    pub fn with_override_model_id(mut self, id: Option<i64>) -> Self {
+        self.override_model_id = id;
         self
     }
 }

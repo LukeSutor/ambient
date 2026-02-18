@@ -45,7 +45,7 @@ pub async fn generate(
     };
 
     // Resolve the model to use
-    let resolved = resolve_model(&app_handle, &policy).await?;
+    let resolved = resolve_model(&app_handle, &policy, request.override_model_id).await?;
 
     // Extract cancel_notify before the retry loop (it's not cloneable via LlmRequest::clone
     // since Notify doesn't impl Clone via the default derive — we handle it explicitly)
@@ -183,6 +183,7 @@ where
 async fn resolve_model(
     app_handle: &AppHandle,
     policy: &ProviderPolicy,
+    override_model_id: Option<i64>,
 ) -> Result<ResolvedModel, String> {
     let fallback = || ResolvedModel {
         id: 1,
@@ -205,6 +206,19 @@ async fn resolve_model(
         api_key: entry.api_key,
         request_format: entry.request_format,
     };
+
+    // If an explicit model override is requested, use it first.
+    if let Some(id) = override_model_id {
+        match crate::db::models::get_model_by_id(app_handle, id) {
+            Ok(entry) => {
+                log::info!("[llm_client] Using override model id={} ({})", id, entry.model);
+                return Ok(from_entry(entry));
+            }
+            Err(e) => {
+                log::warn!("[llm_client] Override model id {} not found: {}. Falling back to policy.", id, e);
+            }
+        }
+    }
 
     match policy {
         ProviderPolicy::ForceLocal => {
