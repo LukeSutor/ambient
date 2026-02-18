@@ -124,7 +124,6 @@ export function ModelAccessProvider({ children }: ModelAccessProviderProps) {
 
     try {
       const result = await invoke<CreditUsageResponse>("get_credit_usage");
-      console.log("Fetched credit usage data:", result);
       dispatch({
         type: "SET_CREDIT_DATA",
         payload: {

@@ -13,6 +13,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ContentContainer } from "./content-container";
+import {
+  llmMarkdownConfig,
+  preprocessMarkdownCurrency,
+} from "@/components/ui/markdown-config";
+import Markdown from "react-markdown";
 
 export function AutomationNotificationBanner() {
   const [queue, setQueue] = useState<AutomationNotification[]>([]);
@@ -66,7 +71,7 @@ export function AutomationNotificationBanner() {
 
   return (
     <div
-      className="mb-2"
+      className={notification && "mb-2"}
       style={{
         display: "grid",
         gridTemplateRows: queue.length > 0 ? "1fr" : "0fr",
@@ -114,9 +119,9 @@ export function AutomationNotificationBanner() {
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground line-clamp-3">
-              {notification?.body}
-            </p>
+            <Markdown {...llmMarkdownConfig}>
+              {preprocessMarkdownCurrency(notification?.body ?? "")}
+            </Markdown>
           </div>
 
           <div className="flex items-center gap-0.5 shrink-0">
