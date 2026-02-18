@@ -61,15 +61,20 @@ export function AutomationNotificationBanner() {
     [sliding],
   );
 
-  if (queue.length === 0) return null;
-
-  const notification = queue[index];
-  if (!notification) return null;
-
-  const isError = notification.notification_type === "error";
+  const notification = queue[index] ?? null;
+  const isError = notification?.notification_type === "error";
 
   return (
-    <ContentContainer className="mb-2">
+    <div
+      className="mb-2"
+      style={{
+        display: "grid",
+        gridTemplateRows: queue.length > 0 ? "1fr" : "0fr",
+        transition: "grid-template-rows 0.35s ease",
+      }}
+    >
+      <div style={{ overflow: "hidden" }}>
+    <ContentContainer>
       <div className="p-3 overflow-hidden">
         <div
           className="flex items-start gap-2"
@@ -93,7 +98,7 @@ export function AutomationNotificationBanner() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium truncate">
-                {notification.title}
+                {notification?.title}
               </span>
               {isError && (
                 <Badge
@@ -110,7 +115,7 @@ export function AutomationNotificationBanner() {
               )}
             </div>
             <p className="text-xs text-muted-foreground line-clamp-3">
-              {notification.body}
+              {notification?.body}
             </p>
           </div>
 
@@ -149,5 +154,7 @@ export function AutomationNotificationBanner() {
         </div>
       </div>
     </ContentContainer>
+      </div>
+    </div>
   );
 }

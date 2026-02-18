@@ -16,6 +16,7 @@ const SKILL_DESCRIPTIONS: Record<string, string> = {
     "Run code snippets to perform calculations, data processing, and more",
   calendar: "View, create, and manage events on your Google Calendar",
   email: "Read and search emails using your Gmail account",
+  "automation-management": "Create and manage automations to complete tasks on your computer",
 };
 
 /**

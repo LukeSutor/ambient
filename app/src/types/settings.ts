@@ -61,4 +61,9 @@ disabled_skills: Array<string>,
  * Whether to offload model layers to GPU via Vulkan.
  * Only effective when a compatible GPU is detected.
  */
-gpu_acceleration: boolean, };
+gpu_acceleration: boolean, 
+/**
+ * How often the screen monitor polls for semantic automation triggers (seconds).
+ * Clamped to [5, 300]. Defaults to 30 when not set.
+ */
+screen_poll_interval_secs: bigint | null, };

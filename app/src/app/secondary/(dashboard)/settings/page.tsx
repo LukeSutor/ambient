@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/lib/settings";
 import type { GpuDevice } from "@/types/llm";
@@ -59,7 +60,10 @@ export default function Settings() {
     setShowFullThoughtTraces,
     setModelSelection,
     setGpuAcceleration,
+    setScreenPollInterval,
   } = useSettings();
+
+  const [pollIntervalInput, setPollIntervalInput] = useState<string>("");
 
   const [gpuDevices, setGpuDevices] = useState<GpuDevice[]>([]);
   const [gpuDetectionDone, setGpuDetectionDone] = useState(false);
@@ -78,6 +82,27 @@ export default function Settings() {
   }, []);
 
   const hasGpu = gpuDevices.length > 0;
+
+  // Sync poll interval input with settings
+  useEffect(() => {
+    setPollIntervalInput(String(settings?.screen_poll_interval_secs ?? 30));
+  }, [settings?.screen_poll_interval_secs]);
+
+  const handlePollIntervalBlur = async () => {
+    const n = Number(pollIntervalInput);
+    if (Number.isNaN(n) || n < 5 || n > 300) {
+      toast.error("Poll interval must be between 5 and 300 seconds");
+      setPollIntervalInput(String(settings?.screen_poll_interval_secs ?? 30));
+      return;
+    }
+    try {
+      await setScreenPollInterval(n);
+      toast.success("Screen monitor interval updated");
+    } catch (error) {
+      console.error("Failed to save poll interval:", error);
+      toast.error("Failed to save setting");
+    }
+  };
 
   const hudSize = settings?.hud_size ?? "Normal";
   const modelSelection = settings?.model_selection ?? "1";
@@ -206,6 +231,29 @@ export default function Settings() {
               void setShowFullThoughtTraces(checked);
             }}
           />
+        </SettingRow>
+      </SettingsSection>
+
+      {/* Automations Settings */}
+      <SettingsSection title="Automations">
+        <SettingRow
+          title="Screen Monitor Interval"
+          description="How often to check screen content for automation triggers (5-300 seconds)"
+        >
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={5}
+              max={300}
+              step={5}
+              className="w-24 text-right"
+              value={pollIntervalInput}
+              onChange={(e) => setPollIntervalInput(e.target.value)}
+              onBlur={() => void handlePollIntervalBlur()}
+              disabled={isLoading}
+            />
+            <span className="text-sm text-muted-foreground">sec</span>
+          </div>
         </SettingRow>
       </SettingsSection>
 

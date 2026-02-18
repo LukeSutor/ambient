@@ -586,6 +586,24 @@ function getFriendlyToolMessage(call: MessageMetadata): FriendlyToolMessage {
         finishedPrefix: "Loaded",
         suffix: `${args.skill_name.replace("-", " ")} tools`,
       };
+    case "automation-management.list_automations":
+      return {
+        loadingPrefix: "Listing",
+        finishedPrefix: "Listed",
+        suffix: "automations",
+      };
+    case "automation-management.create_automation":
+      return {
+        loadingPrefix: "Creating",
+        finishedPrefix: "Created",
+        suffix: "an automation",
+      };
+    case "automation-management.run_automation":
+      return {
+        loadingPrefix: "Running",
+        finishedPrefix: "Ran",
+        suffix: "an automation",
+      };
     case "browser.navigate":
       return {
         loadingPrefix: "Navigating",

@@ -43,6 +43,7 @@ import type {
 } from "@/types/automations";
 import type { ModelEntry } from "@/types/models";
 import type { SkillSummary } from "@/types/skills";
+import { AutomationProposalEvent } from "@/types/events";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -538,6 +539,7 @@ export default function AutomationsPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTask, setEditTask] = useState<AutomationTask | null>(null);
+  const [proposedValues, setProposedValues] = useState<Partial<AutomationFormValues> | null>(null);
   const [runHistoryTask, setRunHistoryTask] = useState<AutomationTask | null>(
     null,
   );
@@ -564,6 +566,41 @@ export default function AutomationsPage() {
       listen("automation_task_updated", () => fetchTasks()),
       listen("automation_task_deleted", () => fetchTasks()),
       listen("automation_run_completed", () => fetchTasks()),
+      listen<AutomationProposalEvent>("automation_propose_creation", (event) => {
+        const proposal = event.payload;
+        const partial: Partial<AutomationFormValues> = {
+          name: proposal.name,
+          description: proposal.description ?? "",
+          taskType: (proposal.task_type === "semantic" ? "semantic" : "scheduled") as AutomationFormValues["taskType"],
+          promptTemplate: proposal.prompt_template,
+        };
+        if (proposal.schedule_type) {
+          const st = proposal.schedule_type as AutomationFormValues["scheduleType"];
+          partial.scheduleType = st;
+          const sv = proposal.schedule_value ?? "";
+          if (st === "interval") {
+            partial.scheduleValue = sv;
+          } else if (st === "daily" || st === "weekdays") {
+            partial.timeInput = sv ? formatTime12h(sv) : "";
+          } else if (st === "specific_days") {
+            const [days, time] = sv.split("|");
+            partial.selectedDays = days ? days.split(",") : [];
+            partial.timeInput = time ? formatTime12h(time) : "";
+          }
+        }
+        if (proposal.trigger_type) {
+          partial.triggerType = proposal.trigger_type as AutomationFormValues["triggerType"];
+        }
+        if (proposal.trigger_config) {
+          try {
+            const cfg = JSON.parse(proposal.trigger_config) as Record<string, string[]>;
+            partial.triggerTags = cfg.keywords ?? cfg.url_patterns ?? [];
+          } catch { /* ignore */ }
+        }
+        setProposedValues(partial);
+        setEditTask(null);
+        setDialogOpen(true);
+      }),
     ];
 
     return () => {
@@ -617,6 +654,7 @@ export default function AutomationsPage() {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setEditTask(null);
+    setProposedValues(null);
     fetchTasks();
   };
 
@@ -682,6 +720,7 @@ export default function AutomationsPage() {
         open={dialogOpen}
         onClose={handleDialogClose}
         editTask={editTask}
+        proposedValues={proposedValues}
       />
 
       {runHistoryTask && (
@@ -869,10 +908,12 @@ function AutomationDialog({
   open,
   onClose,
   editTask,
+  proposedValues,
 }: {
   open: boolean;
   onClose: () => void;
   editTask: AutomationTask | null;
+  proposedValues?: Partial<AutomationFormValues> | null;
 }) {
   const isEdit = !!editTask;
   const [saving, setSaving] = useState(false);
@@ -899,7 +940,7 @@ function AutomationDialog({
   const buildDefaultValues = useCallback(
     (task: AutomationTask | null): AutomationFormValues => {
       if (!task) {
-        return {
+        const base: AutomationFormValues = {
           name: "",
           description: "",
           taskType: "scheduled",
@@ -916,6 +957,7 @@ function AutomationDialog({
           disabledSkills: [],
           notifyOnComplete: true,
         };
+        return proposedValues ? { ...base, ...proposedValues } : base;
       }
       const st = (task.schedule_type ?? "interval") as AutomationFormValues["scheduleType"];
       const sv = task.schedule_value ?? "";
@@ -960,7 +1002,7 @@ function AutomationDialog({
         notifyOnComplete: task.notify_on_complete,
       };
     },
-    [defaultModelId],
+    [defaultModelId, proposedValues],
   );
 
   const {

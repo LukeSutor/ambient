@@ -6,6 +6,12 @@ export type AttachmentData = { name: string, file_type: string, data: string, };
 
 export type AttachmentsCreatedEvent = { message_id: string, attachments: Array<Attachment>, timestamp: string, };
 
+/**
+ * Emitted by the automation-management skill to ask the frontend to open the
+ * Create Automation dialog pre-filled with a proposed automation.
+ */
+export type AutomationProposalEvent = { name: string, description: string | null, task_type: string, prompt_template: string, schedule_type: string | null, schedule_value: string | null, trigger_type: string | null, trigger_config: string | null, };
+
 export type AutomationRunCompletedEvent = { run_id: string, task_id: string, status: string, result_summary: string | null, timestamp: string, };
 
 export type AutomationRunEvent = { run_id: string, task_id: string, timestamp: string, };

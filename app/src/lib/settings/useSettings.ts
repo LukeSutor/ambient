@@ -251,6 +251,34 @@ export function useSettings() {
   );
 
   /**
+   * Sets the screen monitor polling interval (seconds, 5–300).
+   * Pass null to revert to the default (30 s).
+   */
+  const setScreenPollInterval = useCallback(
+    async (secs: number | null): Promise<void> => {
+      try {
+        if (!state.settings) {
+          throw new Error("Settings not loaded");
+        }
+
+        dispatch({ type: "UPDATE_SCREEN_POLL_INTERVAL", payload: secs });
+
+        const updatedSettings = {
+          ...state.settings,
+          screen_poll_interval_secs: secs,
+        };
+        await invoke("save_user_settings", { settings: updatedSettings });
+        await invoke("emit_settings_changed");
+      } catch (error) {
+        console.error("[useSettings] Failed to set screen poll interval:", error);
+        await loadSettings();
+        throw error;
+      }
+    },
+    [state.settings, dispatch, loadSettings],
+  );
+
+  /**
    * Invalidates the cache and reloads from backend
    */
   const refreshCache = useCallback(async (): Promise<void> => {
@@ -323,6 +351,7 @@ export function useSettings() {
     setShowFullThoughtTraces,
     setModelSelection,
     setGpuAcceleration,
+    setScreenPollInterval,
     setDisabledSkills,
     toggleSkill,
     refreshCache,

@@ -49,6 +49,7 @@ type SettingsAction =
   | { type: "UPDATE_HUD_DIMENSIONS"; payload: HudDimensions }
   | { type: "UPDATE_DISABLED_SKILLS"; payload: string[] }
   | { type: "UPDATE_GPU_ACCELERATION"; payload: boolean }
+  | { type: "UPDATE_SCREEN_POLL_INTERVAL"; payload: number | null }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "INVALIDATE_CACHE" };
 
@@ -120,6 +121,16 @@ function settingsReducer(
         settings: {
           ...state.settings,
           gpu_acceleration: action.payload,
+        },
+      };
+
+    case "UPDATE_SCREEN_POLL_INTERVAL":
+      if (!state.settings) return state;
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          screen_poll_interval_secs: action.payload,
         },
       };
 
@@ -199,6 +210,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
           },
           disabled_skills: [],
           gpu_acceleration: false,
+          screen_poll_interval_secs: null,
         };
         dispatch({ type: "SET_SETTINGS", payload: defaults });
       }
