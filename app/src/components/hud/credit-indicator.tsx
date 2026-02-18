@@ -56,6 +56,19 @@ export function CreditIndicator() {
     return "text-red-700/70";
   }, [remainingPercent]);
 
+  // Midnight UTC timestamp for credit reset time display
+  const resetTime = useMemo(() => {
+    const now = new Date();
+    const utcMidnight = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0),
+    );
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(utcMidnight);
+  }, []);
+
   if (!shouldShow) return <div className="ml-auto" />;
 
   return (
@@ -74,7 +87,9 @@ export function CreditIndicator() {
               {remainingPercent}%
             </span>
           </p>
-          <p className="text-muted-foreground">Credits reset daily.</p>
+          <p className="text-muted-foreground">
+            Credits reset at {resetTime}
+          </p>
         </div>
       </HoverCardContent>
     </HoverCard>
