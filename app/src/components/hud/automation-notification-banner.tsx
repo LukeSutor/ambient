@@ -69,7 +69,7 @@ export function AutomationNotificationBanner() {
   const isError = notification.notification_type === "error";
 
   return (
-    <ContentContainer>
+    <ContentContainer className="mb-2">
       <div className="p-3 overflow-hidden">
         <div
           className="flex items-start gap-2"
@@ -95,12 +95,14 @@ export function AutomationNotificationBanner() {
               <span className="text-sm font-medium truncate">
                 {notification.title}
               </span>
-              <Badge
-                variant={isError ? "destructive" : "default"}
-                className="text-[10px] px-1.5 py-0"
-              >
-                {isError ? "Error" : "Done"}
-              </Badge>
+              {isError && (
+                <Badge
+                  variant="destructive"
+                  className="text-[10px] px-1.5 py-0"
+                >
+                  Error
+                </Badge>
+              )}
               {queue.length > 1 && (
                 <span className="text-xs text-muted-foreground ml-auto shrink-0">
                   {index + 1}/{queue.length}

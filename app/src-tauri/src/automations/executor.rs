@@ -20,9 +20,8 @@ pub async fn execute_automation(
     task: &AutomationTask,
 ) -> Result<AutomationRun, String> {
     log::info!(
-        "[executor] Starting automation '{}' ({})",
+        "[executor] Starting automation '{}'",
         task.name,
-        task.id
     );
 
     // Create a run record

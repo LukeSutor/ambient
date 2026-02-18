@@ -18,7 +18,7 @@ pub fn send_completion_notification(
         task_name: task.name.clone(),
         notification_type: NotificationType::Success,
         title: format!("{} completed", task.name),
-        body: truncate_text(result_text, 200),
+        body: result_text.to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
 
@@ -40,7 +40,7 @@ pub fn send_error_notification(
         task_name: task.name.clone(),
         notification_type: NotificationType::Error,
         title: format!("{} failed", task.name),
-        body: truncate_text(error, 200),
+        body: error.to_string(),
         timestamp: chrono::Utc::now().to_rfc3339(),
     };
 
@@ -48,13 +48,4 @@ pub fn send_error_notification(
         super::events::AUTOMATION_NOTIFICATION,
         notification,
     );
-}
-
-/// Truncate text to a maximum length, appending "..." if needed.
-fn truncate_text(text: &str, max_len: usize) -> String {
-    if text.len() <= max_len {
-        text.to_string()
-    } else {
-        format!("{}...", &text[..max_len])
-    }
 }
